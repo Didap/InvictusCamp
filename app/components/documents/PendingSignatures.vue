@@ -64,7 +64,6 @@ function dueText(item: MySignatureItem): string {
               <DocumentsSignatureStatusBadge
                 :status="item.status"
                 :requires-signature="item.document.requiresSignature"
-                size="sm"
               />
               <span>{{ enumLabel('documentCategory', item.document.category) }}</span>
               <span v-if="item.dueDate" :class="item.dueDate < today ? 'font-semibold text-warning' : ''">

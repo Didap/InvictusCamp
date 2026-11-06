@@ -18,6 +18,8 @@ const c = computed(() => props.convocation)
 const dates = computed(() => formatDayRange(c.value.session.startDate, c.value.session.endDate, 'long'))
 const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
 const sessionOver = computed(() => c.value.session.endDate < todayIso())
+// For the person convoked, "Inviata" (the administration's word) means it waits for their answer.
+const toAnswer = computed(() => c.value.status === 'sent' && isSessionEditable(c.value.session.status))
 
 const accepting = ref(false)
 async function accept() {
@@ -27,6 +29,7 @@ async function accept() {
       ? `«${c.value.session.title}», ${dates.value}. Dopo l’accettazione firmi il contratto «${c.value.contractTitle}»: ti arriva anche una email con il link.`
       : `«${c.value.session.title}», ${dates.value}. L’amministrazione vede subito la tua risposta.`,
     confirmLabel: 'Accetta',
+    cancelLabel: 'Torna indietro',
   })
   if (!ok) return
   accepting.value = true
@@ -77,7 +80,16 @@ async function decline() {
         </component>
         <p class="text-muted">{{ dates }}</p>
       </div>
-      <StaffConvocationBadge :status="c.status" :confirmed="c.confirmed" />
+      <UBadge
+        v-if="toAnswer"
+        color="info"
+        variant="subtle"
+        size="lg"
+        icon="i-lucide-reply"
+        label="Da rispondere"
+        class="shrink-0"
+      />
+      <StaffConvocationBadge v-else :status="c.status" :confirmed="c.confirmed" />
     </div>
 
     <dl class="grid gap-x-8 gap-y-2 sm:grid-cols-2">
@@ -91,7 +103,7 @@ async function decline() {
       </div>
     </dl>
 
-    <div v-if="c.message" class="max-w-prose border-s-2 border-accented ps-3">
+    <div v-if="c.message" class="max-w-prose rounded-lg bg-muted px-4 py-3">
       <p class="text-sm font-semibold text-muted">Messaggio dell’amministrazione</p>
       <p class="whitespace-pre-line">{{ c.message }}</p>
     </div>
@@ -123,7 +135,7 @@ async function decline() {
         La sessione è conclusa o annullata: non serve più rispondere.
       </p>
       <p v-else class="text-sm text-muted">
-        Il tuo profilo non è attivo: per rispondere scrivi all’amministrazione del camp.
+        Il tuo profilo non è attivo: <IcContactLine as="span" lead="per rispondere" />
       </p>
     </template>
 
@@ -169,6 +181,7 @@ async function decline() {
       v-model:open="declineOpen"
       title="Rifiuti la convocazione?"
       :description="`«${c.session.title}», ${dates}. Se vuoi, scrivi all’amministrazione il motivo.`"
+      :ui="{ wrapper: 'pe-12', close: 'pointer-coarse:size-11 pointer-coarse:justify-center' }"
     >
       <template #body>
         <UFormField label="Motivo" hint="Facoltativo" help="Lo legge solo l’amministrazione.">
@@ -181,7 +194,7 @@ async function decline() {
             class="pointer-coarse:min-h-11"
             color="neutral"
             variant="outline"
-            label="Annulla"
+            label="Torna indietro"
             @click="declineOpen = false"
           />
           <UButton

@@ -71,7 +71,9 @@ Every move is a button of the administration that first shows what it sends and 
 | draft → inviting | titolari `selected` → `invited`; reserves `selected` → `invited` | `session.invite` to titolari (with the answer deadline), `session.reserve` to reserves |
 | inviting → confirmed | none | `session.confirmed` to titolari `confirmed` |
 | confirmed → completed | none | none |
-| any → cancelled | `selected`/`invited`/`confirmed` → `cancelled` | `session.cancelled` to those who had been invited (not to `selected`) |
+| any → cancelled | `selected`/`invited`/`confirmed` → `cancelled`; staff convocations `sent`/`accepted` → `cancelled` (drafts deleted) and their pending contract requests cancelled | `session.cancelled` to those who had been invited (not to `selected`); `staff.convocation_cancelled` to staff whose convocation had been sent |
+
+Moves to `completed` and `cancelled` are final: the confirmation says so ("Non si può tornare indietro").
 
 While the session is `inviting` or `confirmed`, a family added as titolare is invited at once
 (`session.invite`), a reserve gets `session.reserve`. In `draft` nothing is sent. "Ogni invito ad una
@@ -178,7 +180,7 @@ waiting, emails failed in the last 30 days; the upcoming sessions with their pro
 | `session.cancelled` | session cancelled | families invited or confirmed |
 | `session.removed` | family removed after being invited | that family |
 | `staff.convocation` | convocation sent | staff member |
-| `staff.convocation_cancelled` | sent convocation cancelled | staff member |
+| `staff.convocation_cancelled` | sent convocation cancelled, or its session cancelled | staff member |
 | `staff.approved` / `staff.rejected` | sent by the administration from the review | candidate |
 | `signature.request` / `signature.reminder` | document assigned / reminder | assignee |
 | `signature.otp` | code requested | signer |

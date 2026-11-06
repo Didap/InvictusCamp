@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { z } from 'zod'
 import { zReadConsent, zSignedName } from '#shared/schemas/documents'
-import type { SignatureCodeState, SignaturePage } from '#shared/types/documents'
+import type { MySignatureItem, SignatureCodeState, SignaturePage } from '#shared/types/documents'
 import { LOCALE, TIME_ZONE, enumLabel } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDateTime, formatDay } from '#shared/utils/format'
@@ -74,6 +74,13 @@ const readSchema = z.object({ consent: zReadConsent })
 const schema = computed(() => (codeState.value ? signSchema : detailsSchema))
 
 const overdue = computed(() => !!page.value?.dueDate && page.value.dueDate < todayIso())
+
+// After signing: what is still waiting, from the list of the Documenti pages (same key, refreshed below).
+const { data: mine } = useApiFetch<MySignatureItem[]>('/api/signatures', { key: 'my-signatures', lazy: true })
+const stillPending = computed(() =>
+  (mine.value ?? []).filter(item => item.status === 'pending' && item.id !== requestId.value),
+)
+const next = computed(() => stillPending.value[0])
 
 async function sendCode() {
   sending.value = true
@@ -175,8 +182,37 @@ async function confirmRead() {
               : `Il ${formatDateTime(page.signedAt)}.`
           "
         />
+        <div
+          v-if="next"
+          class="mt-6 flex flex-col gap-3 rounded-lg border border-default bg-elevated p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div class="min-w-0">
+            <p class="break-words">
+              Ti resta da {{ next.document.requiresSignature ? 'firmare' : 'leggere' }}:
+              <span class="font-semibold text-highlighted">{{ next.document.title }}</span>
+            </p>
+            <p v-if="stillPending.length > 1" class="text-sm text-muted">
+              In tutto te ne restano {{ stillPending.length }}: li trovi tra i tuoi documenti.
+            </p>
+          </div>
+          <UButton
+            :to="`/firma/${next.id}`"
+            :label="next.document.requiresSignature ? 'Leggi e firma' : 'Leggi il documento'"
+            trailing-icon="i-lucide-arrow-right"
+            size="lg"
+            class="justify-center sm:shrink-0"
+          />
+        </div>
         <div v-if="doc.requiresSignature" class="mt-6 flex flex-wrap gap-3">
-          <UButton :href="`${copyUrl}?download`" external icon="i-lucide-download" label="Scarica la copia firmata" />
+          <UButton
+            :href="`${copyUrl}?download`"
+            external
+            icon="i-lucide-download"
+            label="Scarica la copia firmata"
+            :color="next ? 'neutral' : 'primary'"
+            :variant="next ? 'outline' : 'solid'"
+            class="pointer-coarse:min-h-11"
+          />
           <UButton
             :href="copyUrl"
             external
@@ -203,9 +239,12 @@ async function confirmRead() {
         variant="subtle"
         icon="i-lucide-ban"
         title="Non serve più firmare questo documento"
-        description="L’amministrazione ha annullato la richiesta. Se hai dubbi, scrivi al camp."
         :actions="[{ label: 'Torna ai tuoi documenti', to: back, color: 'neutral', variant: 'outline' }]"
-      />
+      >
+        <template #description>
+          L’amministrazione ha annullato la richiesta. <IcContactLine as="span" lead="Se hai dubbi" />
+        </template>
+      </UAlert>
 
       <!-- To sign or to read -->
       <template v-else>
@@ -249,7 +288,14 @@ async function confirmRead() {
                 Ti invieremo un codice di 6 cifre a <strong class="text-highlighted">{{ page.email }}</strong
                 >. Vale 10 minuti.
               </p>
-              <UButton type="submit" size="lg" icon="i-lucide-mail" label="Invia il codice" :loading="sending" />
+              <UButton
+                type="submit"
+                size="lg"
+                icon="i-lucide-mail"
+                label="Invia il codice"
+                :loading="sending"
+                class="w-full justify-center sm:w-auto"
+              />
             </template>
 
             <template v-else>
@@ -274,7 +320,7 @@ async function confirmRead() {
                   :ui="{ root: 'gap-2', base: 'size-12 text-xl font-mono' }"
                 />
               </UFormField>
-              <div class="flex flex-wrap items-center gap-3">
+              <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                 <UButton
                   type="submit"
                   size="lg"
@@ -282,11 +328,13 @@ async function confirmRead() {
                   label="Firma il documento"
                   :loading="working"
                   :disabled="codeExpired"
+                  class="justify-center"
                 />
                 <UButton
                   color="neutral"
                   variant="outline"
                   size="lg"
+                  class="justify-center"
                   :disabled="resendIn > 0"
                   :loading="sending"
                   :label="resendIn > 0 ? `Nuovo codice tra ${resendIn} s` : 'Invia un nuovo codice'"
@@ -313,6 +361,7 @@ async function confirmRead() {
               icon="i-lucide-book-check"
               label="Conferma la lettura"
               :loading="working"
+              class="w-full justify-center sm:w-auto"
             />
           </UForm>
         </IcSection>

@@ -249,7 +249,7 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
                 {{ plural(family.memberCount, 'componente', 'componenti')
                 }}{{ family.lastSession ? ` · ${family.lastSession.title}` : '' }}
               </p>
-              <IcStatusBadge kind="familyFormStatus" :value="family.formStatus" size="sm" />
+              <IcStatusBadge kind="familyFormStatus" :value="family.formStatus" />
             </div>
             <UIcon name="i-lucide-chevron-right" class="mt-1 size-5 shrink-0 text-dimmed" aria-hidden="true" />
           </NuxtLink>

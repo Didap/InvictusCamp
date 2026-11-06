@@ -129,7 +129,6 @@ function actionsFor(item: SessionFamilyItem): DropdownMenuItem[][] {
           v-if="row.original.accountStatus === 'disabled'"
           kind="userStatus"
           value="disabled"
-          size="sm"
           class="mt-1"
         />
       </template>
@@ -209,8 +208,8 @@ function actionsFor(item: SessionFamilyItem): DropdownMenuItem[][] {
           </NuxtLink>
           <p class="text-sm text-muted">{{ item.referent }}</p>
           <div class="flex flex-wrap items-center gap-2">
-            <IcStatusBadge kind="participationStatus" :value="item.status" size="sm" />
-            <IcStatusBadge v-if="item.accountStatus === 'disabled'" kind="userStatus" value="disabled" size="sm" />
+            <IcStatusBadge kind="participationStatus" :value="item.status" />
+            <IcStatusBadge v-if="item.accountStatus === 'disabled'" kind="userStatus" value="disabled" />
           </div>
           <p v-if="variant !== 'gone' && invitedText(item)" class="text-sm text-muted">
             {{ variant === 'reserves' ? 'Avvisata' : 'Invito' }}: {{ invitedText(item) }}

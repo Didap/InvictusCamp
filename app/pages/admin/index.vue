@@ -3,7 +3,8 @@ import { FAILED_EMAIL_DAYS, type DashboardDto } from '#shared/types/dashboard'
 import { formatNumber } from '#shared/utils/format'
 
 // Panoramica (docs/spec.md, 3.9): the next session, the numbers that lead to action (each one opens
-// its list), what to do now, the sessions to come with their progress.
+// its list), what to do now, the sessions to come with their progress. A number is not repeated in
+// "Da fare"; emails not delivered get a tile only when there are some, otherwise one quiet line.
 const { data, error, refresh } = await useApiFetch<DashboardDto>('/api/admin/dashboard')
 
 const others = computed(() => data.value?.upcoming.filter(s => s.id !== data.value?.nextSession?.id) ?? [])
@@ -33,13 +34,17 @@ const tiles = computed(() => {
       icon: 'i-lucide-pen-line',
       to: '/admin/documenti',
     },
-    {
-      label: 'Email non recapitate',
-      value: formatNumber(counts.emailsFailed),
-      hint: `Negli ultimi ${FAILED_EMAIL_DAYS} giorni`,
-      icon: 'i-lucide-mail-warning',
-      to: `/admin/comunicazioni?tab=registro&status=failed&days=${FAILED_EMAIL_DAYS}`,
-    },
+    ...(counts.emailsFailed
+      ? [
+          {
+            label: 'Email non recapitate',
+            value: formatNumber(counts.emailsFailed),
+            hint: `Negli ultimi ${FAILED_EMAIL_DAYS} giorni: controlla gli indirizzi`,
+            icon: 'i-lucide-mail-warning',
+            to: `/admin/comunicazioni?tab=registro&status=failed&days=${FAILED_EMAIL_DAYS}`,
+          },
+        ]
+      : []),
   ]
 })
 </script>
@@ -80,9 +85,13 @@ const tiles = computed(() => {
       </IcSection>
 
       <IcSection title="Da seguire" description="Ogni numero apre l’elenco da cui partire.">
-        <div class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+        <div :class="['grid gap-4', tiles.length > 3 ? 'sm:grid-cols-2 2xl:grid-cols-4' : 'md:grid-cols-3']">
           <IcStatCard v-for="tile in tiles" :key="tile.label" v-bind="tile" />
         </div>
+        <p v-if="!data.counts.emailsFailed" class="mt-4 flex items-center gap-2 text-sm text-muted">
+          <UIcon name="i-lucide-mail-check" class="size-5 shrink-0 text-success" aria-hidden="true" />
+          Nessuna email non recapitata negli ultimi {{ FAILED_EMAIL_DAYS }} giorni.
+        </p>
       </IcSection>
 
       <IcSection title="Da fare">

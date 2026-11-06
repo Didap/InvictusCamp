@@ -57,8 +57,8 @@ function answer(item: FamilyParticipationItem): string | null {
         <p v-if="item.declineReason" class="text-sm text-muted">Motivo: {{ item.declineReason }}</p>
       </div>
       <div class="flex shrink-0 flex-wrap gap-2">
-        <IcStatusBadge kind="participationKind" :value="item.kind" size="sm" />
-        <IcStatusBadge kind="participationStatus" :value="item.status" size="sm" />
+        <IcStatusBadge kind="participationKind" :value="item.kind" />
+        <IcStatusBadge kind="participationStatus" :value="item.status" />
       </div>
     </li>
   </ul>

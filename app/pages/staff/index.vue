@@ -19,9 +19,7 @@ const started = computed(() => checklist.value.some(item => item.done))
 </script>
 
 <template>
-  <IcPage title="Home" width="narrow">
-    <p class="text-lg text-highlighted">Ciao {{ user?.firstName }}.</p>
-
+  <IcPage :title="user?.firstName ? `Ciao ${user.firstName}` : 'Home'" width="narrow">
     <template v-if="home">
       <!-- Registered: the application is still to complete and send. -->
       <IcSection
@@ -80,7 +78,7 @@ const started = computed(() => checklist.value.some(item => item.done))
             Per questa stagione non possiamo inserirti nello staff di Invictus Camp. Ti ringraziamo per il tempo che ci
             hai dedicato e per l’interesse verso il camp.
           </p>
-          <p class="text-muted">Se hai domande, puoi scrivere all’amministrazione del camp.</p>
+          <IcContactLine lead="Se hai domande" class="text-muted" />
         </div>
       </IcSection>
 
@@ -88,8 +86,8 @@ const started = computed(() => checklist.value.some(item => item.done))
       <template v-else>
         <IcSection v-if="home.status === 'inactive'" title="Il tuo profilo non è attivo">
           <p class="max-w-prose text-muted">
-            Al momento non ricevi convocazioni e non puoi indicare la disponibilità. Se vuoi tornare disponibile, scrivi
-            all’amministrazione del camp.
+            Al momento non ricevi convocazioni e non puoi indicare la disponibilità.
+            <IcContactLine as="span" lead="Se vuoi tornare disponibile" />
           </p>
         </IcSection>
 

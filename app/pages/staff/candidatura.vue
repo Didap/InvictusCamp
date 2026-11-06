@@ -140,8 +140,12 @@ const texts = computed(() => {
           variant="subtle"
           :icon="meta('staffStatus', application.status).icon"
           :title="SENT_TITLE[application.status] ?? 'Candidatura inviata'"
-          :description="`Inviata il ${dayOf(application.appliedAt)}. Non si può più modificare: se devi correggere qualcosa, scrivi all’amministrazione del camp.`"
-        />
+        >
+          <template #description>
+            Inviata il {{ dayOf(application.appliedAt) }}. Non si può più modificare:
+            <IcContactLine as="span" lead="se devi correggere qualcosa" />
+          </template>
+        </UAlert>
         <IcSection title="Su di te">
           <IcDataList :items="details" :columns="2" />
         </IcSection>
@@ -246,6 +250,7 @@ const texts = computed(() => {
               endpoint="/api/staff/application/cv"
               accept="application/pdf"
               label="Trascina qui il CV o sceglilo dal dispositivo"
+              touch-label="Scegli il CV dal dispositivo"
               description="Solo PDF, fino a 15 MB"
               :button-label="cv ? 'Sostituisci il CV' : 'Carica il CV'"
               @uploaded="cvUploaded"

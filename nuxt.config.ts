@@ -47,6 +47,14 @@ export default defineNuxtConfig({
       name: 'invictus-session',
       maxAge: 60 * 60 * 24 * 14,
     },
+    public: {
+      /** How families and staff reach the camp (<IcContactLine>): only the values that are set appear. */
+      contact: {
+        email: 'info@fondazionevannilongo.it',
+        phone: '',
+        hours: '',
+      },
+    },
   },
 
   routeRules: {

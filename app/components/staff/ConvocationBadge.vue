@@ -3,9 +3,10 @@ import type { ConvocationStatus } from '#shared/utils/constants'
 
 // The status of a convocation. "Confermata" is derived (accepted and, if the session has a contract,
 // signed: docs/spec.md 0), so it is not in ENUM_META: it gets the same icon + label look here.
-withDefaults(defineProps<{ status: ConvocationStatus; confirmed?: boolean; size?: 'sm' | 'md' | 'lg' }>(), {
+// At least 14px (lg), like <IcStatusBadge>.
+withDefaults(defineProps<{ status: ConvocationStatus; confirmed?: boolean; size?: 'lg' | 'xl' }>(), {
   confirmed: false,
-  size: 'md',
+  size: 'lg',
 })
 </script>
 

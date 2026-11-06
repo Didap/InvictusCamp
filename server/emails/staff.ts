@@ -120,17 +120,25 @@ export function convocationEmail(
   }
 }
 
-/** `staff.convocation_cancelled`: a convocation that had been sent is withdrawn. */
+/**
+ * `staff.convocation_cancelled`: a convocation that had been sent is withdrawn, alone or because the whole
+ * session was cancelled (`sessionCancelled`), which the person is told.
+ */
 export function convocationCancelledEmail(
   ctx: EmailContext,
-  input: Recipient & { session: ConvocationSession; role: StaffRole | null },
+  input: Recipient & { session: ConvocationSession; role: StaffRole | null; sessionCancelled?: boolean },
 ): EmailMessage {
+  const title = input.session.title
   const { html, text } = renderEmail(ctx, {
-    preheader: `La convocazione per «${input.session.title}» è stata annullata.`,
-    title: 'Convocazione annullata',
+    preheader: input.sessionCancelled
+      ? `La sessione «${title}» è stata annullata.`
+      : `La convocazione per «${title}» è stata annullata.`,
+    title: input.sessionCancelled ? 'Sessione annullata' : 'Convocazione annullata',
     greeting: `Ciao ${input.firstName},`,
     paragraphs: [
-      `l’amministrazione di Invictus Camp ha annullato la tua convocazione per la sessione «${input.session.title}».`,
+      input.sessionCancelled
+        ? `l’amministrazione di Invictus Camp ha annullato la sessione «${title}»: la tua convocazione non vale più.`
+        : `l’amministrazione di Invictus Camp ha annullato la tua convocazione per la sessione «${title}».`,
       'Non devi fare nulla. Se hai domande, scrivi all’amministrazione del camp.',
     ],
     details: sessionDetails(input.session, input.role),
@@ -140,7 +148,7 @@ export function convocationCancelledEmail(
     to: input.to,
     toUserId: input.toUserId,
     template: 'staff.convocation_cancelled',
-    subject: `Convocazione annullata: «${input.session.title}»`,
+    subject: input.sessionCancelled ? `Sessione annullata: «${title}»` : `Convocazione annullata: «${title}»`,
     html,
     text,
     sessionId: input.session.id,

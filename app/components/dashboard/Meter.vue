@@ -6,7 +6,7 @@
 // screen readers: it repeats what the text says.
 const props = defineProps<{
   label: string
-  /** "3 confermate su 6 posti". */
+  /** Confirmed out of the limit: "3/6 confermate". */
   summary: string
   max: number
   confirmed: { value: number; label: string }

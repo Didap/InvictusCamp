@@ -219,29 +219,32 @@ async function remove(item: SessionFamilyItem) {
       />
       <div v-else class="mb-8 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <p class="text-highlighted">
-          <strong class="tabular-nums">{{ slots.held }} di {{ slots.total }}</strong> posti occupati ·
-          <span class="tabular-nums">{{ slots.confirmed }}</span>
-          {{ slots.confirmed === 1 ? 'confermata' : 'confermate' }} · <span class="tabular-nums">{{ slots.free }}</span>
+          <strong class="tabular-nums">{{ slots.confirmed }}/{{ slots.total }}</strong>
+          {{ slots.confirmed === 1 ? 'confermata' : 'confermate' }} · <span class="tabular-nums">{{ slots.held }}</span>
+          {{ slots.held === 1 ? 'posto occupato' : 'posti occupati' }} ·
+          <span class="tabular-nums">{{ slots.free }}</span>
           {{ slots.free === 1 ? 'libero' : 'liberi' }} ·
           <span class="tabular-nums">{{ slots.reserves }}</span>
           {{ slots.reserves === 1 ? 'riserva in attesa' : 'riserve in attesa' }}
         </p>
-        <!-- The solid primary of the page is the status move in its header: these stay outlined. -->
+        <!-- The status moves in the page header are outlined: the tab's own next action is the solid one.
+             data-action lets "Il prossimo passo" on the session page focus these buttons. -->
         <div class="flex flex-wrap gap-2 xl:shrink-0">
           <UButton
             v-if="canCall && reserves.length"
+            data-action="call-reserve"
             icon="i-lucide-user-round-check"
             label="Chiama la riserva"
-            variant="outline"
             :disabled="busy"
             @click="callReserve()"
           />
           <UButton
             v-if="editable"
+            data-action="add-families"
             icon="i-lucide-plus"
             label="Aggiungi famiglie"
             :color="canCall && reserves.length ? 'neutral' : 'primary'"
-            variant="outline"
+            :variant="canCall && reserves.length ? 'outline' : 'solid'"
             @click="openAdd()"
           />
           <UButton :to="writeLink" icon="i-lucide-mail" label="Scrivi alle famiglie" color="neutral" variant="ghost" />

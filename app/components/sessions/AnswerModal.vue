@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The answer to an invitation: recorded by the administration after a phone call (Conferma or Rinuncia)
-// or given by the family when it gives up its place (Rinuncia, with an optional reason).
+// or given by the family when it gives up its place (Rinuncia, with an optional reason). A decline frees
+// the place, so its button is red and never looks like Conferma. Slot `description`: richer text than the prop.
 type Answer = 'confirmed' | 'declined'
 
 const props = defineProps<{
@@ -38,7 +39,13 @@ function submit() {
 </script>
 
 <template>
-  <UModal v-model:open="open" :title="title" :description="description">
+  <UModal
+    v-model:open="open"
+    :title="title"
+    :description="description"
+    :ui="{ wrapper: 'pe-12', close: 'pointer-coarse:size-11 pointer-coarse:justify-center' }"
+  >
+    <template v-if="$slots.description" #description><slot name="description" /></template>
     <template #body>
       <form :id="formId" class="space-y-5" @submit.prevent="submit">
         <URadioGroup v-if="answers.length > 1" v-model="answer" :items="items" legend="La risposta" variant="card" />
@@ -49,8 +56,21 @@ function submit() {
     </template>
     <template #footer>
       <div class="flex w-full flex-wrap justify-end gap-2">
-        <UButton color="neutral" variant="outline" label="Annulla" @click="open = false" />
-        <UButton type="submit" :form="formId" :label="submitLabel" :loading="loading" />
+        <UButton
+          color="neutral"
+          variant="outline"
+          label="Torna indietro"
+          class="pointer-coarse:min-h-11"
+          @click="open = false"
+        />
+        <UButton
+          type="submit"
+          :form="formId"
+          :color="answer === 'declined' ? 'error' : 'primary'"
+          :label="submitLabel"
+          :loading="loading"
+          class="pointer-coarse:min-h-11"
+        />
       </div>
     </template>
   </UModal>

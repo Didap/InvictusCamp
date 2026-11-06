@@ -22,9 +22,16 @@ export type InviteUserInput = z.infer<typeof inviteUserSchema>
 const optional = <T extends z.ZodType>(schema: T) =>
   z.preprocess(value => (value === '' || value === null ? undefined : value), schema.optional())
 
+/** The columns /admin/utenti sorts by, on the server because the list comes a page at a time. */
+export const USER_LIST_SORTS = ['name', 'role', 'status', 'lastLogin'] as const
+export type UserListSort = (typeof USER_LIST_SORTS)[number]
+
 export const userListQuery = zListQuery.extend({
   role: optional(z.enum(USER_ROLES)),
   status: optional(z.enum(USER_STATUSES)),
+  /** By name (surname first) when missing. */
+  sort: optional(z.enum(USER_LIST_SORTS)),
+  order: optional(z.enum(['asc', 'desc'])),
   /** Comma-separated ids: the composer asks for the names of the people it was opened with. */
   ids: optional(
     z

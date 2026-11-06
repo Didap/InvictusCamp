@@ -103,7 +103,7 @@ async function remove(member: OwnFamilyMember) {
             />
             <UButton
               icon="i-lucide-trash-2"
-              color="error"
+              color="neutral"
               variant="ghost"
               class="pointer-coarse:min-h-11 pointer-coarse:min-w-11 justify-center"
               :aria-label="`Rimuovi ${fullName(member)}`"

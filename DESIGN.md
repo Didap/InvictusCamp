@@ -26,7 +26,7 @@ typography:
   family: "Atkinson Hyperlegible Next"
   mono: "Atkinson Hyperlegible Mono"
   body: "16px / 1.55"
-radius: "0.5rem"
+radius: "0.25rem (panels rounded-lg, 8px)"
 ---
 
 # Design System: Invictus Camp · Gestionale
@@ -79,7 +79,7 @@ for codes (the signature code, ids).
 
 | Role | Size | Weight |
 |---|---|---|
-| Page title (navbar `h1`) | 18px | 700 |
+| Page title (navbar `h1`) | 20px | 700 |
 | Section title (`h2`) | 18px | 700 |
 | Auth page title | 24px | 700 |
 | Big number (stat) | 30px | 700, tabular |
@@ -92,7 +92,8 @@ Never below 14px for text people read. Paragraphs stay within `max-w-prose`. Num
 
 ## 4. Surfaces and elevation
 
-Cream page, white panels with a 1px `border-default`, radius 0.5rem. No shadows on panels; floating layers
+Cream page, white panels with a 1px `border-default`. Radius: `--ui-radius` is 0.25rem (buttons,
+inputs, badges); panels are `rounded-lg` (8px). No shadows on panels; floating layers
 (menus, modals, toasts) get Nuxt UI's shadow. Sections inside a page are separated by a rule
 (`<IcSection>`), not boxed. Cards only for things the user picks among or for the stat tiles.
 

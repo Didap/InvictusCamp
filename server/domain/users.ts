@@ -1,7 +1,7 @@
 // Accounts managed by the administration (docs/spec.md, 3.1): invite a person (family, staff or
 // administration), send the invitation again, disable and enable an account (never your own), send a
 // password reset link. Every function returns the emails to deliver after the commit.
-import { and, asc, count, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm'
 import type { InviteUserInput, UserListQuery } from '../../shared/schemas/users'
 import type { Paginated } from '../../shared/types/api'
 import type { UserListItem } from '../../shared/types/users'
@@ -192,7 +192,31 @@ export function containsPattern(text: string): string {
   return `%${text.replace(/[\\%_]/g, '\\$&')}%`
 }
 
-/** The accounts page: search by name, email or family name; filter by role and status; by surname. */
+/**
+ * The order of the accounts page: the chosen column (roles and statuses in the order of their enum,
+ * never signed in last), then by name, so that pages never overlap.
+ */
+function userListOrder(query: UserListQuery): SQL[] {
+  const direction = query.order === 'desc' ? desc : asc
+  const byName = (order: typeof asc) => [
+    order(users.lastName),
+    order(users.firstName),
+    order(users.email),
+    asc(users.id),
+  ]
+  switch (query.sort) {
+    case 'role':
+      return [direction(users.role), ...byName(asc)]
+    case 'status':
+      return [direction(users.status), ...byName(asc)]
+    case 'lastLogin':
+      return [sql`${users.lastLoginAt} ${sql.raw(query.order === 'desc' ? 'desc' : 'asc')} nulls last`, ...byName(asc)]
+    default:
+      return byName(direction)
+  }
+}
+
+/** The accounts page: search by name, email or family name; filter by role and status; sortable columns. */
 export async function listUsers(db: DbOrTx, query: UserListQuery): Promise<Paginated<UserListItem>> {
   const { page, pageSize } = query
   if (query.ids && !query.ids.length) return { items: [], total: 0, page, pageSize }
@@ -238,7 +262,7 @@ export async function listUsers(db: DbOrTx, query: UserListQuery): Promise<Pagin
       .leftJoin(families, eq(families.userId, users.id))
       .leftJoin(staffProfiles, eq(staffProfiles.userId, users.id))
       .where(where)
-      .orderBy(asc(users.lastName), asc(users.firstName), asc(users.email))
+      .orderBy(...userListOrder(query))
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db.select({ total: count() }).from(users).leftJoin(families, eq(families.userId, users.id)).where(where),

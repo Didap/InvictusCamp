@@ -550,6 +550,9 @@ export async function setConvocationRole(
   })
 }
 
+/** Who withdraws a convocation: a session move may come without an account (only the audit reads it). */
+type CancelActor = Omit<Actor, 'userId'> & { userId: string | null }
+
 /**
  * Withdraws a convocation. A draft (never sent) is simply removed. A sent or accepted one becomes
  * `cancelled` with `staff.convocation_cancelled`; the contract request still to sign is cancelled too.
@@ -557,7 +560,7 @@ export async function setConvocationRole(
 export async function cancelConvocation(
   db: DbOrTx,
   ctx: EmailContext,
-  input: { id: string; actor: Actor },
+  input: { id: string; actor: CancelActor; sessionCancelled?: boolean },
 ): Promise<{ emails: EmailMessage[]; removed: boolean }> {
   const [row] = await db
     .select({
@@ -614,10 +617,52 @@ export async function cancelConvocation(
         firstName: row.firstName,
         session,
         role: convocation.role,
+        sessionCancelled: input.sessionCancelled,
       }),
     ],
     removed: false,
   }
+}
+
+/** Convocations a cancelled session withdraws. */
+const OPEN_CONVOCATIONS: ConvocationStatus[] = ['draft', 'sent', 'accepted']
+
+/**
+ * The session is being cancelled (server/domain/sessions.ts, transitionSession, before the status
+ * changes): every convocation still open is withdrawn as cancelConvocation does one by one.
+ */
+export async function cancelSessionConvocations(
+  db: DbOrTx,
+  ctx: EmailContext,
+  input: { sessionId: string; actor: CancelActor },
+): Promise<EmailMessage[]> {
+  const rows = await db
+    .select({ id: sessionStaff.id })
+    .from(sessionStaff)
+    .where(and(eq(sessionStaff.sessionId, input.sessionId), inArray(sessionStaff.status, OPEN_CONVOCATIONS)))
+    .for('update')
+  const emails: EmailMessage[] = []
+  for (const row of rows) {
+    const result = await cancelConvocation(db, ctx, { id: row.id, actor: input.actor, sessionCancelled: true })
+    emails.push(...result.emails)
+  }
+  return emails
+}
+
+/** The `staff.convocation_cancelled` emails cancelSessionConvocations would send now (the preview of the move). */
+export async function sessionConvocationNotices(db: DbOrTx, sessionId: string): Promise<number> {
+  const rows = await db
+    .select({ id: sessionStaff.id })
+    .from(sessionStaff)
+    .innerJoin(users, eq(users.id, sessionStaff.userId))
+    .where(
+      and(
+        eq(sessionStaff.sessionId, sessionId),
+        inArray(sessionStaff.status, ['sent', 'accepted']),
+        ne(users.status, 'disabled'),
+      ),
+    )
+  return rows.length
 }
 
 const ALREADY_ANSWERED: Record<ConvocationStatus, string> = {

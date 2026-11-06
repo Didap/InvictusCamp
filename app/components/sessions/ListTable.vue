@@ -2,7 +2,8 @@
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { SessionCreated, SessionListItem } from '#shared/types/sessions'
 import { DEFAULT_LOCATION } from '#shared/utils/constants'
-import { formatDay, formatDayRange } from '#shared/utils/format'
+import { formatDay, formatDayRange, plural } from '#shared/utils/format'
+import { isSessionEditable } from '#shared/utils/session-status'
 
 // The sessions of /admin/sessioni: a sortable table on desktop, a list of rows on phones.
 const props = defineProps<{ sessions: SessionListItem[]; caption: string }>()
@@ -71,6 +72,13 @@ function actions(session: SessionListItem): DropdownMenuItem[][] {
 }
 
 const rows = computed(() => props.sessions)
+
+/** What the staff of a session still needs: convocations "da inviare", people "da trovare" (no one convoked yet). */
+function staffToDo({ staff, status }: SessionListItem): string[] {
+  if (!isSessionEditable(status)) return []
+  const missing = Math.max(0, staff.needed - staff.accepted - staff.waiting - staff.toSend)
+  return [staff.toSend ? `${staff.toSend} da inviare` : '', missing ? `${missing} da trovare` : ''].filter(Boolean)
+}
 </script>
 
 <template>
@@ -95,28 +103,39 @@ const rows = computed(() => props.sessions)
       </template>
       <template #startDate-cell="{ row }">
         <span class="whitespace-nowrap">{{ formatDayRange(row.original.startDate, row.original.endDate) }}</span>
-        <p v-if="row.original.status === 'inviting' && row.original.responseDeadline" class="text-sm text-muted">
-          Risposte entro il {{ formatDay(row.original.responseDeadline) }}
+        <p
+          v-if="row.original.status === 'inviting' && row.original.responseDeadline"
+          class="text-sm whitespace-normal text-muted"
+        >
+          Risposte entro il <span class="whitespace-nowrap">{{ formatDay(row.original.responseDeadline) }}</span>
         </p>
       </template>
       <template #status-cell="{ row }">
         <IcStatusBadge kind="sessionStatus" :value="row.original.status" />
       </template>
       <template #places-cell="{ row }">
-        <span class="font-semibold text-highlighted tabular-nums">
-          {{ row.original.slots.held }}/{{ row.original.slots.total }}
-        </span>
-        <p class="text-sm text-muted">{{ row.original.slots.confirmed }} confermate</p>
+        <p class="whitespace-nowrap text-highlighted">
+          <span class="font-semibold tabular-nums"
+            >{{ row.original.slots.confirmed }}/{{ row.original.slots.total }}</span
+          >
+          {{ row.original.slots.confirmed === 1 ? 'confermata' : 'confermate' }}
+        </p>
+        <p class="text-sm text-muted">{{ plural(row.original.slots.held, 'posto occupato', 'posti occupati') }}</p>
       </template>
       <template #reserves-cell="{ row }">
         <span class="tabular-nums">{{ row.original.slots.reserves }}</span>
         <span class="sr-only">in attesa</span>
       </template>
       <template #staff-cell="{ row }">
-        <span class="font-semibold text-highlighted tabular-nums">
-          {{ row.original.staff.confirmed }}/{{ row.original.staff.needed }}
-        </span>
-        <p class="text-sm text-muted">confermati</p>
+        <p class="whitespace-nowrap text-highlighted">
+          <span class="font-semibold tabular-nums"
+            >{{ row.original.staff.confirmed }}/{{ row.original.staff.needed }}</span
+          >
+          {{ row.original.staff.confirmed === 1 ? 'confermato' : 'confermati' }}
+        </p>
+        <ul class="flex flex-wrap gap-x-3 text-sm whitespace-normal text-muted">
+          <li v-for="item in staffToDo(row.original)" :key="item" class="whitespace-nowrap">{{ item }}</li>
+        </ul>
       </template>
       <template #actions-cell="{ row }">
         <div class="flex justify-end">
@@ -143,22 +162,25 @@ const rows = computed(() => props.sessions)
         >
           <span class="flex items-start justify-between gap-3">
             <span class="font-semibold text-highlighted">{{ session.title }}</span>
-            <IcStatusBadge kind="sessionStatus" :value="session.status" size="sm" />
+            <IcStatusBadge kind="sessionStatus" :value="session.status" />
           </span>
           <span class="text-sm text-muted">{{ formatDayRange(session.startDate, session.endDate) }}</span>
           <span class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <span>
-              Posti <strong class="tabular-nums">{{ session.slots.held }}/{{ session.slots.total }}</strong>
+              Famiglie <strong class="tabular-nums">{{ session.slots.confirmed }}/{{ session.slots.total }}</strong>
+              {{ session.slots.confirmed === 1 ? 'confermata' : 'confermate' }}
             </span>
             <span>
-              Confermate <strong class="tabular-nums">{{ session.slots.confirmed }}</strong>
+              Posti occupati <strong class="tabular-nums">{{ session.slots.held }}</strong>
             </span>
             <span>
               Riserve <strong class="tabular-nums">{{ session.slots.reserves }}</strong>
             </span>
             <span>
               Staff <strong class="tabular-nums">{{ session.staff.confirmed }}/{{ session.staff.needed }}</strong>
+              {{ session.staff.confirmed === 1 ? 'confermato' : 'confermati' }}
             </span>
+            <span v-for="item in staffToDo(session)" :key="item" class="text-muted">{{ item }}</span>
           </span>
         </NuxtLink>
       </li>

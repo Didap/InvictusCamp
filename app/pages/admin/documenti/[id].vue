@@ -58,7 +58,6 @@ const details = computed(() => {
     { label: 'Sessione', value: d.session?.title ?? 'Nessuna: vale per tutto il camp' },
     { label: 'Caricato', value: `${formatDateTime(d.createdAt)}${d.createdBy ? `, da ${d.createdBy}` : ''}` },
     { label: 'Descrizione', value: d.description },
-    { label: 'Impronta SHA-256 del file', value: d.file.sha256 },
   ]
 })
 
@@ -151,7 +150,13 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
   <IcPage :title="doc?.title ?? 'Documento'" back="/admin/documenti" width="wide">
     <template v-if="doc" #actions>
       <UDropdownMenu :items="menuItems" :content="{ align: 'end' }">
-        <UButton icon="i-lucide-ellipsis" color="neutral" variant="outline" aria-label="Altre azioni sul documento" />
+        <UButton
+          icon="i-lucide-ellipsis"
+          color="neutral"
+          variant="ghost"
+          label="Altro"
+          :ui="{ label: 'max-sm:sr-only' }"
+        />
       </UDropdownMenu>
       <UButton
         icon="i-lucide-user-plus"
@@ -266,10 +271,16 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
 
       <IcSection title="Dettagli">
         <IcDataList :items="details" :columns="2" />
-        <div class="mt-6">
-          <p class="text-sm font-semibold text-muted">File</p>
-          <IcFileLink :file="doc.file" class="mt-1" />
-        </div>
+        <dl class="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-2">
+          <div class="min-w-0">
+            <dt class="text-sm font-semibold text-muted">File</dt>
+            <dd class="mt-1"><IcFileLink :file="doc.file" /></dd>
+          </div>
+          <div class="min-w-0">
+            <dt class="text-sm font-semibold text-muted">Impronta SHA-256 del file</dt>
+            <dd class="mt-0.5 font-mono text-sm break-all">{{ doc.file.sha256 }}</dd>
+          </div>
+        </dl>
       </IcSection>
 
       <IcSection title="Anteprima">

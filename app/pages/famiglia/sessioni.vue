@@ -42,6 +42,9 @@ const events = computed<CalendarEvent[]>(() =>
           : enumLabel('participationStatus', item.status),
     })),
 )
+// The month grid helps only with more than one session ahead: with one, or none ahead, the cards below
+// already say when it is (and an empty month would greet the family).
+const showCalendar = computed(() => events.value.filter(event => event.endDate >= today).length > 1)
 </script>
 
 <template>
@@ -66,7 +69,7 @@ const events = computed<CalendarEvent[]>(() =>
     <template v-else>
       <SessionsFamilyInvitations />
 
-      <IcSection v-if="events.length" title="Calendario">
+      <IcSection v-if="showCalendar" title="Calendario">
         <IcCalendarMonth :events="events" />
       </IcSection>
 
@@ -86,7 +89,7 @@ const events = computed<CalendarEvent[]>(() =>
             v-for="item in history"
             :id="`sessione-${item.sessionId}`"
             :key="item.id"
-            class="flex scroll-mt-6 flex-col gap-2 p-4 sm:flex-row sm:items-start sm:justify-between"
+            class="flex scroll-mt-6 flex-col items-start gap-2 p-4 sm:flex-row sm:justify-between"
           >
             <div class="min-w-0">
               <p class="font-semibold text-highlighted">{{ item.title }}</p>

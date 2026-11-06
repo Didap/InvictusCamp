@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { DropdownMenuItem } from '@nuxt/ui'
+import type { ButtonProps, DropdownMenuItem } from '@nuxt/ui'
 import type { SessionInput } from '#shared/schemas/sessions'
 import type { SessionCreated, SessionDetail, SessionMove, SessionTransitionResult } from '#shared/types/sessions'
 import { DEFAULT_LOCATION, enumMeta, type SessionStatus } from '#shared/utils/constants'
+import { todayIso } from '#shared/utils/dates'
 import { formatDateTime, formatDay, formatDayRange, plural } from '#shared/utils/format'
-import { isSessionEditable } from '#shared/utils/session-status'
+import { SESSION_TRANSITION_ACTIONS, isSessionEditable } from '#shared/utils/session-status'
 
 // One session (docs/spec.md 3.2): the status with its valid moves, then the tabs. Every move first
 // says what it does and how many emails leave. The tab lives in the query string (?tab=famiglie).
@@ -50,7 +51,9 @@ const EMAIL_KINDS: Record<string, (count: number) => string> = {
   'session.invite': n => (n === 1 ? '1 invito a una famiglia titolare' : `${n} inviti alle famiglie titolari`),
   'session.reserve': n => (n === 1 ? '1 avviso a una riserva' : `${n} avvisi alle riserve`),
   'session.confirmed': n => (n === 1 ? '1 conferma' : `${n} conferme`),
-  'session.cancelled': n => (n === 1 ? '1 avviso di annullamento' : `${n} avvisi di annullamento`),
+  'session.cancelled': n =>
+    n === 1 ? '1 avviso di annullamento a una famiglia' : `${n} avvisi di annullamento alle famiglie`,
+  'staff.convocation_cancelled': n => (n === 1 ? '1 avviso a una persona dello staff' : `${n} avvisi allo staff`),
 }
 
 function emailsSentence(move: SessionMove): string {
@@ -59,6 +62,42 @@ function emailsSentence(move: SessionMove): string {
     (EMAIL_KINDS[template] ?? (n => plural(n, 'email', 'email')))(count),
   )
   return `${move.emails === 1 ? 'Partirà 1 email' : `Partiranno ${move.emails} email`}: ${parts.join(' e ')}.`
+}
+
+/** What the confirmation of a move says, from what the page already knows (spec 3.2: nothing silent). */
+function moveNotes(move: SessionMove, s: SessionDetail): string[] {
+  const notes = [move.effect]
+  if (move.to === 'confirmed') {
+    const waiting = s.slots.held - s.slots.confirmed
+    const { free, reserves } = s.slots
+    notes.push(
+      waiting === 0
+        ? 'Tutte le famiglie titolari hanno risposto.'
+        : waiting === 1
+          ? '1 famiglia titolare non ha ancora risposto: potrà farlo anche dopo.'
+          : `${waiting} famiglie titolari non hanno ancora risposto: potranno farlo anche dopo.`,
+      free
+        ? `${free === 1 ? 'Resta 1 posto libero' : `Restano ${free} posti liberi`}${reserves ? ` e ${plural(reserves, 'riserva', 'riserve')} in attesa` : ''}.`
+        : 'Non restano posti liberi.',
+    )
+  }
+  if (move.to === 'cancelled') {
+    const convocations = s.staff.accepted + s.staff.waiting + s.staff.toSend
+    if (convocations) {
+      notes.push(
+        convocations === 1
+          ? 'Anche la convocazione dello staff viene annullata.'
+          : `Anche le ${convocations} convocazioni dello staff vengono annullate.`,
+      )
+    }
+  }
+  // "Segna come conclusa" already says it sends nothing.
+  if (move.emails || move.to !== 'completed') notes.push(emailsSentence(move))
+  if (move.to === 'inviting' && !s.responseDeadline) {
+    notes.push('Non hai indicato entro quando rispondere: puoi aggiungerlo prima, con «Modifica».')
+  }
+  if (move.to === 'completed' || move.to === 'cancelled') notes.push('Non si può tornare indietro.')
+  return notes
 }
 
 const SUCCESS: Record<SessionStatus, string> = {
@@ -86,13 +125,9 @@ async function applyMove(to: SessionStatus) {
     })
     return
   }
-  const notes = [move.effect, emailsSentence(move)]
-  if (to === 'inviting' && !current.responseDeadline) {
-    notes.push('Non hai indicato entro quando rispondere: puoi aggiungerlo prima, con «Modifica».')
-  }
   const ok = await confirm({
     title: `${move.label}?`,
-    description: notes.join(' '),
+    description: moveNotes(move, current).join(' '),
     confirmLabel: move.label,
     cancelLabel: 'Torna indietro',
     danger: to === 'cancelled',
@@ -223,24 +258,112 @@ async function save(values: SessionInput) {
   }
 }
 
-const nextStep = computed(() => {
+// ─── The next step ─────────────────────────────────────────────────────────────────────────────────
+
+/** The Famiglie tab, mounted only while open: a step can bring the focus to one of its buttons. */
+const familiesTab = ref<HTMLElement | null>(null)
+
+/**
+ * Opens the Famiglie tab and, once its list has loaded, puts the focus on the button with these words
+ * (or on the tab itself), so that the step is one key away.
+ */
+async function openFamilies(action?: 'add-families' | 'call-reserve') {
+  tab.value = 'famiglie'
+  // The tab opens with the route, its list loads after: wait for them, about three seconds at most.
+  for (let frame = 0; frame < 180; frame++) {
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    if (tab.value !== 'famiglie') return
+    if (!familiesTab.value) continue
+    if (!action) break
+    // FamiliesPanel marks its two main buttons with data-action.
+    const target = familiesTab.value.querySelector<HTMLElement>(`[data-action="${action}"]`)
+    if (target) {
+      target.focus()
+      target.scrollIntoView({ block: 'nearest' })
+      return
+    }
+  }
+  document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus()
+}
+
+const toFamilies = (action?: 'add-families' | 'call-reserve'): ButtonProps => ({
+  label: 'Vai alla scheda Famiglie',
+  trailingIcon: 'i-lucide-arrow-right',
+  onClick: () => openFamilies(action),
+})
+
+const doMove = (to: SessionStatus): ButtonProps => ({
+  label: SESSION_TRANSITION_ACTIONS[to],
+  icon: enumMeta('sessionStatus', to).icon,
+  loading: moving.value === to,
+  onClick: () => applyMove(to),
+})
+
+/** What to do now, with the button that does it or opens the place where it is done. */
+const nextStep = computed<{ text: string; action: ButtonProps } | null>(() => {
   const s = session.value
   if (!s) return null
   if (s.status === 'draft') {
     return s.slots.held
-      ? 'Quando le famiglie titolari e le riserve sono quelle giuste, apri gli inviti: solo allora ricevono l’email.'
-      : 'Aggiungi le famiglie titolari e le riserve dalla scheda Famiglie, poi apri gli inviti.'
+      ? {
+          text: 'Quando le famiglie titolari e le riserve sono quelle giuste, apri gli inviti: solo allora ricevono l’email.',
+          action: doMove('inviting'),
+        }
+      : {
+          text: 'Aggiungi le famiglie titolari e le riserve dalla scheda Famiglie, poi apri gli inviti.',
+          action: toFamilies('add-families'),
+        }
   }
-  if (s.status === 'inviting' || s.status === 'confirmed') {
-    if (s.slots.free > 0 && s.slots.reserves > 0) {
-      return `${s.slots.free === 1 ? 'C’è 1 posto libero' : `Ci sono ${s.slots.free} posti liberi`} e ${plural(s.slots.reserves, 'riserva', 'riserve')} in attesa: puoi chiamare la riserva dalla scheda Famiglie.`
+  if (s.status !== 'inviting' && s.status !== 'confirmed') return null
+  if (s.slots.free > 0 && s.slots.reserves > 0) {
+    return {
+      text: `${s.slots.free === 1 ? 'C’è 1 posto libero' : `Ci sono ${s.slots.free} posti liberi`} e ${plural(s.slots.reserves, 'riserva', 'riserve')} in attesa: puoi chiamare la riserva dalla scheda Famiglie.`,
+      action: toFamilies('call-reserve'),
     }
-    const waiting = s.slots.held - s.slots.confirmed
-    if (s.status === 'inviting' && waiting > 0) {
-      return `${waiting === 1 ? '1 famiglia titolare non ha' : `${waiting} famiglie titolari non hanno`} ancora risposto${s.responseDeadline ? `: il termine è il ${formatDay(s.responseDeadline, 'long')}` : ''}.`
+  }
+  const waiting = s.slots.held - s.slots.confirmed
+  if (s.status === 'inviting' && waiting > 0) {
+    return {
+      text: `${waiting === 1 ? '1 famiglia titolare non ha' : `${waiting} famiglie titolari non hanno`} ancora risposto${s.responseDeadline ? `: il termine è il ${formatDay(s.responseDeadline, 'long')}` : ''}.`,
+      action: toFamilies(),
     }
+  }
+  if (s.status === 'inviting' && s.slots.confirmed > 0) {
+    return {
+      text: 'Tutte le famiglie titolari hanno risposto: quando sei pronto, conferma la sessione.',
+      action: doMove('confirmed'),
+    }
+  }
+  if (s.status === 'confirmed' && s.endDate < todayIso()) {
+    return { text: 'La sessione è finita: segnala come conclusa.', action: doMove('completed') }
   }
   return null
+})
+
+// ─── Numbers ───────────────────────────────────────────────────────────────────────────────────────
+
+/** Under "3/6" confirmed: the places held, and the free ones while the session is open. */
+const placesHint = computed(() => {
+  const slots = session.value?.slots
+  if (!slots) return undefined
+  const held = plural(slots.held, 'posto occupato', 'posti occupati')
+  if (!editable.value) return held
+  return `${held} · ${slots.free ? plural(slots.free, 'libero', 'liberi') : 'nessuno libero'}`
+})
+
+/** Staff in words: who is on the way, convocations "da inviare", people "da trovare" (no one convoked yet). */
+const staffHint = computed(() => {
+  const staff = session.value?.staff
+  if (!staff || !editable.value) return undefined
+  const pending = staff.accepted - staff.confirmed + staff.waiting
+  const missing = Math.max(0, staff.needed - staff.accepted - staff.waiting - staff.toSend)
+  const parts = [
+    pending && `${pending} in attesa di risposta o firma`,
+    staff.toSend && `${staff.toSend} da inviare`,
+    missing && `${missing} da trovare`,
+  ].filter(Boolean)
+  if (parts.length) return parts.join(' · ')
+  return staff.needed ? 'Al completo' : 'Nessuna persona richiesta'
 })
 </script>
 
@@ -272,11 +395,13 @@ const nextStep = computed(() => {
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2 lg:shrink-0">
+          <!-- Outlined: the one solid button of each tab is the tab's own action. -->
           <UButton
             v-for="move in forwardMoves"
             :key="move.to"
             :label="move.label"
             :icon="enumMeta('sessionStatus', move.to).icon"
+            variant="outline"
             :loading="moving === move.to"
             :disabled="moving !== null"
             @click="applyMove(move.to)"
@@ -285,7 +410,7 @@ const nextStep = computed(() => {
             v-if="cancelMove"
             :label="cancelMove.label"
             icon="i-lucide-circle-x"
-            color="neutral"
+            color="error"
             variant="outline"
             :loading="moving === 'cancelled'"
             :disabled="moving !== null"
@@ -311,38 +436,44 @@ const nextStep = computed(() => {
             variant="subtle"
             icon="i-lucide-lightbulb"
             title="Il prossimo passo"
-            :description="nextStep"
+            :description="nextStep.text"
+            :actions="[{ size: 'md', disabled: moving !== null, ...nextStep.action }]"
             class="mb-8"
           />
 
           <div class="mb-10 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <IcStatCard
-              label="Posti occupati"
-              :value="`${session.slots.held}/${session.slots.total}`"
-              :hint="
-                session.slots.free ? plural(session.slots.free, 'posto libero', 'posti liberi') : 'Nessun posto libero'
-              "
-              icon="i-lucide-user-check"
+              label="Famiglie confermate"
+              :value="`${session.slots.confirmed}/${session.slots.total}`"
+              :hint="placesHint"
+              icon="i-lucide-circle-check"
               :to="tabLink('famiglie')"
             />
             <IcStatCard
-              label="Famiglie confermate"
-              :value="session.slots.confirmed"
-              :hint="`Su ${plural(session.slots.total, 'posto', 'posti')}`"
-              icon="i-lucide-circle-check"
+              v-if="editable"
+              :label="session.status === 'draft' ? 'Famiglie da invitare' : 'In attesa di risposta'"
+              :value="session.slots.held - session.slots.confirmed"
+              :hint="
+                session.status === 'draft'
+                  ? 'Ricevono l’invito quando apri gli inviti'
+                  : session.responseDeadline
+                    ? `Risposte entro il ${formatDay(session.responseDeadline)}`
+                    : 'Famiglie titolari invitate'
+              "
+              icon="i-lucide-hourglass"
               :to="tabLink('famiglie')"
             />
             <IcStatCard
               label="Riserve in attesa"
               :value="session.slots.reserves"
-              hint="Le chiami tu quando si libera un posto"
+              :hint="editable ? 'Le chiami tu quando si libera un posto' : undefined"
               icon="i-lucide-list-ordered"
               :to="tabLink('famiglie')"
             />
             <IcStatCard
               label="Staff confermato"
               :value="`${session.staff.confirmed}/${session.staff.needed}`"
-              :hint="`${session.staff.accepted} ${session.staff.accepted === 1 ? 'ha' : 'hanno'} accettato · ${session.staff.waiting} in attesa · ${session.staff.toSend} da convocare`"
+              :hint="staffHint"
               icon="i-lucide-id-card"
               :to="tabLink('staff')"
             />
@@ -380,7 +511,9 @@ const nextStep = computed(() => {
         </template>
 
         <template #famiglie>
-          <SessionsFamiliesPanel :session-id="session.id" @changed="refresh" />
+          <div ref="familiesTab">
+            <SessionsFamiliesPanel :session-id="session.id" @changed="refresh" />
+          </div>
         </template>
         <template #staff>
           <StaffSessionStaffPanel :session-id="session.id" />

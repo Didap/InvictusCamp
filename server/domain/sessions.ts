@@ -65,6 +65,7 @@ import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
+import { cancelSessionConvocations, sessionConvocationNotices } from './staff'
 
 /** Who acts: the signed-in user and the client address, for the audit. */
 export interface Actor {
@@ -296,16 +297,19 @@ function canReceive(row: Pick<ParticipationRow, 'userStatus'>): boolean {
   return row.userStatus !== 'disabled'
 }
 
-function movesOf(session: SessionRow, rows: ParticipationRow[]): SessionMove[] {
+/** `staffNotices`: the staff emails of a cancellation (sessionConvocationNotices). */
+function movesOf(session: SessionRow, rows: ParticipationRow[], staffNotices: number): SessionMove[] {
   return SESSION_TRANSITIONS[session.status].map(to => {
     const recipients = transitionRecipients(to, rows).filter(r => canReceive(r.row))
     const emailsByTemplate: Record<string, number> = {}
     for (const { template } of recipients) emailsByTemplate[template] = (emailsByTemplate[template] ?? 0) + 1
+    const staffEmails = to === 'cancelled' ? staffNotices : 0
+    if (staffEmails) emailsByTemplate['staff.convocation_cancelled'] = staffEmails
     return {
       to,
       label: SESSION_TRANSITION_ACTIONS[to],
       effect: SESSION_TRANSITION_EFFECTS[to],
-      emails: recipients.length,
+      emails: recipients.length + staffEmails,
       emailsByTemplate,
     }
   })
@@ -338,7 +342,11 @@ export async function getSessionDetail(db: DbOrTx, sessionId: string): Promise<S
     statusChangedAt: iso(row.statusChangedAt),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    moves: movesOf(row, participations),
+    moves: movesOf(
+      row,
+      participations,
+      canTransition(row.status, 'cancelled') ? await sessionConvocationNotices(db, row.id) : 0,
+    ),
     deletable: row.status === 'draft' && participations.length === 0 && (convocations?.count ?? 0) === 0,
   }
 }
@@ -636,7 +644,9 @@ export async function updateSession(
 /**
  * Moves the session to `to` (spec 3.2): draft → inviting invites the titolari and tells the reserves;
  * inviting → confirmed confirms to the titolari who confirmed; any → cancelled cancels every family
- * still in and tells those who had been invited. Returns the emails.
+ * still in and tells those who had been invited, and withdraws every open convocation of the staff
+ * (cancelSessionConvocations: those sent or accepted are told, their contract request is cancelled).
+ * Returns the emails.
  */
 export async function transitionSession(
   db: DbOrTx,
@@ -658,12 +668,15 @@ export async function transitionSession(
   const rows = await participationsOf(db, session.id)
   const recipients = transitionRecipients(to, rows)
 
+  let staffEmails: EmailMessage[] = []
   if (to === 'inviting') {
     await db
       .update(sessionFamilies)
       .set({ status: 'invited', invitedAt: now })
       .where(and(eq(sessionFamilies.sessionId, session.id), eq(sessionFamilies.status, 'selected')))
   } else if (to === 'cancelled') {
+    // Before the status changes: a convocation is withdrawn only while its session is still open.
+    staffEmails = await cancelSessionConvocations(db, ctx, { sessionId: session.id, actor: input.actor })
     await db
       .update(sessionFamilies)
       .set({ status: 'cancelled' })
@@ -671,9 +684,12 @@ export async function transitionSession(
   }
   await db.update(campSessions).set({ status: to, statusChangedAt: now }).where(eq(campSessions.id, session.id))
 
-  const emails = recipients
-    .filter(({ row }) => canReceive(row))
-    .map(({ row, template }) => familyEmail(ctx, template, row, session))
+  const emails = [
+    ...recipients
+      .filter(({ row }) => canReceive(row))
+      .map(({ row, template }) => familyEmail(ctx, template, row, session)),
+    ...staffEmails,
+  ]
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'session.status',

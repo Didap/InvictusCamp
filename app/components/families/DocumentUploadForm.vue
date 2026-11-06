@@ -27,6 +27,8 @@ const state = reactive<{
 
 const { options } = useEnums()
 const categories = options('personalDocumentCategory')
+// Nothing to drag on a touch screen: the drop zone only opens the file picker there.
+const touch = useMediaQuery('(pointer: coarse)')
 const memberItems = computed(() => [
   { value: WHOLE_FAMILY, label: 'Tutta la famiglia' },
   ...props.members.map(member => ({ value: member.id, label: fullName(member) })),
@@ -91,7 +93,7 @@ async function upload() {
       <UFileUpload
         v-model="state.file"
         accept="application/pdf,image/jpeg,image/png"
-        label="Trascina qui il file o sceglilo dal dispositivo"
+        :label="touch ? 'Scegli il file dal dispositivo' : 'Trascina qui il file o sceglilo dal dispositivo'"
         description="PDF, JPG o PNG, fino a 15 MB"
         icon="i-lucide-upload"
         :disabled="uploading"

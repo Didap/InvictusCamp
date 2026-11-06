@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
+import { USER_LIST_SORTS, type UserListSort } from '#shared/schemas/users'
 import type { Paginated } from '#shared/types/api'
 import type { UserListItem } from '#shared/types/users'
 import { formatDateTime, fullName, plural } from '#shared/utils/format'
 
-// Every account (docs/spec.md, 3.1): search, filter by role and status, invite a person, send the
-// invitation again, send a password link, disable and enable (never your own account).
+// Every account (docs/spec.md, 3.1): search, filter by role and status, sort by name, role, status or
+// last sign-in (on the server: the list comes a page at a time), invite a person, send the invitation
+// again, send a password link, disable and enable (never your own account).
 const PAGE_SIZE = 25
 const route = useRoute()
 const router = useRouter()
@@ -19,15 +21,19 @@ const q = ref(fromQuery(route.query.q, ''))
 const role = ref(fromQuery(route.query.role))
 const status = ref(fromQuery(route.query.status))
 const page = ref(Number(route.query.page) || 1)
+const sort = ref<UserListSort>(USER_LIST_SORTS.find(value => value === route.query.sort) ?? ('name' as const))
+const order = ref<'asc' | 'desc'>(route.query.order === 'desc' ? 'desc' : 'asc')
 const search = refDebounced(q, 300)
 
-watch([search, role, status], () => {
+watch([search, role, status, sort, order], () => {
   page.value = 1
 })
 const query = computed(() => ({
   q: search.value.trim() || undefined,
   role: role.value === 'all' ? undefined : role.value,
   status: status.value === 'all' ? undefined : status.value,
+  sort: sort.value === 'name' && order.value === 'asc' ? undefined : sort.value,
+  order: sort.value === 'name' && order.value === 'asc' ? undefined : order.value,
   page: page.value > 1 ? page.value : undefined,
 }))
 watch(query, value => router.replace({ query: value }))
@@ -141,11 +147,37 @@ function actionsFor(user: UserListItem): DropdownMenuItem[][] {
   return [open, access, state].filter(group => group.length)
 }
 
+const UButton = resolveComponent('UButton')
+
+/** A column header that sorts the whole list (like /admin/famiglie): a second click reverses it. */
+function sortHeader(label: string, key: UserListSort) {
+  return () => {
+    const active = sort.value === key
+    const next = active && order.value === 'asc' ? 'desc' : 'asc'
+    return h(UButton, {
+      color: 'neutral',
+      variant: 'ghost',
+      label,
+      trailingIcon: active
+        ? order.value === 'asc'
+          ? 'i-lucide-arrow-up'
+          : 'i-lucide-arrow-down'
+        : 'i-lucide-arrow-up-down',
+      class: '-mx-2.5 font-semibold',
+      'aria-label': `${label}: ordina in ordine ${next === 'asc' ? 'crescente' : 'decrescente'}`,
+      onClick: () => {
+        sort.value = key
+        order.value = next
+      },
+    })
+  }
+}
+
 const columns: TableColumn<UserListItem>[] = [
-  { id: 'person', header: 'Persona' },
-  { accessorKey: 'role', header: 'Ruolo' },
-  { accessorKey: 'status', header: 'Stato' },
-  { accessorKey: 'lastLoginAt', header: 'Ultimo accesso' },
+  { id: 'person', header: sortHeader('Persona', 'name') },
+  { accessorKey: 'role', header: sortHeader('Ruolo', 'role') },
+  { accessorKey: 'status', header: sortHeader('Stato', 'status') },
+  { accessorKey: 'lastLoginAt', header: sortHeader('Ultimo accesso', 'lastLogin') },
   { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Azioni') },
 ]
 </script>

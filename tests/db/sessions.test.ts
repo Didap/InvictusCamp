@@ -1,5 +1,5 @@
 // Sessions, places and reserves: every rule of docs/spec.md 3.2 and 3.3, against a real database.
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
   addFamilies,
@@ -210,6 +210,82 @@ describe('life of a session (spec 3.2)', () => {
     const result = await transitionSession(db, ctx, { sessionId: session.id, to: 'cancelled', actor })
     expect(result.emails).toEqual([])
     expect((await participationRow(selected.participation.id)).status).toBe('cancelled')
+  })
+
+  it('cancelling withdraws every open convocation, tells the staff it had reached and says so first', async () => {
+    const contract = await makeDocument(db, { category: 'contract' })
+    const other = await makeDocument(db, { category: 'regulation' })
+    const { session, actor } = await setup({ status: 'confirmed' })
+    await db.update(t.campSessions).set({ contractDocumentId: contract.id }).where(eq(t.campSessions.id, session.id))
+    const family = await join(session.id, 'slot', 'confirmed')
+    const [draft, waiting, accepted, declined, disabled] = [
+      await makeStaff(db),
+      await makeStaff(db),
+      await makeStaff(db),
+      await makeStaff(db),
+      await makeStaff(db),
+    ]
+    await db.update(t.users).set({ status: 'disabled' }).where(eq(t.users.id, disabled.user.id))
+    const convocations = await db
+      .insert(t.sessionStaff)
+      .values([
+        { sessionId: session.id, userId: draft.user.id, status: 'draft' as const },
+        { sessionId: session.id, userId: waiting.user.id, status: 'sent' as const },
+        { sessionId: session.id, userId: accepted.user.id, status: 'accepted' as const },
+        { sessionId: session.id, userId: declined.user.id, status: 'declined' as const },
+        { sessionId: session.id, userId: disabled.user.id, status: 'sent' as const },
+      ])
+      .returning()
+    const [contractRequest, otherRequest] = await db
+      .insert(t.signatureRequests)
+      .values([
+        { documentId: contract.id, userId: accepted.user.id, status: 'pending' as const, sessionId: session.id },
+        { documentId: other.id, userId: accepted.user.id, status: 'pending' as const },
+      ])
+      .returning()
+
+    const preview = (await getSessionDetail(db, session.id)).moves.find(move => move.to === 'cancelled')!
+    expect(preview.emails).toBe(3)
+    expect(preview.emailsByTemplate).toEqual({ 'session.cancelled': 1, 'staff.convocation_cancelled': 2 })
+
+    const result = await transitionSession(db, ctx, { sessionId: session.id, to: 'cancelled', actor })
+
+    expect(sent(result.emails)).toEqual(
+      [
+        `session.cancelled ${family.user.email}`,
+        `staff.convocation_cancelled ${waiting.user.email}`,
+        `staff.convocation_cancelled ${accepted.user.email}`,
+      ].sort(),
+    )
+    const notice = result.emails.find(email => email.template === 'staff.convocation_cancelled')!
+    expect(notice.subject).toBe('Sessione annullata: «Sessione di prova»')
+    const rows = await db.select().from(t.sessionStaff).where(eq(t.sessionStaff.sessionId, session.id))
+    const statusOf = (userId: string) => rows.find(row => row.userId === userId)?.status
+    expect(statusOf(draft.user.id)).toBeUndefined()
+    expect([waiting, accepted, disabled].map(person => statusOf(person.user.id))).toEqual([
+      'cancelled',
+      'cancelled',
+      'cancelled',
+    ])
+    expect(statusOf(declined.user.id)).toBe('declined')
+    const requests = await db.select().from(t.signatureRequests)
+    expect(requests.find(row => row.id === contractRequest!.id)!.status).toBe('cancelled')
+    expect(requests.find(row => row.id === otherRequest!.id)!.status).toBe('pending')
+    const audit = await db
+      .select()
+      .from(t.auditLog)
+      .where(
+        inArray(
+          t.auditLog.entityId,
+          convocations.map(row => row.id),
+        ),
+      )
+    expect(audit.map(entry => entry.action).sort()).toEqual([
+      'convocation.cancel',
+      'convocation.cancel',
+      'convocation.cancel',
+      'convocation.remove',
+    ])
   })
 })
 

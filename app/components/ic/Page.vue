@@ -20,7 +20,7 @@ const WIDTHS = { narrow: 'max-w-3xl', default: 'max-w-6xl', wide: 'max-w-7xl', f
 <template>
   <UDashboardPanel :ui="{ body: 'p-4 sm:p-6 lg:p-8' }">
     <template #header>
-      <UDashboardNavbar :ui="{ right: 'gap-2', title: 'text-lg font-bold text-highlighted' }">
+      <UDashboardNavbar :ui="{ right: 'gap-2', title: 'text-xl font-bold text-highlighted' }">
         <template #leading>
           <UDashboardSidebarCollapse class="lg:hidden" />
           <UButton

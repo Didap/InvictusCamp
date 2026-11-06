@@ -19,7 +19,7 @@ const places = computed(() => {
   const p = props.session.places
   const waiting = p.held - p.confirmed
   return {
-    summary: p.total ? `${p.confirmed} su ${plural(p.total, 'posto', 'posti')}` : 'Nessun posto',
+    summary: p.total ? `${p.confirmed}/${p.total} ${p.confirmed === 1 ? 'confermata' : 'confermate'}` : 'Nessun posto',
     confirmed: { value: p.confirmed, label: plural(p.confirmed, 'confermata', 'confermate') },
     pending: {
       value: waiting,
@@ -33,15 +33,19 @@ const places = computed(() => {
   }
 })
 
+// The same words as the sessions list and the session page: "da inviare" for convocations not sent yet,
+// "da trovare" for the people nobody has been convoked for yet.
 const staff = computed(() => {
   const s = props.session.staff
   const waiting = s.accepted - s.confirmed + s.awaiting
   const missing = Math.max(0, s.needed - s.confirmed - waiting - s.toSend)
   return {
-    summary: s.needed ? `${s.confirmed} su ${plural(s.needed, 'persona', 'persone')}` : 'Nessuna persona richiesta',
-    confirmed: { value: s.confirmed, label: plural(s.confirmed, 'confermata', 'confermate') },
+    summary: s.needed
+      ? `${s.confirmed}/${s.needed} ${s.confirmed === 1 ? 'confermato' : 'confermati'}`
+      : 'Nessuna persona richiesta',
+    confirmed: { value: s.confirmed, label: plural(s.confirmed, 'confermato', 'confermati') },
     pending: { value: waiting, label: `${waiting} in attesa di risposta o firma` },
-    rest: missing ? plural(missing, 'da trovare', 'da trovare') : undefined,
+    rest: missing ? `${missing} da trovare` : undefined,
     toSend: s.toSend ? plural(s.toSend, 'convocazione da inviare', 'convocazioni da inviare') : null,
   }
 })

@@ -41,9 +41,29 @@ function initialState(member: OwnFamilyMember | null): State {
 }
 
 const state = reactive<State>(initialState(null))
+// What the form held when it opened: health details take time to write, so closing with changes asks first.
+const opened = ref('')
 watch(open, value => {
-  if (value) Object.assign(state, initialState(props.member))
+  if (!value) return
+  Object.assign(state, initialState(props.member))
+  opened.value = JSON.stringify(state)
 })
+const dirty = computed(() => open.value && JSON.stringify(state) !== opened.value)
+const confirm = useConfirm()
+
+async function close() {
+  if (dirty.value) {
+    const ok = await confirm({
+      title: 'Chiudi senza salvare?',
+      description: 'Quello che hai scritto in questa scheda andrà perso.',
+      confirmLabel: 'Chiudi senza salvare',
+      cancelLabel: 'Continua a scrivere',
+      danger: true,
+    })
+    if (!ok) return
+  }
+  open.value = false
+}
 
 const { options } = useEnums()
 const relationships = options('memberRelationship')
@@ -91,8 +111,21 @@ async function save() {
     v-model:open="open"
     :title="member ? `Modifica ${fullName(member)}` : 'Aggiungi un componente'"
     description="I campi con l’asterisco sono obbligatori."
-    :ui="{ content: 'sm:max-w-2xl' }"
+    :dismissible="!dirty"
+    :close="false"
+    :ui="{ content: 'sm:max-w-2xl', wrapper: 'pe-12' }"
   >
+    <!-- Not the built-in close: it would close at once, without asking about the changes. -->
+    <template #actions>
+      <UButton
+        icon="i-lucide-x"
+        color="neutral"
+        variant="ghost"
+        aria-label="Chiudi"
+        class="absolute end-4 top-4 pointer-coarse:size-11 pointer-coarse:justify-center"
+        @click="close"
+      />
+    </template>
     <template #body>
       <UForm :schema="memberSchema" :state="state" class="space-y-5" @submit="save">
         <div class="grid gap-5 sm:grid-cols-2">
@@ -145,7 +178,7 @@ async function save() {
               :name="`health.disability.${field.key}`"
               hint="Facoltativo"
             >
-              <UTextarea v-model="state.health.disability[field.key]" autoresize :rows="2" class="w-full" />
+              <UTextarea v-model="state.health.disability[field.key]" autoresize :rows="4" class="w-full" />
             </UFormField>
           </template>
         </fieldset>
@@ -159,13 +192,7 @@ async function save() {
         />
 
         <div class="flex flex-wrap justify-end gap-2 pt-2">
-          <UButton
-            label="Annulla"
-            color="neutral"
-            variant="outline"
-            class="pointer-coarse:min-h-11"
-            @click="open = false"
-          />
+          <UButton label="Annulla" color="neutral" variant="outline" class="pointer-coarse:min-h-11" @click="close" />
           <UButton
             type="submit"
             :loading="saving"

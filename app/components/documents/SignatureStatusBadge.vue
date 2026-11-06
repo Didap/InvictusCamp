@@ -3,10 +3,9 @@ import type { EnumMeta, SignatureStatus } from '#shared/utils/constants'
 
 // The status of a request. A document to read (requiresSignature false) reads "Da leggere" / "Letto"
 // instead of "Da firmare" / "Firmato"; everything else is the usual <IcStatusBadge>.
-const props = withDefaults(
-  defineProps<{ status: SignatureStatus; requiresSignature: boolean; size?: 'sm' | 'md' | 'lg' }>(),
-  { size: 'md' },
-)
+const props = withDefaults(defineProps<{ status: SignatureStatus; requiresSignature: boolean; size?: 'lg' | 'xl' }>(), {
+  size: 'lg',
+})
 
 const READ: Partial<Record<SignatureStatus, EnumMeta>> = {
   pending: { label: 'Da leggere', icon: 'i-lucide-eye', color: 'warning' },

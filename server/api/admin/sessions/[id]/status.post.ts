@@ -2,7 +2,7 @@ import { transitionSession } from '#server/domain/sessions'
 import { sessionTransitionSchema } from '#shared/schemas/sessions'
 import type { SessionTransitionResult } from '#shared/types/sessions'
 
-/** Moves the session to another status (spec 3.2) and sends the families' emails after the commit. */
+/** Moves the session to another status (spec 3.2) and sends the families' and staff's emails after the commit. */
 export default defineEventHandler(async (event): Promise<SessionTransitionResult> => {
   const admin = await requireAdmin(event)
   const sessionId = requireUuidParam(event, 'id')

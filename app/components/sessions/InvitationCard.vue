@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { contactSentence, type ContactConfig } from '~/components/ic/ContactLine.vue'
 import type { FamilySessionItem } from '#shared/types/sessions'
 import { todayIso } from '#shared/utils/dates'
 import { formatDay, formatDayRange } from '#shared/utils/format'
@@ -10,12 +11,15 @@ const emit = defineEmits<{ answered: [] }>()
 
 const api = useApi()
 const confirm = useConfirm()
+const contact = useRuntimeConfig().public.contact as ContactConfig
 const titleId = useId()
 const saving = ref(false)
 const declineOpen = ref(false)
 
 const range = computed(() => formatDayRange(props.item.startDate, props.item.endDate, 'long'))
 const waitingReserve = computed(() => props.item.kind === 'reserve' && props.item.status === 'invited')
+// Confirmed and not over yet: the family must know how to tell the camp it can no longer come.
+const canStillCancel = computed(() => props.item.status === 'confirmed' && props.item.sessionStatus !== 'completed')
 
 const message = computed(() => {
   const { item } = props
@@ -33,8 +37,8 @@ const message = computed(() => {
   if (item.status === 'confirmed') {
     if (item.sessionStatus === 'completed') return 'La sessione è conclusa. Grazie di aver partecipato.'
     return item.sessionStatus === 'confirmed'
-      ? 'La sessione è confermata: ti aspettiamo al camp con la tua famiglia. Se non puoi più partecipare, avvisa l’amministrazione del camp.'
-      : 'Hai confermato la partecipazione. Ti scriviamo quando la sessione è confermata. Se non puoi più partecipare, avvisa l’amministrazione del camp.'
+      ? 'La sessione è confermata: ti aspettiamo al camp con la tua famiglia.'
+      : 'Hai confermato la partecipazione. Ti scriviamo quando la sessione è confermata.'
   }
   if (item.canConfirm) {
     return 'La tua famiglia è invitata a partecipare.'
@@ -72,9 +76,9 @@ async function answer(value: { answer: 'confirmed' | 'declined'; reason: string 
 async function confirmPlace() {
   const ok = await confirm({
     title: 'Confermi la partecipazione?',
-    description: `La tua famiglia partecipa a «${props.item.title}», ${range.value}. Se poi non potete più venire, avvisa l’amministrazione del camp.`,
+    description: `La tua famiglia partecipa a «${props.item.title}», ${range.value}. ${contactSentence(contact, 'Se poi non potete più venire')}`,
     confirmLabel: 'Conferma',
-    cancelLabel: 'Non ancora',
+    cancelLabel: 'Torna indietro',
   })
   if (ok) await answer({ answer: 'confirmed', reason: null })
 }
@@ -95,6 +99,7 @@ async function confirmPlace() {
     <p class="text-muted">{{ item.location }}</p>
     <p v-if="item.description" class="mt-3 max-w-prose">{{ item.description }}</p>
     <p class="mt-4 max-w-prose">{{ message }}</p>
+    <IcContactLine v-if="canStillCancel" lead="Se non puoi più partecipare" class="mt-1 max-w-prose" />
     <p v-if="item.status === 'declined' && item.declineReason" class="mt-1 max-w-prose text-sm text-muted">
       Motivo: {{ item.declineReason }}
     </p>
@@ -128,16 +133,20 @@ async function confirmPlace() {
     <SessionsAnswerModal
       v-model:open="declineOpen"
       :title="item.kind === 'slot' ? `Rinunci a «${item.title}»?` : 'Esci dalla lista di riserva?'"
-      :description="
-        item.kind === 'slot'
-          ? 'Il posto passa a un’altra famiglia in attesa. Se cambi idea, contatta l’amministrazione del camp.'
-          : `La tua famiglia non sarà più in lista di riserva per «${item.title}».`
-      "
       :answers="['declined']"
       :submit-label="item.kind === 'slot' ? 'Rinuncia al posto' : 'Esci dalla lista'"
       :loading="saving"
       reason-help="Se vuoi, scrivi il motivo: lo legge solo l’amministrazione del camp. Non servono dettagli sulla salute."
       @submit="answer"
-    />
+    >
+      <template #description>
+        {{
+          item.kind === 'slot'
+            ? 'Il posto passa a un’altra famiglia in attesa.'
+            : `La tua famiglia non sarà più in lista di riserva per «${item.title}».`
+        }}
+        <IcContactLine as="span" lead="Se cambi idea" />
+      </template>
+    </SessionsAnswerModal>
   </article>
 </template>

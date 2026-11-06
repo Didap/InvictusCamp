@@ -205,40 +205,25 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
         icon: 'i-lucide-send',
       })
     }
+    // "Da trovare": people nobody has been convoked for yet (the same words as the session pages).
     const missing = s.staff.needed - s.staff.accepted - s.staff.awaiting - s.staff.toSend
     if (open && missing > 0) {
       todo.push({
         key: `${s.id}:staff`,
-        label: `«${s.title}»: ${plural(missing, 'persona dello staff da convocare', 'persone dello staff da convocare')}`,
-        detail: `${s.staff.accepted} su ${s.staff.needed} hanno accettato`,
+        label: `«${s.title}»: ${plural(missing, 'persona dello staff da trovare', 'persone dello staff da trovare')}`,
+        detail: `Staff ${s.staff.confirmed}/${s.staff.needed} ${s.staff.confirmed === 1 ? 'confermato' : 'confermati'}`,
         to: sessionTab(s.id, 'staff'),
         icon: 'i-lucide-user-plus',
       })
     }
   }
-  if (counts.applicationsToReview > 0) {
-    todo.push({
-      key: 'applications',
-      label: `${plural(counts.applicationsToReview, 'candidatura da valutare', 'candidature da valutare')}`,
-      to: '/admin/staff?tab=review',
-      icon: 'i-lucide-inbox',
-    })
-  }
+  // Applications to review and emails not delivered are numbers of their own above the list (index.vue).
   if (overdueSignatures > 0) {
     todo.push({
       key: 'signatures',
       label: `${plural(overdueSignatures, 'firma oltre la scadenza', 'firme oltre la scadenza')}: manda un promemoria`,
       to: '/admin/documenti',
       icon: 'i-lucide-pen-line',
-    })
-  }
-  if (counts.emailsFailed > 0) {
-    todo.push({
-      key: 'emails',
-      label: `${plural(counts.emailsFailed, 'email non recapitata', 'email non recapitate')}: controlla gli indirizzi`,
-      detail: `Negli ultimi ${FAILED_EMAIL_DAYS} giorni`,
-      to: `/admin/comunicazioni?tab=registro&status=failed&days=${FAILED_EMAIL_DAYS}`,
-      icon: 'i-lucide-mail-warning',
     })
   }
   if (expiredInvites > 0) {

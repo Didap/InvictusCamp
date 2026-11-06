@@ -132,16 +132,15 @@ const columns = computed<TableColumn<SignatureRequestRow>[]>(() => [
         <DocumentsSignatureStatusBadge
           :status="row.original.status"
           :requires-signature="row.original.document.requiresSignature"
-          size="sm"
         />
       </template>
       <template #requested-cell="{ row }">
-        <p class="text-sm tabular-nums">{{ formatDay(row.original.requestedAt.slice(0, 10)) }}</p>
-        <p v-if="row.original.dueDate" class="text-sm text-muted">{{ dueText(row.original) }}</p>
+        <p class="text-sm whitespace-nowrap tabular-nums">{{ formatDay(row.original.requestedAt.slice(0, 10)) }}</p>
+        <p v-if="row.original.dueDate" class="text-sm whitespace-nowrap text-muted">{{ dueText(row.original) }}</p>
       </template>
       <template #signed-cell="{ row }">
         <template v-if="row.original.status === 'signed'">
-          <p class="text-sm tabular-nums">{{ signedText(row.original) }}</p>
+          <p class="text-sm whitespace-nowrap tabular-nums">{{ signedText(row.original) }}</p>
           <p v-if="row.original.document.requiresSignature" class="text-sm break-words text-muted">
             come «{{ row.original.signedName }}»
           </p>
@@ -149,7 +148,7 @@ const columns = computed<TableColumn<SignatureRequestRow>[]>(() => [
         <span v-else class="text-sm text-dimmed">Non ancora</span>
       </template>
       <template #reminded-cell="{ row }">
-        <span class="text-sm" :class="row.original.remindedAt ? 'text-default' : 'text-dimmed'">
+        <span class="text-sm whitespace-nowrap" :class="row.original.remindedAt ? 'text-default' : 'text-dimmed'">
           {{ row.original.remindedAt ? formatDateTime(row.original.remindedAt) : 'Nessuno' }}
         </span>
       </template>
@@ -180,22 +179,23 @@ const columns = computed<TableColumn<SignatureRequestRow>[]>(() => [
           <ULink v-else :to="`/admin/documenti/${row.document.id}`" class="block font-semibold text-primary">
             {{ row.document.title }}
           </ULink>
-          <DocumentsSignatureStatusBadge
-            :status="row.status"
-            :requires-signature="row.document.requiresSignature"
-            size="sm"
-          />
+          <DocumentsSignatureStatusBadge :status="row.status" :requires-signature="row.document.requiresSignature" />
           <p class="text-sm text-muted">
             <template v-if="row.status === 'signed'">
-              {{ row.document.requiresSignature ? 'Firmato' : 'Letto' }} il {{ signedText(row)
-              }}<template v-if="row.document.requiresSignature"> come «{{ row.signedName }}»</template>
+              {{ row.document.requiresSignature ? 'Firmato' : 'Letto' }} il
+              <span class="whitespace-nowrap">{{ signedText(row) }}</span
+              ><template v-if="row.document.requiresSignature"> come «{{ row.signedName }}»</template>
             </template>
             <template v-else>
-              Richiesta il {{ formatDay(row.requestedAt.slice(0, 10))
-              }}<template v-if="row.dueDate">, {{ dueText(row).toLowerCase() }}</template>
+              Richiesta il <span class="whitespace-nowrap">{{ formatDay(row.requestedAt.slice(0, 10)) }}</span
+              ><template v-if="row.dueDate"
+                >, <span class="whitespace-nowrap">{{ dueText(row).toLowerCase() }}</span></template
+              >
             </template>
           </p>
-          <p v-if="row.remindedAt" class="text-sm text-muted">Promemoria il {{ formatDateTime(row.remindedAt) }}</p>
+          <p v-if="row.remindedAt" class="text-sm text-muted">
+            Promemoria il <span class="whitespace-nowrap">{{ formatDateTime(row.remindedAt) }}</span>
+          </p>
         </div>
         <UDropdownMenu v-if="actions(row).length" :items="actions(row)" :content="{ align: 'end' }">
           <UButton
