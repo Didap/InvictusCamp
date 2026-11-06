@@ -1,0 +1,173 @@
+@import 'tailwindcss';
+@import '@nuxt/ui';
+
+/*
+ * Invictus Camp, gestionale. Colours from invictuscamp.it and its logo (DESIGN.md is the authority;
+ * scripts/check-contrast.mjs verifies every text pair at WCAG AA). Light theme only.
+ *   blu     primary   site #2373d4, logo #1d89c7
+ *   sabbia  neutral   the site's cream #fcf9ef
+ *   verde   success   site #008d36
+ *   rosso   error     site #c80000, logo #cb333a
+ *   giallo  warning   site #f3b200, logo #fcbc50
+ *   viola   secondary wordmark #662483
+ *   azzurro info      logo #1d89c7
+ */
+
+@theme static {
+  --font-sans: 'Atkinson Hyperlegible Next', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Atkinson Hyperlegible Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  --color-blu-50: #eef5fc;
+  --color-blu-100: #dbe9f9;
+  --color-blu-200: #bad5f3;
+  --color-blu-300: #8ab8ea;
+  --color-blu-400: #5596de;
+  --color-blu-500: #2373d4;
+  --color-blu-600: #1d5fb0;
+  --color-blu-700: #1a4e8e;
+  --color-blu-800: #184274;
+  --color-blu-900: #16375f;
+  --color-blu-950: #0e233e;
+
+  --color-sabbia-50: #fcf9ef;
+  --color-sabbia-100: #f5f0e2;
+  --color-sabbia-200: #e9e2cf;
+  --color-sabbia-300: #d6ccb4;
+  --color-sabbia-400: #ada38b;
+  --color-sabbia-500: #877e68;
+  --color-sabbia-600: #6a6352;
+  --color-sabbia-700: #514b3e;
+  --color-sabbia-800: #39352c;
+  --color-sabbia-900: #27241e;
+  --color-sabbia-950: #1a1814;
+
+  --color-verde-50: #ebf8ef;
+  --color-verde-100: #cdeed8;
+  --color-verde-200: #9ddcb3;
+  --color-verde-300: #62c486;
+  --color-verde-400: #2aa95d;
+  --color-verde-500: #008d36;
+  --color-verde-600: #00782e;
+  --color-verde-700: #006227;
+  --color-verde-800: #054f22;
+  --color-verde-900: #08411e;
+  --color-verde-950: #022510;
+
+  --color-rosso-50: #fdf0f0;
+  --color-rosso-100: #fbdcdc;
+  --color-rosso-200: #f6b9b9;
+  --color-rosso-300: #ee8c8c;
+  --color-rosso-400: #e25555;
+  --color-rosso-500: #d42a2a;
+  --color-rosso-600: #c80000;
+  --color-rosso-700: #a60000;
+  --color-rosso-800: #890505;
+  --color-rosso-900: #720a0a;
+  --color-rosso-950: #400202;
+
+  --color-giallo-50: #fef9e8;
+  --color-giallo-100: #fdf0c4;
+  --color-giallo-200: #fbe08a;
+  --color-giallo-300: #f8cb48;
+  --color-giallo-400: #f3b200;
+  --color-giallo-500: #d99a00;
+  --color-giallo-600: #b37800;
+  --color-giallo-700: #8f5b00;
+  --color-giallo-800: #764a06;
+  --color-giallo-900: #643e0b;
+  --color-giallo-950: #3a2100;
+
+  --color-viola-50: #f8f2fb;
+  --color-viola-100: #f0e2f6;
+  --color-viola-200: #e1c5ed;
+  --color-viola-300: #cb9ddf;
+  --color-viola-400: #ae6cca;
+  --color-viola-500: #9346b1;
+  --color-viola-600: #7a3393;
+  --color-viola-700: #662483;
+  --color-viola-800: #551f6c;
+  --color-viola-900: #481d5a;
+  --color-viola-950: #2d0a3a;
+
+  --color-azzurro-50: #eef8fd;
+  --color-azzurro-100: #d7eefa;
+  --color-azzurro-200: #b0dcf4;
+  --color-azzurro-300: #79c3ec;
+  --color-azzurro-400: #3fa5df;
+  --color-azzurro-500: #1d89c7;
+  --color-azzurro-600: #156fa7;
+  --color-azzurro-700: #135a87;
+  --color-azzurro-800: #154c70;
+  --color-azzurro-900: #16405e;
+  --color-azzurro-950: #0e2a3f;
+
+  /* The seven colours of the wordmark, for the brand stripe and categorical marks only. */
+  --color-brand-red: #e30613;
+  --color-brand-orange: #e94e1b;
+  --color-brand-amber: #f39200;
+  --color-brand-yellow: #f9b233;
+  --color-brand-green: #008d36;
+  --color-brand-blue: #1d71b8;
+  --color-brand-purple: #662483;
+}
+
+:root {
+  --ui-radius: 0.5rem;
+
+  /* Surfaces: the page is the site's cream, panels are white. */
+  --ui-bg: #fcf9ef;
+  --ui-bg-muted: #f5f0e2;
+  --ui-bg-elevated: #ffffff;
+  --ui-bg-accented: #e9e2cf;
+  --ui-bg-inverted: #27241e;
+
+  --ui-border: #e6dfcd;
+  --ui-border-muted: #efe9da;
+  --ui-border-accented: #877e68;
+  --ui-border-inverted: #27241e;
+
+  --ui-text-dimmed: #6a6352;
+  --ui-text-muted: #5b5446;
+  --ui-text-toned: #4a4539;
+  --ui-text: #2f2b24;
+  --ui-text-highlighted: #1a1814;
+  --ui-text-inverted: #ffffff;
+
+  /* Semantic colours, one step darker than the brand swatch where text needs 4.5:1 on cream. */
+  --ui-primary: #1d5fb0;
+  --ui-secondary: #662483;
+  --ui-success: #006227;
+  --ui-info: #135a87;
+  --ui-warning: #8f5b00;
+  --ui-error: #c80000;
+}
+
+@layer base {
+  html {
+    background: var(--ui-bg);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-size: 1rem;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: var(--color-blu-200);
+    color: var(--ui-text-highlighted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

@@ -1,0 +1,35 @@
+import type { ApiIssue } from '#shared/types/api'
+
+interface ApiErrorBody {
+  message?: string
+  statusMessage?: string
+  data?: { issues?: ApiIssue[]; reason?: string }
+}
+
+interface FetchErrorLike {
+  name?: string
+  statusCode?: number
+  data?: ApiErrorBody
+}
+
+/** The `data` the server attached to an error (createError({ data })), e.g. { reason } or { issues }. */
+export function apiErrorData(error: unknown): ApiErrorBody['data'] | undefined {
+  return (error as FetchErrorLike | null)?.data?.data
+}
+
+/** The Italian message of an API error, or a fallback. */
+export function apiErrorMessage(error: unknown, fallback = 'Qualcosa non ha funzionato: riprova'): string {
+  const e = error as FetchErrorLike | null
+  if (e?.data?.message) return e.data.message
+  if (e?.statusCode === 413) return 'Il file è troppo grande'
+  if (e?.name === 'FetchError' && !e.statusCode) return 'Connessione assente: controlla la rete e riprova'
+  return fallback
+}
+
+export function notifyError(error: unknown, title = 'Operazione non riuscita') {
+  useToast().add({ title, description: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
+}
+
+export function notifySuccess(title: string, description?: string) {
+  useToast().add({ title, description, color: 'success', icon: 'i-lucide-circle-check' })
+}
