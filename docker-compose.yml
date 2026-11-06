@@ -1,0 +1,23 @@
+# Local Postgres for development and tests. Same major version (17) as `shared-postgres`, the
+# shared database of the Coolify project `shared-infra`, where the test deployment will run.
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: invictuscamp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: invictuscamp
+      POSTGRES_PASSWORD: invictuscamp
+      POSTGRES_DB: invictuscamp
+    ports:
+      - '127.0.0.1:5436:5432'
+    volumes:
+      - invictuscamp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U invictuscamp -d invictuscamp']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  invictuscamp_pgdata:

@@ -1,0 +1,158 @@
+// DTOs of the families area (A3). Health details (MemberHealth) travel only in the family's own
+// endpoints and in the reserved endpoint of the administration, never in lists.
+import type { FileDto, Paginated } from './api'
+import type { DisabilityInfo, FormAnswers } from './domain'
+import type {
+  FamilyFormStatus,
+  MemberRelationship,
+  ParticipationKind,
+  ParticipationStatus,
+  PersonalDocumentCategory,
+  SessionStatus,
+  UserStatus,
+} from '../utils/constants'
+
+/** A session the family takes part in, as the family home and the admin list show it. */
+export interface FamilySessionRef {
+  id: string
+  title: string
+  startDate: string
+  endDate: string
+  location: string
+  sessionStatus: SessionStatus
+  kind: ParticipationKind
+  status: ParticipationStatus
+}
+
+/** A row of GET /api/admin/families. Never carries health details. */
+export interface FamilyListItem {
+  id: string
+  name: string
+  city: string | null
+  province: string | null
+  memberCount: number
+  formStatus: FamilyFormStatus
+  formSubmittedAt: string | null
+  referent: { userId: string; firstName: string; lastName: string; email: string; status: UserStatus }
+  /** The latest session the family is in (selected, invited or confirmed). */
+  lastSession: FamilySessionRef | null
+  createdAt: string
+}
+
+/** GET /api/admin/families */
+export interface FamilyListResponse extends Paginated<FamilyListItem> {
+  /** Every province with at least one family, for the filter. */
+  provinces: string[]
+}
+
+/** A member without health details. */
+export interface FamilyMemberDto {
+  id: string
+  firstName: string
+  lastName: string
+  birthDate: string | null
+  relationship: MemberRelationship
+  isReferent: boolean
+}
+
+/** Health details of a member: special category data (GDPR art. 9), only after the consent. */
+export interface MemberHealth {
+  hasDisability: boolean
+  disability: DisabilityInfo | null
+}
+
+/** A member as the family itself sees it: health is null while the consent is not given. */
+export interface OwnFamilyMember extends FamilyMemberDto {
+  health: MemberHealth | null
+}
+
+/** GET /api/family/members */
+export interface FamilyMembersResponse {
+  healthDataConsentAt: string | null
+  /** Certificates and diagnoses uploaded: withdrawing the consent deletes them. */
+  healthDocuments: number
+  members: OwnFamilyMember[]
+}
+
+/** PUT /api/family/members/consent */
+export interface HealthConsentResult {
+  healthDataConsentAt: string | null
+  /** Members whose health details were deleted because the consent was withdrawn. */
+  cleared: number
+  /** Certificates and diagnoses deleted with them. */
+  documentsRemoved: number
+}
+
+/** A document uploaded by the family (certificates, diagnoses, ID, health card). */
+export interface PersonalDocumentDto {
+  id: string
+  category: PersonalDocumentCategory
+  title: string
+  member: { id: string; firstName: string; lastName: string } | null
+  file: FileDto
+  createdAt: string
+}
+
+/** GET /api/family/profile: family data and the questionnaire. */
+export interface FamilyProfileDto {
+  id: string
+  name: string
+  address: string | null
+  city: string | null
+  province: string | null
+  phone: string | null
+  formAnswers: FormAnswers
+  formStatus: FamilyFormStatus
+  formSubmittedAt: string | null
+}
+
+/** GET /api/family/home: the greeting, what is left to do, the next session. */
+export interface FamilyHomeDto {
+  firstName: string
+  familyName: string
+  formStatus: FamilyFormStatus
+  memberCount: number
+  healthConsent: boolean
+  /** Documents waiting for the family's signature. */
+  pendingSignatures: number
+  /** The next session with a confirmed place. */
+  nextSession: FamilySessionRef | null
+}
+
+/** GET /api/admin/families/:id: the record, without health details (those are in /health). */
+export interface AdminFamilyDetail {
+  id: string
+  name: string
+  address: string | null
+  city: string | null
+  province: string | null
+  phone: string | null
+  formAnswers: FormAnswers
+  formStatus: FamilyFormStatus
+  formSubmittedAt: string | null
+  privacyConsentAt: string | null
+  healthDataConsentAt: string | null
+  /** Internal notes of the administration; never sent to the family. */
+  adminNotes: string | null
+  createdAt: string
+  referent: {
+    userId: string
+    firstName: string
+    lastName: string
+    email: string
+    phone: string | null
+    status: UserStatus
+    emailVerifiedAt: string | null
+    lastLoginAt: string | null
+  }
+  members: FamilyMemberDto[]
+  documents: PersonalDocumentDto[]
+  /** Sessions where the family already holds a participation (selected, invited or confirmed). */
+  activeSessionIds: string[]
+}
+
+/** GET /api/admin/families/:id/health: the reserved section of the admin record. */
+export interface AdminFamilyHealth {
+  healthDataConsentAt: string | null
+  members: (Pick<FamilyMemberDto, 'id' | 'firstName' | 'lastName'> & MemberHealth)[]
+}
