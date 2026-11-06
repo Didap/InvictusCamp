@@ -71,7 +71,7 @@ Every move is a button of the administration that first shows what it sends and 
 | draft → inviting | titolari `selected` → `invited`; reserves `selected` → `invited` | `session.invite` to titolari (with the answer deadline), `session.reserve` to reserves |
 | inviting → confirmed | none | `session.confirmed` to titolari `confirmed` |
 | confirmed → completed | none | none |
-| any → cancelled | `selected`/`invited`/`confirmed` → `cancelled`; staff convocations `sent`/`accepted` → `cancelled` (drafts deleted) and their pending contract requests cancelled | `session.cancelled` to those who had been invited (not to `selected`); `staff.convocation_cancelled` to staff whose convocation had been sent |
+| any → cancelled | `selected`/`invited`/`confirmed` → `cancelled`; staff convocations `sent`/`accepted` → `cancelled` (drafts deleted) and their pending contract requests cancelled, unless another accepted convocation of the person, in an open session, has the same contract | `session.cancelled` to those who had been invited (not to `selected`); `staff.convocation_cancelled` to staff whose convocation had been sent |
 
 Moves to `completed` and `cancelled` are final: the confirmation says so ("Non si può tornare indietro").
 
@@ -157,7 +157,8 @@ availability or receive convocations.
   consent (`healthDataConsentAt`), which the family can give or withdraw (withdrawing hides the fields and
   asks to delete the details).
 - Personal documents (certificates, diagnoses, ID, health card): PDF, JPG or PNG up to 15 MB, with a
-  category, a title and optionally the member they refer to.
+  category, a title and optionally the member they refer to. Medical certificates and diagnoses are health
+  data: uploaded only with the consent, deleted with their files when it is withdrawn.
 
 ### 3.9 Panoramica (administration home)
 

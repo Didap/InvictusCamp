@@ -1,8 +1,9 @@
 // Assigning a document to people. Used by the documents area (assign to users, roles, a session) and
 // by the staff area (the contract of a session after a convocation is accepted). Idempotent: an
-// existing request is kept as it is; a cancelled one is reopened.
+// existing request is kept as it is; a cancelled one is reopened for the session asking now.
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { documents, signatureRequests, users } from '../db/schema'
+import { documentToReadEmail } from '../emails/documents'
 import { signatureRequestEmail } from '../emails/signatures'
 import type { EmailContext, EmailMessage } from '../emails/types'
 import type { DbOrTx } from './db'
@@ -38,6 +39,7 @@ export async function requestSignatures(
       target: [signatureRequests.documentId, signatureRequests.userId],
       set: {
         status: 'pending',
+        sessionId: input.sessionId ?? null,
         requestedAt: sql`now()`,
         requestedBy: input.requestedBy ?? null,
         dueDate: input.dueDate ?? null,
@@ -50,7 +52,10 @@ export async function requestSignatures(
     .returning({ id: signatureRequests.id, userId: signatureRequests.userId })
 }
 
-/** The "document to sign" emails for the given requests. */
+/**
+ * The email of each pending request (or its reminder): "to sign" or "to read" as the document says.
+ * Disabled accounts get none.
+ */
 export async function signatureRequestEmails(
   db: DbOrTx,
   ctx: EmailContext,
@@ -68,6 +73,7 @@ export async function signatureRequestEmails(
       firstName: users.firstName,
       userStatus: users.status,
       title: documents.title,
+      requiresSignature: documents.requiresSignature,
     })
     .from(signatureRequests)
     .innerJoin(users, eq(users.id, signatureRequests.userId))
@@ -75,8 +81,8 @@ export async function signatureRequestEmails(
     .where(and(inArray(signatureRequests.id, requestIds), eq(signatureRequests.status, 'pending')))
   return rows
     .filter(row => row.userStatus !== 'disabled')
-    .map(row =>
-      signatureRequestEmail(ctx, {
+    .map(row => {
+      const input = {
         to: row.email,
         toUserId: row.userId,
         firstName: row.firstName,
@@ -85,6 +91,7 @@ export async function signatureRequestEmails(
         dueDate: row.dueDate,
         sessionId: row.sessionId,
         reminder: options.reminder,
-      }),
-    )
+      }
+      return row.requiresSignature ? signatureRequestEmail(ctx, input) : documentToReadEmail(ctx, input)
+    })
 }

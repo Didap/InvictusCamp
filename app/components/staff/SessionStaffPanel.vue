@@ -78,9 +78,11 @@ async function cancel(c: SessionConvocation) {
         }
       : {
           title: `Annulli la convocazione di ${name}?`,
-          description: `Partirà 1 email a ${name} con l’avviso.${
+          description: `${
+            c.sendable ? `Partirà 1 email a ${name} con l’avviso.` : 'Nessuna email parte: l’account è disattivato.'
+          }${
             c.status === 'accepted' && c.contract === 'pending'
-              ? ' Anche la richiesta di firma del contratto viene annullata.'
+              ? ' Anche la richiesta di firma del contratto viene annullata, se non serve per un’altra sessione.'
               : ''
           }`,
           confirmLabel: 'Annulla la convocazione',
@@ -90,10 +92,15 @@ async function cancel(c: SessionConvocation) {
   )
   if (!ok) return
   try {
-    await api(`/api/admin/convocations/${c.id}/cancel`, { method: 'POST' })
+    const url: string = `/api/admin/convocations/${c.id}/cancel`
+    const result = await api<{ emails: number; failed: number }>(url, { method: 'POST' })
     notifySuccess(
       draft ? 'Convocazione tolta' : 'Convocazione annullata',
-      draft ? undefined : `Email inviata a ${name}.`,
+      result.failed
+        ? 'L’email di avviso non è stata recapitata: controlla il registro delle email.'
+        : result.emails
+          ? `Email inviata a ${name}.`
+          : undefined,
     )
   } catch (error) {
     notifyError(error)

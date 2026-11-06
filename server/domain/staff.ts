@@ -35,7 +35,7 @@ import type {
 import type { ConvocationStatus, SignatureStatus, StaffRole, StaffStatus } from '../../shared/utils/constants'
 import { rangeCoverage, todayIso, type DayRange } from '../../shared/utils/dates'
 import { formatDayRange } from '../../shared/utils/format'
-import { isSessionEditable } from '../../shared/utils/session-status'
+import { SESSION_EDITABLE_STATUSES, isSessionEditable } from '../../shared/utils/session-status'
 import {
   campSessions,
   documents,
@@ -554,8 +554,45 @@ export async function setConvocationRole(
 type CancelActor = Omit<Actor, 'userId'> & { userId: string | null }
 
 /**
+ * Cancels the person's request to sign a contract, if still pending, unless another accepted
+ * convocation of theirs, in a session neither over nor cancelled, has the same contract: a request is
+ * one per document and person, and a duplicated session keeps the contract of the original. The
+ * request is locked first, so an acceptance in progress elsewhere is counted before deciding.
+ */
+async function releaseContract(db: DbOrTx, input: { documentId: string; userId: string }): Promise<void> {
+  const [request] = await db
+    .select({ id: signatureRequests.id })
+    .from(signatureRequests)
+    .where(
+      and(
+        eq(signatureRequests.documentId, input.documentId),
+        eq(signatureRequests.userId, input.userId),
+        eq(signatureRequests.status, 'pending'),
+      ),
+    )
+    .for('update')
+  if (!request) return
+  const [stillNeeded] = await db
+    .select({ id: sessionStaff.id })
+    .from(sessionStaff)
+    .innerJoin(campSessions, eq(campSessions.id, sessionStaff.sessionId))
+    .where(
+      and(
+        eq(sessionStaff.userId, input.userId),
+        eq(sessionStaff.status, 'accepted'),
+        eq(campSessions.contractDocumentId, input.documentId),
+        inArray(campSessions.status, SESSION_EDITABLE_STATUSES),
+      ),
+    )
+    .limit(1)
+  if (stillNeeded) return
+  await db.update(signatureRequests).set({ status: 'cancelled' }).where(eq(signatureRequests.id, request.id))
+}
+
+/**
  * Withdraws a convocation. A draft (never sent) is simply removed. A sent or accepted one becomes
- * `cancelled` with `staff.convocation_cancelled`; the contract request still to sign is cancelled too.
+ * `cancelled` with `staff.convocation_cancelled`; the contract request still to sign is cancelled too,
+ * unless another convocation of the person still needs it (releaseContract).
  */
 export async function cancelConvocation(
   db: DbOrTx,
@@ -596,16 +633,7 @@ export async function cancelConvocation(
   }
   await db.update(sessionStaff).set({ status: 'cancelled' }).where(eq(sessionStaff.id, convocation.id))
   if (convocation.status === 'accepted' && session.contractDocumentId) {
-    await db
-      .update(signatureRequests)
-      .set({ status: 'cancelled' })
-      .where(
-        and(
-          eq(signatureRequests.documentId, session.contractDocumentId),
-          eq(signatureRequests.userId, convocation.userId),
-          eq(signatureRequests.status, 'pending'),
-        ),
-      )
+    await releaseContract(db, { documentId: session.contractDocumentId, userId: convocation.userId })
   }
   await writeAudit(db, { ...audit, action: 'convocation.cancel' })
   if (row.accountStatus === 'disabled') return { emails: [], removed: false }
@@ -674,9 +702,9 @@ const ALREADY_ANSWERED: Record<ConvocationStatus, string> = {
 }
 
 /**
- * The staff member answers a sent convocation. Accepting, when the session has a contract, creates the
- * signature request (requestSignatures) and returns its `signature.request` email; the request to open
- * on /firma/:id is returned too (also when it already existed).
+ * The staff member answers a sent convocation. Accepting, when the session has a contract that is not
+ * archived, creates the signature request (requestSignatures) and returns its email; the request to
+ * open on /firma/:id is returned too (also when it already existed).
  */
 export async function answerConvocation(
   db: DbOrTx,
@@ -722,6 +750,13 @@ export async function answerConvocation(
     ip: input.ip ?? null,
   })
   if (!accept || !session.contractDocumentId) return { emails: [], signatureRequestId: null }
+  // An archived document is never requested (locked as the documents area does when assigning).
+  const [contract] = await db
+    .select({ archivedAt: documents.archivedAt })
+    .from(documents)
+    .where(eq(documents.id, session.contractDocumentId))
+    .for('share')
+  if (!contract || contract.archivedAt) return { emails: [], signatureRequestId: null }
 
   const created = await requestSignatures(db, {
     documentId: session.contractDocumentId,
@@ -1015,7 +1050,11 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
         coverage: rangeCoverage(periodsOf(convocation.userId), range),
         contract,
         confirmed: isConfirmed(convocation.status, contract),
-        sendable: person.profileStatus === 'approved' && person.accountStatus !== 'disabled',
+        // Whether the next email reaches the person: the convocation needs approved staff, the notice
+        // of its cancellation only an account that is not disabled (cancelConvocation).
+        sendable:
+          person.accountStatus !== 'disabled' &&
+          (convocation.status !== 'draft' || person.profileStatus === 'approved'),
       }
     })
     .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])

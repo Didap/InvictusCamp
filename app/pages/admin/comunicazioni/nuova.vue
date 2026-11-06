@@ -77,30 +77,32 @@ const missing = computed(() => {
   return null
 })
 let countRequest = 0
-watchDebounced(
-  () => JSON.stringify(state.audience),
-  async () => {
-    const request = ++countRequest
-    if (missing.value) {
-      summary.value = null
-      return
-    }
-    counting.value = true
-    try {
-      const result = await api<AudienceSummary>('/api/admin/communications/audience', {
-        method: 'POST',
-        body: { audience: state.audience },
-      })
-      if (request === countRequest) summary.value = result
-    } catch (error) {
-      if (request === countRequest) summary.value = null
-      notifyError(error, 'Conteggio non riuscito')
-    } finally {
-      if (request === countRequest) counting.value = false
-    }
-  },
-  { debounce: 300, immediate: true },
-)
+/** Counts the audience chosen now and returns its summary (null when it cannot be counted); the last call shows. */
+async function refreshSummary(): Promise<AudienceSummary | null> {
+  const request = ++countRequest
+  const audience = state.audience
+  if (missing.value) {
+    summary.value = null
+    counting.value = false
+    return null
+  }
+  counting.value = true
+  try {
+    const result = await api<AudienceSummary>('/api/admin/communications/audience', {
+      method: 'POST',
+      body: { audience },
+    })
+    if (request === countRequest) summary.value = result
+    return result
+  } catch (error) {
+    if (request === countRequest) summary.value = null
+    notifyError(error, 'Conteggio non riuscito')
+    return null
+  } finally {
+    if (request === countRequest) counting.value = false
+  }
+}
+watchDebounced(() => JSON.stringify(state.audience), refreshSummary, { debounce: 300, immediate: true })
 
 // ─── Preview ───────────────────────────────────────────────────────────────────────────────────────
 const preview = ref<EmailPreview | null>(null)
@@ -128,25 +130,33 @@ const saving = ref(false)
 const count = computed(() => summary.value?.count ?? 0)
 
 async function send() {
-  if (counting.value) return
-  if (!summary.value || !count.value) {
-    warn(missing.value ?? 'Nessun destinatario: nessun account attivo corrisponde alla scelta.')
-    return
-  }
-  const emails = plural(count.value, 'email', 'email')
-  const names = summary.value.recipients.map(person => person.name)
-  const who = names.length <= 3 ? names.join(', ') : summary.value.label
-  const ok = await confirm({
-    title: `Invierai ${emails}`,
-    description: `Destinatari: ${who}. ${count.value === 1 ? 'Riceve' : 'Ognuno riceve'} «${state.subject.trim()}» al proprio indirizzo. Dopo l’invio il messaggio non si può ritirare.`,
-    confirmLabel: `Invia ${emails}`,
-  })
-  if (!ok) return
+  if (sending.value) return
+  // The confirmation counts the audience as it is now, and exactly that message leaves.
+  const message = { subject: state.subject, body: state.body, audience: state.audience }
   sending.value = true
   try {
+    const fresh = await refreshSummary()
+    if (!fresh) {
+      // Something is missing, or the count failed and has already said so.
+      if (missing.value) warn(missing.value)
+      return
+    }
+    if (!fresh.count) {
+      warn('Nessun destinatario: nessun account attivo corrisponde alla scelta.')
+      return
+    }
+    const emails = plural(fresh.count, 'email', 'email')
+    const names = fresh.recipients.map(person => person.name)
+    const who = names.length <= 3 ? names.join(', ') : fresh.label
+    const ok = await confirm({
+      title: `Invierai ${emails}`,
+      description: `Destinatari: ${who}. ${fresh.count === 1 ? 'Riceve' : 'Ognuno riceve'} «${message.subject.trim()}» al proprio indirizzo. Dopo l’invio il messaggio non si può ritirare.`,
+      confirmLabel: `Invia ${emails}`,
+    })
+    if (!ok) return
     const result = await api<CommunicationSendResult>(
       draftId.value ? `/api/admin/communications/${draftId.value}/send` : '/api/admin/communications',
-      { method: 'POST', body: { subject: state.subject, body: state.body, audience: state.audience } },
+      { method: 'POST', body: message },
     )
     const outcome = result.failed
       ? `${plural(result.failed, 'email non recapitata', 'email non recapitate')}: le trovi nel registro.`

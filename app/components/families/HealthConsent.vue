@@ -4,8 +4,9 @@ import type { HealthConsentResult } from '#shared/types/families'
 import { formatDateTime, plural } from '#shared/utils/format'
 
 // The consent to the processing of health data (GDPR art. 9) on /famiglia/membri: given with an
-// explicit tick, withdrawn at any time; withdrawing deletes the details already entered.
-const props = defineProps<{ consentAt: string | null; membersWithHealth: number }>()
+// explicit tick, withdrawn at any time; withdrawing deletes the details already entered and the
+// certificates and diagnoses uploaded among the documents.
+const props = defineProps<{ consentAt: string | null; membersWithHealth: number; healthDocuments: number }>()
 const emit = defineEmits<{ changed: [] }>()
 
 const api = useApi()
@@ -30,14 +31,28 @@ async function give() {
   }
 }
 
+/** What withdrawing deletes, for the confirmation: "i dati sulla salute di 2 componenti e i 3 certificati…". */
+function toDelete(members: number, documents: number): string {
+  return [
+    members ? `i dati sulla salute di ${plural(members, 'componente', 'componenti')}` : '',
+    documents === 1
+      ? 'il certificato medico o la diagnosi che hai caricato'
+      : documents
+        ? `i ${documents} certificati medici e diagnosi che hai caricato`
+        : '',
+  ]
+    .filter(Boolean)
+    .join(' e ')
+}
+
 async function withdraw() {
-  const count = props.membersWithHealth
+  const lost = toDelete(props.membersWithHealth, props.healthDocuments)
   const ok = await confirm({
     title: 'Ritirare il consenso?',
-    description: count
-      ? `I dati sulla salute di ${plural(count, 'componente', 'componenti')} verranno cancellati. Potrai dare di nuovo il consenso quando vuoi.`
-      : 'I campi sui dati sulla salute non saranno più visibili. Potrai dare di nuovo il consenso quando vuoi.',
-    confirmLabel: count ? 'Ritira e cancella i dati' : 'Ritira il consenso',
+    description: lost
+      ? `Cancelleremo ${lost}. Potrai dare di nuovo il consenso quando vuoi.`
+      : 'I campi sui dati sulla salute non saranno più visibili e non potrai caricare certificati medici e diagnosi. Potrai dare di nuovo il consenso quando vuoi.',
+    confirmLabel: lost ? 'Ritira e cancella i dati' : 'Ritira il consenso',
     danger: true,
   })
   if (!ok) return
@@ -47,9 +62,10 @@ async function withdraw() {
       method: 'PUT',
       body: { given: false },
     })
+    const deleted = toDelete(result.cleared, result.documentsRemoved)
     notifySuccess(
       'Consenso ritirato',
-      result.cleared ? 'I dati sulla salute sono stati cancellati.' : 'Non c’erano dati sulla salute da cancellare.',
+      deleted ? `Abbiamo cancellato ${deleted}.` : 'Non c’erano dati sulla salute da cancellare.',
     )
     emit('changed')
   } catch (error) {
@@ -66,7 +82,7 @@ async function withdraw() {
       <UIcon name="i-lucide-shield-check" class="mt-1 size-5 shrink-0 text-success" aria-hidden="true" />
       <span>
         Hai dato il consenso il {{ formatDateTime(consentAt) }}. Puoi indicare la disabilità e i bisogni di supporto di
-        ogni componente con «Modifica».
+        ogni componente con «Modifica» e caricare certificati medici e diagnosi tra i documenti.
       </span>
     </p>
     <UButton
@@ -83,7 +99,8 @@ async function withdraw() {
     <p>
       Per organizzare il soggiorno ci servono alcune informazioni sulla disabilità e sui bisogni di supporto. Sono dati
       particolari: li vedete solo voi e l’amministrazione del camp, non finiscono mai nelle email e ogni modifica viene
-      registrata. Puoi ritirare il consenso quando vuoi: i dati inseriti verranno cancellati.
+      registrata. Il consenso serve anche per caricare certificati medici e diagnosi. Puoi ritirarlo quando vuoi: i dati
+      inseriti e i certificati e le diagnosi caricati verranno cancellati.
     </p>
     <UFormField name="accepted">
       <UCheckbox

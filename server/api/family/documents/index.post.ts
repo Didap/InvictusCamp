@@ -1,13 +1,13 @@
 import { personalDocumentSchema } from '#shared/schemas/families'
-import { addPersonalDocument, requireFamilyMember } from '../../../domain/families'
+import { addPersonalDocument, assertPersonalDocument } from '../../../domain/families'
 
 /**
  * The family uploads a personal document (multipart: `file` plus category, title and optionally the
  * member it refers to): PDF, JPG or PNG up to 15 MB, stored privately and owned by the family account.
+ * Certificates and diagnoses need the consent to health data.
  */
 export default defineEventHandler(async event => {
   const { user, family } = await requireFamily(event)
-  rateLimit(`family-upload:${user.id}`, 30, 10 * 60_000)
   const upload = await readUpload(event)
   const parsed = personalDocumentSchema.safeParse(upload.fields)
   if (!parsed.success) {
@@ -20,8 +20,8 @@ export default defineEventHandler(async event => {
   }
   const document = parsed.data
   const db = useDb()
-  // Checked before the file is written, so a wrong member leaves nothing behind.
-  if (document.familyMemberId) await requireFamilyMember(db, family.id, document.familyMemberId)
+  // Checked before the file is written, so a refused upload leaves nothing behind.
+  await assertPersonalDocument(db, family.id, document)
   return db.transaction(async tx => {
     const file = await saveFile(
       {

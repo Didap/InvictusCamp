@@ -85,5 +85,10 @@ export async function readStoredFile(uploadsDir: string, file: Pick<FileRow, 'st
 /** Removes the record and the bytes. */
 export async function deleteStoredFile(db: DbOrTx, uploadsDir: string, fileId: string): Promise<void> {
   const [row] = await db.delete(files).where(eq(files.id, fileId)).returning({ storageKey: files.storageKey })
-  if (row) await rm(absolutePath(uploadsDir, row.storageKey), { force: true })
+  if (row) await removeStoredBytes(uploadsDir, [row.storageKey])
+}
+
+/** Removes the bytes of files whose records are gone (after the transaction that deleted them). */
+export async function removeStoredBytes(uploadsDir: string, storageKeys: string[]): Promise<void> {
+  await Promise.all(storageKeys.map(key => rm(absolutePath(uploadsDir, key), { force: true })))
 }

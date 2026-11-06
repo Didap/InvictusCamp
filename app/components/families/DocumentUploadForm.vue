@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import { personalDocumentSchema } from '#shared/schemas/families'
+import { isHealthDocument, personalDocumentSchema } from '#shared/schemas/families'
 import type { FamilyMemberDto } from '#shared/types/families'
-import { MAX_UPLOAD_BYTES, enumLabel, type PersonalDocumentCategory } from '#shared/utils/constants'
+import {
+  MAX_UPLOAD_BYTES,
+  PERSONAL_DOCUMENT_CATEGORIES,
+  enumLabel,
+  type PersonalDocumentCategory,
+} from '#shared/utils/constants'
 import { fullName } from '#shared/utils/format'
 
 // Upload of a personal document of the family: type, title, who it refers to, the file (PDF, JPG or
-// PNG up to 15 MB). The server checks type, size and the member again.
-const props = defineProps<{ members: FamilyMemberDto[] }>()
+// PNG up to 15 MB). Certificates and diagnoses are offered only with the consent to health data. The
+// server checks type, size, consent and the member again.
+const props = defineProps<{ members: FamilyMemberDto[]; healthConsent: boolean }>()
 const emit = defineEmits<{ uploaded: [] }>()
 
 const WHOLE_FAMILY = 'family'
@@ -26,7 +32,12 @@ const state = reactive<{
 }>({ category: undefined, title: '', member: WHOLE_FAMILY, file: null })
 
 const { options } = useEnums()
-const categories = options('personalDocumentCategory')
+const categories = computed(() =>
+  options(
+    'personalDocumentCategory',
+    props.healthConsent ? undefined : PERSONAL_DOCUMENT_CATEGORIES.filter(category => !isHealthDocument(category)),
+  ),
+)
 // Nothing to drag on a touch screen: the drop zone only opens the file picker there.
 const touch = useMediaQuery('(pointer: coarse)')
 const memberItems = computed(() => [
@@ -76,6 +87,12 @@ async function upload() {
     <div class="grid gap-5 sm:grid-cols-2">
       <UFormField label="Tipo di documento" name="category" required>
         <USelect v-model="state.category" :items="categories" value-key="value" placeholder="Scegli" class="w-full" />
+        <template v-if="!healthConsent" #help>
+          Per certificati medici e diagnosi serve il
+          <ULink to="/famiglia/membri#consenso" class="font-semibold text-primary underline"
+            >consenso ai dati sulla salute</ULink
+          >.
+        </template>
       </UFormField>
       <UFormField label="Riguarda" name="member">
         <USelect v-model="state.member" :items="memberItems" value-key="value" class="w-full" />

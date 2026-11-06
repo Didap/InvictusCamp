@@ -12,12 +12,15 @@ import {
   confirmReading,
   ensureSignedCopy,
   issueSignatureCode,
+  listDocuments,
+  mySignatures,
   remindRequests,
   resolveAssignees,
   setDocumentArchived,
   signRequest,
   signaturePage,
 } from '../../server/domain/signatures'
+import { requestSignatures } from '../../server/domain/signature-requests'
 import { readStoredFile, storeFile } from '../../server/domain/storage'
 import { makeAdmin, makeFamily, makeSession, makeStaff, makeUser, t, useTestDb } from './helpers'
 
@@ -165,6 +168,25 @@ describe('assigning a document', () => {
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
+  it('reopens a cancelled request for the session asking now, and counts it only there', async () => {
+    const { admin, user, document, request } = await pendingRequest()
+    const [first, second] = [await makeSession(db), await makeSession(db)]
+    await db.update(t.documents).set({ sessionId: first.id }).where(eq(t.documents.id, document.id))
+    await db.update(t.signatureRequests).set({ sessionId: first.id }).where(eq(t.signatureRequests.id, request.id))
+    await cancelRequest(db, { requestId: request.id, actor: { userId: admin.id } })
+
+    const reopened = await requestSignatures(db, { documentId: document.id, userIds: [user.id], sessionId: second.id })
+    expect(reopened).toEqual([{ id: request.id, userId: user.id }])
+    const [row] = await db.select().from(t.signatureRequests).where(eq(t.signatureRequests.id, request.id))
+    expect(row).toMatchObject({ status: 'pending', sessionId: second.id })
+
+    // The document belongs to the first session, the request now to the second one.
+    const progress = async (sessionId: string) =>
+      (await listDocuments(db, { sessionId })).find(item => item.id === document.id)?.progress
+    expect(await progress(first.id)).toEqual({ assigned: 0, signed: 0 })
+    expect(await progress(second.id)).toEqual({ assigned: 1, signed: 0 })
+  })
+
   it('reminds only who still has to sign', async () => {
     const { admin, document, user } = await pendingRequest()
     const other = await makeFamily(db)
@@ -290,6 +312,22 @@ describe('signing', () => {
     await expect(cancelRequest(db, { requestId: request.id, actor: { userId: admin.id } })).rejects.toMatchObject({
       statusCode: 409,
     })
+  })
+
+  it('refuses the code and the signature of an archived document, whose page has nothing left to sign', async () => {
+    const { user, request, document } = await pendingRequest()
+    const { code } = await issueSignatureCode(db, ctx, { requestId: request.id, userId: user.id })
+    // Archiving cancels the requests: this one is left pending on purpose, as older data could be.
+    await db.update(t.documents).set({ archivedAt: new Date() }).where(eq(t.documents.id, document.id))
+    const archived = { statusCode: 409, message: 'Il documento è stato archiviato: non serve più firmarlo' }
+    await expect(issueSignatureCode(db, ctx, { requestId: request.id, userId: user.id })).rejects.toMatchObject(
+      archived,
+    )
+    await expect(sign(request.id, user.id, code)).rejects.toMatchObject(archived)
+    expect(await signaturePage(db, request.id, user.id)).toMatchObject({ status: 'cancelled', code: null })
+    expect(await mySignatures(db, user.id)).toEqual([])
+    const [row] = await db.select().from(t.signatureRequests).where(eq(t.signatureRequests.id, request.id))
+    expect(row).toMatchObject({ status: 'pending', otpAttempts: 0 })
   })
 
   it('confirms the reading of a document to read, without a code', async () => {

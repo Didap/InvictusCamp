@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { forwardedClientIp } from '~~/server/domain/client-ip'
 import { SESSION_STATUSES } from '#shared/utils/constants'
 import { areaRole, isPublicPath, safeRedirect } from '#shared/utils/routes'
 import { SESSION_TRANSITIONS, canTransition } from '#shared/utils/session-status'
@@ -71,5 +72,20 @@ describe('routes', () => {
     expect(safeRedirect('/\\evil.example', '/admin')).toBe('/admin')
     expect(safeRedirect('https://evil.example', '/admin')).toBe('/admin')
     expect(safeRedirect(undefined, '/admin')).toBe('/admin')
+  })
+})
+
+describe('client address', () => {
+  it('takes the entry the proxy appended, never one the client wrote', () => {
+    expect(forwardedClientIp('203.0.113.7', '10.0.1.5')).toBe('203.0.113.7')
+    expect(forwardedClientIp('1.2.3.4, 198.51.100.9', '10.0.1.5')).toBe('198.51.100.9')
+    expect(forwardedClientIp('forged, 1.2.3.4 ,2001:db8::1 ', '10.0.1.5')).toBe('2001:db8::1')
+  })
+
+  it('falls back to the socket without the header or with an empty last entry', () => {
+    expect(forwardedClientIp(undefined, '127.0.0.1')).toBe('127.0.0.1')
+    expect(forwardedClientIp('', '127.0.0.1')).toBe('127.0.0.1')
+    expect(forwardedClientIp('1.2.3.4, ', '127.0.0.1')).toBe('127.0.0.1')
+    expect(forwardedClientIp(null, undefined)).toBeNull()
   })
 })

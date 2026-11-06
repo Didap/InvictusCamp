@@ -129,6 +129,7 @@ async function remove(member: OwnFamilyMember) {
       <FamiliesHealthConsent
         :consent-at="data?.healthDataConsentAt ?? null"
         :members-with-health="withHealth"
+        :health-documents="data?.healthDocuments ?? 0"
         @changed="refresh"
       />
     </IcSection>

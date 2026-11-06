@@ -69,6 +69,8 @@ export interface OwnFamilyMember extends FamilyMemberDto {
 /** GET /api/family/members */
 export interface FamilyMembersResponse {
   healthDataConsentAt: string | null
+  /** Certificates and diagnoses uploaded: withdrawing the consent deletes them. */
+  healthDocuments: number
   members: OwnFamilyMember[]
 }
 
@@ -77,6 +79,8 @@ export interface HealthConsentResult {
   healthDataConsentAt: string | null
   /** Members whose health details were deleted because the consent was withdrawn. */
   cleared: number
+  /** Certificates and diagnoses deleted with them. */
+  documentsRemoved: number
 }
 
 /** A document uploaded by the family (certificates, diagnoses, ID, health card). */

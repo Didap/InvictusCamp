@@ -24,19 +24,32 @@ export interface Upload {
   fields: Record<string, string>
 }
 
+/** Uploads per hour, per address and per account. */
+const UPLOADS_PER_HOUR = 60
+
 /**
  * Reads a multipart form: the file in the `file` field plus the text fields. The type comes from the
- * file's first bytes. 400, 413 or 415 with an Italian message when something is wrong.
+ * file's first bytes. Before the body is read: the rate limit, and a declared length within the limit
+ * (a request without one, chunked, would be buffered whole). 400, 411, 413, 415 or 429 with an Italian
+ * message when something is wrong.
  */
 export async function readUpload(
   event: H3Event,
   options: { accept?: readonly UploadMimeType[]; maxBytes?: number } = {},
 ): Promise<Upload> {
+  const ip = clientIp(event)
+  if (ip) rateLimit(`upload:ip:${ip}`, UPLOADS_PER_HOUR, 60 * 60_000)
+  const { user } = await getUserSession(event)
+  if (user) rateLimit(`upload:user:${user.id}`, UPLOADS_PER_HOUR, 60 * 60_000)
+
   const maxBytes = options.maxBytes ?? MAX_UPLOAD_BYTES
   const accept = options.accept ?? UPLOAD_MIME_TYPES
   const tooBig = `Il file supera ${Math.round(maxBytes / 1024 / 1024)} MB`
-  const declared = Number(getRequestHeader(event, 'content-length') ?? 0)
-  if (declared > maxBytes + 256 * 1024) throw createError({ statusCode: 413, message: tooBig })
+  const length = getRequestHeader(event, 'content-length')
+  if (!length || !/^\d+$/.test(length) || getRequestHeader(event, 'transfer-encoding')) {
+    throw createError({ statusCode: 411, message: 'Manca la dimensione del file: caricalo dal modulo della pagina' })
+  }
+  if (Number(length) > maxBytes + 256 * 1024) throw createError({ statusCode: 413, message: tooBig })
 
   const parts = await readMultipartFormData(event)
   const fields: Record<string, string> = {}

@@ -22,7 +22,7 @@ import {
   updateSession,
 } from '../../server/domain/sessions'
 import type { EmailContext, EmailMessage } from '../../server/emails/types'
-import type { SessionInput } from '../../shared/schemas/sessions'
+import { sessionSchema, type SessionInput } from '../../shared/schemas/sessions'
 import type { ParticipationKind, ParticipationStatus, SessionStatus } from '../../shared/utils/constants'
 import { makeAdmin, makeDocument, makeFamily, makeSession, makeStaff, makeUser, t, useTestDb } from './helpers'
 
@@ -873,6 +873,29 @@ describe('the session itself', () => {
         .from(t.sessionFamilies)
         .where(and(eq(t.sessionFamilies.sessionId, copy.id))),
     ).toEqual([])
+  })
+
+  it('a copy keeps the contract only while it can still be used', async () => {
+    const { actor } = await setup()
+    const usable = await makeSession(db, { contractDocumentId: (await makeDocument(db, { category: 'contract' })).id })
+    const archivedContract = await makeDocument(db, { category: 'contract', archivedAt: new Date() })
+    const archived = await makeSession(db, { contractDocumentId: archivedContract.id })
+
+    const kept = await duplicateSession(db, { sessionId: usable.id, actor })
+    expect((await sessionRow(kept.id)).contractDocumentId).toBe(usable.contractDocumentId)
+    const dropped = await duplicateSession(db, { sessionId: archived.id, actor })
+    expect((await sessionRow(dropped.id)).contractDocumentId).toBeNull()
+  })
+
+  it('refuses days that do not exist before they reach the database', async () => {
+    const issues = (values: Partial<SessionInput>) => {
+      const result = sessionSchema.safeParse(sessionValues(values))
+      return result.success ? [] : result.error.issues.map(issue => [issue.path.join('.'), issue.message])
+    }
+    expect(issues({ startDate: '2027-02-30' })).toContainEqual(['startDate', 'Data non valida'])
+    expect(issues({ endDate: '2027-13-01' })).toEqual([['endDate', 'Data non valida']])
+    expect(issues({ responseDeadline: '2027-04-31' })).toEqual([['responseDeadline', 'Data non valida']])
+    expect(issues({ startDate: '2028-02-29', endDate: '2028-03-01', responseDeadline: null })).toEqual([])
   })
 
   it('exports the families as CSV without health details and with formulas defused', async () => {

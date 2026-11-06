@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isIsoDay } from '../utils/dates'
 
 // Italian messages for every schema, on the client (UForm) and on the server (parseBody).
 z.config(z.locales.it())
@@ -42,8 +43,8 @@ export const zRequiredText = (max: number) =>
     .min(1, { error: 'Campo obbligatorio' })
     .max(max, { error: `Al massimo ${max} caratteri` })
 
-/** A day, YYYY-MM-DD. */
-export const zIsoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: 'Data non valida' })
+/** A day that exists, YYYY-MM-DD: 2027-02-30 is refused here, not by the database. */
+export const zIsoDay = z.string().refine(isIsoDay, { error: 'Data non valida' })
 
 export const zUuid = z.uuid()
 

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import type { H3Event } from 'h3'
 import type { AccountDto, SessionUser } from '#shared/types/api'
 import type { UserRole } from '#shared/utils/constants'
+import { forwardedClientIp } from '../domain/client-ip'
 
 type UserRow = typeof tables.users.$inferSelect
 
@@ -93,7 +94,7 @@ export function requireUuidParam(event: H3Event, name: string): string {
   return value
 }
 
-/** The address of the client, behind the Coolify proxy too. */
+/** The address of the client: the entry the Coolify proxy appended to X-Forwarded-For, or the socket. */
 export function clientIp(event: H3Event): string | null {
-  return getRequestIP(event, { xForwardedFor: true }) ?? null
+  return forwardedClientIp(getRequestHeader(event, 'x-forwarded-for'), getRequestIP(event))
 }

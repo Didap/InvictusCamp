@@ -2,7 +2,7 @@ const buckets = new Map<string, { count: number; resetAt: number }>()
 
 /**
  * A small in-memory fixed-window limiter (one process). Throws 429 when `key` has been hit more than
- * `max` times in `windowMs`. Used on sign-in, registration, password reset and signature codes.
+ * `max` times in `windowMs`. Used on sign-in, registration, password reset, signature codes and uploads.
  */
 export function rateLimit(key: string, max: number, windowMs: number) {
   const now = Date.now()

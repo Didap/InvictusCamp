@@ -4,8 +4,10 @@
 // and the administration's list and record. Explicit imports only, so the database tests can load it.
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, ne, not, or, sql, type SQL } from 'drizzle-orm'
 import {
+  HEALTH_DOCUMENT_CATEGORIES,
   hasHealthData,
   healthChangedFields,
+  isHealthDocument,
   missingRequiredQuestions,
   NO_HEALTH,
   normalizeFormAnswers,
@@ -145,6 +147,8 @@ export async function saveFamilyForm(
   }
   const wasSubmitted = family.formStatus === 'submitted'
   const submitted = input.submit || wasSubmitted
+  // The date of the first sending: later saves of a questionnaire already sent keep it.
+  const submittedAt = wasSubmitted ? (family.formSubmittedAt ?? new Date()) : submitted ? new Date() : null
   if (submitted) {
     const missing = missingRequiredQuestions(answers)
     if (missing.length) {
@@ -160,7 +164,7 @@ export async function saveFamilyForm(
     .set({
       formAnswers: answers,
       formStatus: submitted ? 'submitted' : 'draft',
-      formSubmittedAt: submitted ? new Date() : null,
+      formSubmittedAt: submittedAt,
     })
     .where(eq(families.id, family.id))
     .returning()
@@ -212,13 +216,20 @@ export async function requireFamilyMember(db: DbOrTx, familyId: string, memberId
   return row
 }
 
+/** The certificates and diagnoses the family uploaded (health data, like the members' details). */
+function healthDocumentsOf(userId: string): SQL | undefined {
+  return and(eq(personalDocuments.userId, userId), inArray(personalDocuments.category, HEALTH_DOCUMENT_CATEGORIES))
+}
+
 /** The family's own members; health details only while the consent is given. */
 export async function ownFamilyMembers(db: DbOrTx, familyId: string): Promise<FamilyMembersResponse> {
   const family = await requireFamilyRow(db, familyId)
   const consent = Boolean(family.healthDataConsentAt)
   const rows = await listMemberRows(db, familyId)
+  const [uploaded] = await db.select({ total: count() }).from(personalDocuments).where(healthDocumentsOf(family.userId))
   return {
     healthDataConsentAt: iso(family.healthDataConsentAt),
+    healthDocuments: uploaded?.total ?? 0,
     members: rows.map(row => ({ ...toMember(row), health: consent ? healthOf(row) : null })),
   }
 }
@@ -351,15 +362,18 @@ export async function removeFamilyMember(
 
 /**
  * Gives or withdraws the consent to the processing of health data (GDPR art. 9). Withdrawing deletes
- * the health details of every member, so the fields disappear and nothing stays behind.
+ * the health details of every member and the certificates and diagnoses uploaded, so nothing stays
+ * behind: their records go now, their bytes after the commit (`storageKeys`, removeStoredBytes).
  */
 export async function setHealthConsent(
   db: DbOrTx,
   input: { familyId: string; given: boolean; actor: Actor },
-): Promise<HealthConsentResult> {
+): Promise<HealthConsentResult & { storageKeys: string[] }> {
   const family = await requireFamilyRow(db, input.familyId)
   if (input.given) {
-    if (family.healthDataConsentAt) return { healthDataConsentAt: iso(family.healthDataConsentAt), cleared: 0 }
+    if (family.healthDataConsentAt) {
+      return { healthDataConsentAt: iso(family.healthDataConsentAt), cleared: 0, documentsRemoved: 0, storageKeys: [] }
+    }
     const now = new Date()
     await db.update(families).set({ healthDataConsentAt: now }).where(eq(families.id, family.id))
     await writeAudit(db, {
@@ -370,7 +384,7 @@ export async function setHealthConsent(
       data: { given: true },
       ip: input.actor.ip,
     })
-    return { healthDataConsentAt: now.toISOString(), cleared: 0 }
+    return { healthDataConsentAt: now.toISOString(), cleared: 0, documentsRemoved: 0, storageKeys: [] }
   }
 
   const withHealth = (await listMemberRows(db, family.id)).filter(row => hasHealthData(healthOf(row)))
@@ -388,18 +402,33 @@ export async function setHealthConsent(
       await auditHealth(db, input.actor, row, healthChangedFields(healthOf(row), NO_HEALTH), 'consent_withdrawn')
     }
   }
-  if (family.healthDataConsentAt) {
+  // Deleting the file record deletes the personal document with it (cascade).
+  const removed = await db
+    .delete(files)
+    .where(
+      inArray(
+        files.id,
+        db.select({ id: personalDocuments.fileId }).from(personalDocuments).where(healthDocumentsOf(family.userId)),
+      ),
+    )
+    .returning({ storageKey: files.storageKey })
+  if (family.healthDataConsentAt || removed.length) {
     await db.update(families).set({ healthDataConsentAt: null }).where(eq(families.id, family.id))
     await writeAudit(db, {
       actorUserId: input.actor.userId,
       action: 'family.health_consent',
       entityType: 'family',
       entityId: family.id,
-      data: { given: false, cleared: withHealth.length },
+      data: { given: false, cleared: withHealth.length, documentsRemoved: removed.length },
       ip: input.actor.ip,
     })
   }
-  return { healthDataConsentAt: null, cleared: withHealth.length }
+  return {
+    healthDataConsentAt: null,
+    cleared: withHealth.length,
+    documentsRemoved: removed.length,
+    storageKeys: removed.map(row => row.storageKey),
+  }
 }
 
 // ─── Personal documents ────────────────────────────────────────────────────────────────────────────
@@ -453,12 +482,31 @@ export async function listPersonalDocuments(db: DbOrTx, userId: string): Promise
   }))
 }
 
-/** Records an uploaded file as a personal document of the family; the member must be one of its own. */
+/**
+ * What a family may upload: certificates and diagnoses only with the consent to health data, and only
+ * about one of its own members. Checked before the file is stored, and again when it is recorded.
+ */
+export async function assertPersonalDocument(
+  db: DbOrTx,
+  familyId: string,
+  document: PersonalDocumentInput,
+): Promise<void> {
+  if (isHealthDocument(document.category) && !(await requireFamilyRow(db, familyId)).healthDataConsentAt) {
+    throw createError({
+      statusCode: 400,
+      message:
+        'Per caricare certificati medici e diagnosi serve il consenso ai dati sulla salute: puoi darlo in fondo alla pagina Componenti',
+    })
+  }
+  if (document.familyMemberId) await requireFamilyMember(db, familyId, document.familyMemberId)
+}
+
+/** Records an uploaded file as a personal document of the family (assertPersonalDocument). */
 export async function addPersonalDocument(
   db: DbOrTx,
   input: { familyId: string; userId: string; document: PersonalDocumentInput; fileId: string; uploadedBy: string },
 ): Promise<{ id: string }> {
-  if (input.document.familyMemberId) await requireFamilyMember(db, input.familyId, input.document.familyMemberId)
+  await assertPersonalDocument(db, input.familyId, input.document)
   const [row] = await db
     .insert(personalDocuments)
     .values({

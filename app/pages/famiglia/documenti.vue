@@ -46,7 +46,11 @@ async function remove(document: PersonalDocumentDto) {
     </IcSection>
 
     <IcSection title="Carica un documento" description="Scegli il tipo e la persona a cui si riferisce, poi il file.">
-      <FamiliesDocumentUploadForm :members="members?.members ?? []" @uploaded="refresh" />
+      <FamiliesDocumentUploadForm
+        :members="members?.members ?? []"
+        :health-consent="Boolean(members?.healthDataConsentAt)"
+        @uploaded="refresh"
+      />
     </IcSection>
   </IcPage>
 </template>

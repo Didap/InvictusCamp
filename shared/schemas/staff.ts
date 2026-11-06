@@ -7,15 +7,12 @@ import {
   type PersonalDocumentCategory,
   type StaffStatus,
 } from '../utils/constants'
-import { isIsoDay, todayIso } from '../utils/dates'
+import { todayIso } from '../utils/dates'
 import { zIsoDay, zRequiredText, zText, zUuid } from './common'
 
 export const zStaffRole = z.enum(STAFF_ROLES)
 
-/** A day that exists: 2027-02-30 is refused. */
-const zDay = zIsoDay.refine(isIsoDay, { error: 'Data non valida' })
-
-const zBirthDate = zDay.refine(day => day >= '1920-01-01' && day < todayIso(), {
+const zBirthDate = zIsoDay.refine(day => day >= '1920-01-01' && day < todayIso(), {
   error: 'Data di nascita non valida',
 })
 
@@ -128,8 +125,8 @@ export const staffBulkApproveSchema = z.object({
 /** POST /api/staff/availability: inclusive days, not already over. */
 export const availabilitySchema = z
   .object({
-    startDate: zDay,
-    endDate: zDay,
+    startDate: zIsoDay,
+    endDate: zIsoDay,
     notes: zText(300).nullable().optional(),
   })
   .refine(value => value.endDate >= value.startDate, {

@@ -565,14 +565,18 @@ function familyEmail(
 
 // ─── The session ───────────────────────────────────────────────────────────────────────────────────
 
-async function assertContract(db: DbOrTx, documentId: string | null) {
-  if (!documentId) return
+/** A contract a session can use: a document of category "contract", not archived. */
+async function isUsableContract(db: DbOrTx, documentId: string): Promise<boolean> {
   const [document] = await db
-    .select({ id: documents.id, archivedAt: documents.archivedAt })
+    .select({ id: documents.id })
     .from(documents)
-    .where(and(eq(documents.id, documentId), eq(documents.category, 'contract')))
+    .where(and(eq(documents.id, documentId), eq(documents.category, 'contract'), isNull(documents.archivedAt)))
     .limit(1)
-  if (!document || document.archivedAt) {
+  return Boolean(document)
+}
+
+async function assertContract(db: DbOrTx, documentId: string | null) {
+  if (documentId && !(await isUsableContract(db, documentId))) {
     throw new DomainError(400, 'Il contratto scelto non è disponibile: scegline un altro')
   }
 }
@@ -729,7 +733,7 @@ export async function deleteSession(db: DbOrTx, input: { sessionId: string; acto
   })
 }
 
-/** A new draft with the same facts (P1): no families, no staff. */
+/** A new draft with the same facts (P1): no families, no staff, the contract only if still usable. */
 export async function duplicateSession(
   db: DbOrTx,
   input: { sessionId: string; actor: Actor },
@@ -747,7 +751,10 @@ export async function duplicateSession(
       familySlots: source.familySlots,
       staffNeeded: source.staffNeeded,
       responseDeadline: source.responseDeadline,
-      contractDocumentId: source.contractDocumentId,
+      contractDocumentId:
+        source.contractDocumentId && (await isUsableContract(db, source.contractDocumentId))
+          ? source.contractDocumentId
+          : null,
       notes: source.notes,
       status: 'draft',
       createdBy: input.actor.userId,
@@ -943,32 +950,28 @@ export async function answerInvitation(
   },
 ): Promise<{ status: ParticipationStatus; late: boolean; emails: EmailMessage[] }> {
   const now = input.now ?? new Date()
-  const [row] = await db
-    .select({
-      id: sessionFamilies.id,
-      sessionId: sessionFamilies.sessionId,
-      familyId: sessionFamilies.familyId,
-      kind: sessionFamilies.kind,
-      status: sessionFamilies.status,
-      invitedAt: sessionFamilies.invitedAt,
-      sessionStatus: campSessions.status,
-      responseDeadline: campSessions.responseDeadline,
-    })
+  const notFound = () => new DomainError(404, 'Invito non trovato')
+  // The session row first, then the participation: the order every move of the administration takes.
+  const [target] = await db
+    .select({ sessionId: sessionFamilies.sessionId })
     .from(sessionFamilies)
-    .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
+    .where(
+      and(
+        eq(sessionFamilies.id, input.participationId),
+        input.familyId ? eq(sessionFamilies.familyId, input.familyId) : undefined,
+        input.sessionId ? eq(sessionFamilies.sessionId, input.sessionId) : undefined,
+      ),
+    )
+  if (!target) throw notFound()
+  const session = await lockSession(db, target.sessionId)
+  const [row] = await db
+    .select()
+    .from(sessionFamilies)
     .where(eq(sessionFamilies.id, input.participationId))
     .for('update')
-  const invisible = input.by === 'family' && (!row?.invitedAt || row.status === 'selected')
-  if (
-    !row ||
-    invisible ||
-    (input.familyId && row.familyId !== input.familyId) ||
-    (input.sessionId && row.sessionId !== input.sessionId)
-  ) {
-    throw new DomainError(404, 'Invito non trovato')
-  }
-  if (!isSessionOpen(row.sessionStatus)) {
-    throw new DomainError(409, `La sessione è «${enumLabel('sessionStatus', row.sessionStatus)}»: non accetta risposte`)
+  if (!row || (input.by === 'family' && (!row.invitedAt || row.status === 'selected'))) throw notFound()
+  if (!isSessionOpen(session.status)) {
+    throw new DomainError(409, `La sessione è «${enumLabel('sessionStatus', session.status)}»: non accetta risposte`)
   }
   if (input.answer === 'confirmed' && row.kind === 'reserve') {
     throw new DomainError(409, 'Una famiglia in lista di riserva può confermare solo quando viene chiamata')
@@ -995,7 +998,7 @@ export async function answerInvitation(
     })
     .where(eq(sessionFamilies.id, row.id))
   if (row.kind === 'reserve') await renumberReserves(db, row.sessionId)
-  const late = lateAnswer(now, row.responseDeadline)
+  const late = lateAnswer(now, session.responseDeadline)
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: input.by === 'admin' ? 'participation.answer_by_admin' : 'participation.answer',

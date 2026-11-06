@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
   addFamilyMember,
@@ -98,7 +98,7 @@ describe('ownership', () => {
       addPersonalDocument(db, {
         familyId: a.family.id,
         userId: a.user.id,
-        document: { category: 'medical_certificate', title: 'Certificato', familyMemberId: b.referent.id },
+        document: { category: 'id_document', title: 'Carta d’identità', familyMemberId: b.referent.id },
         fileId: fileA.id,
         uploadedBy: a.user.id,
       }),
@@ -107,7 +107,7 @@ describe('ownership', () => {
     const { id } = await addPersonalDocument(db, {
       familyId: a.family.id,
       userId: a.user.id,
-      document: { category: 'medical_certificate', title: 'Certificato', familyMemberId: a.referent.id },
+      document: { category: 'id_document', title: 'Carta d’identità', familyMemberId: a.referent.id },
       fileId: fileA.id,
       uploadedBy: a.user.id,
     })
@@ -194,7 +194,7 @@ describe('health data consent', () => {
     await addFamilyMember(db, { familyId: family.id, member: child({ firstName: 'Sofia' }), actor })
 
     const result = await setHealthConsent(db, { familyId: family.id, given: false, actor })
-    expect(result).toEqual({ healthDataConsentAt: null, cleared: 1 })
+    expect(result).toEqual({ healthDataConsentAt: null, cleared: 1, documentsRemoved: 0, storageKeys: [] })
     const rows = await db.select().from(t.familyMembers).where(eq(t.familyMembers.familyId, family.id))
     expect(rows.every(row => !row.hasDisability && row.disability === null)).toBe(true)
     const own = await ownFamilyMembers(db, family.id)
@@ -207,6 +207,41 @@ describe('health data consent', () => {
       .where(and(eq(t.auditLog.action, 'member.health_update'), eq(t.auditLog.entityType, 'family_member')))
     expect(withdrawn.map(row => (row.data as { reason?: string }).reason)).toContain('consent_withdrawn')
     expect(await adminFamilyHealth(db, family.id)).toEqual({ healthDataConsentAt: null, members: [] })
+  })
+})
+
+describe('health documents', () => {
+  it('certificates and diagnoses need the consent, and withdrawing it deletes them with their files', async () => {
+    const { user, family, referent, actor } = await familyWithReferent()
+    const upload = async (category: 'diagnosis' | 'medical_certificate' | 'id_document') => {
+      const file = await makeFile(user.id)
+      await addPersonalDocument(db, {
+        familyId: family.id,
+        userId: user.id,
+        document: { category, title: category, familyMemberId: referent.id },
+        fileId: file.id,
+        uploadedBy: user.id,
+      })
+      return file
+    }
+    await expect(upload('diagnosis')).rejects.toMatchObject({
+      statusCode: 400,
+      message: expect.stringContaining('serve il consenso ai dati sulla salute'),
+    })
+    await upload('id_document')
+
+    await setHealthConsent(db, { familyId: family.id, given: true, actor })
+    const health = [await upload('diagnosis'), await upload('medical_certificate')]
+    expect((await ownFamilyMembers(db, family.id)).healthDocuments).toBe(2)
+
+    const result = await setHealthConsent(db, { familyId: family.id, given: false, actor })
+    expect(result).toMatchObject({ healthDataConsentAt: null, cleared: 0, documentsRemoved: 2 })
+    expect([...result.storageKeys].sort()).toEqual(health.map(file => file.storageKey).sort())
+    expect((await listPersonalDocuments(db, user.id)).map(document => document.category)).toEqual(['id_document'])
+    const ids = health.map(file => file.id)
+    expect(await db.select().from(t.files).where(inArray(t.files.id, ids))).toEqual([])
+    const withdrawn = (await auditRows('family.health_consent')).find(row => !(row.data as { given: boolean }).given)
+    expect(withdrawn!.data).toEqual({ given: false, cleared: 0, documentsRemoved: 2 })
   })
 })
 
@@ -281,6 +316,14 @@ describe('questionnaire', () => {
       actor,
     })
     expect(edited.formStatus).toBe('submitted')
+    expect(edited.formSubmittedAt).toEqual(sent.formSubmittedAt)
+    const resent = await saveFamilyForm(db, {
+      familyId: family.id,
+      answers: { howDidYouHear: 'Social network', preferredPeriods: ['Agosto'] },
+      submit: true,
+      actor,
+    })
+    expect(resent.formSubmittedAt).toEqual(sent.formSubmittedAt)
     expect(await auditRows('family.form_submit')).toHaveLength(1)
   })
 })

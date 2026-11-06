@@ -9,6 +9,7 @@ import {
   answerConvocation,
   approveApplications,
   cancelConvocation,
+  cancelSessionConvocations,
   changeStaffStatus,
   myConvocations,
   removeAvailability,
@@ -92,6 +93,24 @@ async function sentConvocation(values: Partial<typeof t.campSessions.$inferInser
   const setup = await sessionWithDrafts(1, values)
   await sendConvocations(db, ctx, { sessionId: setup.session.id, ids: setup.ids, actor: { userId: setup.admin.id } })
   return { ...setup, id: setup.ids[0]!, person: setup.people[0]! }
+}
+
+/** One approved person convoked to a new session for each `values`, who accepts every convocation. */
+async function acceptedInSessions(...values: Partial<typeof t.campSessions.$inferInsert>[]) {
+  const actor = { userId: (await makeAdmin(db)).id }
+  const { user } = await makeStaff(db, 'approved')
+  const sessions = []
+  const ids = []
+  for (const value of values) {
+    const session = await makeSession(db, value)
+    await addConvocations(db, { sessionId: session.id, people: [{ userId: user.id, role: 'educator' }], actor })
+    const [row] = await db.select().from(t.sessionStaff).where(eq(t.sessionStaff.sessionId, session.id))
+    await sendConvocations(db, ctx, { sessionId: session.id, ids: [row!.id], actor })
+    await answerConvocation(db, ctx, { id: row!.id, userId: user.id, answer: 'accept' })
+    sessions.push(session)
+    ids.push(row!.id)
+  }
+  return { actor, user, sessions, ids }
 }
 
 describe('application', () => {
@@ -547,6 +566,59 @@ describe('convocations', () => {
     const requests = await db.select().from(t.signatureRequests)
     expect(requests).toHaveLength(1)
     expect(requests[0]!.status).toBe('pending')
+  })
+
+  it('a contract shared by sessions stays to sign while an accepted convocation in an open session needs it', async () => {
+    const contract = await makeDocument(db)
+    const shared = { contractDocumentId: contract.id }
+    const { actor, sessions, ids } = await acceptedInSessions(shared, shared, shared)
+    const requests = () => db.select().from(t.signatureRequests)
+    expect(await requests()).toHaveLength(1)
+    await db.update(t.campSessions).set({ status: 'completed' }).where(eq(t.campSessions.id, sessions[2]!.id))
+
+    // Cancelling the first session (the cascade of a session move): the second one still needs it.
+    await cancelSessionConvocations(db, ctx, { sessionId: sessions[0]!.id, actor })
+    expect((await requests()).map(row => row.status)).toEqual(['pending'])
+    expect((await convocation(ids[0]!))!.status).toBe('cancelled')
+
+    // The last open one goes: a session already over does not keep the contract to sign.
+    await cancelConvocation(db, ctx, { id: ids[1]!, actor })
+    expect((await requests()).map(row => row.status)).toEqual(['cancelled'])
+  })
+
+  it('accepting never requests an archived contract; a document to read is emailed as such', async () => {
+    const archived = await makeDocument(db, { archivedAt: new Date() })
+    const first = await sentConvocation({ contractDocumentId: archived.id })
+    expect(await answerConvocation(db, ctx, { id: first.id, userId: first.person.user.id, answer: 'accept' })).toEqual({
+      emails: [],
+      signatureRequestId: null,
+    })
+    expect(await db.select().from(t.signatureRequests)).toHaveLength(0)
+
+    const toRead = await makeDocument(db, { title: 'Regolamento', requiresSignature: false })
+    const second = await sentConvocation({ contractDocumentId: toRead.id })
+    const result = await answerConvocation(db, ctx, { id: second.id, userId: second.person.user.id, answer: 'accept' })
+    expect(result.emails.map(email => email.subject)).toEqual(['Documento da leggere, «Regolamento»'])
+  })
+
+  it('the cancellation dialog knows whether its email reaches the person', async () => {
+    const { session, people, ids, admin } = await sessionWithDrafts(2)
+    const actor = { userId: admin.id }
+    await sendConvocations(db, ctx, { sessionId: session.id, ids, actor })
+    const [inactive, disabled] = people
+    await db.update(t.staffProfiles).set({ status: 'inactive' }).where(eq(t.staffProfiles.userId, inactive!.user.id))
+    await db.update(t.users).set({ status: 'disabled' }).where(eq(t.users.id, disabled!.user.id))
+    const outcome = []
+    for (const c of (await sessionStaffData(db, session.id)).convocations) {
+      const { emails } = await cancelConvocation(db, ctx, { id: c.id, actor })
+      outcome.push({ userId: c.userId, sendable: c.sendable, emails: emails.length })
+    }
+    expect(outcome).toEqual(
+      expect.arrayContaining([
+        { userId: inactive!.user.id, sendable: true, emails: 1 },
+        { userId: disabled!.user.id, sendable: false, emails: 0 },
+      ]),
+    )
   })
 
   it('the role changes while the convocation is open', async () => {

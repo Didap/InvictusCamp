@@ -142,7 +142,10 @@ export interface SessionConvocation {
   coverage: Coverage
   contract: ContractState
   confirmed: boolean
-  /** The profile is still approved and the account can receive emails: a draft can be sent. */
+  /**
+   * The next email reaches the person: a draft can be sent (profile still approved, account not
+   * disabled); a sent or accepted one, if cancelled, is told so (account not disabled).
+   */
   sendable: boolean
 }
 

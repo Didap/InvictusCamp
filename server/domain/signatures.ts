@@ -31,13 +31,13 @@ import {
   staffProfiles,
   users,
 } from '../db/schema'
-import { documentToReadEmail, signatureSignedEmail } from '../emails/documents'
-import { signatureOtpEmail, signatureRequestEmail } from '../emails/signatures'
+import { signatureSignedEmail } from '../emails/documents'
+import { signatureOtpEmail } from '../emails/signatures'
 import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import { otpCode, safeEqualHex, sha256 } from './crypto'
 import type { DbOrTx } from './db'
-import { requestSignatures } from './signature-requests'
+import { requestSignatures, signatureRequestEmails } from './signature-requests'
 import { cleanName, deleteStoredFile, readStoredFile, storeFile, type FileRow } from './storage'
 import { DomainError } from './errors'
 
@@ -62,8 +62,16 @@ interface Actor {
 
 type DocumentRow = typeof documents.$inferSelect
 
-async function requireDocument(db: DbOrTx, documentId: string): Promise<DocumentRow> {
-  const [row] = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1)
+/**
+ * Document locks, held until the end of the transaction: what changes the file, whether it is to sign
+ * or whether it is archived takes `update`; signing and assigning take `share`. So a replacement waits
+ * for the signatures in progress and counts them, and a signature never lands on a file being replaced.
+ */
+type DocumentLock = 'update' | 'share'
+
+async function requireDocument(db: DbOrTx, documentId: string, lock?: DocumentLock): Promise<DocumentRow> {
+  const query = db.select().from(documents).where(eq(documents.id, documentId)).limit(1)
+  const [row] = lock ? await query.for(lock) : await query
   if (!row) throw fail(404, 'Documento non trovato')
   return row
 }
@@ -146,7 +154,7 @@ export async function updateDocument(
   db: DbOrTx,
   input: { documentId: string; fields: DocumentFields; actor: Actor },
 ): Promise<void> {
-  const document = await requireDocument(db, input.documentId)
+  const document = await requireDocument(db, input.documentId, 'update')
   if (document.requiresSignature !== input.fields.requiresSignature && (await signedCount(db, document.id)) > 0) {
     throw fail(409, 'Qualcuno lo ha già firmato o letto: non puoi più cambiare se va firmato')
   }
@@ -177,7 +185,7 @@ export async function replaceDocumentFile(
   uploadsDir: string,
   input: { documentId: string; data: Uint8Array; filename: string; actor: Actor },
 ): Promise<{ oldFileId: string }> {
-  const document = await requireDocument(db, input.documentId)
+  const document = await requireDocument(db, input.documentId, 'update')
   if ((await signedCount(db, document.id)) > 0) {
     throw fail(409, 'Qualcuno lo ha già firmato o letto: carica un nuovo documento invece di sostituirlo')
   }
@@ -219,7 +227,7 @@ export async function setDocumentArchived(
   db: DbOrTx,
   input: { documentId: string; archived: boolean; actor: Actor },
 ): Promise<{ cancelled: number }> {
-  const document = await requireDocument(db, input.documentId)
+  const document = await requireDocument(db, input.documentId, 'update')
   if (Boolean(document.archivedAt) === input.archived) return { cancelled: 0 }
   await db
     .update(documents)
@@ -313,7 +321,7 @@ export async function assignDocument(
   ctx: EmailContext,
   input: { documentId: string; target: AssignTarget; dueDate?: string | null; dryRun?: boolean; actor: Actor },
 ): Promise<{ result: AssignResult; messages: EmailMessage[] }> {
-  const document = await requireDocument(db, input.documentId)
+  const document = await requireDocument(db, input.documentId, 'share')
   if (document.archivedAt) throw fail(409, 'Il documento è archiviato: ripristinalo prima di assegnarlo')
   if (input.dueDate && input.dueDate < todayIso()) throw fail(400, 'La scadenza non può essere nel passato')
   const userIds = await resolveAssignees(db, input.target)
@@ -341,7 +349,7 @@ export async function assignDocument(
     requestedBy: input.actor.userId,
     dueDate: input.dueDate ?? null,
   })
-  const messages = await requestEmails(
+  const messages = await signatureRequestEmails(
     db,
     ctx,
     created.map(row => row.id),
@@ -357,47 +365,6 @@ export async function assignDocument(
     })
   }
   return { result: { ...counts, created: created.length, dryRun: false }, messages }
-}
-
-/** The "to sign" or "to read" email of each pending request (or its reminder); disabled accounts get none. */
-export async function requestEmails(
-  db: DbOrTx,
-  ctx: EmailContext,
-  requestIds: string[],
-  options: { reminder?: boolean } = {},
-): Promise<EmailMessage[]> {
-  if (!requestIds.length) return []
-  const rows = await db
-    .select({
-      id: signatureRequests.id,
-      dueDate: signatureRequests.dueDate,
-      sessionId: signatureRequests.sessionId,
-      userId: users.id,
-      email: users.email,
-      firstName: users.firstName,
-      userStatus: users.status,
-      title: documents.title,
-      requiresSignature: documents.requiresSignature,
-    })
-    .from(signatureRequests)
-    .innerJoin(users, eq(users.id, signatureRequests.userId))
-    .innerJoin(documents, eq(documents.id, signatureRequests.documentId))
-    .where(and(inArray(signatureRequests.id, requestIds), eq(signatureRequests.status, 'pending')))
-  return rows
-    .filter(row => row.userStatus !== 'disabled')
-    .map(row => {
-      const input = {
-        to: row.email,
-        toUserId: row.userId,
-        firstName: row.firstName,
-        documentTitle: row.title,
-        requestId: row.id,
-        dueDate: row.dueDate,
-        sessionId: row.sessionId,
-        reminder: options.reminder,
-      }
-      return row.requiresSignature ? signatureRequestEmail(ctx, input) : documentToReadEmail(ctx, input)
-    })
 }
 
 /** Reminds one request, or every pending request of a document. */
@@ -426,7 +393,7 @@ export async function remindRequests(
   } else return []
   if (!ids.length) return []
   await db.update(signatureRequests).set({ remindedAt: new Date() }).where(inArray(signatureRequests.id, ids))
-  const messages = await requestEmails(db, ctx, ids, { reminder: true })
+  const messages = await signatureRequestEmails(db, ctx, ids, { reminder: true })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'signature.remind',
@@ -479,8 +446,19 @@ function codeState(expiresAt: Date, attempts: number): SignatureCodeState {
   }
 }
 
-/** A request of `userId` with its document, file and person; 404 for anybody else. */
-async function requireOwnRequest(db: DbOrTx, requestId: string, userId: string) {
+/**
+ * A request of `userId` with its document, file and person; 404 for anybody else. With `lock`, the
+ * document is locked first (requireDocument), so what follows reads the file it has now.
+ */
+async function requireOwnRequest(db: DbOrTx, requestId: string, userId: string, lock?: DocumentLock) {
+  if (lock) {
+    const [own] = await db
+      .select({ documentId: signatureRequests.documentId })
+      .from(signatureRequests)
+      .where(and(eq(signatureRequests.id, requestId), eq(signatureRequests.userId, userId)))
+      .limit(1)
+    if (own) await requireDocument(db, own.documentId, lock)
+  }
   const [row] = await db
     .select({
       request: signatureRequests,
@@ -503,6 +481,17 @@ function assertPending(status: string): void {
   if (status === 'cancelled') throw fail(409, 'Questa richiesta è stata annullata: non serve più firmare')
 }
 
+/** An archived document is no longer signed nor read: archiving cancels its requests still to sign. */
+function assertNotArchived(document: DocumentRow): void {
+  if (!document.archivedAt) return
+  throw fail(
+    409,
+    document.requiresSignature
+      ? 'Il documento è stato archiviato: non serve più firmarlo'
+      : 'Il documento è stato archiviato: non serve più confermarne la lettura',
+  )
+}
+
 /** GET /api/signatures/:id */
 export async function signaturePage(
   db: DbOrTx,
@@ -511,11 +500,12 @@ export async function signaturePage(
   now = new Date(),
 ): Promise<SignaturePage> {
   const { request, document, file, user } = await requireOwnRequest(db, requestId, userId)
-  const codeAlive =
-    request.status === 'pending' && request.otpHash && request.otpExpiresAt && request.otpExpiresAt > now
+  // A request left pending on an archived document can no longer be signed: nothing more to do.
+  const status = request.status === 'pending' && document.archivedAt ? 'cancelled' : request.status
+  const codeAlive = status === 'pending' && request.otpHash && request.otpExpiresAt && request.otpExpiresAt > now
   return {
     id: request.id,
-    status: request.status,
+    status,
     document: {
       title: document.title,
       description: document.description,
@@ -550,6 +540,7 @@ export async function issueSignatureCode(
 ): Promise<{ code: string; message: EmailMessage; state: SignatureCodeState }> {
   const { request, document, user } = await requireOwnRequest(db, input.requestId, input.userId)
   assertPending(request.status)
+  assertNotArchived(document)
   if (!document.requiresSignature) throw fail(409, 'Questo documento si legge soltanto: non serve un codice')
   const now = input.now ?? new Date()
   const code = otpCode()
@@ -616,8 +607,9 @@ export async function signRequest(
     now?: Date
   },
 ): Promise<SignOutcome> {
-  const { request, document, file, user } = await requireOwnRequest(db, input.requestId, input.userId)
+  const { request, document, file, user } = await requireOwnRequest(db, input.requestId, input.userId, 'share')
   assertPending(request.status)
+  assertNotArchived(document)
   if (!document.requiresSignature) throw fail(409, 'Questo documento si legge soltanto: conferma la lettura')
   if (!request.otpHash) return { ok: false, reason: 'no_code', attemptsLeft: 0 }
   const now = input.now ?? new Date()
@@ -719,9 +711,10 @@ export async function confirmReading(
   uploadsDir: string,
   input: { requestId: string; userId: string; ip: string | null; userAgent: string | null; now?: Date },
 ): Promise<void> {
-  const { request, document, file, user } = await requireOwnRequest(db, input.requestId, input.userId)
+  const { request, document, file, user } = await requireOwnRequest(db, input.requestId, input.userId, 'share')
   if (request.status === 'signed') throw fail(409, 'Hai già confermato la lettura di questo documento')
   assertPending(request.status)
+  assertNotArchived(document)
   if (document.requiresSignature) throw fail(409, 'Questo documento va firmato con il codice')
   const now = input.now ?? new Date()
   const documentSha256 = sha256(await readStoredFile(uploadsDir, file))
@@ -1066,9 +1059,7 @@ export async function signatureRows(
  */
 export async function listDocuments(db: DbOrTx, options: { sessionId?: string } = {}): Promise<DocumentListItem[]> {
   const { sessionId } = options
-  const inSession = sessionId
-    ? sql` and (${signatureRequests.sessionId} = ${sessionId} or ${documents.sessionId} = ${sessionId})`
-    : sql``
+  const inSession = sessionId ? sql` and ${signatureRequests.sessionId} = ${sessionId}` : sql``
   const rows = await db
     .select({
       id: documents.id,
@@ -1205,7 +1196,10 @@ export async function documentOptions(db: DbOrTx): Promise<DocumentOptions> {
   }
 }
 
-/** GET /api/signatures: the documents of one account, to sign first, cancelled ones left out. */
+/**
+ * GET /api/signatures: the documents of one account, to sign first; cancelled ones left out, and so
+ * are those still to sign of an archived document (signaturePage shows them as cancelled).
+ */
 export async function mySignatures(db: DbOrTx, userId: string): Promise<MySignatureItem[]> {
   const rows = await db
     .select({
@@ -1220,7 +1214,13 @@ export async function mySignatures(db: DbOrTx, userId: string): Promise<MySignat
     })
     .from(signatureRequests)
     .innerJoin(documents, eq(documents.id, signatureRequests.documentId))
-    .where(and(eq(signatureRequests.userId, userId), ne(signatureRequests.status, 'cancelled')))
+    .where(
+      and(
+        eq(signatureRequests.userId, userId),
+        ne(signatureRequests.status, 'cancelled'),
+        or(ne(signatureRequests.status, 'pending'), isNull(documents.archivedAt)),
+      ),
+    )
     .orderBy(STATUS_ORDER, sql`${signatureRequests.dueDate} asc nulls last`, desc(signatureRequests.requestedAt))
   return rows.map(row => ({
     id: row.id,

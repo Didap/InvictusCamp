@@ -4,7 +4,12 @@ import { z } from 'zod'
 import { FAMILY_FORM_QUESTIONS, type FormQuestion } from '../content/family-form'
 import type { MemberHealth } from '../types/families'
 import type { DisabilityInfo, FormAnswers } from '../types/domain'
-import { FAMILY_FORM_STATUSES, MEMBER_RELATIONSHIPS, PERSONAL_DOCUMENT_CATEGORIES } from '../utils/constants'
+import {
+  FAMILY_FORM_STATUSES,
+  MEMBER_RELATIONSHIPS,
+  PERSONAL_DOCUMENT_CATEGORIES,
+  type PersonalDocumentCategory,
+} from '../utils/constants'
 import { isIsoDay, todayIso } from '../utils/dates'
 import { zListQuery, zPersonName, zPhone, zRequiredText, zText, zUuid } from './common'
 
@@ -187,6 +192,13 @@ export const personalDocumentSchema = z.object({
   familyMemberId: z.preprocess(value => (value === '' || value === null ? undefined : value), zUuid.optional()),
 })
 export type PersonalDocumentInput = z.output<typeof personalDocumentSchema>
+
+/** Documents that carry health data: a family uploads them only with the consent, withdrawing it deletes them. */
+export const HEALTH_DOCUMENT_CATEGORIES: readonly PersonalDocumentCategory[] = ['medical_certificate', 'diagnosis']
+
+export function isHealthDocument(category: PersonalDocumentCategory): boolean {
+  return HEALTH_DOCUMENT_CATEGORIES.includes(category)
+}
 
 // ─── Administration ─────────────────────────────────────────────────────────────────────────────────
 
