@@ -10,6 +10,7 @@ import {
   todayIso,
   weekdayIndex,
 } from '#shared/utils/dates'
+import { formatDayRange } from '#shared/utils/format'
 
 const session = { startDate: '2027-06-21', endDate: '2027-06-27' }
 
@@ -66,5 +67,15 @@ describe('dates', () => {
     expect(rangeCoverage([{ startDate: '2027-06-24', endDate: '2027-07-20' }], session)).toBe('partial')
     expect(rangeCoverage([{ startDate: '2027-08-01', endDate: '2027-09-30' }], session)).toBe('none')
     expect(rangeCoverage([], session)).toBe('none')
+  })
+})
+
+describe('formatDayRange', () => {
+  it('writes days without a leading zero, like formatDay', () => {
+    // ICU puts thin spaces (U+2009) around the dash when the months differ.
+    expect(formatDayRange('2027-09-06', '2027-09-12')).toBe('6–12 set 2027')
+    expect(formatDayRange('2027-06-30', '2027-07-05')).toBe('30 giu\u2009–\u20095 lug 2027')
+    expect(formatDayRange('2027-08-01', '2027-08-20', 'long')).toBe('1–20 agosto 2027')
+    expect(formatDayRange('2027-12-28', '2028-01-03')).toBe('28 dic 2027\u2009–\u20093 gen 2028')
   })
 })

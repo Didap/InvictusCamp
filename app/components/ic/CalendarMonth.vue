@@ -16,6 +16,8 @@ export interface CalendarEvent {
 }
 
 const props = defineProps<{ events: CalendarEvent[]; initialDay?: IsoDay }>()
+// Resolved here: resolveComponent() inside the template does not find NuxtLink at runtime.
+const NuxtLink = resolveComponent('NuxtLink')
 
 const today = todayIso()
 const monthOf = (day: IsoDay) => `${day.slice(0, 7)}-01`
@@ -121,7 +123,7 @@ const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
             <ul class="mt-1 space-y-1">
               <li v-for="event in eventsOn(day)" :key="event.id">
                 <component
-                  :is="event.to ? resolveComponent('NuxtLink') : 'span'"
+                  :is="event.to ? NuxtLink : 'span'"
                   :to="event.to"
                   class="block truncate rounded px-1.5 py-0.5 text-xs font-semibold ring-1 ring-inset"
                   :class="TONES[event.tone ?? 'primary']"
@@ -139,7 +141,7 @@ const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
     <ul class="space-y-2 sm:hidden">
       <li v-for="event in monthEvents" :key="event.id">
         <component
-          :is="event.to ? resolveComponent('NuxtLink') : 'div'"
+          :is="event.to ? NuxtLink : 'div'"
           :to="event.to"
           class="block rounded-lg border border-default bg-elevated p-3"
         >

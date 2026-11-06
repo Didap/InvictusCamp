@@ -36,7 +36,11 @@ export function formatDay(day: IsoDay | null | undefined, style: DayStyle = 'sho
 /** "12–18 lug 2027", "30 giu – 5 lug 2027": the shared parts are written once. */
 export function formatDayRange(start: IsoDay, end: IsoDay, style: Exclude<DayStyle, 'numeric'> = 'short'): string {
   if (start === end) return formatDay(start, style)
-  return dayFormatter(DAY_OPTIONS[style]).formatRange(dayToDate(start), dayToDate(end))
+  // ICU's Italian range patterns pad the day ("06–12 set"): the parts let us write it as formatDay does.
+  return dayFormatter(DAY_OPTIONS[style])
+    .formatRangeToParts(dayToDate(start), dayToDate(end))
+    .map(part => (part.type === 'day' ? String(Number(part.value)) : part.value))
+    .join('')
 }
 
 /** "sabato 12 luglio". */

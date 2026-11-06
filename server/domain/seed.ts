@@ -317,7 +317,7 @@ const DEMO_ANSWERS: FormAnswers = {
   howDidYouHear: 'Associazione o ente',
   previousCamps: false,
   accommodationNeeds: 'Camera al piano terra, spazio per la carrozzina (esempio).',
-  dietaryNeeds: 'Nessuna allergia nota (esempio).',
+  dietaryNeeds: 'Nessuna preferenza particolare (esempio).',
   preferredPeriods: ['Giugno', 'Luglio'],
   expectations: 'Qualche giorno di vacanza insieme e nuove amicizie (esempio).',
 }

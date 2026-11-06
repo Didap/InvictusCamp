@@ -18,8 +18,14 @@ export default defineAppConfig({
           variant: 'solid',
           class: 'hover:bg-(--color-blu-700) active:bg-(--color-blu-800) disabled:bg-primary aria-disabled:bg-primary',
         },
+        // Touch targets of at least 44px on phones (PRODUCT.md); link buttons sit in text and keep their size.
+        {
+          variant: ['solid', 'outline', 'soft', 'subtle', 'ghost'],
+          class: 'pointer-coarse:min-h-11 pointer-coarse:min-w-11',
+        },
       ],
     },
+    tabs: { slots: { trigger: 'pointer-coarse:min-h-11' } },
     input: { slots: { base: 'pointer-coarse:min-h-11' } },
     select: { slots: { base: 'pointer-coarse:min-h-11' } },
     selectMenu: { slots: { base: 'pointer-coarse:min-h-11' } },

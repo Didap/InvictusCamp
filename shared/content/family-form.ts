@@ -26,7 +26,7 @@ export const FAMILY_FORM_SECTIONS: FormSection[] = [
   {
     id: 'general',
     title: 'La vostra famiglia',
-    description: 'Domande segnaposto: il questionario definitivo arriverà nel prossimo sprint.',
+    description: 'Domande provvisorie: il questionario completo arriverà nelle prossime settimane.',
     questions: [
       {
         id: 'howDidYouHear',
@@ -48,7 +48,14 @@ export const FAMILY_FORM_SECTIONS: FormSection[] = [
         type: 'textarea',
         help: 'Per esempio accessibilità, letti, ausili da portare.',
       },
-      { id: 'dietaryNeeds', label: 'Esigenze alimentari o allergie', type: 'textarea' },
+      {
+        id: 'dietaryNeeds',
+        label: 'Abitudini e preferenze alimentari',
+        type: 'textarea',
+        // Allergies and medical diets are health data: they belong to each member's reserved section,
+        // which needs the explicit consent (docs/spec.md 3.8).
+        help: 'Allergie, intolleranze e diete mediche vanno nelle informazioni sanitarie di ciascun componente.',
+      },
       {
         id: 'preferredPeriods',
         label: 'Periodi preferiti',

@@ -26,10 +26,14 @@ export function apiErrorMessage(error: unknown, fallback = 'Qualcosa non ha funz
   return fallback
 }
 
+// Nuxt UI's useToast() calls inject(): after an `await` in an event handler there is no component
+// instance, so it runs in the app context (no "inject() can only be used inside setup()" warning).
+const toast = () => useNuxtApp().vueApp.runWithContext(() => useToast())
+
 export function notifyError(error: unknown, title = 'Operazione non riuscita') {
-  useToast().add({ title, description: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
+  toast().add({ title, description: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
 }
 
 export function notifySuccess(title: string, description?: string) {
-  useToast().add({ title, description, color: 'success', icon: 'i-lucide-circle-check' })
+  toast().add({ title, description, color: 'success', icon: 'i-lucide-circle-check' })
 }

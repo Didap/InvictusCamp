@@ -49,7 +49,7 @@ server/
   utils/          auto-imported: db, auth (requireAdmin/Family/Staff), validation, rate-limit, email
                   (deliver), files, audit
   domain/         explicit imports, testable against a real database: tokens, storage, audit,
-                  signature-requests, seed, and one module per area
+                  signature-requests, seed, errors (h3-compatible createError), and one module per area
   emails/         layout + one template file per area; templates return EmailMessage
 shared/
   utils/          constants (every enumeration + ENUM_META labels/icons/colours), dates, format,
@@ -77,7 +77,8 @@ tests/unit, tests/db   vitest projects `unit` and `db`
   only (no auto-imports) so tests can load them.
 - **Client**: data with `useApiFetch` / `useApi()`; errors with `notifyError`; statuses with
   `<IcStatusBadge>`; dates with `#shared/utils/format`; destructive or email-sending actions through
-  `useConfirm()` saying how many emails leave.
+  `useConfirm()` saying how many emails leave. With the typed `$fetch` of `useApi()`, build a dynamic URL
+  as `const url: string` first: a template route can hit "excessive stack depth" or allow only GET.
 - **Design** (DESIGN.md): semantic classes, never raw colours; one primary action per view; Italian copy
   with "tu", no em dashes; WCAG 2.2 AA; every page works at 390px.
 

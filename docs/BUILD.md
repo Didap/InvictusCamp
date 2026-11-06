@@ -23,7 +23,8 @@ ship; P1 if time allows, in the order listed.
   `removeFile`, `isUniqueViolation`, `toSessionUser`, `clientIp`.
 - **Domain** (explicit imports, no auto-imports, testable): `server/domain/db.ts` (types `Db`, `DbOrTx`),
   `tokens.ts` (`issueToken`, `consumeToken`), `storage.ts`, `audit.ts` (`writeAudit`),
-  `signature-requests.ts` (`requestSignatures`, `signatureRequestEmails`), `seed.ts`.
+  `signature-requests.ts` (`requestSignatures`, `signatureRequestEmails`), `seed.ts`, `errors.ts`
+  (`DomainError`, `createError`: an h3-compatible error the database tests can load).
 - **Emails**: `server/emails/layout.ts` (`renderEmail`, `appLink`, `escapeHtml`), `types.ts`
   (`EmailMessage`), `auth.ts`, `signatures.ts`. Your templates go in your own file (below) and return
   `EmailMessage`.
@@ -79,7 +80,8 @@ own endpoints.
 3. **Logic that touches several tables or sends emails** goes in `server/domain/<area>.ts`: explicit
    imports, takes `db` (or a transaction), returns the `EmailMessage[]` to send. The handler runs it in
    `useDb().transaction(...)` and calls `deliver(messages)` after the commit. Domain functions throw
-   `createError` imported from `h3` explicitly. Cover them with database tests.
+   `createError` imported from `./errors` (h3 is not a direct dependency, so tests cannot load it). Cover
+   them with database tests.
 4. **Imports**: shared code explicitly from `#shared/...` (app and server); Nuxt, Nitro and Nuxt UI
    composables stay auto-imported.
 5. **Design**: DESIGN.md. `IcPage` for every page, `IcSection` inside, `IcStatusBadge` for every status,

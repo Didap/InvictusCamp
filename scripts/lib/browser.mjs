@@ -1,5 +1,5 @@
 // Shared by page-check.mjs and check-pages.mjs: a signed-in headless Chromium against the dev server.
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { chromium } from 'playwright'
 
@@ -27,13 +27,40 @@ export function newContext(browser, { mobile = false } = {}) {
   })
 }
 
-/** Signs the context in as a demo account ('guest' stays signed out). */
+/**
+ * Signs the context in as a demo account ('guest' stays signed out). The cookie is saved in .checks/auth
+ * and reused while the server still accepts it, so repeated checks stay under the sign-in rate limit.
+ */
 export async function signIn(context, who) {
   if (who === 'guest') return
   const email = ACCOUNTS[who]
   if (!email) throw new Error(`unknown account "${who}" (admin, famiglia, staff, candidato, guest)`)
+  const saved = resolve(`.checks/auth/${who}.json`)
+  if (existsSync(saved)) {
+    await context.addCookies(JSON.parse(readFileSync(saved, 'utf8')))
+    const account = await context.request.get(`${BASE}/api/account`)
+    if (account.ok() && (await account.json()).email === email) return
+    await context.clearCookies()
+  }
   const response = await context.request.post(`${BASE}/api/auth/login`, { data: { email, password: PASSWORD } })
   if (!response.ok()) throw new Error(`login ${who} failed (${response.status()}): run "pnpm db:seed --fresh"`)
+  mkdirSync(dirname(saved), { recursive: true })
+  writeFileSync(saved, JSON.stringify(await context.cookies()))
+}
+
+/** Where fill:<selector>=<text> splits: the first '=' outside [attribute] brackets and quotes. */
+function fillSplit(arg) {
+  let depth = 0
+  let quote = null
+  for (let i = 0; i < arg.length; i++) {
+    const c = arg[i]
+    if (quote) quote = c === quote ? null : quote
+    else if (c === '"' || c === "'") quote = c
+    else if (c === '[') depth++
+    else if (c === ']') depth--
+    else if (c === '=' && depth === 0) return i
+  }
+  return -1
 }
 
 /** Replaces {session}, {family}, {signature}… with ids from GET /api/dev/ids (dev only). */
@@ -82,7 +109,7 @@ export async function visit(context, path, { actions = [], wait = 400, shot, ful
       if (verb === 'click') await page.locator(arg).first().click({ timeout: 5000 })
       else if (verb === 'hover') await page.locator(arg).first().hover({ timeout: 5000 })
       else if (verb === 'fill') {
-        const eq = arg.indexOf('=')
+        const eq = fillSplit(arg)
         await page
           .locator(arg.slice(0, eq))
           .first()
