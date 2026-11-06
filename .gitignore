@@ -1,0 +1,24 @@
+# Dependencies and builds
+node_modules
+.nuxt
+.output
+.nitro
+.cache
+dist
+
+# Local data: uploaded files, test artefacts, screenshots of the checks
+.data
+.checks
+coverage
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Logs and OS files
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
