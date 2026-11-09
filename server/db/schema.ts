@@ -16,7 +16,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
-import type { Audience, DisabilityInfo, FormAnswers } from '../../shared/types/domain'
+import type { Audience, DisabilityInfo, FormAnswers, ProgrammeContent } from '../../shared/types/domain'
 import type {
   ConvocationStatus,
   DocumentCategory,
@@ -315,6 +315,30 @@ export const sessionStaff = pgTable(
   t => [
     uniqueIndex('session_staff_session_user_key').on(t.sessionId, t.userId),
     index('session_staff_user_idx').on(t.userId),
+  ],
+)
+
+/**
+ * The week programme (docs/spec.md 3.10): one per year (`year`), and the copy a session may have of it
+ * (`sessionId`), never both. A session without a copy uses the programme of the year it starts in.
+ * `revision` grows at every save: a save carrying an older one is refused (two people editing).
+ */
+export const programmes = pgTable(
+  'programmes',
+  {
+    id: pk(),
+    year: integer(),
+    sessionId: uuid().references(() => campSessions.id, { onDelete: 'cascade' }),
+    content: jsonb().$type<ProgrammeContent>().notNull(),
+    revision: integer().notNull().default(1),
+    updatedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  t => [
+    uniqueIndex('programmes_year_key').on(t.year),
+    uniqueIndex('programmes_session_key').on(t.sessionId),
+    check('programmes_owner', sql`(${t.year} is null) <> (${t.sessionId} is null)`),
   ],
 )
 

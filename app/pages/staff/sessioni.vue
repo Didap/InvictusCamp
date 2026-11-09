@@ -79,6 +79,14 @@ const events = computed<CalendarEvent[]>(() =>
               <div class="flex flex-wrap items-center gap-2">
                 <StaffConvocationBadge :status="c.status" :confirmed="c.confirmed" />
                 <UButton
+                  :to="`/staff/programma/${c.session.id}`"
+                  icon="i-lucide-calendar-clock"
+                  label="Programma"
+                  color="neutral"
+                  variant="outline"
+                  class="pointer-coarse:min-h-11"
+                />
+                <UButton
                   class="pointer-coarse:min-h-11"
                   v-if="c.contract === 'pending' && c.contractRequestId"
                   :to="`/firma/${c.contractRequestId}`"

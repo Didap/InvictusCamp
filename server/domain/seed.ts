@@ -13,6 +13,7 @@ import type {
   ItalianRegion,
   StaffStatus,
 } from '../../shared/utils/constants'
+import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_LOCATION } from '../../shared/utils/constants'
 import * as t from '../db/schema'
 import type { Db } from './db'
@@ -36,6 +37,7 @@ const TABLES = [
   'session_staff',
   'session_families',
   'documents',
+  'programmes',
   'camp_sessions',
   'staff_availability',
   'staff_profiles',
@@ -568,6 +570,8 @@ export async function seedDemo(db: Db, options: { passwordHash: string; uploadsD
     staffNeeded: 10,
     responseDeadline: '2027-06-10',
   })
+  // The 2027 programme, from the model week: every 2027 session uses it.
+  await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() })
   await session({
     title: 'Sessione 3 · Settembre 2027',
     startDate: '2027-09-06',

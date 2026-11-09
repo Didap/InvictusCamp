@@ -106,6 +106,30 @@ export type FilePurpose = (typeof FILE_PURPOSES)[number]
 export const EMAIL_STATUSES = ['sent', 'failed', 'simulated'] as const
 export type EmailStatus = (typeof EMAIL_STATUSES)[number]
 
+/** What a block of the week programme is (docs/spec.md 3.10). `staff` blocks are not shown to families. */
+export const PROGRAMME_BLOCK_KINDS = [
+  'groups',
+  'everyone',
+  'adults',
+  'choice',
+  'welcome',
+  'meal',
+  'rest',
+  'free',
+  'staff',
+  'departure',
+] as const
+export type ProgrammeBlockKind = (typeof PROGRAMME_BLOCK_KINDS)[number]
+
+/** The groups that rotate through the activities of `groups` blocks. */
+export const PROGRAMME_GROUPS = ['yellow', 'red', 'blue'] as const
+export type ProgrammeGroup = (typeof PROGRAMME_GROUPS)[number]
+export const PROGRAMME_GROUP_LABELS: Record<ProgrammeGroup, string> = {
+  yellow: 'Giallo',
+  red: 'Rosso',
+  blue: 'Blu',
+}
+
 /** Uploads: 15 MB, PDF or images. Documents to sign are PDF only. */
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 export const UPLOAD_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'] as const
@@ -283,7 +307,26 @@ const emailStatus: Record<EmailStatus, EnumMeta> = {
   },
 }
 
+const programmeBlockKind: Record<ProgrammeBlockKind, EnumMeta> = {
+  groups: { label: 'Attività a gruppi', icon: 'i-lucide-shapes', color: 'primary' },
+  everyone: { label: 'Tutti insieme', icon: 'i-lucide-party-popper', color: 'secondary' },
+  adults: { label: 'Solo adulti', icon: 'i-lucide-coffee', color: 'info' },
+  choice: { label: 'A scelta', icon: 'i-lucide-sparkles', color: 'info' },
+  welcome: { label: 'Accoglienza', icon: 'i-lucide-hand-heart', color: 'neutral' },
+  meal: { label: 'Pasto', icon: 'i-lucide-utensils', color: 'neutral' },
+  rest: { label: 'Riposo', icon: 'i-lucide-moon', color: 'neutral' },
+  free: { label: 'Libero', icon: 'i-lucide-sun', color: 'neutral' },
+  staff: {
+    label: 'Solo staff',
+    icon: 'i-lucide-id-card',
+    color: 'neutral',
+    description: 'Le famiglie non vedono questo blocco',
+  },
+  departure: { label: 'Partenza', icon: 'i-lucide-car-front', color: 'neutral' },
+}
+
 export const ENUM_META = {
+  programmeBlockKind,
   userRole,
   userStatus,
   sessionStatus,
