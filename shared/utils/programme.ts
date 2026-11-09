@@ -48,6 +48,24 @@ export function blockTime(block: Pick<ProgrammeBlock, 'start' | 'end'>): string 
   return block.end ? `${block.start}–${block.end}` : block.start
 }
 
+/** A block dragged from one place to another; `newIndex` counts after the block left its place. */
+export interface BlockMove {
+  from: string
+  oldIndex: number
+  to: string
+  newIndex: number
+}
+
+/** Moves a block of `content` (the drag of the editor, and "Sposta su/giù" in its menu). */
+export function moveBlock(content: ProgrammeContent, move: BlockMove): void {
+  const from = content.days.find(day => day.id === move.from)
+  const to = content.days.find(day => day.id === move.to)
+  const block = from?.blocks[move.oldIndex]
+  if (!from || !to || !block) return
+  from.blocks.splice(move.oldIndex, 1)
+  to.blocks.splice(Math.min(move.newIndex, to.blocks.length), 0, block)
+}
+
 /**
  * Puts `block` among `blocks` by its start time: before the first block that starts later, at the end
  * otherwise. Blocks without a time stay where they are; a block without a time goes at the end.

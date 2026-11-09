@@ -10,6 +10,7 @@ import {
   canFamilyReadProgramme,
   dayDates,
   groupRotation,
+  moveBlock,
   newBlockId,
   openPoints,
   placeBlock,
@@ -141,6 +142,17 @@ describe('editor helpers', () => {
     const yellow = groupRotation(content).find(row => row.group === 'yellow')!
     expect(yellow.repeated).toEqual([twice])
     expect(yellow.missing).toEqual([lost])
+  })
+
+  it('moves a dragged block within its day and to another day', () => {
+    const content = programmeTemplate()
+    const titles = (id: string) => content.days.find(day => day.id === id)!.blocks.map(b => b.title)
+    const [first, second] = titles('ven')
+    moveBlock(content, { from: 'ven', oldIndex: 0, to: 'ven', newIndex: 1 })
+    expect(titles('ven').slice(0, 2)).toEqual([second, first])
+    moveBlock(content, { from: 'ven', oldIndex: 0, to: 'lun', newIndex: 0 })
+    expect(titles('lun')[0]).toBe(second)
+    expect(titles('ven')).not.toContain(second)
   })
 
   it('flags turns whose activity left the list', () => {
