@@ -1,0 +1,64 @@
+// GET /api/admin/dashboard: the Panoramica of the administration (docs/spec.md, 3.9).
+import type { IsoDay } from '../utils/dates'
+import type { SessionStatus } from '../utils/constants'
+
+/** A session that has not ended yet, with the progress of its families and staff. */
+export interface DashboardSession {
+  id: string
+  title: string
+  startDate: IsoDay
+  endDate: IsoDay
+  status: SessionStatus
+  responseDeadline: IsoDay | null
+  places: {
+    total: number
+    /** Titolari selected, invited or confirmed. */
+    held: number
+    confirmed: number
+    /** Titolari invited, still to answer. */
+    awaiting: number
+    free: number
+    /** Reserves waiting to be called. */
+    reserves: number
+  }
+  staff: {
+    needed: number
+    /** Accepted and, when the session has a contract, signed. */
+    confirmed: number
+    accepted: number
+    /** Convocations sent, still to answer. */
+    awaiting: number
+    /** Convocations prepared and not sent. */
+    toSend: number
+  }
+}
+
+/** One thing to do, with the page where it is done. */
+export interface DashboardTodo {
+  key: string
+  label: string
+  detail?: string
+  to: string
+  icon: string
+}
+
+export interface DashboardDto {
+  today: IsoDay
+  nextSession: DashboardSession | null
+  /** Sessions not ended yet (draft, inviting, confirmed), first to start first. */
+  upcoming: DashboardSession[]
+  counts: {
+    /** Staff applications `applied`. */
+    applicationsToReview: number
+    /** Families that have not confirmed their data yet. */
+    formsToComplete: number
+    /** Signature requests pending, documents not archived. */
+    signaturesPending: number
+    /** Emails not delivered in the last FAILED_EMAIL_DAYS days. */
+    emailsFailed: number
+  }
+  todo: DashboardTodo[]
+}
+
+/** The window of the "emails failed" number. */
+export const FAILED_EMAIL_DAYS = 30

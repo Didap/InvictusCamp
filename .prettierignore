@@ -1,0 +1,12 @@
+node_modules
+.nuxt
+.output
+.nitro
+.data
+.checks
+coverage
+pnpm-lock.yaml
+server/db/migrations
+public
+*.md
+.claude/settings.local.json
