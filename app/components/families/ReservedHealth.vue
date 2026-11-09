@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AdminFamilyHealth } from '#shared/types/families'
-import { formatDateTime, fullName } from '#shared/utils/format'
+import { formatDateTime, memberName } from '#shared/utils/format'
 
 // The reserved section of the admin family record. Health details stay closed until the
 // administration opens them (loaded on demand, the reading is audited) and never leave this section.
@@ -64,7 +64,7 @@ watch(
         :key="member.id"
         class="border-t border-default pt-5 first:border-t-0 first:pt-0"
       >
-        <h3 class="mb-3 font-bold text-highlighted">{{ fullName(member) }}</h3>
+        <h3 class="mb-3 font-bold text-highlighted">{{ memberName(member) }}</h3>
         <FamiliesHealthDetails :health="member" />
       </div>
       <p v-if="withDisability.length && othersCount" class="text-sm text-muted">

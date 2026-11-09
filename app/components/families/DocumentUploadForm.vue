@@ -42,7 +42,8 @@ const categories = computed(() =>
 const touch = useMediaQuery('(pointer: coarse)')
 const memberItems = computed(() => [
   { value: WHOLE_FAMILY, label: 'Tutta la famiglia' },
-  ...props.members.map(member => ({ value: member.id, label: fullName(member) })),
+  // A card still to fill in has no name to put on a document.
+  ...props.members.filter(member => member.firstName).map(member => ({ value: member.id, label: fullName(member) })),
 ])
 
 // A title written for you from the type and the person, until you write your own.

@@ -1,8 +1,7 @@
 import type { ConvocationStatus, ParticipationKind, ParticipationStatus } from '../utils/constants'
 
 /**
- * Answers of the family questionnaire, keyed by question id. Sprint 1 ships a generic placeholder
- * questionnaire (shared/content/family-form.ts); sprint 2 replaces the questions, not this shape.
+ * Answers to the questions of the family data (shared/content/family-form.ts), keyed by question id.
  */
 export type FormAnswers = Record<string, string | string[] | boolean | null>
 

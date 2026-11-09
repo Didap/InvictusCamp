@@ -47,8 +47,41 @@ export type ConvocationStatus = (typeof CONVOCATION_STATUSES)[number]
 export const MEMBER_RELATIONSHIPS = ['parent', 'child', 'sibling', 'grandparent', 'guardian', 'other'] as const
 export type MemberRelationship = (typeof MEMBER_RELATIONSHIPS)[number]
 
+/**
+ * Who a member is in the family's data: an adult or a young person (ragazzo o ragazza). Whether the young
+ * person has a condition is `hasDisability`, health data (docs/spec.md, 3.8).
+ */
+export const MEMBER_KINDS = ['adult', 'young'] as const
+export type MemberKind = (typeof MEMBER_KINDS)[number]
+
+/** `draft`: the family data is not confirmed yet; `submitted`: confirmed, the members' cards exist. */
 export const FAMILY_FORM_STATUSES = ['draft', 'submitted'] as const
 export type FamilyFormStatus = (typeof FAMILY_FORM_STATUSES)[number]
+
+/** The regions of Italy, for the family's residence. */
+export const ITALIAN_REGIONS = [
+  'Abruzzo',
+  'Basilicata',
+  'Calabria',
+  'Campania',
+  'Emilia-Romagna',
+  'Friuli-Venezia Giulia',
+  'Lazio',
+  'Liguria',
+  'Lombardia',
+  'Marche',
+  'Molise',
+  'Piemonte',
+  'Puglia',
+  'Sardegna',
+  'Sicilia',
+  'Toscana',
+  'Trentino-Alto Adige',
+  'Umbria',
+  'Valle d’Aosta',
+  'Veneto',
+] as const
+export type ItalianRegion = (typeof ITALIAN_REGIONS)[number]
 
 export const DOCUMENT_CATEGORIES = ['contract', 'consent', 'regulation', 'privacy', 'other'] as const
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number]
@@ -206,9 +239,14 @@ const memberRelationship: Record<MemberRelationship, EnumMeta> = {
   other: { label: 'Altro', icon: 'i-lucide-user', color: 'neutral' },
 }
 
+const memberKind: Record<MemberKind, EnumMeta> = {
+  adult: { label: 'Adulto', icon: 'i-lucide-user', color: 'neutral' },
+  young: { label: 'Ragazzo o ragazza', icon: 'i-lucide-smile', color: 'neutral' },
+}
+
 const familyFormStatus: Record<FamilyFormStatus, EnumMeta> = {
   draft: { label: 'Da completare', icon: 'i-lucide-file-pen-line', color: 'warning' },
-  submitted: { label: 'Inviato', icon: 'i-lucide-file-check', color: 'success' },
+  submitted: { label: 'Confermati', icon: 'i-lucide-file-check', color: 'success' },
 }
 
 const documentCategory: Record<DocumentCategory, EnumMeta> = {
@@ -255,6 +293,7 @@ export const ENUM_META = {
   staffRole,
   convocationStatus,
   memberRelationship,
+  memberKind,
   familyFormStatus,
   documentCategory,
   signatureStatus,

@@ -19,25 +19,31 @@ interface Step {
 const steps = computed<Step[]>(() => {
   const h = home.value
   if (!h) return []
+  const confirmed = h.formStatus === 'submitted'
   return [
     {
-      id: 'questionnaire',
-      done: h.formStatus === 'submitted',
-      title: h.formStatus === 'submitted' ? 'Scheda famiglia inviata' : 'Compila la scheda famiglia',
-      description:
-        h.formStatus === 'submitted'
-          ? 'Puoi ancora cambiare le risposte quando vuoi.'
-          : 'Qualche domanda su di voi e sulle esigenze per il soggiorno.',
+      id: 'familyData',
+      done: confirmed,
+      title: confirmed ? 'Dati della famiglia confermati' : 'Compila i dati della famiglia',
+      description: confirmed
+        ? 'Puoi cambiarli quando vuoi.'
+        : 'Dove abitate, chi fa parte della famiglia, le sessioni che preferisci.',
       to: '/famiglia/profilo',
       action: 'Compila',
     },
     {
-      id: 'members',
-      done: h.memberCount > 1,
-      title: h.memberCount > 1 ? `Componenti inseriti: ${h.memberCount}` : 'Aggiungi i componenti della famiglia',
-      description: 'Le persone che verranno al camp, con la data di nascita.',
+      id: 'cards',
+      done: confirmed && h.cardsToComplete === 0,
+      title: !confirmed
+        ? 'Completa le schede dei componenti'
+        : h.cardsToComplete
+          ? `Completa ${plural(h.cardsToComplete, 'scheda', 'schede')}`
+          : `Schede dei componenti compilate: ${h.memberCount}`,
+      description: confirmed
+        ? 'Nome, parentela e data di nascita di ogni persona della famiglia.'
+        : 'Le creiamo noi, una per persona, quando confermi i dati della famiglia.',
       to: '/famiglia/membri',
-      action: 'Aggiungi',
+      action: 'Compila',
     },
     {
       id: 'consent',

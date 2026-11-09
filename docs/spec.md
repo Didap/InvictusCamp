@@ -39,7 +39,7 @@ Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova
 `/admin/staff`, `/admin/staff/:userId`, `/admin/documenti`, `/admin/documenti/:id`,
 `/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/utenti`.
 
-Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (family data and questionnaire),
+Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
 `/famiglia/membri`, `/famiglia/documenti`. Staff: `/staff` (home), `/staff/candidatura`,
 `/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`.
 Everyone: `/account`, `/firma/:requestId`.
@@ -49,8 +49,9 @@ Everyone: `/account`, `/firma/:requestId`.
 ### 3.1 Accounts (foundation, done)
 
 - A family registers at `/registrati` (family name, referent, email, password, privacy): user `family`,
-  a `families` row and the referent as first member; an email confirms the address (48 h). Sign-in is
-  refused until the address is confirmed.
+  a `families` row and the referent as first member (an adult); an email confirms the address (48 h).
+  Sign-in is refused until the address is confirmed. The "Partecipa" or "Iscriviti" button of the camp's
+  website links here. Once in, the first thing to do is the family data (3.8).
 - A staff member registers at `/candidati`: user `staff` and a `staff_profiles` row `registered`; same
   confirmation. The application itself is completed inside the platform (3.4).
 - The administration invites any role (`/admin/utenti`): user `invited` without password and an
@@ -146,16 +147,33 @@ availability or receive convocations.
 - The log lists every email the platform sent, automatic or written, with status (sent, failed,
   simulated) and, for non-sensitive emails, the content. Access emails and codes are never stored.
 
-### 3.8 The family: profile, questionnaire, members, documents
+### 3.8 The family: family data, member cards, documents
 
-- Family data: family name, address, city, province, phone.
-- The questionnaire (`shared/content/family-form.ts`) is a **placeholder** for sprint 1: generic sections
-  and questions, answers in `families.formAnswers`, status `draft`/`submitted`. Sprint 2 replaces the
-  questions and adds conditions; the storage stays.
-- Members: name, birth date, relationship, referent, "ha una disabilità" and the disability details
-  (`DisabilityInfo`, placeholder fields). Details can be entered only after the explicit health data
-  consent (`healthDataConsentAt`), which the family can give or withdraw (withdrawing hides the fields and
-  asks to delete the details).
+- **Family data** (`/famiglia/profilo`, "Dati della famiglia"), the first form of the family: family name
+  and phone; residence (street and number, city, CAP and region required, province optional); the
+  composition, i.e. how many adults (the account holder included), how many young people with a severe or
+  chronic illness, a neurodevelopmental disorder or a disability, how many without; and the questions of
+  `shared/content/family-form.ts` (how they found the camp, association, preferred sessions: weekend with 2
+  nights and/or summer week with 4 nights, accommodation needs: kitchen, bathroom without architectural
+  barriers, microwave). Answers in `families.formAnswers` by question id. Every save needs the whole form.
+- **Confirming** it (`formStatus` `draft` → `submitted`, `formSubmittedAt` the first time) creates one
+  **card** (`family_members` row) per person declared: the cards already there count, so the account
+  holder is the first adult, and the missing ones are created empty (no name, no relationship), with their
+  `kind` (`adult`/`young`) and, for a young person with a condition, `hasDisability`. The page then opens
+  Componenti. Example: 2 adults, 1 young person with a disability, 1 without → 3 new cards, 4 in all.
+- Afterwards the family data stays editable and the composition shows the cards there. Raising a number
+  creates the cards missing; a number below the cards is refused (409): a person goes away by changing or
+  removing their card in Componenti.
+- Declaring a young person with a condition is health data: when the family has not given the consent
+  yet, the form asks for it next to the composition and gives it with the save (`family.health_consent`).
+  Without it, the save is refused.
+- **Member cards** (`/famiglia/membri`, "Componenti"): name, birth date, relationship, adult or young
+  person, referent, and, with the consent, "ha una patologia o disabilità" and its details (`DisabilityInfo`,
+  placeholder fields). An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling
+  it in requires name, surname and relationship. Before the family data is confirmed the page shows only
+  the account holder's card and points to the family data; afterwards cards can also be added by hand.
+- The health data consent (`healthDataConsentAt`) can be given or withdrawn in Componenti; withdrawing
+  deletes the details and the condition of every card (the card stays, as a young person without).
 - Personal documents (certificates, diagnoses, ID, health card): PDF, JPG or PNG up to 15 MB, with a
   category, a title and optionally the member they refer to. Medical certificates and diagnoses are health
   data: uploaded only with the consent, deleted with their files when it is withdrawn.
@@ -163,7 +181,7 @@ availability or receive convocations.
 ### 3.9 Panoramica (administration home)
 
 Numbers that lead to action: the next session (dates, countdown, places confirmed/total, staff
-confirmed/needed), applications to review, families with the questionnaire to complete, signatures
+confirmed/needed), applications to review, families with the family data to confirm, signatures
 waiting, emails failed in the last 30 days; the upcoming sessions with their progress; a "Da fare" list
 (each item links to where it is done).
 
@@ -202,6 +220,7 @@ Emails never contain health details. Without `NUXT_RESEND_API_KEY` every email i
 
 ## 6. Not in sprint 1
 
-The real family questionnaire and its conditions (sprint 2), automatic reserve promotion, Resend delivery
+The details of each card beyond name, birth date and relationship (sprint 2, still to define with the
+camp), automatic reserve promotion, Resend delivery
 webhooks, a qualified e-signature provider, Supabase (decided together: the app uses plain Postgres, so
 moving there is a change of `DATABASE_URL` and of the file storage), multilingual interface, dark mode.

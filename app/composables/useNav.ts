@@ -22,7 +22,7 @@ export function useNav() {
           [
             { label: 'Home', icon: 'i-lucide-house', to: '/famiglia', exact: true },
             { label: 'Sessioni', icon: 'i-lucide-calendar-days', to: '/famiglia/sessioni' },
-            { label: 'Scheda famiglia', icon: 'i-lucide-clipboard-list', to: '/famiglia/profilo' },
+            { label: 'Dati della famiglia', icon: 'i-lucide-clipboard-list', to: '/famiglia/profilo' },
             { label: 'Componenti', icon: 'i-lucide-users', to: '/famiglia/membri' },
             { label: 'Documenti', icon: 'i-lucide-folder-open', to: '/famiglia/documenti' },
           ],

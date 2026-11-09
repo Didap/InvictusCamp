@@ -1,7 +1,7 @@
 // Italian formatting shared by the interface (useFormat) and the email templates, so a date reads
 // the same on screen and in the inbox. Days are formatted as calendar days (no time zone shift);
 // instants are shown in Italian time.
-import { LOCALE, TIME_ZONE } from './constants'
+import { enumLabel, LOCALE, TIME_ZONE, type MemberKind } from './constants'
 import { daysBetween, todayIso, type IsoDay } from './dates'
 
 type DayStyle = 'long' | 'short' | 'numeric'
@@ -79,9 +79,14 @@ export function relativeDay(day: IsoDay, today: IsoDay = todayIso()): string {
 }
 
 /** "Mario Rossi". */
-export function fullName(person: { firstName: string; lastName: string } | null | undefined): string {
+export function fullName(person: { firstName: string | null; lastName: string | null } | null | undefined): string {
   if (!person) return ''
-  return `${person.firstName} ${person.lastName}`.trim()
+  return `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim()
+}
+
+/** A member's name, or what the card is while the family has not filled it in yet ("Adulto, da compilare"). */
+export function memberName(member: { firstName: string | null; lastName: string | null; kind: MemberKind }): string {
+  return fullName(member) || `${enumLabel('memberKind', member.kind)}, da compilare`
 }
 
 /** Initials for avatars: "MR". */
