@@ -4,7 +4,7 @@ import { MAX_ACTIVITIES, type ProgrammeSaveInput } from '#shared/schemas/program
 import type { ProgrammeBlock, ProgrammeDay } from '#shared/types/domain'
 import type { ProgrammeDto } from '#shared/types/programmes'
 import { formatDateTime } from '#shared/utils/format'
-import { copyOf, newBlockId, openPoints, placeBlock, sameContent } from '#shared/utils/programme'
+import { copyOf, moveBlock, newBlockId, openPoints, placeBlock, sameContent } from '#shared/utils/programme'
 
 // The week editor of the administration (docs/spec.md 3.10). Changes stay on this page until Salva,
 // which sends the whole week with the revision it was loaded at: if someone saved in between, the
@@ -91,8 +91,7 @@ function applyBlock({ dayId, block }: { dayId: string; block: ProgrammeBlock }) 
 }
 
 function move(day: ProgrammeDay, index: number, by: number) {
-  const [block] = day.blocks.splice(index, 1)
-  day.blocks.splice(index + by, 0, block!)
+  moveBlock(draft.value, { from: day.id, oldIndex: index, to: day.id, newIndex: index + by })
 }
 
 /** The toast puts the block back in the day it left, even if the week was saved or changed since. */
@@ -182,7 +181,7 @@ function showBlock(blockId: string) {
     </div>
 
     <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
-      <ProgrammeWeek :content="draft" :dates="dates">
+      <ProgrammeWeek :content="draft" :dates="dates" sortable @move="moveBlock(draft, $event)">
         <template #block-actions="{ day, block, index }">
           <div class="flex shrink-0 gap-1">
             <UButton
