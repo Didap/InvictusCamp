@@ -10,6 +10,7 @@ import {
   MEMBER_KINDS,
   MEMBER_RELATIONSHIPS,
   PERSONAL_DOCUMENT_CATEGORIES,
+  type MemberKind,
   type PersonalDocumentCategory,
 } from '../utils/constants'
 import { isIsoDay, todayIso } from '../utils/dates'
@@ -63,6 +64,45 @@ export const familyCompositionSchema = z.object({
   youngWithoutCondition: zCount(0),
 })
 export type FamilyComposition = z.output<typeof familyCompositionSchema>
+
+/**
+ * The three numbers of the composition: what a card of each group is, and how the form and the
+ * messages name the group.
+ */
+export const COMPOSITION_GROUPS = [
+  { key: 'adults', kind: 'adult', hasDisability: false, label: 'Adulti', help: 'Contando anche te.' },
+  {
+    key: 'youngWithCondition',
+    kind: 'young',
+    hasDisability: true,
+    label: 'Ragazzi e ragazze con patologie gravi o croniche, disturbi del neurosviluppo o disabilità',
+  },
+  {
+    key: 'youngWithoutCondition',
+    kind: 'young',
+    hasDisability: false,
+    label: 'Ragazzi e ragazze senza patologie o disabilità',
+  },
+] as const satisfies readonly {
+  key: keyof FamilyComposition
+  kind: MemberKind
+  hasDisability: boolean
+  label: string
+  help?: string
+}[]
+
+/** Which number of the composition a card counts in. */
+export function compositionGroupOf(card: { kind: MemberKind; hasDisability: boolean }): keyof FamilyComposition {
+  if (card.kind === 'adult') return 'adults'
+  return card.hasDisability ? 'youngWithCondition' : 'youngWithoutCondition'
+}
+
+/** The cards of a family counted by group. */
+export function countCards(cards: { kind: MemberKind; hasDisability: boolean }[]): FamilyComposition {
+  const counts: FamilyComposition = { adults: 0, youngWithCondition: 0, youngWithoutCondition: 0 }
+  for (const card of cards) counts[compositionGroupOf(card)]++
+  return counts
+}
 
 /**
  * The fields of the family data form (/famiglia/profilo): residence required, the composition, and the

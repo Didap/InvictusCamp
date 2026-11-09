@@ -2,7 +2,7 @@
 import { adminNotesSchema, ageOn } from '#shared/schemas/families'
 import type { AdminFamilyDetail, FamilyMemberDto } from '#shared/types/families'
 import { enumLabel } from '#shared/utils/constants'
-import { formatDay, formatDateTime, fullName, memberName, plural } from '#shared/utils/format'
+import { formatDay, formatDateTime, fullName, isEmptyCard, memberName, plural } from '#shared/utils/format'
 
 // The record of one family for the administration: data and contacts, members (health details only
 // in the reserved section, loaded on demand), sessions (A1), questionnaire, personal documents,
@@ -40,7 +40,7 @@ const contacts = computed(() => {
 })
 
 function memberSummary(member: FamilyMemberDto): string {
-  if (!member.relationship) return 'Scheda non ancora compilata dalla famiglia'
+  if (isEmptyCard(member) || !member.relationship) return 'Scheda non ancora compilata dalla famiglia'
   const relationship = enumLabel('memberRelationship', member.relationship)
   if (!member.birthDate) return relationship
   const age = ageOn(member.birthDate)
@@ -168,11 +168,11 @@ async function saveNotes() {
       </IcSection>
 
       <IcSection
-        title="Questionario"
+        title="Le risposte della famiglia"
         :description="
           family.formSubmittedAt
-            ? `Inviato il ${formatDateTime(family.formSubmittedAt)}.`
-            : 'Non ancora inviato: qui vedi le risposte salvate in bozza.'
+            ? `Dati confermati il ${formatDateTime(family.formSubmittedAt)}.`
+            : 'La famiglia non ha ancora confermato i suoi dati.'
         "
       >
         <template #actions>

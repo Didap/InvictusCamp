@@ -2,6 +2,7 @@
 import type { FormError, FormErrorEvent } from '@nuxt/ui'
 import { FAMILY_FORM_QUESTIONS, FAMILY_FORM_SECTIONS } from '#shared/content/family-form'
 import {
+  COMPOSITION_GROUPS,
   familyDataFieldsSchema,
   MAX_MEMBERS_OF_A_KIND,
   missingRequiredQuestions,
@@ -9,7 +10,7 @@ import {
 } from '#shared/schemas/families'
 import type { FormAnswers } from '#shared/types/domain'
 import type { FamilyDataResult, FamilyProfileDto } from '#shared/types/families'
-import { ITALIAN_REGIONS, type ItalianRegion } from '#shared/utils/constants'
+import type { ItalianRegion } from '#shared/utils/constants'
 import { formatDateTime, plural } from '#shared/utils/format'
 
 // The family data (docs/spec.md, 3.8): the first form of the family, editable afterwards. Confirming it
@@ -73,15 +74,6 @@ function answers(): FormAnswers {
   }
   return result
 }
-
-const compositionFields: { key: keyof FamilyComposition; label: string; help?: string }[] = [
-  { key: 'adults', label: 'Adulti', help: 'Contando anche te.' },
-  {
-    key: 'youngWithCondition',
-    label: 'Ragazzi e ragazze con patologie gravi o croniche, disturbi del neurosviluppo o disabilità',
-  },
-  { key: 'youngWithoutCondition', label: 'Ragazzi e ragazze senza patologie o disabilità' },
-]
 
 /** Declaring a young person with a condition is health data: the consent comes with it, the first time. */
 const needsConsent = computed(
@@ -181,45 +173,7 @@ const booleanItems = [
       </IcSection>
 
       <IcSection title="Residenza">
-        <div class="space-y-5">
-          <UFormField label="Via e numero civico" name="address" data-field="address" required>
-            <UInput v-model="state.address" autocomplete="street-address" class="w-full" />
-          </UFormField>
-          <div class="grid gap-5 sm:grid-cols-[1fr_10rem]">
-            <UFormField label="Città" name="city" data-field="city" required>
-              <UInput v-model="state.city" autocomplete="address-level2" class="w-full" />
-            </UFormField>
-            <UFormField label="CAP" name="postalCode" data-field="postalCode" required>
-              <UInput
-                v-model="state.postalCode"
-                inputmode="numeric"
-                maxlength="5"
-                autocomplete="postal-code"
-                class="w-full"
-              />
-            </UFormField>
-          </div>
-          <div class="grid gap-5 sm:grid-cols-[1fr_10rem]">
-            <UFormField label="Regione" name="region" data-field="region" required>
-              <USelect
-                v-model="state.region"
-                :items="[...ITALIAN_REGIONS]"
-                placeholder="Scegli"
-                autocomplete="address-level1"
-                class="w-full"
-              />
-            </UFormField>
-            <UFormField
-              label="Provincia"
-              name="province"
-              data-field="province"
-              hint="Facoltativo"
-              help="La sigla, per esempio TA."
-            >
-              <UInput v-model="state.province" maxlength="2" autocomplete="off" class="w-full uppercase" />
-            </UFormField>
-          </div>
-        </div>
+        <FamiliesResidenceFields v-model="state" required />
       </IcSection>
 
       <IcSection
@@ -232,10 +186,10 @@ const booleanItems = [
       >
         <div class="space-y-5">
           <UFormField
-            v-for="field in compositionFields"
+            v-for="field in COMPOSITION_GROUPS"
             :key="field.key"
             :label="field.label"
-            :help="field.help"
+            :help="'help' in field ? field.help : undefined"
             :name="`composition.${field.key}`"
             :data-field="`composition.${field.key}`"
             required
@@ -256,17 +210,7 @@ const booleanItems = [
               vuoi dalla pagina Componenti.
             </p>
             <UFormField name="healthConsent" data-field="healthConsent">
-              <UCheckbox
-                v-model="state.healthConsent"
-                label="Acconsento al trattamento dei dati sulla salute dei componenti della mia famiglia"
-              >
-                <template #description>
-                  Come descritto
-                  <ULink to="/privacy" target="_blank" class="font-semibold text-primary underline"
-                    >nell’informativa privacy</ULink
-                  >.
-                </template>
-              </UCheckbox>
+              <FamiliesHealthConsentCheckbox v-model="state.healthConsent" />
             </UFormField>
           </div>
         </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { familyProfileSchema } from '#shared/schemas/families'
 import type { FamilyProfileDto } from '#shared/types/families'
-import { ITALIAN_REGIONS, type ItalianRegion } from '#shared/utils/constants'
+import type { ItalianRegion } from '#shared/utils/constants'
 
 // The family's name, residence and phone, changed by the administration on the family's behalf
 // (PATCH /api/admin/families/:id). The family itself changes them with the rest of its data on
@@ -64,25 +64,7 @@ async function save() {
     >
       <UInput v-model="state.name" class="w-full" />
     </UFormField>
-    <UFormField label="Indirizzo" name="address" hint="Facoltativo">
-      <UInput v-model="state.address" autocomplete="street-address" class="w-full" />
-    </UFormField>
-    <div class="grid gap-5 sm:grid-cols-[1fr_8rem]">
-      <UFormField label="Città" name="city" hint="Facoltativo">
-        <UInput v-model="state.city" autocomplete="address-level2" class="w-full" />
-      </UFormField>
-      <UFormField label="CAP" name="postalCode" hint="Facoltativo">
-        <UInput v-model="state.postalCode" inputmode="numeric" maxlength="5" autocomplete="off" class="w-full" />
-      </UFormField>
-    </div>
-    <div class="grid gap-5 sm:grid-cols-[1fr_8rem]">
-      <UFormField label="Regione" name="region" hint="Facoltativo">
-        <USelect v-model="state.region" :items="[...ITALIAN_REGIONS]" placeholder="Scegli" class="w-full" />
-      </UFormField>
-      <UFormField label="Provincia" name="province" hint="Facoltativo" help="La sigla, per esempio TA.">
-        <UInput v-model="state.province" maxlength="2" autocomplete="off" class="w-full uppercase" />
-      </UFormField>
-    </div>
+    <FamiliesResidenceFields v-model="state" />
     <UFormField label="Telefono" name="phone" hint="Facoltativo">
       <UInput v-model="state.phone" type="tel" autocomplete="tel" class="w-full" />
     </UFormField>

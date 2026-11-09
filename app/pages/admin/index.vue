@@ -21,9 +21,9 @@ const tiles = computed(() => {
       to: '/admin/staff?tab=review',
     },
     {
-      label: 'Questionari da completare',
+      label: 'Dati della famiglia da confermare',
       value: formatNumber(counts.formsToComplete),
-      hint: 'Famiglie con la scheda in bozza',
+      hint: 'Famiglie che non li hanno ancora confermati',
       icon: 'i-lucide-file-pen-line',
       to: '/admin/famiglie?formStatus=draft',
     },

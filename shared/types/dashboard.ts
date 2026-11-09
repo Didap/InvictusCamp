@@ -50,7 +50,7 @@ export interface DashboardDto {
   counts: {
     /** Staff applications `applied`. */
     applicationsToReview: number
-    /** Families whose questionnaire is still a draft. */
+    /** Families that have not confirmed their data yet. */
     formsToComplete: number
     /** Signature requests pending, documents not archived. */
     signaturesPending: number

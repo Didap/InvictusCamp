@@ -8,6 +8,9 @@ import {
   hasHealthData,
   healthChangedFields,
   isHealthDocument,
+  COMPOSITION_GROUPS,
+  compositionGroupOf,
+  countCards,
   MAX_MEMBERS_OF_A_KIND,
   missingRequiredQuestions,
   NO_HEALTH,
@@ -36,7 +39,7 @@ import type {
   OwnFamilyMember,
   PersonalDocumentDto,
 } from '../../shared/types/families'
-import type { MemberKind, ParticipationStatus } from '../../shared/utils/constants'
+import type { ParticipationStatus } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
 import { plural } from '../../shared/utils/format'
 import {
@@ -100,31 +103,43 @@ export function familyFields(family: FamilyRow) {
   }
 }
 
-/** The cards of a family by kind. Young people with a condition are known only with the consent. */
-type Card = Pick<MemberRow, 'kind' | 'hasDisability'>
+/** A card as the composition counts it (young people with a condition only with the consent), with its place. */
+type CardRow = Pick<MemberRow, 'id' | 'kind' | 'hasDisability' | 'position'>
 
-/** Which number of the composition a card counts in. */
-function groupOf(card: Card): keyof FamilyComposition {
-  if (card.kind === 'adult') return 'adults'
-  return card.hasDisability ? 'youngWithCondition' : 'youngWithoutCondition'
+/** The family's cards: only what counting them and placing a new one needs, no names, no health details. */
+function cardRows(db: DbOrTx, familyId: string): Promise<CardRow[]> {
+  return db
+    .select({
+      id: familyMembers.id,
+      kind: familyMembers.kind,
+      hasDisability: familyMembers.hasDisability,
+      position: familyMembers.position,
+    })
+    .from(familyMembers)
+    .where(eq(familyMembers.familyId, familyId))
 }
 
-function cardsOf(rows: Card[]): FamilyComposition {
-  const cards: FamilyComposition = { adults: 0, youngWithCondition: 0, youngWithoutCondition: 0 }
-  for (const row of rows) cards[groupOf(row)]++
-  return cards
+/** Where a new card goes: after the others. */
+function nextPosition(rows: CardRow[]): number {
+  return rows.reduce((next, row) => Math.max(next, row.position + 1), 0)
+}
+
+/** A group of the composition inside a sentence: "adulti", "ragazzi e ragazze senza patologie o disabilità". */
+function groupName(key: keyof FamilyComposition): string {
+  const { label } = COMPOSITION_GROUPS.find(group => group.key === key)!
+  return label.charAt(0).toLowerCase() + label.slice(1)
 }
 
 /**
  * 409 when `card` would make its group larger than the family data form can hold: past that, no
  * composition would be both allowed and at least the cards there, and the form could not be saved.
  */
-function assertRoomFor(others: Card[], card: Card) {
-  const group = groupOf(card)
-  if (cardsOf(others)[group] >= MAX_MEMBERS_OF_A_KIND) {
+function assertRoomFor(others: CardRow[], card: Pick<CardRow, 'kind' | 'hasDisability'>) {
+  const group = compositionGroupOf(card)
+  if (countCards(others)[group] >= MAX_MEMBERS_OF_A_KIND) {
     throw createError({
       statusCode: 409,
-      message: `Al massimo ${MAX_MEMBERS_OF_A_KIND} schede di ${CARD_OF[group].label}`,
+      message: `Al massimo ${MAX_MEMBERS_OF_A_KIND} schede di ${groupName(group)}`,
     })
   }
 }
@@ -135,7 +150,7 @@ export function toFamilyProfile(family: FamilyRow, cards: FamilyComposition): Fa
 
 /** GET /api/family/profile */
 export async function familyProfile(db: DbOrTx, family: FamilyRow): Promise<FamilyProfileDto> {
-  return toFamilyProfile(family, cardsOf(await listMemberRows(db, family.id)))
+  return toFamilyProfile(family, countCards(await cardRows(db, family.id)))
 }
 
 /** Name, residence and phone as stored: empty values become null. */
@@ -178,33 +193,19 @@ export async function updateFamilyDataByAdmin(
   return after!
 }
 
-/** What a card of each kind of the composition is when it is created. */
-const CARD_OF: Record<keyof FamilyComposition, { kind: MemberKind; hasDisability: boolean; label: string }> = {
-  adults: { kind: 'adult', hasDisability: false, label: 'adulti' },
-  youngWithCondition: {
-    kind: 'young',
-    hasDisability: true,
-    label: 'ragazzi o ragazze con patologie o disabilità',
-  },
-  youngWithoutCondition: {
-    kind: 'young',
-    hasDisability: false,
-    label: 'ragazzi o ragazze senza patologie o disabilità',
-  },
-}
-
 /**
  * Confirms the family data (docs/spec.md, 3.8): residence, composition, answers. Every save needs the
  * whole form; the first one marks the data confirmed. Then the family gets one card per person
  * declared: cards already there count (the account holder is the first adult), missing ones are
  * created empty, and a composition below the cards there is refused, since removing a person is
  * removing their card. Declaring a young person with a condition is health data: it needs the consent,
- * which the form gives (`healthConsent`) when the family has not given it yet.
+ * which the form gives (`healthConsent`) when the family has not given it yet. Afterwards the cards are
+ * exactly the composition, returned as `cards`.
  */
 export async function saveFamilyData(
   db: DbOrTx,
   input: { familyId: string; data: FamilyDataInput; actor: Actor },
-): Promise<{ family: FamilyRow; cardsCreated: number }> {
+): Promise<{ family: FamilyRow; cards: FamilyComposition; cardsCreated: number }> {
   // Locked: two saves at once (two tabs, a retry) would both count the same cards and both add the missing ones.
   const family = await requireFamilyRow(db, input.familyId, true)
   const { answers, invalid } = normalizeFormAnswers(input.data.answers)
@@ -221,12 +222,13 @@ export async function saveFamilyData(
   }
 
   const { composition } = input.data
-  const cards = cardsOf(await listMemberRows(db, family.id))
-  for (const key of Object.keys(CARD_OF) as (keyof FamilyComposition)[]) {
+  const rows = await cardRows(db, family.id)
+  const cards = countCards(rows)
+  for (const { key } of COMPOSITION_GROUPS) {
     if (composition[key] < cards[key]) {
       throw createError({
         statusCode: 409,
-        message: `Hai già ${plural(cards[key], 'scheda', 'schede')} di ${CARD_OF[key].label}: per indicarne di meno, cambia o rimuovi una scheda nella pagina Componenti`,
+        message: `Hai già ${plural(cards[key], 'scheda', 'schede')} di ${groupName(key)}: per indicarne di meno, cambia o rimuovi una scheda nella pagina Componenti`,
       })
     }
   }
@@ -253,7 +255,7 @@ export async function saveFamilyData(
     .where(eq(families.id, family.id))
     .returning()
 
-  const created = await createCards(db, family.id, composition, cards)
+  const created = await createCards(db, family.id, composition, cards, nextPosition(rows))
   for (const card of created) {
     if (card.hasDisability) await auditHealth(db, input.actor, card, ['hasDisability'])
   }
@@ -267,22 +269,22 @@ export async function saveFamilyData(
       ip: input.actor.ip,
     })
   }
-  return { family: row!, cardsCreated: created.length }
+  return { family: row!, cards: composition, cardsCreated: created.length }
 }
 
-/** The empty cards that bring the family from `cards` to `composition`, after the cards already there. */
+/** The empty cards that bring the family from `cards` to `composition`, from `position` on. */
 async function createCards(
   db: DbOrTx,
   familyId: string,
   composition: FamilyComposition,
   cards: FamilyComposition,
+  position: number,
 ): Promise<MemberRow[]> {
-  let position = await nextPosition(db, familyId)
-  const values = (Object.keys(CARD_OF) as (keyof FamilyComposition)[]).flatMap(key =>
-    Array.from({ length: composition[key] - cards[key] }, () => ({
+  const values = COMPOSITION_GROUPS.flatMap(group =>
+    Array.from({ length: composition[group.key] - cards[group.key] }, () => ({
       familyId,
-      kind: CARD_OF[key].kind,
-      hasDisability: CARD_OF[key].hasDisability,
+      kind: group.kind,
+      hasDisability: group.hasDisability,
       position: position++,
     })),
   )
@@ -301,15 +303,6 @@ function toMember(row: MemberRow): FamilyMemberDto {
     kind: row.kind,
     isReferent: row.isReferent,
   }
-}
-
-/** Where a new member goes: after the others. */
-async function nextPosition(db: DbOrTx, familyId: string): Promise<number> {
-  const [last] = await db
-    .select({ next: sql<number>`coalesce(max(${familyMembers.position}) + 1, 0)::int` })
-    .from(familyMembers)
-    .where(eq(familyMembers.familyId, familyId))
-  return last?.next ?? 0
 }
 
 function healthOf(row: Pick<MemberRow, 'hasDisability' | 'disability'>): MemberHealth {
@@ -409,7 +402,8 @@ export async function addFamilyMember(
   }
   const health = normalizeHealth(input.member.health)
   if (hasHealthData(health) && !family.healthDataConsentAt) throw consentRequired()
-  assertRoomFor(await listMemberRows(db, family.id), { kind: input.member.kind, hasDisability: health.hasDisability })
+  const rows = await cardRows(db, family.id)
+  assertRoomFor(rows, { kind: input.member.kind, hasDisability: health.hasDisability })
   const [row] = await db
     .insert(familyMembers)
     .values({
@@ -422,7 +416,7 @@ export async function addFamilyMember(
       isReferent: input.member.isReferent,
       hasDisability: health.hasDisability,
       disability: health.disability,
-      position: await nextPosition(db, family.id),
+      position: nextPosition(rows),
     })
     .returning()
   await auditHealth(db, input.actor, row!, healthChangedFields(NO_HEALTH, health))
@@ -444,8 +438,8 @@ export async function updateFamilyMember(
     else if (hasHealthData(next)) throw consentRequired()
   }
   const card = { kind: input.member.kind, hasDisability: after.hasDisability }
-  if (groupOf(card) !== groupOf(row)) {
-    const others = (await listMemberRows(db, family.id)).filter(other => other.id !== row.id)
+  if (compositionGroupOf(card) !== compositionGroupOf(row)) {
+    const others = (await cardRows(db, family.id)).filter(other => other.id !== row.id)
     assertRoomFor(others, card)
   }
   if (row.isReferent && !input.member.isReferent) {

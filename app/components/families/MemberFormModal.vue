@@ -4,7 +4,7 @@ import type { DisabilityInfo } from '#shared/types/domain'
 import type { OwnFamilyMember } from '#shared/types/families'
 import type { MemberKind, MemberRelationship } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
-import { fullName } from '#shared/utils/format'
+import { fullName, isEmptyCard } from '#shared/utils/format'
 
 // Adds or edits a member of the signed-in family. The health fields appear only with the consent
 // (docs/spec.md, 3.8); without it the request carries no health data at all.
@@ -75,7 +75,7 @@ const api = useApi()
 const saving = ref(false)
 
 /** A card created from the family data and still empty: the family fills it in for the first time. */
-const emptyCard = computed(() => Boolean(props.member && !props.member.firstName))
+const emptyCard = computed(() => Boolean(props.member && isEmptyCard(props.member)))
 const title = computed(() => {
   if (!props.member) return 'Aggiungi un componente'
   return emptyCard.value ? 'Compila la scheda' : `Modifica ${fullName(props.member)}`

@@ -2,7 +2,7 @@
 import { ageOn } from '#shared/schemas/families'
 import type { FamilyMembersResponse, OwnFamilyMember } from '#shared/types/families'
 import { enumLabel } from '#shared/utils/constants'
-import { memberName, plural } from '#shared/utils/format'
+import { isEmptyCard, memberName, plural } from '#shared/utils/format'
 
 // The members of the family. Health details (disability) only after the explicit consent, which the
 // family gives or withdraws at the bottom of the page (docs/spec.md, 3.8).
@@ -15,7 +15,7 @@ const consent = computed(() => Boolean(data.value?.healthDataConsentAt))
 const withHealth = computed(() => members.value.filter(member => member.health?.hasDisability).length)
 /** The cards come from the family data: until it is confirmed there is only the account holder's. */
 const confirmed = computed(() => data.value?.formStatus === 'submitted')
-const toComplete = computed(() => members.value.filter(member => !member.firstName))
+const toComplete = computed(() => members.value.filter(isEmptyCard))
 /** The first card to fill in carries the one primary button of the page. */
 const nextCardId = computed(() => toComplete.value[0]?.id)
 
@@ -42,7 +42,7 @@ function openForm(member: OwnFamilyMember | null) {
 const title = (member: OwnFamilyMember) => memberName(member, members.value)
 
 function summary(member: OwnFamilyMember): string {
-  if (!member.relationship) return 'Scheda da compilare: nome, parentela, data di nascita'
+  if (isEmptyCard(member) || !member.relationship) return 'Scheda da compilare: nome, parentela, data di nascita'
   const relationship = enumLabel('memberRelationship', member.relationship)
   if (!member.birthDate) return relationship
   const age = ageOn(member.birthDate)
@@ -111,7 +111,7 @@ async function remove(member: OwnFamilyMember) {
                 label="Referente"
               />
               <UBadge
-                v-if="!member.firstName"
+                v-if="isEmptyCard(member)"
                 color="warning"
                 variant="subtle"
                 icon="i-lucide-file-pen-line"
@@ -126,23 +126,12 @@ async function remove(member: OwnFamilyMember) {
           </div>
           <div class="flex gap-2">
             <UButton
-              v-if="!member.firstName"
               icon="i-lucide-pencil"
-              label="Compila"
+              :label="isEmptyCard(member) ? 'Compila' : 'Modifica'"
               :color="member.id === nextCardId ? 'primary' : 'neutral'"
               :variant="member.id === nextCardId ? 'solid' : 'outline'"
               class="pointer-coarse:min-h-11"
-              :aria-label="`Compila la scheda ${title(member)}`"
-              @click="openForm(member)"
-            />
-            <UButton
-              v-else
-              icon="i-lucide-pencil"
-              label="Modifica"
-              color="neutral"
-              variant="outline"
-              class="pointer-coarse:min-h-11"
-              :aria-label="`Modifica ${title(member)}`"
+              :aria-label="`${isEmptyCard(member) ? 'Compila la scheda' : 'Modifica'} ${title(member)}`"
               @click="openForm(member)"
             />
             <UButton

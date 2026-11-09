@@ -117,7 +117,7 @@ const columns: TableColumn<FamilyListItem>[] = [
   { id: 'referent', header: 'Referente' },
   { accessorKey: 'city', header: sortHeader('Città', 'city') },
   { accessorKey: 'memberCount', header: sortHeader('Componenti', 'members') },
-  { accessorKey: 'formStatus', header: 'Questionario' },
+  { accessorKey: 'formStatus', header: 'Dati della famiglia' },
   { id: 'lastSession', header: 'Ultima sessione' },
 ]
 
@@ -156,7 +156,7 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
           class="w-full"
         />
       </UFormField>
-      <UFormField label="Questionario">
+      <UFormField label="Dati della famiglia">
         <USelect v-model="formStatusFilter" :items="formStatusItems" value-key="value" class="w-full" />
       </UFormField>
       <UFormField label="Provincia">

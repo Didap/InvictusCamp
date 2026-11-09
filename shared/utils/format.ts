@@ -87,12 +87,19 @@ export function fullName(person: { firstName: string | null; lastName: string | 
 type MemberRef = { id: string; firstName: string | null; lastName: string | null; kind: MemberKind }
 
 /**
+ * A card created from the family data and not filled in yet: name, surname and relationship are null
+ * together until the family saves it (the member schema requires all three).
+ */
+export function isEmptyCard(member: { firstName: string | null }): boolean {
+  return member.firstName === null
+}
+
+/**
  * A member's name or, while the family has not filled in the card, what the card is: "Adulto 2",
  * numbered among the cards of its kind in `members` (the whole family, in its order).
  */
 export function memberName(member: MemberRef, members: Pick<MemberRef, 'id' | 'kind'>[]): string {
-  const name = fullName(member)
-  if (name) return name
+  if (!isEmptyCard(member)) return fullName(member)
   const sameKind = members.filter(other => other.kind === member.kind)
   return `${enumLabel('memberKind', member.kind)} ${sameKind.findIndex(other => other.id === member.id) + 1}`
 }

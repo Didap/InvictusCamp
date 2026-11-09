@@ -9,6 +9,5 @@ export default defineEventHandler(async (event): Promise<FamilyDataResult> => {
   const saved = await useDb().transaction(tx =>
     saveFamilyData(tx, { familyId: family.id, data, actor: { userId: user.id, ip: clientIp(event) } }),
   )
-  // After the save the cards are exactly the composition: the missing ones were created, fewer is refused.
-  return { profile: toFamilyProfile(saved.family, data.composition), cardsCreated: saved.cardsCreated }
+  return { profile: toFamilyProfile(saved.family, saved.cards), cardsCreated: saved.cardsCreated }
 })

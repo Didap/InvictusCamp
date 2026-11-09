@@ -8,7 +8,7 @@ import {
   enumLabel,
   type PersonalDocumentCategory,
 } from '#shared/utils/constants'
-import { fullName } from '#shared/utils/format'
+import { fullName, isEmptyCard } from '#shared/utils/format'
 
 // Upload of a personal document of the family: type, title, who it refers to, the file (PDF, JPG or
 // PNG up to 15 MB). Certificates and diagnoses are offered only with the consent to health data. The
@@ -43,7 +43,9 @@ const touch = useMediaQuery('(pointer: coarse)')
 const memberItems = computed(() => [
   { value: WHOLE_FAMILY, label: 'Tutta la famiglia' },
   // A card still to fill in has no name to put on a document.
-  ...props.members.filter(member => member.firstName).map(member => ({ value: member.id, label: fullName(member) })),
+  ...props.members
+    .filter(member => !isEmptyCard(member))
+    .map(member => ({ value: member.id, label: fullName(member) })),
 ])
 
 // A title written for you from the type and the person, until you write your own.

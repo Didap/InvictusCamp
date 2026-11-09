@@ -795,7 +795,7 @@ export async function seedDemo(db: Db, options: { passwordHash: string; uploadsD
     .insert(t.communications)
     .values({
       subject: 'Le iscrizioni per l’estate 2027 sono aperte',
-      body: 'Care famiglie,\n\nsono aperte le iscrizioni per le sessioni dell’estate 2027. Completate il questionario nel gestionale: vi contatteremo noi per le sessioni.\n\nA presto,\nlo staff di Invictus Camp',
+      body: 'Care famiglie,\n\nsono aperte le iscrizioni per le sessioni dell’estate 2027. Completate i dati della famiglia nel gestionale: vi contatteremo noi per le sessioni.\n\nA presto,\nlo staff di Invictus Camp',
       audience: { type: 'all_families' },
       recipientCount: families.length,
       sentBy: admin.id,
