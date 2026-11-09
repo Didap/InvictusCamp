@@ -33,7 +33,13 @@ export interface FamilyListItem {
   name: string
   city: string | null
   province: string | null
+  region: ItalianRegion | null
   memberCount: number
+  /**
+   * Ages of the members with a condition (null: no birth date), youngest first. Health data: set only
+   * with the family's consent (withdrawing it clears the condition), shown to the administration only.
+   */
+  fragileAges: (number | null)[]
   formStatus: FamilyFormStatus
   formSubmittedAt: string | null
   referent: { userId: string; firstName: string; lastName: string; email: string; status: UserStatus }
@@ -46,6 +52,8 @@ export interface FamilyListItem {
 export interface FamilyListResponse extends Paginated<FamilyListItem> {
   /** Every province with at least one family, for the filter. */
   provinces: string[]
+  /** Every region with at least one family, for the filter. */
+  regions: ItalianRegion[]
 }
 
 /**

@@ -294,7 +294,8 @@ export type FamilyListSort = (typeof FAMILY_LIST_SORTS)[number]
 export const adminFamilyListQuerySchema = zListQuery.extend({
   formStatus: z.enum(FAMILY_FORM_STATUSES).optional(),
   province: z.string().trim().toUpperCase().max(40).optional(),
-  /** Families with (yes) or without (no) a member with a disability. Never shown as a column. */
+  region: z.enum(ITALIAN_REGIONS).optional(),
+  /** Families with (yes) or without (no) a member with a disability (the list shows only their ages). */
   disability: z.enum(['yes', 'no']).optional(),
   sort: z.enum(FAMILY_LIST_SORTS).default('name'),
   order: z.enum(['asc', 'desc']).default('asc'),

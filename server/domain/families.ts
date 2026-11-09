@@ -40,7 +40,7 @@ import type {
   PersonalDocumentDto,
 } from '../../shared/types/families'
 import type { ParticipationStatus } from '../../shared/utils/constants'
-import { todayIso } from '../../shared/utils/dates'
+import { ageOn, todayIso } from '../../shared/utils/dates'
 import { plural } from '../../shared/utils/format'
 import {
   campSessions,
@@ -747,6 +747,7 @@ function familyListWhere(query: AdminFamilyListQuery): SQL | undefined {
   }
   if (query.formStatus) conditions.push(eq(families.formStatus, query.formStatus))
   if (query.province) conditions.push(eq(families.province, query.province))
+  if (query.region) conditions.push(eq(families.region, query.region))
   if (query.disability) {
     const withDisability = sql`exists (select 1 from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability})`
     conditions.push(query.disability === 'yes' ? withDisability : not(withDisability))
@@ -788,6 +789,7 @@ export async function listFamilies(db: DbOrTx, query: AdminFamilyListQuery): Pro
       name: families.name,
       city: families.city,
       province: families.province,
+      region: families.region,
       formStatus: families.formStatus,
       formSubmittedAt: families.formSubmittedAt,
       createdAt: families.createdAt,
@@ -811,20 +813,27 @@ export async function listFamilies(db: DbOrTx, query: AdminFamilyListQuery): Pro
     .from(families)
     .innerJoin(users, eq(users.id, families.userId))
     .where(where)
-  const provinces = await db
-    .selectDistinct({ province: families.province })
-    .from(families)
-    .where(isNotNull(families.province))
-    .orderBy(asc(families.province))
-  const latest = await latestSessions(
-    db,
-    rows.map(row => row.id),
-  )
+  const familyIds = rows.map(row => row.id)
+  const [provinces, regions, latest, ages] = await Promise.all([
+    db
+      .selectDistinct({ province: families.province })
+      .from(families)
+      .where(isNotNull(families.province))
+      .orderBy(asc(families.province)),
+    db
+      .selectDistinct({ region: families.region })
+      .from(families)
+      .where(isNotNull(families.region))
+      .orderBy(asc(families.region)),
+    latestSessions(db, familyIds),
+    fragileAges(db, familyIds),
+  ])
   const items: FamilyListItem[] = rows.map(row => ({
     ...row,
     formSubmittedAt: iso(row.formSubmittedAt),
     createdAt: row.createdAt.toISOString(),
     lastSession: latest.get(row.id) ?? null,
+    fragileAges: ages.get(row.id) ?? [],
   }))
   return {
     items,
@@ -832,7 +841,23 @@ export async function listFamilies(db: DbOrTx, query: AdminFamilyListQuery): Pro
     page: query.page,
     pageSize: query.pageSize,
     provinces: provinces.flatMap(row => (row.province ? [row.province] : [])),
+    regions: regions.flatMap(row => (row.region ? [row.region] : [])),
   }
+}
+
+/** For each family, the ages of its members with a condition (null without a birth date). */
+async function fragileAges(db: DbOrTx, familyIds: string[]): Promise<Map<string, (number | null)[]>> {
+  const ages = new Map<string, (number | null)[]>()
+  if (!familyIds.length) return ages
+  const today = todayIso()
+  const rows = await db
+    .select({ familyId: familyMembers.familyId, birthDate: familyMembers.birthDate })
+    .from(familyMembers)
+    .where(and(inArray(familyMembers.familyId, familyIds), eq(familyMembers.hasDisability, true)))
+  for (const { familyId, birthDate } of rows) {
+    ages.set(familyId, [...(ages.get(familyId) ?? []), birthDate ? ageOn(birthDate, today) : null])
+  }
+  return ages
 }
 
 /** The rows of the CSV export: every family matching the filters, contacts included, no health details. */

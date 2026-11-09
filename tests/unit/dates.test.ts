@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { formatAges } from '#shared/utils/format'
 import {
   addDays,
+  ageOn,
   dayCount,
   daysBetween,
   isIsoDay,
@@ -77,5 +79,20 @@ describe('formatDayRange', () => {
     expect(formatDayRange('2027-06-30', '2027-07-05')).toBe('30 giu\u2009–\u20095 lug 2027')
     expect(formatDayRange('2027-08-01', '2027-08-20', 'long')).toBe('1–20 agosto 2027')
     expect(formatDayRange('2027-12-28', '2028-01-03')).toBe('28 dic 2027\u2009–\u20093 gen 2028')
+  })
+})
+
+describe('ages', () => {
+  it('counts whole years, the birthday included', () => {
+    expect(ageOn('2017-03-10', '2026-03-09')).toBe(8)
+    expect(ageOn('2017-03-10', '2026-03-10')).toBe(9)
+  })
+
+  it('formats the ages of a family, youngest first', () => {
+    expect(formatAges([14, 9])).toBe('9 e 14 anni')
+    expect(formatAges([1])).toBe('1 anno')
+    expect(formatAges([12, null])).toBe('12 anni, un’età da indicare')
+    expect(formatAges([null, null])).toBe('2 età da indicare')
+    expect(formatAges([])).toBe('')
   })
 })

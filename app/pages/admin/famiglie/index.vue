@@ -2,7 +2,7 @@
 import type { TableColumn, TableRow } from '@nuxt/ui'
 import { FAMILY_LIST_SORTS, type FamilyListSort } from '#shared/schemas/families'
 import type { FamilyListItem, FamilyListResponse } from '#shared/types/families'
-import { formatDayRange, fullName, plural } from '#shared/utils/format'
+import { formatAges, formatDayRange, fullName, plural } from '#shared/utils/format'
 
 // The families of the camp for the administration: search, filters (questionnaire, province, members
 // with a disability), sortable columns. No health detail is ever shown here (docs/spec.md, 5).
@@ -41,6 +41,7 @@ const filterQuery = computed(() => ({
   q: queryValue('q'),
   formStatus: queryValue('formStatus'),
   province: queryValue('province'),
+  region: queryValue('region'),
   disability: queryValue('disability'),
   sort: sort.value,
   order: order.value,
@@ -52,11 +53,11 @@ const items = computed(() => data.value?.items ?? [])
 const total = computed(() => data.value?.total ?? 0)
 
 const filtersActive = computed(() =>
-  Boolean(queryValue('q') || queryValue('formStatus') || queryValue('province') || queryValue('disability')),
+  ['q', 'formStatus', 'province', 'region', 'disability'].some(key => Boolean(queryValue(key))),
 )
 function resetFilters() {
   search.value = ''
-  setQuery({ q: undefined, formStatus: undefined, province: undefined, disability: undefined })
+  setQuery({ q: undefined, formStatus: undefined, province: undefined, region: undefined, disability: undefined })
 }
 
 function filterModel(key: string) {
@@ -67,6 +68,7 @@ function filterModel(key: string) {
 }
 const formStatusFilter = filterModel('formStatus')
 const provinceFilter = filterModel('province')
+const regionFilter = filterModel('region')
 const disabilityFilter = filterModel('disability')
 
 const formStatusItems = [
@@ -76,6 +78,10 @@ const formStatusItems = [
 const provinceItems = computed(() => [
   { value: ALL, label: 'Tutte' },
   ...(data.value?.provinces ?? []).map(province => ({ value: province, label: province })),
+])
+const regionItems = computed(() => [
+  { value: ALL, label: 'Tutte' },
+  ...(data.value?.regions ?? []).map(region => ({ value: region, label: region })),
 ])
 const disabilityItems = [
   { value: ALL, label: 'Tutte le famiglie' },
@@ -117,6 +123,7 @@ const columns: TableColumn<FamilyListItem>[] = [
   { id: 'referent', header: 'Referente' },
   { accessorKey: 'city', header: sortHeader('Città', 'city') },
   { accessorKey: 'memberCount', header: sortHeader('Componenti', 'members') },
+  { id: 'fragileAges', header: 'Ragazzi con fragilità' },
   { accessorKey: 'formStatus', header: 'Dati della famiglia' },
   { id: 'lastSession', header: 'Ultima sessione' },
 ]
@@ -146,7 +153,7 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
       </UButton>
     </template>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
       <UFormField label="Cerca" class="sm:col-span-2">
         <UInput
           v-model="search"
@@ -161,6 +168,9 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
       </UFormField>
       <UFormField label="Provincia">
         <USelect v-model="provinceFilter" :items="provinceItems" value-key="value" class="w-full" />
+      </UFormField>
+      <UFormField label="Regione">
+        <USelect v-model="regionFilter" :items="regionItems" value-key="value" class="w-full" />
       </UFormField>
       <UFormField label="Disabilità">
         <USelect v-model="disabilityFilter" :items="disabilityItems" value-key="value" class="w-full" />
@@ -215,7 +225,13 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
           {{ fullName(row.original.referent) }}
         </template>
         <template #city-cell="{ row }">
-          <span :class="place(row.original) ? '' : 'text-dimmed'">{{ place(row.original) || 'Non indicata' }}</span>
+          <p :class="place(row.original) ? '' : 'text-dimmed'">{{ place(row.original) || 'Non indicata' }}</p>
+          <p v-if="row.original.region" class="text-sm text-muted">{{ row.original.region }}</p>
+        </template>
+        <template #fragileAges-cell="{ row }">
+          <span :class="row.original.fragileAges.length ? '' : 'text-dimmed'">
+            {{ formatAges(row.original.fragileAges) || 'Nessuno' }}
+          </span>
         </template>
         <template #memberCount-cell="{ row }">
           <span class="tabular-nums">{{ row.original.memberCount }}</span>
@@ -243,7 +259,10 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
             <div class="min-w-0 flex-1 space-y-1">
               <p class="font-semibold text-primary">{{ family.name }}</p>
               <p class="text-sm text-muted">
-                {{ fullName(family.referent) }}{{ place(family) ? ` · ${place(family)}` : '' }}
+                {{ [fullName(family.referent), place(family), family.region].filter(Boolean).join(' · ') }}
+              </p>
+              <p v-if="family.fragileAges.length" class="text-sm text-muted">
+                Ragazzi con fragilità: {{ formatAges(family.fragileAges) }}
               </p>
               <p class="text-sm text-muted">
                 {{ plural(family.memberCount, 'componente', 'componenti')

@@ -242,7 +242,8 @@ Emails never contain health details. Without `NUXT_RESEND_API_KEY` every email i
 ## 5. Privacy and security
 
 - Health details: only after consent; visible to the family and the administration; not in lists, emails,
-  toasts or logs; changes audited (`member.health_update`).
+  toasts or logs; changes audited (`member.health_update`). The one exception: the administration's family
+  list shows the ages of the members with a condition (no names, no details), not in the CSV export.
 - Files are never public: downloads go through an authorised endpoint (`/api/files/:id` or an area endpoint).
 - Every list or detail endpoint checks the role and the ownership; ids from the client are never trusted.
 - Sensitive actions are recorded in `audit_log` (status changes, reviews, signatures, account changes).
