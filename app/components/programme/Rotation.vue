@@ -30,8 +30,12 @@ const rows = computed(() => groupRotation(props.content))
         <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         Mai: {{ row.missing.join(', ') }}
       </p>
+      <p v-if="row.unlisted.length" class="mt-1 flex gap-1.5 text-sm text-warning">
+        <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        Non più in lista: {{ row.unlisted.join(', ') }}
+      </p>
       <p
-        v-if="content.activities.length && !row.repeated.length && !row.missing.length"
+        v-if="content.activities.length && !row.repeated.length && !row.missing.length && !row.unlisted.length"
         class="mt-1 flex gap-1.5 text-sm text-success"
       >
         <UIcon name="i-lucide-circle-check" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />

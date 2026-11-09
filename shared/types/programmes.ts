@@ -3,6 +3,7 @@ import type { ProgrammeContent } from './domain'
 
 /** A programme as the editor loads it. */
 export interface ProgrammeDto {
+  id: string
   year: number | null
   sessionId: string | null
   content: ProgrammeContent

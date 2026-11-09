@@ -14,6 +14,7 @@ import {
   saveYearProgramme,
   staffProgramme,
 } from '../../server/domain/programmes'
+import { transitionSession } from '../../server/domain/sessions'
 import { emptyWeek } from '../../shared/content/programme-template'
 import { makeAdmin, makeFamily, makeSession, makeStaff, t, useTestDb } from './helpers'
 
@@ -49,16 +50,17 @@ describe('programme of a year', () => {
   it('refuses a save over a revision someone else already saved', async () => {
     const actor = await withYear()
     const content = emptyWeek()
-    const saved = await saveYearProgramme(db, { year: 2027, values: { revision: 1, content }, actor })
+    const { id } = await getYearProgramme(db, 2027)
+    const saved = await saveYearProgramme(db, { year: 2027, values: { id, revision: 1, content }, actor })
     expect(saved.revision).toBe(2)
     expect(saved.content.days[0]!.blocks).toEqual([])
 
-    await expect(saveYearProgramme(db, { year: 2027, values: { revision: 1, content }, actor })).rejects.toMatchObject({
-      statusCode: 409,
-    })
-    await expect(saveYearProgramme(db, { year: 2030, values: { revision: 1, content }, actor })).rejects.toMatchObject({
-      statusCode: 404,
-    })
+    await expect(
+      saveYearProgramme(db, { year: 2027, values: { id, revision: 1, content }, actor }),
+    ).rejects.toMatchObject({ statusCode: 409 })
+    await expect(
+      saveYearProgramme(db, { year: 2030, values: { id, revision: 2, content }, actor }),
+    ).rejects.toMatchObject({ statusCode: 404 })
   })
 
   it('lists the years with a programme and the years whose sessions wait for one', async () => {
@@ -94,7 +96,7 @@ describe('programme of a session', () => {
     expect(copy.source).toBe('session')
     const after = await saveSessionProgramme(db, {
       sessionId: session.id,
-      values: { revision: copy.programme!.revision, content: emptyWeek() },
+      values: { id: copy.programme!.id, revision: copy.programme!.revision, content: emptyWeek() },
       actor,
     })
     expect(after.programme!.content.days[0]!.blocks).toEqual([])
@@ -102,6 +104,27 @@ describe('programme of a session', () => {
 
     await dropSessionProgramme(db, { sessionId: session.id, actor })
     expect((await adminSessionProgramme(db, session.id)).source).toBe('year')
+
+    // An editor still open on the dropped copy cannot overwrite a new copy, even at the same revision.
+    await copyProgrammeToSession(db, { sessionId: session.id, actor })
+    await expect(
+      saveSessionProgramme(db, {
+        sessionId: session.id,
+        values: { id: copy.programme!.id, revision: 1, content: emptyWeek() },
+        actor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it('keeps its programme once completed, whatever the year’s programme becomes', async () => {
+    const actor = await withYear()
+    const session = await makeSession(db, { status: 'confirmed' })
+    await transitionSession(db, { appUrl: 'http://localhost:3080' }, { sessionId: session.id, to: 'completed', actor })
+    const ofYear = await getYearProgramme(db, 2027)
+    await saveYearProgramme(db, { year: 2027, values: { id: ofYear.id, revision: 1, content: emptyWeek() }, actor })
+    const after = await adminSessionProgramme(db, session.id)
+    expect(after.source).toBe('session')
+    expect(after.programme!.content).toEqual(ofYear.content)
   })
 
   it('has none while its year has no programme, and cannot be copied then', async () => {
@@ -190,7 +213,12 @@ describe('who reads the programme of a session', () => {
     const actor = { userId: admin.id }
     await createYearProgramme(db, { values: { year: 2031, from: 'template' }, actor })
     await copyProgrammeToSession(db, { sessionId: session.id, actor })
-    await saveSessionProgramme(db, { sessionId: session.id, values: { revision: 1, content: emptyWeek() }, actor })
+    const { programme } = await adminSessionProgramme(db, session.id)
+    await saveSessionProgramme(db, {
+      sessionId: session.id,
+      values: { id: programme!.id, revision: 1, content: emptyWeek() },
+      actor,
+    })
     const view = await familyProgramme(db, { familyId: family.family.id, sessionId: session.id })
     expect(view.content!.days.flatMap(day => day.blocks)).toEqual([])
   })

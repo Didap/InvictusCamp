@@ -82,12 +82,14 @@ export const programmeContentSchema = z
     }
   })
 
-/** Save a programme with the revision it was loaded at, so that two people do not overwrite each other. */
+/** Save a programme with the id and revision it was loaded at, so that two people do not overwrite each other. */
 export const programmeSaveSchema = z.object({
+  id: z.uuid(),
   revision: z.number().int().min(1),
   content: programmeContentSchema,
 })
 export type ProgrammeSaveInput = z.input<typeof programmeSaveSchema>
+export type ProgrammeSaveValues = z.output<typeof programmeSaveSchema>
 
 const zYear = z
   .number({ error: 'Indica l’anno' })

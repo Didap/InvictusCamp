@@ -4,7 +4,7 @@ import { MAX_ACTIVITIES, type ProgrammeSaveInput } from '#shared/schemas/program
 import type { ProgrammeBlock, ProgrammeContent, ProgrammeDay } from '#shared/types/domain'
 import type { ProgrammeDto } from '#shared/types/programmes'
 import { formatDateTime } from '#shared/utils/format'
-import { openPoints, placeBlock } from '#shared/utils/programme'
+import { newBlockId, openPoints, placeBlock, sameContent } from '#shared/utils/programme'
 
 // The week editor of the administration (docs/spec.md 3.10). Changes stay on this page until Salva,
 // which sends the whole week with the revision it was loaded at: if someone saved in between, the
@@ -21,21 +21,17 @@ const toast = useToast()
 
 const clone = (content: ProgrammeContent): ProgrammeContent => JSON.parse(JSON.stringify(content))
 const draft = ref(clone(props.programme.content))
-const baseline = ref(JSON.stringify(props.programme.content))
 watch(
   () => props.programme,
-  programme => {
-    draft.value = clone(programme.content)
-    baseline.value = JSON.stringify(programme.content)
-  },
+  programme => (draft.value = clone(programme.content)),
 )
-const dirty = computed(() => JSON.stringify(draft.value) !== baseline.value)
+const dirty = computed(() => !sameContent(draft.value, props.programme.content))
 
 const saving = ref(false)
 async function onSave() {
   saving.value = true
   try {
-    await props.save({ revision: props.programme.revision, content: draft.value })
+    await props.save({ id: props.programme.id, revision: props.programme.revision, content: draft.value })
     notifySuccess('Programma salvato')
   } catch (error) {
     notifyError(error, 'Programma non salvato')
@@ -100,8 +96,14 @@ function move(day: ProgrammeDay, index: number, by: number) {
   day.blocks.splice(index + by, 0, block!)
 }
 
+/** The toast puts the block back in the day it left, even if the week was saved or changed since. */
 function remove(day: ProgrammeDay, index: number) {
   const [block] = day.blocks.splice(index, 1)
+  const restore = () => {
+    const target = draft.value.days.find(other => other.id === day.id)
+    if (!target || target.blocks.some(other => other.id === block!.id)) return
+    target.blocks.splice(Math.min(index, target.blocks.length), 0, block!)
+  }
   toast.add({
     title: `«${block!.title}» tolto dal programma`,
     color: 'neutral',
@@ -110,7 +112,7 @@ function remove(day: ProgrammeDay, index: number) {
         label: 'Rimetti',
         color: 'neutral',
         variant: 'outline',
-        onClick: () => void day.blocks.splice(index, 0, block!),
+        onClick: restore,
       },
     ],
   })
@@ -122,8 +124,7 @@ function blockItems(day: ProgrammeDay, block: ProgrammeBlock, index: number): Dr
       {
         label: 'Duplica',
         icon: 'i-lucide-copy',
-        onSelect: () =>
-          day.blocks.splice(index + 1, 0, { ...JSON.parse(JSON.stringify(block)), id: crypto.randomUUID() }),
+        onSelect: () => day.blocks.splice(index + 1, 0, { ...JSON.parse(JSON.stringify(block)), id: newBlockId() }),
       },
       { label: 'Sposta su', icon: 'i-lucide-arrow-up', disabled: index === 0, onSelect: () => move(day, index, -1) },
       {

@@ -209,8 +209,11 @@ Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or 
 - **Who reads it**: families invited to or confirmed in the session (link on their session card) and
   staff who accepted the convocation (`/staff/sessioni`), read-only, once the session is not cancelled.
   Families never see "solo staff" blocks, internal notes or the "Novità" flag; staff see everything but
-  "Novità". The days carry the session's dates when the session is at least as long as the programme.
-  A completed or cancelled session's copy is no longer edited.
+  "Novità". The days carry the session's dates when the session starts on a Monday and is at least as
+  long as the programme.
+- **Completed sessions** keep the programme they had: completing a session without a copy gives it one,
+  so later changes to the year's programme do not rewrite it. A completed or cancelled session's
+  programme is no longer edited.
 
 ## 4. Emails
 

@@ -52,6 +52,11 @@ export function dayCount(range: DayRange): number {
   return daysBetween(range.startDate, range.endDate) + 1
 }
 
+/** Every day of an inclusive range, first to last. */
+export function rangeDays(range: DayRange): IsoDay[] {
+  return Array.from({ length: dayCount(range) }, (_, i) => addDays(range.startDate, i))
+}
+
 /** True when two inclusive ranges share at least one day. */
 export function rangesOverlap(a: DayRange, b: DayRange): boolean {
   return a.startDate <= b.endDate && b.startDate <= a.endDate

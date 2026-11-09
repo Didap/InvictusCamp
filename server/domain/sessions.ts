@@ -65,6 +65,7 @@ import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
+import { freezeSessionProgramme } from './programmes'
 import { cancelSessionConvocations, sessionConvocationNotices } from './staff'
 
 /** Who acts: the signed-in user and the client address, for the audit. */
@@ -687,6 +688,7 @@ export async function transitionSession(
       .where(and(eq(sessionFamilies.sessionId, session.id), inArray(sessionFamilies.status, ACTIVE_STATUSES)))
   }
   await db.update(campSessions).set({ status: to, statusChangedAt: now }).where(eq(campSessions.id, session.id))
+  if (to === 'completed') await freezeSessionProgramme(db, session)
 
   const emails = [
     ...recipients

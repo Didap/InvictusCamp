@@ -52,8 +52,8 @@ export interface ProgrammeGroupTurn {
 
 /**
  * A block of the week programme (docs/spec.md 3.10). Times are 'HH:MM' or '' (no time, e.g. breakfast).
- * `note` is for everyone in the session; `staffNote`, `isNew` and `toConfirm` are planning aids:
- * families never receive them (server/domain/programmes.ts, programmeForViewer).
+ * `note` is for everyone in the session; `toConfirm` too (families read "Da confermare"). `staffNote`
+ * is for administration and staff, `isNew` for the administration only (programmeForViewer).
  */
 export interface ProgrammeBlock {
   id: string

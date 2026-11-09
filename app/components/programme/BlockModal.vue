@@ -2,6 +2,7 @@
 import type { FormSubmitEvent } from '@nuxt/ui'
 import type { z } from 'zod'
 import { emptyTurns, programmeBlockSchema } from '#shared/schemas/programmes'
+import { newBlockId } from '#shared/utils/programme'
 import type { ProgrammeBlock, ProgrammeDay, ProgrammeGroupTurn } from '#shared/types/domain'
 import {
   enumMeta,
@@ -26,7 +27,7 @@ type State = Omit<ProgrammeBlock, 'groups'> & { groups: Record<ProgrammeGroup, P
 
 function blank(): State {
   return {
-    id: crypto.randomUUID(),
+    id: newBlockId(),
     start: '',
     end: '',
     title: '',

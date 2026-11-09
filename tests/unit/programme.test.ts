@@ -5,7 +5,16 @@ import { programmeForViewer } from '~~/server/domain/programmes'
 import { emptyWeek, programmeTemplate } from '~~/shared/content/programme-template'
 import { programmeBlockSchema, programmeContentSchema } from '~~/shared/schemas/programmes'
 import type { ProgrammeBlock, ProgrammeContent } from '~~/shared/types/domain'
-import { blockTime, dayDates, groupRotation, openPoints, placeBlock } from '~~/shared/utils/programme'
+import {
+  blockTime,
+  canFamilyReadProgramme,
+  dayDates,
+  groupRotation,
+  newBlockId,
+  openPoints,
+  placeBlock,
+  sameContent,
+} from '~~/shared/utils/programme'
 
 const block = (values: Partial<ProgrammeBlock>): ProgrammeBlock => ({
   id: crypto.randomUUID(),
@@ -134,11 +143,35 @@ describe('editor helpers', () => {
     expect(yellow.missing).toEqual([lost])
   })
 
-  it('dates the days only when the session is at least as long as the programme', () => {
+  it('flags turns whose activity left the list', () => {
+    const content = programmeTemplate()
+    const gone = content.activities.shift()!
+    for (const row of groupRotation(content)) expect(row.unlisted).toEqual([gone])
+  })
+
+  it('compares two weeks whatever the order of their keys', () => {
+    const a = programmeTemplate()
+    const b = programmeTemplate()
+    const { id, title, ...rest } = b.days[0]!.blocks[0]!
+    b.days[0]!.blocks[0] = { ...rest, title, id }
+    expect(sameContent(a, b)).toBe(true)
+    b.days[0]!.blocks[0]!.title = 'Altro'
+    expect(sameContent(a, b)).toBe(false)
+  })
+
+  it('makes distinct block ids and shares the reading rule of families', () => {
+    expect(newBlockId()).not.toBe(newBlockId())
+    expect(canFamilyReadProgramme('invited', 'inviting')).toBe(true)
+    expect(canFamilyReadProgramme('confirmed', 'cancelled')).toBe(false)
+    expect(canFamilyReadProgramme('declined', 'confirmed')).toBe(false)
+  })
+
+  it('dates the days only for a session that starts on Monday and is long enough', () => {
     const week = emptyWeek()
     const seven = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25', '2027-06-26', '2027-06-27']
     expect(dayDates(week, seven)).toEqual(seven.slice(0, 5))
     expect(dayDates(week, seven.slice(0, 3))).toEqual([null, null, null, null, null])
+    expect(dayDates(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual([null, null, null, null, null])
     expect(dayDates(week, undefined)).toEqual([null, null, null, null, null])
   })
 })

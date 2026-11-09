@@ -1,6 +1,41 @@
 // Pure helpers of the week programme (docs/spec.md 3.10), shared by the editor and the read-only week.
 import type { ProgrammeBlock, ProgrammeContent } from '../types/domain'
-import { PROGRAMME_GROUPS, type ProgrammeGroup } from './constants'
+import {
+  PROGRAMME_GROUPS,
+  type ConvocationStatus,
+  type ParticipationStatus,
+  type ProgrammeGroup,
+  type SessionStatus,
+} from './constants'
+import { weekdayIndex } from './dates'
+
+/** A family reads the programme of a session it is invited to or confirmed in, unless cancelled. */
+export function canFamilyReadProgramme(participation: ParticipationStatus, session: SessionStatus): boolean {
+  return (participation === 'invited' || participation === 'confirmed') && session !== 'cancelled'
+}
+
+/** A staff member reads it once they accepted the convocation, unless the session is cancelled. */
+export function canStaffReadProgramme(convocation: ConvocationStatus, session: SessionStatus): boolean {
+  return convocation === 'accepted' && session !== 'cancelled'
+}
+
+/** A new block id. Not crypto.randomUUID: that exists only on HTTPS and localhost. */
+export function newBlockId(): string {
+  return `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+}
+
+/** Same week, whatever the order of the keys (jsonb reorders them, a form does not). */
+export function sameContent(a: ProgrammeContent, b: ProgrammeContent): boolean {
+  return canonical(a) === canonical(b)
+}
+
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, item: unknown) =>
+    item && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => (a < b ? -1 : 1)))
+      : item,
+  )
+}
 
 /** '10:00–12:30', '20:00' (open end) or '' (no time). */
 export function blockTime(block: Pick<ProgrammeBlock, 'start' | 'end'>): string {
@@ -25,6 +60,8 @@ export interface GroupRotation {
   missing: string[]
   /** Activities the group does more than once. */
   repeated: string[]
+  /** Activities in its turns that are no longer in the list. */
+  unlisted: string[]
 }
 
 /** What each group does across the week, and where the rotation does not cover every activity once. */
@@ -42,6 +79,7 @@ export function groupRotation(content: ProgrammeContent): GroupRotation[] {
       turns,
       missing: content.activities.filter(activity => !counts.has(activity)),
       repeated: [...counts].filter(([, count]) => count > 1).map(([activity]) => activity),
+      unlisted: [...counts.keys()].filter(activity => !content.activities.includes(activity)),
     }
   })
 }
@@ -74,10 +112,11 @@ export function openPoints(content: ProgrammeContent): OpenPoint[] {
 }
 
 /**
- * The date of each programme day: day one is the first day of the session, and so on. None when the
- * session is shorter than the programme (the days would not line up).
+ * The date of each programme day: day one is the first day of the session, and so on. The days of a
+ * programme start on Monday, so the dates appear only for a session that starts on a Monday and is at
+ * least as long as the programme; otherwise they would not line up with the names of the days.
  */
 export function dayDates(content: ProgrammeContent, dates: string[] | undefined): (string | null)[] {
-  const fits = !!dates && dates.length >= content.days.length
+  const fits = !!dates?.length && weekdayIndex(dates[0]!) === 0 && dates.length >= content.days.length
   return content.days.map((_, i) => (fits ? dates![i]! : null))
 }
