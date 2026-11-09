@@ -23,6 +23,8 @@ import type {
   EmailStatus,
   FamilyFormStatus,
   FilePurpose,
+  ItalianRegion,
+  MemberKind,
   MemberRelationship,
   ParticipationKind,
   ParticipationStatus,
@@ -123,11 +125,15 @@ export const families = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** How the family is called in lists, e.g. "Famiglia Rossi". */
     name: text().notNull(),
+    /** Residence: street and number. */
     address: text(),
     city: text(),
+    /** CAP, five digits. */
+    postalCode: text(),
     province: text(),
+    region: text().$type<ItalianRegion>(),
     phone: text(),
-    /** The questionnaire (placeholder in sprint 1, see shared/content/family-form.ts). */
+    /** The questions of the family data (shared/content/family-form.ts), by question id. */
     formAnswers: jsonb().$type<FormAnswers>().notNull().default({}),
     formStatus: text().$type<FamilyFormStatus>().notNull().default('draft'),
     formSubmittedAt: timestamp(tz),
@@ -150,10 +156,15 @@ export const familyMembers = pgTable(
     familyId: uuid()
       .notNull()
       .references(() => families.id, { onDelete: 'cascade' }),
-    firstName: text().notNull(),
-    lastName: text().notNull(),
+    /**
+     * Name and relationship are null while the card is still to fill in: confirming the family data
+     * creates one empty card per person declared (server/domain/families.ts, saveFamilyData).
+     */
+    firstName: text(),
+    lastName: text(),
     birthDate: day(),
-    relationship: text().$type<MemberRelationship>().notNull(),
+    relationship: text().$type<MemberRelationship>(),
+    kind: text().$type<MemberKind>().notNull().default('adult'),
     /** The person the camp talks to. */
     isReferent: boolean().notNull().default(false),
     hasDisability: boolean().notNull().default(false),

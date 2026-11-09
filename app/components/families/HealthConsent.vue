@@ -103,17 +103,7 @@ async function withdraw() {
       inseriti e i certificati e le diagnosi caricati verranno cancellati.
     </p>
     <UFormField name="accepted">
-      <UCheckbox
-        v-model="state.accepted"
-        label="Acconsento al trattamento dei dati sulla salute dei componenti della mia famiglia"
-      >
-        <template #description>
-          Come descritto
-          <ULink to="/privacy" target="_blank" class="font-semibold text-primary underline"
-            >nell’informativa privacy</ULink
-          >.
-        </template>
-      </UCheckbox>
+      <FamiliesHealthConsentCheckbox v-model="state.accepted" />
     </UFormField>
     <UButton
       type="submit"

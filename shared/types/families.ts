@@ -2,8 +2,11 @@
 // endpoints and in the reserved endpoint of the administration, never in lists.
 import type { FileDto, Paginated } from './api'
 import type { DisabilityInfo, FormAnswers } from './domain'
+import type { FamilyComposition } from '../schemas/families'
 import type {
   FamilyFormStatus,
+  ItalianRegion,
+  MemberKind,
   MemberRelationship,
   ParticipationKind,
   ParticipationStatus,
@@ -45,13 +48,17 @@ export interface FamilyListResponse extends Paginated<FamilyListItem> {
   provinces: string[]
 }
 
-/** A member without health details. */
+/**
+ * A member without health details. Name and relationship are null on a card the family has not filled
+ * in yet (created when it confirmed its data): `memberName` (shared/utils/format.ts) names it anyway.
+ */
 export interface FamilyMemberDto {
   id: string
-  firstName: string
-  lastName: string
+  firstName: string | null
+  lastName: string | null
   birthDate: string | null
-  relationship: MemberRelationship
+  relationship: MemberRelationship | null
+  kind: MemberKind
   isReferent: boolean
 }
 
@@ -68,6 +75,8 @@ export interface OwnFamilyMember extends FamilyMemberDto {
 
 /** GET /api/family/members */
 export interface FamilyMembersResponse {
+  /** Until the family data is confirmed the cards do not exist yet: only the account holder's. */
+  formStatus: FamilyFormStatus
   healthDataConsentAt: string | null
   /** Certificates and diagnoses uploaded: withdrawing the consent deletes them. */
   healthDocuments: number
@@ -93,17 +102,29 @@ export interface PersonalDocumentDto {
   createdAt: string
 }
 
-/** GET /api/family/profile: family data and the questionnaire. */
+/** GET /api/family/profile: the family data, with the answers to its questions. */
 export interface FamilyProfileDto {
   id: string
   name: string
   address: string | null
   city: string | null
+  postalCode: string | null
   province: string | null
+  region: ItalianRegion | null
   phone: string | null
   formAnswers: FormAnswers
   formStatus: FamilyFormStatus
   formSubmittedAt: string | null
+  /** The cards the family has, by kind: the composition can grow, never go below them. */
+  cards: FamilyComposition
+  healthDataConsentAt: string | null
+}
+
+/** PUT /api/family/profile */
+export interface FamilyDataResult {
+  profile: FamilyProfileDto
+  /** Cards created by this save, one per person declared beyond those already there. */
+  cardsCreated: number
 }
 
 /** GET /api/family/home: the greeting, what is left to do, the next session. */
@@ -112,6 +133,8 @@ export interface FamilyHomeDto {
   familyName: string
   formStatus: FamilyFormStatus
   memberCount: number
+  /** Cards created from the family data and not filled in yet. */
+  cardsToComplete: number
   healthConsent: boolean
   /** Documents waiting for the family's signature. */
   pendingSignatures: number
@@ -125,7 +148,9 @@ export interface AdminFamilyDetail {
   name: string
   address: string | null
   city: string | null
+  postalCode: string | null
   province: string | null
+  region: ItalianRegion | null
   phone: string | null
   formAnswers: FormAnswers
   formStatus: FamilyFormStatus
@@ -154,5 +179,5 @@ export interface AdminFamilyDetail {
 /** GET /api/admin/families/:id/health: the reserved section of the admin record. */
 export interface AdminFamilyHealth {
   healthDataConsentAt: string | null
-  members: (Pick<FamilyMemberDto, 'id' | 'firstName' | 'lastName'> & MemberHealth)[]
+  members: (Pick<FamilyMemberDto, 'id' | 'firstName' | 'lastName' | 'kind'> & MemberHealth)[]
 }

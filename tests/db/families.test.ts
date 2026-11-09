@@ -9,18 +9,24 @@ import {
   adminFamilyDetail,
   adminFamilyHealth,
   familyHome,
+  familyProfile,
   listFamilies,
   listPersonalDocuments,
   ownFamilyMembers,
   removeFamilyMember,
   removePersonalDocument,
   requireFamilyMember,
-  saveFamilyForm,
+  saveFamilyData,
   setHealthConsent,
   updateFamilyDataByAdmin,
   updateFamilyMember,
 } from '../../server/domain/families'
-import { adminFamilyListQuerySchema, type MemberInput } from '../../shared/schemas/families'
+import {
+  adminFamilyListQuerySchema,
+  MAX_MEMBERS_OF_A_KIND,
+  type FamilyDataInput,
+  type MemberInput,
+} from '../../shared/schemas/families'
 import { makeAdmin, makeDocument, makeFamily, makeSession, t, useTestDb } from './helpers'
 
 const db = useTestDb()
@@ -31,14 +37,35 @@ const child = (values: Partial<MemberInput> = {}): MemberInput => ({
   lastName: 'Prova',
   birthDate: '2015-04-12',
   relationship: 'child',
+  kind: 'young',
   isReferent: false,
+  ...values,
+})
+
+const WEEKEND = 'Sessioni nel weekend (2 notti)'
+const WEEK = 'Sessioni settimanali estive (4 notti)'
+const ANSWERS = { howDidYouHear: 'Passaparola', sessionPreferences: [WEEKEND] }
+
+/** The family data as /famiglia/profilo sends it: the account holder and one young person. */
+const familyData = (values: Partial<FamilyDataInput> = {}): FamilyDataInput => ({
+  name: 'Famiglia Prova',
+  address: 'Via Roma 1',
+  city: 'Taranto',
+  postalCode: '74121',
+  province: 'TA',
+  region: 'Puglia',
+  phone: '',
+  composition: { adults: 1, youngWithCondition: 0, youngWithoutCondition: 1 },
+  healthConsent: false,
+  answers: ANSWERS,
   ...values,
 })
 
 const withDisability = { hasDisability: true, disability: { description: 'Descrizione riservata', mobility: '' } }
 
+/** A family with its account holder's card; its data already confirmed unless `formStatus` says otherwise. */
 async function familyWithReferent(values: Parameters<typeof makeFamily>[1] = {}) {
-  const { user, family } = await makeFamily(db, values)
+  const { user, family } = await makeFamily(db, { formStatus: 'submitted', ...values })
   const [referent] = await db
     .insert(t.familyMembers)
     .values({ familyId: family.id, firstName: 'Anna', lastName: 'Prova', relationship: 'parent', isReferent: true })
@@ -271,60 +298,127 @@ describe('members', () => {
   })
 })
 
-describe('questionnaire', () => {
-  it('saves a partial draft, keeping only known questions and valid values', async () => {
-    const { family, actor } = await familyWithReferent()
-    const saved = await saveFamilyForm(db, {
+describe('family data', () => {
+  it('keeps only known questions and valid values, and refuses a missing or wrong answer', async () => {
+    const { family, actor } = await familyWithReferent({ formStatus: 'draft' })
+    await expect(
+      saveFamilyData(db, {
+        familyId: family.id,
+        data: familyData({ answers: { howDidYouHear: 'Passaparola' } }),
+        actor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 400, data: { missing: ['sessionPreferences'] } })
+    await expect(
+      saveFamilyData(db, {
+        familyId: family.id,
+        data: familyData({ answers: { ...ANSWERS, howDidYouHear: 'Televisione' } }),
+        actor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 })
+
+    const { family: saved } = await saveFamilyData(db, {
       familyId: family.id,
-      answers: { howDidYouHear: 'Passaparola', unknownQuestion: 'x', dietaryNeeds: '   ', previousCamps: false },
-      submit: false,
+      data: familyData({
+        answers: {
+          howDidYouHear: 'Passaparola',
+          unknownQuestion: 'x',
+          association: '   ',
+          sessionPreferences: [WEEK, WEEKEND, WEEK],
+        },
+      }),
       actor,
     })
-    expect(saved.formStatus).toBe('draft')
-    expect(saved.formSubmittedAt).toBeNull()
-    expect(saved.formAnswers).toEqual({ howDidYouHear: 'Passaparola', previousCamps: false })
-
-    await expect(
-      saveFamilyForm(db, { familyId: family.id, answers: { howDidYouHear: 'Televisione' }, submit: false, actor }),
-    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(saved.formAnswers).toEqual({ howDidYouHear: 'Passaparola', sessionPreferences: [WEEKEND, WEEK] })
+    expect(saved).toMatchObject({ postalCode: '74121', region: 'Puglia', formStatus: 'submitted' })
   })
 
-  it('is sent only with every required answer, and stays sent and complete when edited', async () => {
+  it('creates one empty card per person declared, counting the cards already there', async () => {
+    const { family, actor } = await familyWithReferent({ formStatus: 'draft' })
+    const first = await saveFamilyData(db, {
+      familyId: family.id,
+      data: familyData({ composition: { adults: 2, youngWithCondition: 0, youngWithoutCondition: 2 } }),
+      actor,
+    })
+    expect(first.cardsCreated).toBe(3)
+    expect(first.family.formSubmittedAt).toBeInstanceOf(Date)
+    const own = await ownFamilyMembers(db, family.id)
+    expect(own.members.map(member => [member.kind, member.firstName])).toEqual([
+      ['adult', 'Anna'],
+      ['adult', null],
+      ['young', null],
+      ['young', null],
+    ])
+    const home = await familyHome(db, { userId: actor.userId, firstName: 'Anna', familyId: family.id })
+    expect(home).toMatchObject({ memberCount: 4, cardsToComplete: 3 })
+
+    // Saving again creates only what is missing, and the date of the first confirmation stays.
+    const again = await saveFamilyData(db, {
+      familyId: family.id,
+      data: familyData({ composition: { adults: 3, youngWithCondition: 0, youngWithoutCondition: 2 } }),
+      actor,
+    })
+    expect(again.cardsCreated).toBe(1)
+    expect(again.family.formSubmittedAt).toEqual(first.family.formSubmittedAt)
+    expect(await auditRows('family.form_submit')).toHaveLength(1)
+
+    // Fewer people than cards: a person goes away by removing the card.
+    await expect(
+      saveFamilyData(db, {
+        familyId: family.id,
+        data: familyData({ composition: { adults: 2, youngWithCondition: 0, youngWithoutCondition: 2 } }),
+        actor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 409 })
+    expect((await familyProfile(db, again.family)).cards).toEqual({
+      adults: 3,
+      youngWithCondition: 0,
+      youngWithoutCondition: 2,
+    })
+  })
+
+  it('needs the health consent to declare a young person with a condition, and gives it with the form', async () => {
+    const { family, actor } = await familyWithReferent({ formStatus: 'draft' })
+    const data = familyData({ composition: { adults: 1, youngWithCondition: 1, youngWithoutCondition: 0 } })
+    await expect(saveFamilyData(db, { familyId: family.id, data, actor })).rejects.toMatchObject({
+      statusCode: 400,
+      data: { missing: ['healthConsent'] },
+    })
+    expect((await ownFamilyMembers(db, family.id)).members).toHaveLength(1)
+
+    const saved = await saveFamilyData(db, { familyId: family.id, data: { ...data, healthConsent: true }, actor })
+    expect(saved.cardsCreated).toBe(1)
+    expect(saved.family.healthDataConsentAt).toBeInstanceOf(Date)
+    const card = (await ownFamilyMembers(db, family.id)).members[1]!
+    expect(card).toMatchObject({ kind: 'young', firstName: null, health: { hasDisability: true } })
+    expect(await auditRows('family.health_consent')).toHaveLength(1)
+    expect(await auditRows('member.health_update')).toHaveLength(1)
+
+    // Withdrawing the consent deletes the health data: the card stays, without the condition.
+    await setHealthConsent(db, { familyId: family.id, given: false, actor })
+    const [row] = await db.select().from(t.families).where(eq(t.families.id, family.id))
+    expect((await familyProfile(db, row!)).cards).toEqual({
+      adults: 1,
+      youngWithCondition: 0,
+      youngWithoutCondition: 1,
+    })
+  })
+
+  it('adds a card by hand only after the family data is confirmed, and within the limit of the form', async () => {
+    const draft = await familyWithReferent({ formStatus: 'draft' })
+    await expect(
+      addFamilyMember(db, { familyId: draft.family.id, member: child(), actor: draft.actor }),
+    ).rejects.toMatchObject({ statusCode: 409 })
+
     const { family, actor } = await familyWithReferent()
+    await db
+      .insert(t.familyMembers)
+      .values(
+        Array.from({ length: MAX_MEMBERS_OF_A_KIND - 1 }, () => ({ familyId: family.id, kind: 'adult' as const })),
+      )
     await expect(
-      saveFamilyForm(db, { familyId: family.id, answers: { howDidYouHear: 'Passaparola' }, submit: true, actor }),
-    ).rejects.toMatchObject({ statusCode: 400, data: { missing: ['preferredPeriods'] } })
-
-    const sent = await saveFamilyForm(db, {
-      familyId: family.id,
-      answers: { howDidYouHear: 'Passaparola', preferredPeriods: ['Luglio', 'Giugno', 'Luglio'] },
-      submit: true,
-      actor,
-    })
-    expect(sent.formStatus).toBe('submitted')
-    expect(sent.formSubmittedAt).toBeInstanceOf(Date)
-    expect(sent.formAnswers.preferredPeriods).toEqual(['Giugno', 'Luglio'])
-    expect(await auditRows('family.form_submit')).toHaveLength(1)
-
-    await expect(
-      saveFamilyForm(db, { familyId: family.id, answers: { howDidYouHear: 'Passaparola' }, submit: false, actor }),
-    ).rejects.toMatchObject({ statusCode: 400 })
-    const edited = await saveFamilyForm(db, {
-      familyId: family.id,
-      answers: { howDidYouHear: 'Social network', preferredPeriods: ['Agosto'] },
-      submit: false,
-      actor,
-    })
-    expect(edited.formStatus).toBe('submitted')
-    expect(edited.formSubmittedAt).toEqual(sent.formSubmittedAt)
-    const resent = await saveFamilyForm(db, {
-      familyId: family.id,
-      answers: { howDidYouHear: 'Social network', preferredPeriods: ['Agosto'] },
-      submit: true,
-      actor,
-    })
-    expect(resent.formSubmittedAt).toEqual(sent.formSubmittedAt)
-    expect(await auditRows('family.form_submit')).toHaveLength(1)
+      addFamilyMember(db, { familyId: family.id, member: child({ kind: 'adult', relationship: 'parent' }), actor }),
+    ).rejects.toMatchObject({ statusCode: 409 })
+    await addFamilyMember(db, { familyId: family.id, member: child(), actor })
   })
 })
 
@@ -337,11 +431,17 @@ describe('administration', () => {
       member: child({ firstName: 'Matteo', lastName: 'Rossi', health: withDisability }),
       actor: rossi.actor,
     })
+    // Back to unconfirmed, for the filter by status below.
+    await db.update(t.families).set({ formStatus: 'draft' }).where(eq(t.families.id, rossi.family.id))
     const bianchi = await familyWithReferent({ name: 'Famiglia Bianchi', city: 'Bari', province: 'BA' })
-    await saveFamilyForm(db, {
+    await saveFamilyData(db, {
       familyId: bianchi.family.id,
-      answers: { howDidYouHear: 'Altro', preferredPeriods: ['Giugno'] },
-      submit: true,
+      data: familyData({
+        name: 'Famiglia Bianchi',
+        city: 'Bari',
+        province: 'BA',
+        composition: { adults: 1, youngWithCondition: 0, youngWithoutCondition: 0 },
+      }),
       actor: bianchi.actor,
     })
     const session = await makeSession(db, {
@@ -414,7 +514,7 @@ describe('family data edited by the administration', () => {
 
 describe('family home', () => {
   it('counts what is left and shows only a confirmed upcoming session', async () => {
-    const { user, family } = await familyWithReferent()
+    const { user, family } = await familyWithReferent({ formStatus: 'draft' })
     const invited = await makeSession(db, { status: 'inviting', startDate: '2027-06-01', endDate: '2027-06-07' })
     const confirmed = await makeSession(db, { status: 'confirmed', startDate: '2027-07-01', endDate: '2027-07-07' })
     await db.insert(t.sessionFamilies).values([

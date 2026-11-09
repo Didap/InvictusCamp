@@ -1,7 +1,7 @@
 // Italian formatting shared by the interface (useFormat) and the email templates, so a date reads
 // the same on screen and in the inbox. Days are formatted as calendar days (no time zone shift);
 // instants are shown in Italian time.
-import { LOCALE, TIME_ZONE } from './constants'
+import { enumLabel, LOCALE, TIME_ZONE, type MemberKind } from './constants'
 import { daysBetween, todayIso, type IsoDay } from './dates'
 
 type DayStyle = 'long' | 'short' | 'numeric'
@@ -79,9 +79,29 @@ export function relativeDay(day: IsoDay, today: IsoDay = todayIso()): string {
 }
 
 /** "Mario Rossi". */
-export function fullName(person: { firstName: string; lastName: string } | null | undefined): string {
+export function fullName(person: { firstName: string | null; lastName: string | null } | null | undefined): string {
   if (!person) return ''
-  return `${person.firstName} ${person.lastName}`.trim()
+  return `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim()
+}
+
+type MemberRef = { id: string; firstName: string | null; lastName: string | null; kind: MemberKind }
+
+/**
+ * A card created from the family data and not filled in yet: name, surname and relationship are null
+ * together until the family saves it (the member schema requires all three).
+ */
+export function isEmptyCard(member: { firstName: string | null }): boolean {
+  return member.firstName === null
+}
+
+/**
+ * A member's name or, while the family has not filled in the card, what the card is: "Adulto 2",
+ * numbered among the cards of its kind in `members` (the whole family, in its order).
+ */
+export function memberName(member: MemberRef, members: Pick<MemberRef, 'id' | 'kind'>[]): string {
+  if (!isEmptyCard(member)) return fullName(member)
+  const sameKind = members.filter(other => other.kind === member.kind)
+  return `${enumLabel('memberKind', member.kind)} ${sameKind.findIndex(other => other.id === member.id) + 1}`
 }
 
 /** Initials for avatars: "MR". */

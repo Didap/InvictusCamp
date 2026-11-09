@@ -10,6 +10,7 @@ import type {
   ParticipationKind,
   ParticipationStatus,
   StaffRole,
+  ItalianRegion,
   StaffStatus,
 } from '../../shared/utils/constants'
 import { DEFAULT_LOCATION } from '../../shared/utils/constants'
@@ -315,11 +316,22 @@ const STAFF: {
 
 const DEMO_ANSWERS: FormAnswers = {
   howDidYouHear: 'Associazione o ente',
-  previousCamps: false,
-  accommodationNeeds: 'Camera al piano terra, spazio per la carrozzina (esempio).',
-  dietaryNeeds: 'Nessuna preferenza particolare (esempio).',
-  preferredPeriods: ['Giugno', 'Luglio'],
-  expectations: 'Qualche giorno di vacanza insieme e nuove amicizie (esempio).',
+  association: 'Associazione Insieme (esempio)',
+  sessionPreferences: ['Sessioni nel weekend (2 notti)', 'Sessioni settimanali estive (4 notti)'],
+  accommodationNeeds: ['Bagno senza barriere architettoniche'],
+}
+
+/** Region and CAP of the main town of each province of the demo families. */
+const DEMO_PROVINCES: Record<string, { region: ItalianRegion; postalCode: string }> = {
+  BA: { region: 'Puglia', postalCode: '70121' },
+  BR: { region: 'Puglia', postalCode: '72100' },
+  CS: { region: 'Calabria', postalCode: '87100' },
+  FG: { region: 'Puglia', postalCode: '71121' },
+  LE: { region: 'Puglia', postalCode: '73100' },
+  MT: { region: 'Basilicata', postalCode: '75100' },
+  NA: { region: 'Campania', postalCode: '80121' },
+  PZ: { region: 'Basilicata', postalCode: '85100' },
+  TA: { region: 'Puglia', postalCode: '74121' },
 }
 
 function slug(value: string): string {
@@ -436,8 +448,10 @@ export async function seedDemo(db: Db, options: { passwordHash: string; uploadsD
       .values({
         userId: user.id,
         name: `Famiglia ${f.last}`,
+        address: f.submitted ? 'Via Roma 1 (esempio)' : null,
         city: f.city,
         province: f.province,
+        ...(f.submitted ? DEMO_PROVINCES[f.province] : {}),
         phone,
         formAnswers: f.submitted ? DEMO_ANSWERS : {},
         formStatus: f.submitted ? 'submitted' : 'draft',
@@ -453,6 +467,7 @@ export async function seedDemo(db: Db, options: { passwordHash: string; uploadsD
         firstName: m.firstName,
         lastName: f.last,
         relationship: m.relationship,
+        kind: m.relationship === 'child' || m.relationship === 'sibling' ? ('young' as const) : ('adult' as const),
         birthDate: m.birthDate ?? null,
         isReferent: position === 0,
         hasDisability: Boolean(m.disability),
@@ -780,7 +795,7 @@ export async function seedDemo(db: Db, options: { passwordHash: string; uploadsD
     .insert(t.communications)
     .values({
       subject: 'Le iscrizioni per l’estate 2027 sono aperte',
-      body: 'Care famiglie,\n\nsono aperte le iscrizioni per le sessioni dell’estate 2027. Completate il questionario nel gestionale: vi contatteremo noi per le sessioni.\n\nA presto,\nlo staff di Invictus Camp',
+      body: 'Care famiglie,\n\nsono aperte le iscrizioni per le sessioni dell’estate 2027. Completate i dati della famiglia nel gestionale: vi contatteremo noi per le sessioni.\n\nA presto,\nlo staff di Invictus Camp',
       audience: { type: 'all_families' },
       recipientCount: families.length,
       sentBy: admin.id,

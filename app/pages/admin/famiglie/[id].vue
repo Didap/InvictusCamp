@@ -2,7 +2,7 @@
 import { adminNotesSchema, ageOn } from '#shared/schemas/families'
 import type { AdminFamilyDetail, FamilyMemberDto } from '#shared/types/families'
 import { enumLabel } from '#shared/utils/constants'
-import { formatDay, formatDateTime, fullName, plural } from '#shared/utils/format'
+import { formatDay, formatDateTime, fullName, isEmptyCard, memberName, plural } from '#shared/utils/format'
 
 // The record of one family for the administration: data and contacts, members (health details only
 // in the reserved section, loaded on demand), sessions (A1), questionnaire, personal documents,
@@ -25,7 +25,11 @@ const contacts = computed(() => {
     { label: 'Email', value: f.referent.email },
     { label: 'Telefono', value: f.phone ?? f.referent.phone },
     { label: 'Indirizzo', value: f.address },
-    { label: 'Città', value: [f.city, f.province ? `(${f.province})` : null].filter(Boolean).join(' ') },
+    {
+      label: 'Città',
+      value: [f.postalCode, f.city, f.province ? `(${f.province})` : null].filter(Boolean).join(' '),
+    },
+    { label: 'Regione', value: f.region },
     { label: 'Registrata il', value: formatDateTime(f.createdAt) },
     { label: 'Ultimo accesso', value: f.referent.lastLoginAt ? formatDateTime(f.referent.lastLoginAt) : 'Mai' },
     {
@@ -36,6 +40,7 @@ const contacts = computed(() => {
 })
 
 function memberSummary(member: FamilyMemberDto): string {
+  if (isEmptyCard(member) || !member.relationship) return 'Scheda non ancora compilata dalla famiglia'
   const relationship = enumLabel('memberRelationship', member.relationship)
   if (!member.birthDate) return relationship
   const age = ageOn(member.birthDate)
@@ -140,7 +145,7 @@ async function saveNotes() {
             :key="member.id"
             class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3"
           >
-            <span class="font-semibold text-highlighted">{{ fullName(member) }}</span>
+            <span class="font-semibold text-highlighted">{{ memberName(member, family.members) }}</span>
             <UBadge v-if="member.isReferent" color="primary" variant="subtle" icon="i-lucide-star" label="Referente" />
             <span class="basis-full text-sm text-muted sm:basis-auto">{{ memberSummary(member) }}</span>
           </li>
@@ -163,11 +168,11 @@ async function saveNotes() {
       </IcSection>
 
       <IcSection
-        title="Questionario"
+        title="Le risposte della famiglia"
         :description="
           family.formSubmittedAt
-            ? `Inviato il ${formatDateTime(family.formSubmittedAt)}.`
-            : 'Non ancora inviato: qui vedi le risposte salvate in bozza.'
+            ? `Dati confermati il ${formatDateTime(family.formSubmittedAt)}.`
+            : 'La famiglia non ha ancora confermato i suoi dati.'
         "
       >
         <template #actions>
@@ -207,14 +212,7 @@ async function saveNotes() {
         description="Per conto della famiglia: la modifica viene registrata. Email e nome del referente sono dell’account (Utenti)."
       >
         <template #body>
-          <FamiliesFamilyDataForm
-            :family="family"
-            :endpoint="`/api/admin/families/${family.id}`"
-            method="PATCH"
-            submit-label="Salva"
-            primary
-            @saved="onDataSaved"
-          >
+          <FamiliesFamilyDataForm :family="family" @saved="onDataSaved">
             <template #cancel>
               <UButton label="Annulla" color="neutral" variant="outline" @click="editOpen = false" />
             </template>

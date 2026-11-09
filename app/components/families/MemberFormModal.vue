@@ -2,9 +2,9 @@
 import { DISABILITY_FIELDS, memberSchema } from '#shared/schemas/families'
 import type { DisabilityInfo } from '#shared/types/domain'
 import type { OwnFamilyMember } from '#shared/types/families'
-import type { MemberRelationship } from '#shared/utils/constants'
+import type { MemberKind, MemberRelationship } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
-import { fullName } from '#shared/utils/format'
+import { fullName, isEmptyCard } from '#shared/utils/format'
 
 // Adds or edits a member of the signed-in family. The health fields appear only with the consent
 // (docs/spec.md, 3.8); without it the request carries no health data at all.
@@ -19,6 +19,7 @@ interface State {
   lastName: string
   birthDate: string
   relationship: MemberRelationship | undefined
+  kind: MemberKind | undefined
   isReferent: boolean
   health: { hasDisability: boolean; disability: Record<DisabilityKey, string> }
 }
@@ -29,7 +30,8 @@ function initialState(member: OwnFamilyMember | null): State {
     firstName: member?.firstName ?? '',
     lastName: member?.lastName ?? '',
     birthDate: member?.birthDate ?? '',
-    relationship: member?.relationship,
+    relationship: member?.relationship ?? undefined,
+    kind: member?.kind,
     isReferent: member?.isReferent ?? false,
     health: {
       hasDisability: member?.health?.hasDisability ?? false,
@@ -67,9 +69,17 @@ async function close() {
 
 const { options } = useEnums()
 const relationships = options('memberRelationship')
+const kinds = options('memberKind')
 const today = todayIso()
 const api = useApi()
 const saving = ref(false)
+
+/** A card created from the family data and still empty: the family fills it in for the first time. */
+const emptyCard = computed(() => Boolean(props.member && isEmptyCard(props.member)))
+const title = computed(() => {
+  if (!props.member) return 'Aggiungi un componente'
+  return emptyCard.value ? 'Compila la scheda' : `Modifica ${fullName(props.member)}`
+})
 
 async function save() {
   saving.value = true
@@ -78,6 +88,7 @@ async function save() {
     lastName: state.lastName,
     birthDate: state.birthDate || null,
     relationship: state.relationship,
+    kind: state.kind,
     isReferent: state.isReferent,
     ...(props.consent
       ? {
@@ -91,7 +102,7 @@ async function save() {
   try {
     if (props.member) {
       await api(`/api/family/members/${props.member.id}`, { method: 'PATCH', body })
-      notifySuccess('Dati salvati')
+      notifySuccess(emptyCard.value ? 'Scheda compilata' : 'Dati salvati', fullName(state))
     } else {
       await api('/api/family/members', { method: 'POST', body })
       notifySuccess('Componente aggiunto')
@@ -109,7 +120,7 @@ async function save() {
 <template>
   <UModal
     v-model:open="open"
-    :title="member ? `Modifica ${fullName(member)}` : 'Aggiungi un componente'"
+    :title="title"
     description="I campi con l’asterisco sono obbligatori."
     :dismissible="!dirty"
     :close="false"
@@ -148,6 +159,15 @@ async function save() {
             />
           </UFormField>
         </div>
+        <UFormField name="kind" required>
+          <URadioGroup
+            v-model="state.kind"
+            :items="kinds"
+            value-key="value"
+            legend="Nel nucleo familiare è"
+            orientation="horizontal"
+          />
+        </UFormField>
         <UFormField name="isReferent">
           <UCheckbox
             v-model="state.isReferent"
@@ -166,8 +186,8 @@ async function save() {
           </p>
           <USwitch
             v-model="state.health.hasDisability"
-            label="Ha una disabilità"
-            description="Anche una condizione cronica o genetica."
+            label="Ha una patologia grave o cronica, un disturbo del neurosviluppo o una disabilità"
+            description="Anche una condizione genetica."
           />
           <template v-if="state.health.hasDisability">
             <UFormField

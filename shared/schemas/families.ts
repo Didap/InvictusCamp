@@ -6,8 +6,11 @@ import type { MemberHealth } from '../types/families'
 import type { DisabilityInfo, FormAnswers } from '../types/domain'
 import {
   FAMILY_FORM_STATUSES,
+  ITALIAN_REGIONS,
+  MEMBER_KINDS,
   MEMBER_RELATIONSHIPS,
   PERSONAL_DOCUMENT_CATEGORIES,
+  type MemberKind,
   type PersonalDocumentCategory,
 } from '../utils/constants'
 import { isIsoDay, todayIso } from '../utils/dates'
@@ -20,26 +23,107 @@ const zProvince = z
   .toUpperCase()
   .regex(/^([A-Z]{2})?$/, { error: 'Scrivi la sigla di due lettere, per esempio TA' })
 
-/** Family data: /famiglia/profilo, and the administration on the family's behalf. */
+/** A CAP: five digits; empty is allowed. */
+const zPostalCode = z
+  .string()
+  .trim()
+  .regex(/^(\d{5})?$/, { error: 'Il CAP ha cinque cifre, per esempio 74024' })
+
+const zRegion = z.enum(ITALIAN_REGIONS, { error: 'Scegli la regione' })
+
+/** Family name, residence and phone, as the administration edits them on the family's behalf. */
 export const familyProfileSchema = z.object({
   name: zRequiredText(120),
   address: zText(200).optional(),
   city: zText(100).optional(),
+  postalCode: zPostalCode.optional(),
   province: zProvince.optional(),
+  region: z.union([zRegion, z.literal('')]).optional(),
   phone: zPhone.optional(),
 })
 export type FamilyProfileInput = z.output<typeof familyProfileSchema>
 
-// ─── Questionnaire ──────────────────────────────────────────────────────────────────────────────────
+// ─── The family data (the first form of the family) ─────────────────────────────────────────────────
+
+/** At most this many people of one kind: a guard against typing errors, not a rule of the camp. */
+export const MAX_MEMBERS_OF_A_KIND = 12
+
+const zCount = (min: number) =>
+  z
+    .number({ error: 'Indica un numero' })
+    .int({ error: 'Indica un numero intero' })
+    .min(min, { error: min ? `Almeno ${min}` : 'Non può essere negativo' })
+    .max(MAX_MEMBERS_OF_A_KIND, { error: `Al massimo ${MAX_MEMBERS_OF_A_KIND}` })
+
+/** How many people the family is made of. Confirming the data creates one card per person. */
+export const familyCompositionSchema = z.object({
+  /** The account holder is one of them. */
+  adults: zCount(1),
+  /** Young people with a severe or chronic illness, a neurodevelopmental disorder or a disability. */
+  youngWithCondition: zCount(0),
+  youngWithoutCondition: zCount(0),
+})
+export type FamilyComposition = z.output<typeof familyCompositionSchema>
+
+/**
+ * The three numbers of the composition: what a card of each group is, and how the form and the
+ * messages name the group.
+ */
+export const COMPOSITION_GROUPS = [
+  { key: 'adults', kind: 'adult', hasDisability: false, label: 'Adulti', help: 'Contando anche te.' },
+  {
+    key: 'youngWithCondition',
+    kind: 'young',
+    hasDisability: true,
+    label: 'Ragazzi e ragazze con patologie gravi o croniche, disturbi del neurosviluppo o disabilità',
+  },
+  {
+    key: 'youngWithoutCondition',
+    kind: 'young',
+    hasDisability: false,
+    label: 'Ragazzi e ragazze senza patologie o disabilità',
+  },
+] as const satisfies readonly {
+  key: keyof FamilyComposition
+  kind: MemberKind
+  hasDisability: boolean
+  label: string
+  help?: string
+}[]
+
+/** Which number of the composition a card counts in. */
+export function compositionGroupOf(card: { kind: MemberKind; hasDisability: boolean }): keyof FamilyComposition {
+  if (card.kind === 'adult') return 'adults'
+  return card.hasDisability ? 'youngWithCondition' : 'youngWithoutCondition'
+}
+
+/** The cards of a family counted by group. */
+export function countCards(cards: { kind: MemberKind; hasDisability: boolean }[]): FamilyComposition {
+  const counts: FamilyComposition = { adults: 0, youngWithCondition: 0, youngWithoutCondition: 0 }
+  for (const card of cards) counts[compositionGroupOf(card)]++
+  return counts
+}
+
+/**
+ * The fields of the family data form (/famiglia/profilo): residence required, the composition, and the
+ * consent to health data, needed when the family declares a young person with a condition.
+ */
+export const familyDataFieldsSchema = familyProfileSchema.extend({
+  address: zRequiredText(200),
+  city: zRequiredText(100),
+  postalCode: zPostalCode.refine(value => value !== '', { error: 'Campo obbligatorio' }),
+  region: zRegion,
+  composition: familyCompositionSchema,
+  healthConsent: z.boolean().default(false),
+})
 
 const zAnswer = z.union([z.string().max(5000), z.array(z.string().max(300)).max(50), z.boolean(), z.null()])
 
-/** PUT /api/family/profile/form: the answers, saved as a draft or sent (`submit`). */
-export const familyFormSchema = z.object({
+/** PUT /api/family/profile: the family data with the answers to the questions. */
+export const familyDataSchema = familyDataFieldsSchema.extend({
   answers: z.record(z.string().max(80), zAnswer),
-  submit: z.boolean().default(false),
 })
-export type FamilyFormInput = z.output<typeof familyFormSchema>
+export type FamilyDataInput = z.output<typeof familyDataSchema>
 
 const TEXT_MAX = { text: 300, textarea: 4000 } as const
 
@@ -140,6 +224,7 @@ export const memberSchema = z.object({
   lastName: zPersonName,
   birthDate: z.preprocess(value => (value === '' ? null : value), zBirthDate.nullable()).optional(),
   relationship: z.enum(MEMBER_RELATIONSHIPS, { error: 'Scegli la parentela' }),
+  kind: z.enum(MEMBER_KINDS, { error: 'Indica se è un adulto o un ragazzo o ragazza' }),
   isReferent: z.boolean().default(false),
   health: memberHealthSchema.optional(),
 })

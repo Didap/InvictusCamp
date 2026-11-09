@@ -1,8 +1,8 @@
 import type { FamilyProfileDto } from '#shared/types/families'
-import { toFamilyProfile } from '../../../domain/families'
+import { familyProfile } from '../../../domain/families'
 
-/** The family's data and its questionnaire. */
+/** The family data, with the answers and the cards the family already has. */
 export default defineEventHandler(async (event): Promise<FamilyProfileDto> => {
   const { family } = await requireFamily(event)
-  return toFamilyProfile(family)
+  return familyProfile(useDb(), family)
 })

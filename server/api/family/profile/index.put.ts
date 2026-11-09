@@ -1,10 +1,13 @@
-import { familyProfileSchema } from '#shared/schemas/families'
-import type { FamilyProfileDto } from '#shared/types/families'
-import { toFamilyProfile, updateFamilyData } from '../../../domain/families'
+import { familyDataSchema } from '#shared/schemas/families'
+import type { FamilyDataResult } from '#shared/types/families'
+import { saveFamilyData, toFamilyProfile } from '../../../domain/families'
 
-/** The family updates its own data: name, address, city, province, phone. */
-export default defineEventHandler(async (event): Promise<FamilyProfileDto> => {
-  const { family } = await requireFamily(event)
-  const input = await parseBody(event, familyProfileSchema)
-  return toFamilyProfile(await updateFamilyData(useDb(), family.id, input))
+/** Confirms the family data; the members' cards still missing are created (docs/spec.md, 3.8). */
+export default defineEventHandler(async (event): Promise<FamilyDataResult> => {
+  const { user, family } = await requireFamily(event)
+  const data = await parseBody(event, familyDataSchema)
+  const saved = await useDb().transaction(tx =>
+    saveFamilyData(tx, { familyId: family.id, data, actor: { userId: user.id, ip: clientIp(event) } }),
+  )
+  return { profile: toFamilyProfile(saved.family, saved.cards), cardsCreated: saved.cardsCreated }
 })
