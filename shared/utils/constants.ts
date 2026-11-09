@@ -26,18 +26,7 @@ export type ParticipationStatus = (typeof PARTICIPATION_STATUSES)[number]
 export const STAFF_STATUSES = ['registered', 'applied', 'approved', 'rejected', 'inactive'] as const
 export type StaffStatus = (typeof STAFF_STATUSES)[number]
 
-export const STAFF_ROLES = [
-  'educator',
-  'animator',
-  'oss',
-  'nurse',
-  'physiotherapist',
-  'psychologist',
-  'doctor',
-  'speech_therapist',
-  'volunteer',
-  'other',
-] as const
+export const STAFF_ROLES = ['group_lead', 'activity_lead', 'other'] as const
 export type StaffRole = (typeof STAFF_ROLES)[number]
 
 /** A convocation of a staff member to a session. "Confermata" is derived: accepted + contract signed. */
@@ -229,15 +218,8 @@ const staffStatus: Record<StaffStatus, EnumMeta> = {
 }
 
 const staffRole: Record<StaffRole, EnumMeta> = {
-  educator: { label: 'Educatore/Educatrice', icon: 'i-lucide-graduation-cap', color: 'neutral' },
-  animator: { label: 'Animatore/Animatrice', icon: 'i-lucide-party-popper', color: 'neutral' },
-  oss: { label: 'OSS', icon: 'i-lucide-hand-heart', color: 'neutral' },
-  nurse: { label: 'Infermiere/Infermiera', icon: 'i-lucide-syringe', color: 'neutral' },
-  physiotherapist: { label: 'Fisioterapista', icon: 'i-lucide-activity', color: 'neutral' },
-  psychologist: { label: 'Psicologo/Psicologa', icon: 'i-lucide-brain', color: 'neutral' },
-  doctor: { label: 'Medico', icon: 'i-lucide-stethoscope', color: 'neutral' },
-  speech_therapist: { label: 'Logopedista', icon: 'i-lucide-message-circle', color: 'neutral' },
-  volunteer: { label: 'Volontario/Volontaria', icon: 'i-lucide-heart', color: 'neutral' },
+  group_lead: { label: 'Responsabile di gruppo', icon: 'i-lucide-users', color: 'neutral' },
+  activity_lead: { label: 'Responsabile attività', icon: 'i-lucide-shapes', color: 'neutral' },
   other: { label: 'Altro', icon: 'i-lucide-user', color: 'neutral' },
 }
 

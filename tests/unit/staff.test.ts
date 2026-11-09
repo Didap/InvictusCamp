@@ -42,7 +42,7 @@ describe('application', () => {
         ...empty,
         birthDate: '1990-01-01',
         city: '  ',
-        roles: ['oss'],
+        roles: ['activity_lead'],
         qualifications: 'OSS',
         experience: 'Sì',
         motivation: 'Sì',
@@ -55,7 +55,7 @@ describe('application', () => {
     const valid = {
       birthDate: '1995-04-10',
       city: 'Lecce',
-      roles: ['educator'],
+      roles: ['group_lead'],
       qualifications: 'Laurea',
       experience: 'Centri estivi',
       motivation: 'Esserci',
@@ -171,13 +171,13 @@ describe('emails', () => {
       toUserId: 'u2',
       firstName: 'Chiara',
       session,
-      role: 'educator',
+      role: 'group_lead',
       message: 'Ti aspettiamo.',
     })
     expect(email).toMatchObject({ template: 'staff.convocation', sessionId: 's1' })
     expect(email.subject).toContain('Sessione 1 · Giugno 2027')
     expect(email.html).toContain('21–27 giugno 2027')
-    expect(email.html).toContain('Educatore/Educatrice')
+    expect(email.html).toContain('Responsabile di gruppo')
     expect(email.html).toContain('Ti aspettiamo.')
     expect(email.html).toContain('https://gestionale.test/staff/convocazioni')
   })

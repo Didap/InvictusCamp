@@ -34,7 +34,7 @@ const TODAY = '2026-11-06'
 const APPLICATION = {
   birthDate: '1995-04-10',
   city: 'Lecce',
-  roles: ['educator', 'volunteer'] as ('educator' | 'volunteer')[],
+  roles: ['group_lead', 'other'] as ('group_lead' | 'other')[],
   qualifications: 'Laurea in scienze dell’educazione',
   experience: 'Tre estati in un centro estivo inclusivo',
   motivation: 'Voglio esserci',
@@ -81,7 +81,7 @@ async function sessionWithDrafts(count: number, values: Partial<typeof t.campSes
   for (let i = 0; i < count; i++) people.push(await makeStaff(db, 'approved'))
   await addConvocations(db, {
     sessionId: session.id,
-    people: people.map(p => ({ userId: p.user.id, role: 'educator' as const })),
+    people: people.map(p => ({ userId: p.user.id, role: 'group_lead' as const })),
     actor: { userId: admin.id },
   })
   const rows = await db.select().from(t.sessionStaff).where(eq(t.sessionStaff.sessionId, session.id))
@@ -103,7 +103,7 @@ async function acceptedInSessions(...values: Partial<typeof t.campSessions.$infe
   const ids = []
   for (const value of values) {
     const session = await makeSession(db, value)
-    await addConvocations(db, { sessionId: session.id, people: [{ userId: user.id, role: 'educator' }], actor })
+    await addConvocations(db, { sessionId: session.id, people: [{ userId: user.id, role: 'group_lead' }], actor })
     const [row] = await db.select().from(t.sessionStaff).where(eq(t.sessionStaff.sessionId, session.id))
     await sendConvocations(db, ctx, { sessionId: session.id, ids: [row!.id], actor })
     await answerConvocation(db, ctx, { id: row!.id, userId: user.id, answer: 'accept' })
@@ -116,10 +116,10 @@ async function acceptedInSessions(...values: Partial<typeof t.campSessions.$infe
 describe('application', () => {
   it('is saved as a draft, then sent once with the CV', async () => {
     const { user } = await makeStaff(db, 'registered')
-    await saveApplicationDraft(db, user.id, { city: 'Lecce', roles: ['educator', 'educator'] })
+    await saveApplicationDraft(db, user.id, { city: 'Lecce', roles: ['group_lead', 'group_lead'] })
     let profile = await profileStatus(user.id)
     expect(profile.city).toBe('Lecce')
-    expect(profile.roles).toEqual(['educator'])
+    expect(profile.roles).toEqual(['group_lead'])
     expect(profile.status).toBe('registered')
 
     await expect(submitApplication(db, user.id, APPLICATION)).rejects.toMatchObject({ statusCode: 400 })
@@ -130,7 +130,7 @@ describe('application', () => {
     profile = await profileStatus(user.id)
     expect(profile.status).toBe('applied')
     expect(profile.appliedAt).toBeInstanceOf(Date)
-    expect(profile.roles).toEqual(['educator', 'volunteer'])
+    expect(profile.roles).toEqual(['group_lead', 'other'])
     expect(await auditActions(user.id)).toContain('staff.apply')
   })
 
@@ -162,7 +162,7 @@ describe('application', () => {
       'Motivazione',
       'CV in PDF',
     ])
-    await saveApplicationDraft(db, user.id, { city: 'Lecce', roles: ['oss'] })
+    await saveApplicationDraft(db, user.id, { city: 'Lecce', roles: ['activity_lead'] })
     const after = await staffHome(db, await profileStatus(user.id), TODAY)
     expect(after.missing).not.toContain('Città')
     expect(after.missing).not.toContain('Ruoli')
@@ -370,15 +370,19 @@ describe('convocations', () => {
     const actor = { userId: admin.id }
     const session = await makeSession(db)
     const approved = await makeStaff(db, 'approved')
-    const people = [{ userId: approved.user.id, role: 'nurse' as const }]
+    const people = [{ userId: approved.user.id, role: 'other' as const }]
     expect(await addConvocations(db, { sessionId: session.id, people, actor })).toEqual({ added: 1, kept: 0 })
     expect(await addConvocations(db, { sessionId: session.id, people, actor })).toEqual({ added: 0, kept: 1 })
     const [row] = await db.select().from(t.sessionStaff)
-    expect(row).toMatchObject({ status: 'draft', role: 'nurse', sentAt: null })
+    expect(row).toMatchObject({ status: 'draft', role: 'other', sentAt: null })
 
     const applied = await makeStaff(db, 'applied')
     await expect(
-      addConvocations(db, { sessionId: session.id, people: [{ userId: applied.user.id, role: 'oss' }], actor }),
+      addConvocations(db, {
+        sessionId: session.id,
+        people: [{ userId: applied.user.id, role: 'activity_lead' }],
+        actor,
+      }),
     ).rejects.toMatchObject({ statusCode: 409 })
 
     const closed = await makeSession(db, { status: 'completed' })
@@ -555,11 +559,11 @@ describe('convocations', () => {
 
     const again = await addConvocations(db, {
       sessionId: session.id,
-      people: [{ userId: person.user.id, role: 'animator' }],
+      people: [{ userId: person.user.id, role: 'activity_lead' }],
       actor,
     })
     expect(again.added).toBe(1)
-    expect(await convocation(id)).toMatchObject({ status: 'draft', role: 'animator', sentAt: null, message: null })
+    expect(await convocation(id)).toMatchObject({ status: 'draft', role: 'activity_lead', sentAt: null, message: null })
     await sendConvocations(db, ctx, { sessionId: session.id, ids: [id], actor })
     const result = await answerConvocation(db, ctx, { id, userId: person.user.id, answer: 'accept' })
     expect(result.emails).toHaveLength(1)
@@ -623,11 +627,11 @@ describe('convocations', () => {
 
   it('the role changes while the convocation is open', async () => {
     const { admin, ids } = await sessionWithDrafts(1)
-    await setConvocationRole(db, { id: ids[0]!, role: 'oss', actor: { userId: admin.id } })
-    expect((await convocation(ids[0]!))!.role).toBe('oss')
+    await setConvocationRole(db, { id: ids[0]!, role: 'activity_lead', actor: { userId: admin.id } })
+    expect((await convocation(ids[0]!))!.role).toBe('activity_lead')
     await db.update(t.sessionStaff).set({ status: 'declined' }).where(eq(t.sessionStaff.id, ids[0]!))
     await expect(
-      setConvocationRole(db, { id: ids[0]!, role: 'nurse', actor: { userId: admin.id } }),
+      setConvocationRole(db, { id: ids[0]!, role: 'other', actor: { userId: admin.id } }),
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
