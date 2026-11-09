@@ -84,9 +84,17 @@ export function fullName(person: { firstName: string | null; lastName: string | 
   return `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim()
 }
 
-/** A member's name, or what the card is while the family has not filled it in yet ("Adulto, da compilare"). */
-export function memberName(member: { firstName: string | null; lastName: string | null; kind: MemberKind }): string {
-  return fullName(member) || `${enumLabel('memberKind', member.kind)}, da compilare`
+type MemberRef = { id: string; firstName: string | null; lastName: string | null; kind: MemberKind }
+
+/**
+ * A member's name or, while the family has not filled in the card, what the card is: "Adulto 2",
+ * numbered among the cards of its kind in `members` (the whole family, in its order).
+ */
+export function memberName(member: MemberRef, members: Pick<MemberRef, 'id' | 'kind'>[]): string {
+  const name = fullName(member)
+  if (name) return name
+  const sameKind = members.filter(other => other.kind === member.kind)
+  return `${enumLabel('memberKind', member.kind)} ${sameKind.findIndex(other => other.id === member.id) + 1}`
 }
 
 /** Initials for avatars: "MR". */

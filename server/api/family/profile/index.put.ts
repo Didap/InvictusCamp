@@ -1,17 +1,14 @@
 import { familyDataSchema } from '#shared/schemas/families'
 import type { FamilyDataResult } from '#shared/types/families'
-import { familyProfile, saveFamilyData } from '../../../domain/families'
+import { saveFamilyData, toFamilyProfile } from '../../../domain/families'
 
 /** Confirms the family data; the members' cards still missing are created (docs/spec.md, 3.8). */
 export default defineEventHandler(async (event): Promise<FamilyDataResult> => {
   const { user, family } = await requireFamily(event)
   const data = await parseBody(event, familyDataSchema)
-  return useDb().transaction(async tx => {
-    const saved = await saveFamilyData(tx, {
-      familyId: family.id,
-      data,
-      actor: { userId: user.id, ip: clientIp(event) },
-    })
-    return { profile: await familyProfile(tx, saved.family), cardsCreated: saved.cardsCreated }
-  })
+  const saved = await useDb().transaction(tx =>
+    saveFamilyData(tx, { familyId: family.id, data, actor: { userId: user.id, ip: clientIp(event) } }),
+  )
+  // After the save the cards are exactly the composition: the missing ones were created, fewer is refused.
+  return { profile: toFamilyProfile(saved.family, data.composition), cardsCreated: saved.cardsCreated }
 })

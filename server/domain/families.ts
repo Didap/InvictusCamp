@@ -8,6 +8,7 @@ import {
   hasHealthData,
   healthChangedFields,
   isHealthDocument,
+  MAX_MEMBERS_OF_A_KIND,
   missingRequiredQuestions,
   NO_HEALTH,
   normalizeFormAnswers,
@@ -70,8 +71,10 @@ function notFound(message: string) {
   return createError({ statusCode: 404, message })
 }
 
-async function requireFamilyRow(db: DbOrTx, familyId: string): Promise<FamilyRow> {
-  const [family] = await db.select().from(families).where(eq(families.id, familyId)).limit(1)
+/** The family, or 404. `lock` holds the row until the transaction ends, so its cards change one save at a time. */
+async function requireFamilyRow(db: DbOrTx, familyId: string, lock = false): Promise<FamilyRow> {
+  const query = db.select().from(families).where(eq(families.id, familyId)).limit(1)
+  const [family] = lock ? await query.for('update') : await query
   if (!family) throw notFound('Famiglia non trovata')
   return family
 }
@@ -98,23 +101,41 @@ export function familyFields(family: FamilyRow) {
 }
 
 /** The cards of a family by kind. Young people with a condition are known only with the consent. */
-function cardsOf(rows: Pick<MemberRow, 'kind' | 'hasDisability'>[]): FamilyComposition {
-  const young = rows.filter(row => row.kind === 'young')
-  const withCondition = young.filter(row => row.hasDisability).length
-  return {
-    adults: rows.length - young.length,
-    youngWithCondition: withCondition,
-    youngWithoutCondition: young.length - withCondition,
+type Card = Pick<MemberRow, 'kind' | 'hasDisability'>
+
+/** Which number of the composition a card counts in. */
+function groupOf(card: Card): keyof FamilyComposition {
+  if (card.kind === 'adult') return 'adults'
+  return card.hasDisability ? 'youngWithCondition' : 'youngWithoutCondition'
+}
+
+function cardsOf(rows: Card[]): FamilyComposition {
+  const cards: FamilyComposition = { adults: 0, youngWithCondition: 0, youngWithoutCondition: 0 }
+  for (const row of rows) cards[groupOf(row)]++
+  return cards
+}
+
+/**
+ * 409 when `card` would make its group larger than the family data form can hold: past that, no
+ * composition would be both allowed and at least the cards there, and the form could not be saved.
+ */
+function assertRoomFor(others: Card[], card: Card) {
+  const group = groupOf(card)
+  if (cardsOf(others)[group] >= MAX_MEMBERS_OF_A_KIND) {
+    throw createError({
+      statusCode: 409,
+      message: `Al massimo ${MAX_MEMBERS_OF_A_KIND} schede di ${CARD_OF[group].label}`,
+    })
   }
+}
+
+export function toFamilyProfile(family: FamilyRow, cards: FamilyComposition): FamilyProfileDto {
+  return { ...familyFields(family), cards, healthDataConsentAt: iso(family.healthDataConsentAt) }
 }
 
 /** GET /api/family/profile */
 export async function familyProfile(db: DbOrTx, family: FamilyRow): Promise<FamilyProfileDto> {
-  return {
-    ...familyFields(family),
-    cards: cardsOf(await listMemberRows(db, family.id)),
-    healthDataConsentAt: iso(family.healthDataConsentAt),
-  }
+  return toFamilyProfile(family, cardsOf(await listMemberRows(db, family.id)))
 }
 
 /** Name, residence and phone as stored: empty values become null. */
@@ -165,7 +186,11 @@ const CARD_OF: Record<keyof FamilyComposition, { kind: MemberKind; hasDisability
     hasDisability: true,
     label: 'ragazzi o ragazze con patologie o disabilità',
   },
-  youngWithoutCondition: { kind: 'young', hasDisability: false, label: 'ragazzi o ragazze senza' },
+  youngWithoutCondition: {
+    kind: 'young',
+    hasDisability: false,
+    label: 'ragazzi o ragazze senza patologie o disabilità',
+  },
 }
 
 /**
@@ -180,7 +205,8 @@ export async function saveFamilyData(
   db: DbOrTx,
   input: { familyId: string; data: FamilyDataInput; actor: Actor },
 ): Promise<{ family: FamilyRow; cardsCreated: number }> {
-  const family = await requireFamilyRow(db, input.familyId)
+  // Locked: two saves at once (two tabs, a retry) would both count the same cards and both add the missing ones.
+  const family = await requireFamilyRow(db, input.familyId, true)
   const { answers, invalid } = normalizeFormAnswers(input.data.answers)
   if (invalid.length) {
     throw createError({ statusCode: 400, message: `Risposta non valida alla domanda «${invalid[0]!.label}»` })
@@ -373,9 +399,17 @@ export async function addFamilyMember(
   db: DbOrTx,
   input: { familyId: string; member: MemberInput; actor: Actor },
 ): Promise<OwnFamilyMember> {
-  const family = await requireFamilyRow(db, input.familyId)
+  const family = await requireFamilyRow(db, input.familyId, true)
+  // The cards come from the family data: until it is confirmed, the account holder's is the only one.
+  if (family.formStatus !== 'submitted') {
+    throw createError({
+      statusCode: 409,
+      message: 'Prima conferma i dati della famiglia: creiamo noi una scheda per ogni persona',
+    })
+  }
   const health = normalizeHealth(input.member.health)
   if (hasHealthData(health) && !family.healthDataConsentAt) throw consentRequired()
+  assertRoomFor(await listMemberRows(db, family.id), { kind: input.member.kind, hasDisability: health.hasDisability })
   const [row] = await db
     .insert(familyMembers)
     .values({
@@ -408,6 +442,11 @@ export async function updateFamilyMember(
     const next = normalizeHealth(input.member.health)
     if (family.healthDataConsentAt) after = next
     else if (hasHealthData(next)) throw consentRequired()
+  }
+  const card = { kind: input.member.kind, hasDisability: after.hasDisability }
+  if (groupOf(card) !== groupOf(row)) {
+    const others = (await listMemberRows(db, family.id)).filter(other => other.id !== row.id)
+    assertRoomFor(others, card)
   }
   if (row.isReferent && !input.member.isReferent) {
     await requireAnotherReferent(

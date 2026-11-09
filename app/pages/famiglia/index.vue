@@ -27,7 +27,7 @@ const steps = computed<Step[]>(() => {
       title: confirmed ? 'Dati della famiglia confermati' : 'Compila i dati della famiglia',
       description: confirmed
         ? 'Puoi cambiarli quando vuoi.'
-        : 'Dove abitate, chi fa parte della famiglia, le sessioni che preferisci.',
+        : 'Dove abiti, chi fa parte della tua famiglia, le sessioni che preferisci.',
       to: '/famiglia/profilo',
       action: 'Compila',
     },

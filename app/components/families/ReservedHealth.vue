@@ -64,7 +64,7 @@ watch(
         :key="member.id"
         class="border-t border-default pt-5 first:border-t-0 first:pt-0"
       >
-        <h3 class="mb-3 font-bold text-highlighted">{{ memberName(member) }}</h3>
+        <h3 class="mb-3 font-bold text-highlighted">{{ memberName(member, health?.members ?? []) }}</h3>
         <FamiliesHealthDetails :health="member" />
       </div>
       <p v-if="withDisability.length && othersCount" class="text-sm text-muted">

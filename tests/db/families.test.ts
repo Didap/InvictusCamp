@@ -21,7 +21,12 @@ import {
   updateFamilyDataByAdmin,
   updateFamilyMember,
 } from '../../server/domain/families'
-import { adminFamilyListQuerySchema, type FamilyDataInput, type MemberInput } from '../../shared/schemas/families'
+import {
+  adminFamilyListQuerySchema,
+  MAX_MEMBERS_OF_A_KIND,
+  type FamilyDataInput,
+  type MemberInput,
+} from '../../shared/schemas/families'
 import { makeAdmin, makeDocument, makeFamily, makeSession, t, useTestDb } from './helpers'
 
 const db = useTestDb()
@@ -58,8 +63,9 @@ const familyData = (values: Partial<FamilyDataInput> = {}): FamilyDataInput => (
 
 const withDisability = { hasDisability: true, disability: { description: 'Descrizione riservata', mobility: '' } }
 
+/** A family with its account holder's card; its data already confirmed unless `formStatus` says otherwise. */
 async function familyWithReferent(values: Parameters<typeof makeFamily>[1] = {}) {
-  const { user, family } = await makeFamily(db, values)
+  const { user, family } = await makeFamily(db, { formStatus: 'submitted', ...values })
   const [referent] = await db
     .insert(t.familyMembers)
     .values({ familyId: family.id, firstName: 'Anna', lastName: 'Prova', relationship: 'parent', isReferent: true })
@@ -294,7 +300,7 @@ describe('members', () => {
 
 describe('family data', () => {
   it('keeps only known questions and valid values, and refuses a missing or wrong answer', async () => {
-    const { family, actor } = await familyWithReferent()
+    const { family, actor } = await familyWithReferent({ formStatus: 'draft' })
     await expect(
       saveFamilyData(db, {
         familyId: family.id,
@@ -327,7 +333,7 @@ describe('family data', () => {
   })
 
   it('creates one empty card per person declared, counting the cards already there', async () => {
-    const { family, actor } = await familyWithReferent()
+    const { family, actor } = await familyWithReferent({ formStatus: 'draft' })
     const first = await saveFamilyData(db, {
       familyId: family.id,
       data: familyData({ composition: { adults: 2, youngWithCondition: 0, youngWithoutCondition: 2 } }),
@@ -371,7 +377,7 @@ describe('family data', () => {
   })
 
   it('needs the health consent to declare a young person with a condition, and gives it with the form', async () => {
-    const { family, actor } = await familyWithReferent()
+    const { family, actor } = await familyWithReferent({ formStatus: 'draft' })
     const data = familyData({ composition: { adults: 1, youngWithCondition: 1, youngWithoutCondition: 0 } })
     await expect(saveFamilyData(db, { familyId: family.id, data, actor })).rejects.toMatchObject({
       statusCode: 400,
@@ -396,6 +402,24 @@ describe('family data', () => {
       youngWithoutCondition: 1,
     })
   })
+
+  it('adds a card by hand only after the family data is confirmed, and within the limit of the form', async () => {
+    const draft = await familyWithReferent({ formStatus: 'draft' })
+    await expect(
+      addFamilyMember(db, { familyId: draft.family.id, member: child(), actor: draft.actor }),
+    ).rejects.toMatchObject({ statusCode: 409 })
+
+    const { family, actor } = await familyWithReferent()
+    await db
+      .insert(t.familyMembers)
+      .values(
+        Array.from({ length: MAX_MEMBERS_OF_A_KIND - 1 }, () => ({ familyId: family.id, kind: 'adult' as const })),
+      )
+    await expect(
+      addFamilyMember(db, { familyId: family.id, member: child({ kind: 'adult', relationship: 'parent' }), actor }),
+    ).rejects.toMatchObject({ statusCode: 409 })
+    await addFamilyMember(db, { familyId: family.id, member: child(), actor })
+  })
 })
 
 describe('administration', () => {
@@ -407,6 +431,8 @@ describe('administration', () => {
       member: child({ firstName: 'Matteo', lastName: 'Rossi', health: withDisability }),
       actor: rossi.actor,
     })
+    // Back to unconfirmed, for the filter by status below.
+    await db.update(t.families).set({ formStatus: 'draft' }).where(eq(t.families.id, rossi.family.id))
     const bianchi = await familyWithReferent({ name: 'Famiglia Bianchi', city: 'Bari', province: 'BA' })
     await saveFamilyData(db, {
       familyId: bianchi.family.id,
@@ -488,7 +514,7 @@ describe('family data edited by the administration', () => {
 
 describe('family home', () => {
   it('counts what is left and shows only a confirmed upcoming session', async () => {
-    const { user, family } = await familyWithReferent()
+    const { user, family } = await familyWithReferent({ formStatus: 'draft' })
     const invited = await makeSession(db, { status: 'inviting', startDate: '2027-06-01', endDate: '2027-06-07' })
     const confirmed = await makeSession(db, { status: 'confirmed', startDate: '2027-07-01', endDate: '2027-07-07' })
     await db.insert(t.sessionFamilies).values([

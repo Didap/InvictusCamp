@@ -171,7 +171,8 @@ availability or receive convocations.
   person, referent, and, with the consent, "ha una patologia o disabilità" and its details (`DisabilityInfo`,
   placeholder fields). An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling
   it in requires name, surname and relationship. Before the family data is confirmed the page shows only
-  the account holder's card and points to the family data; afterwards cards can also be added by hand.
+  the account holder's card and points to the family data, and adding a card is refused (409); afterwards
+  cards can also be added by hand, at most 12 per number of the composition (the most the form takes).
 - The health data consent (`healthDataConsentAt`) can be given or withdrawn in Componenti; withdrawing
   deletes the details and the condition of every card (the card stays, as a young person without).
 - Personal documents (certificates, diagnoses, ID, health card): PDF, JPG or PNG up to 15 MB, with a

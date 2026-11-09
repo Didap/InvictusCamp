@@ -2,7 +2,7 @@
 import { ageOn } from '#shared/schemas/families'
 import type { FamilyMembersResponse, OwnFamilyMember } from '#shared/types/families'
 import { enumLabel } from '#shared/utils/constants'
-import { fullName, plural } from '#shared/utils/format'
+import { memberName, plural } from '#shared/utils/format'
 
 // The members of the family. Health details (disability) only after the explicit consent, which the
 // family gives or withdraws at the bottom of the page (docs/spec.md, 3.8).
@@ -38,13 +38,8 @@ function openForm(member: OwnFamilyMember | null) {
   formOpen.value = true
 }
 
-/** The name, or "Adulto 2" while the card is empty: numbered among the cards of its kind. */
-function title(member: OwnFamilyMember): string {
-  const name = fullName(member)
-  if (name) return name
-  const sameKind = members.value.filter(other => other.kind === member.kind)
-  return `${enumLabel('memberKind', member.kind)} ${sameKind.indexOf(member) + 1}`
-}
+/** The name, or "Adulto 2" while the card is empty. */
+const title = (member: OwnFamilyMember) => memberName(member, members.value)
 
 function summary(member: OwnFamilyMember): string {
   if (!member.relationship) return 'Scheda da compilare: nome, parentela, data di nascita'

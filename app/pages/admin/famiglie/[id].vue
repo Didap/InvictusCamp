@@ -145,7 +145,7 @@ async function saveNotes() {
             :key="member.id"
             class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3"
           >
-            <span class="font-semibold text-highlighted">{{ memberName(member) }}</span>
+            <span class="font-semibold text-highlighted">{{ memberName(member, family.members) }}</span>
             <UBadge v-if="member.isReferent" color="primary" variant="subtle" icon="i-lucide-star" label="Referente" />
             <span class="basis-full text-sm text-muted sm:basis-auto">{{ memberSummary(member) }}</span>
           </li>
