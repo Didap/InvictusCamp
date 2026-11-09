@@ -94,15 +94,6 @@ export function requireUuidParam(event: H3Event, name: string): string {
   return value
 }
 
-/** The `year` route param: a whole number, or 404. */
-export function requireYearParam(event: H3Event): number {
-  const value = Number(getRouterParam(event, 'year'))
-  if (!Number.isInteger(value) || value < 1000 || value > 9999) {
-    throw createError({ statusCode: 404, message: 'Non trovato' })
-  }
-  return value
-}
-
 /** The address of the client: the entry the Coolify proxy appended to X-Forwarded-For, or the socket. */
 export function clientIp(event: H3Event): string | null {
   return forwardedClientIp(getRequestHeader(event, 'x-forwarded-for'), getRequestIP(event))

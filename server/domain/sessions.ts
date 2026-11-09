@@ -688,7 +688,7 @@ export async function transitionSession(
       .where(and(eq(sessionFamilies.sessionId, session.id), inArray(sessionFamilies.status, ACTIVE_STATUSES)))
   }
   await db.update(campSessions).set({ status: to, statusChangedAt: now }).where(eq(campSessions.id, session.id))
-  if (to === 'completed') await freezeSessionProgramme(db, session)
+  if (!isSessionEditable(to)) await freezeSessionProgramme(db, session)
 
   const emails = [
     ...recipients

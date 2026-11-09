@@ -15,7 +15,7 @@ export interface ProgrammeDto {
 /** A year in /admin/programma: one with a programme, or one with sessions still waiting for it. */
 export interface ProgrammeYearItem {
   year: number
-  exists: boolean
+  /** Null for a year with sessions but no programme yet. */
   updatedAt: string | null
   /** Sessions of the year (not cancelled). */
   sessions: number
@@ -37,7 +37,6 @@ export interface SessionProgrammeDto {
 /** The programme a family or a staff member of the session reads. */
 export interface ProgrammeView {
   session: { id: string; title: string; startDate: string; endDate: string; status: SessionStatus }
-  dates: string[]
   /** Null while there is no programme for the session yet. */
   content: ProgrammeContent | null
 }

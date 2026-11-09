@@ -3,12 +3,12 @@ import type { ProgrammeGroupTurn } from '../types/domain'
 import { PROGRAMME_BLOCK_KINDS, PROGRAMME_GROUPS, type ProgrammeGroup } from '../utils/constants'
 import { zRequiredText, zText } from './common'
 
-export const MAX_PROGRAMME_DAYS = 14
-export const MAX_BLOCKS_PER_DAY = 30
+const MAX_PROGRAMME_DAYS = 14
+const MAX_BLOCKS_PER_DAY = 30
 export const MAX_ACTIVITIES = 20
 /** The years a programme can be made for. */
-export const MIN_PROGRAMME_YEAR = 2024
-export const MAX_PROGRAMME_YEAR = 2100
+const MIN_PROGRAMME_YEAR = 2024
+const MAX_PROGRAMME_YEAR = 2100
 
 /** 'HH:MM', or '' for a block without a time (breakfast, departure). */
 const zTime = z.union([
@@ -19,8 +19,9 @@ const zTime = z.union([
 const zId = z.string().min(1).max(40)
 
 const groupTurnSchema = z.object({
+  // Null (or cleared: undefined) while still to decide.
   activity: zText(80)
-    .nullable()
+    .nullish()
     .transform(value => value || null),
   lead: zText(120),
 })
@@ -103,3 +104,6 @@ export const programmeCreateSchema = z.object({
   from: z.union([z.enum(['template', 'empty']), zYear]),
 })
 export type ProgrammeCreateInput = z.input<typeof programmeCreateSchema>
+
+/** The `year` of /api/admin/programmes/[year]. */
+export const programmeYearParamsSchema = z.object({ year: z.coerce.number().pipe(zYear) })

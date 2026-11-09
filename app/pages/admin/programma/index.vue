@@ -12,13 +12,13 @@ import { formatDateTime, plural } from '#shared/utils/format'
 const api = useApi()
 const { data, error, refresh } = await useApiFetch<ProgrammeYearItem[]>('/api/admin/programmes')
 const items = computed(() => data.value ?? [])
-const years = computed(() => items.value.filter(item => item.exists).map(item => item.year))
+const years = computed(() => items.value.filter(item => item.updatedAt).map(item => item.year))
 
 function summary(item: ProgrammeYearItem): string {
   const sessions = item.sessions
     ? `${plural(item.sessions, 'sessione', 'sessioni')}${item.copies ? `, ${item.copies} con una copia propria` : ''}`
     : 'Nessuna sessione'
-  return item.exists && item.updatedAt ? `${sessions} · aggiornato il ${formatDateTime(item.updatedAt)}` : sessions
+  return item.updatedAt ? `${sessions} · aggiornato il ${formatDateTime(item.updatedAt)}` : sessions
 }
 
 // ─── New programme ─────────────────────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ async function create(event: { data: z.output<typeof formSchema> }) {
         <li v-for="item in items" :key="item.year" class="flex flex-wrap items-center justify-between gap-3 p-4">
           <div class="min-w-0">
             <p class="text-lg font-bold text-highlighted">
-              <NuxtLink v-if="item.exists" :to="`/admin/programma/${item.year}`" class="hover:underline">
+              <NuxtLink v-if="item.updatedAt" :to="`/admin/programma/${item.year}`" class="hover:underline">
                 Programma {{ item.year }}
               </NuxtLink>
               <template v-else>{{ item.year }}, senza programma</template>
@@ -109,7 +109,7 @@ async function create(event: { data: z.output<typeof formSchema> }) {
             <p class="text-sm text-muted">{{ summary(item) }}</p>
           </div>
           <UButton
-            v-if="item.exists"
+            v-if="item.updatedAt"
             :to="`/admin/programma/${item.year}`"
             label="Apri"
             :aria-label="`Apri il programma ${item.year}`"

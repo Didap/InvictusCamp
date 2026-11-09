@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { MAX_ACTIVITIES, type ProgrammeSaveInput } from '#shared/schemas/programmes'
-import type { ProgrammeBlock, ProgrammeContent, ProgrammeDay } from '#shared/types/domain'
+import type { ProgrammeBlock, ProgrammeDay } from '#shared/types/domain'
 import type { ProgrammeDto } from '#shared/types/programmes'
 import { formatDateTime } from '#shared/utils/format'
-import { newBlockId, openPoints, placeBlock, sameContent } from '#shared/utils/programme'
+import { copyOf, newBlockId, openPoints, placeBlock, sameContent } from '#shared/utils/programme'
 
 // The week editor of the administration (docs/spec.md 3.10). Changes stay on this page until Salva,
 // which sends the whole week with the revision it was loaded at: if someone saved in between, the
@@ -19,11 +19,10 @@ const props = defineProps<{
 const confirm = useConfirm()
 const toast = useToast()
 
-const clone = (content: ProgrammeContent): ProgrammeContent => JSON.parse(JSON.stringify(content))
-const draft = ref(clone(props.programme.content))
+const draft = ref(copyOf(props.programme.content))
 watch(
   () => props.programme,
-  programme => (draft.value = clone(programme.content)),
+  programme => (draft.value = copyOf(programme.content)),
 )
 const dirty = computed(() => !sameContent(draft.value, props.programme.content))
 
@@ -48,7 +47,7 @@ async function discard() {
     cancelLabel: 'Continua a modificare',
     danger: true,
   })
-  if (ok) draft.value = clone(props.programme.content)
+  if (ok) draft.value = copyOf(props.programme.content)
 }
 
 async function canLeave() {
@@ -99,8 +98,9 @@ function move(day: ProgrammeDay, index: number, by: number) {
 /** The toast puts the block back in the day it left, even if the week was saved or changed since. */
 function remove(day: ProgrammeDay, index: number) {
   const [block] = day.blocks.splice(index, 1)
+  const dayId = day.id
   const restore = () => {
-    const target = draft.value.days.find(other => other.id === day.id)
+    const target = draft.value.days.find(other => other.id === dayId)
     if (!target || target.blocks.some(other => other.id === block!.id)) return
     target.blocks.splice(Math.min(index, target.blocks.length), 0, block!)
   }
@@ -124,7 +124,7 @@ function blockItems(day: ProgrammeDay, block: ProgrammeBlock, index: number): Dr
       {
         label: 'Duplica',
         icon: 'i-lucide-copy',
-        onSelect: () => day.blocks.splice(index + 1, 0, { ...JSON.parse(JSON.stringify(block)), id: newBlockId() }),
+        onSelect: () => day.blocks.splice(index + 1, 0, { ...copyOf(block), id: newBlockId() }),
       },
       { label: 'Sposta su', icon: 'i-lucide-arrow-up', disabled: index === 0, onSelect: () => move(day, index, -1) },
       {

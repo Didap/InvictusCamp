@@ -211,9 +211,9 @@ Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or 
   Families never see "solo staff" blocks, internal notes or the "Novità" flag; staff see everything but
   "Novità". The days carry the session's dates when the session starts on a Monday and is at least as
   long as the programme.
-- **Completed sessions** keep the programme they had: completing a session without a copy gives it one,
-  so later changes to the year's programme do not rewrite it. A completed or cancelled session's
-  programme is no longer edited.
+- **Closed sessions** keep the programme they had: completing or cancelling a session without a copy
+  gives it one, and a closed session never falls back to the year's programme, so later changes to the
+  year do not rewrite it. A completed or cancelled session's programme is no longer edited.
 
 ## 4. Emails
 

@@ -72,9 +72,11 @@ describe('programme of a year', () => {
     await copyProgrammeToSession(db, { sessionId: june.id, actor })
 
     const items = await listYearProgrammes(db)
-    expect(items.map(({ year, exists, sessions, copies }) => ({ year, exists, sessions, copies }))).toEqual([
-      { year: 2028, exists: false, sessions: 1, copies: 0 },
-      { year: 2027, exists: true, sessions: 2, copies: 1 },
+    expect(
+      items.map(({ year, updatedAt, sessions, copies }) => ({ year, saved: !!updatedAt, sessions, copies })),
+    ).toEqual([
+      { year: 2028, saved: false, sessions: 1, copies: 0 },
+      { year: 2027, saved: true, sessions: 2, copies: 1 },
     ])
   })
 })

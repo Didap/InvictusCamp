@@ -24,6 +24,11 @@ export function newBlockId(): string {
   return `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 }
 
+/** A deep copy of plain data (also of a reactive proxy, which structuredClone refuses). */
+export function copyOf<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value))
+}
+
 /** Same week, whatever the order of the keys (jsonb reorders them, a form does not). */
 export function sameContent(a: ProgrammeContent, b: ProgrammeContent): boolean {
   return canonical(a) === canonical(b)
@@ -52,7 +57,7 @@ export function placeBlock(blocks: ProgrammeBlock[], block: ProgrammeBlock): Pro
   return index < 0 ? [...blocks, block] : [...blocks.slice(0, index), block, ...blocks.slice(index)]
 }
 
-export interface GroupRotation {
+interface GroupRotation {
   group: ProgrammeGroup
   /** The group's turns in week order: the day, the time and the activity (null = to decide). */
   turns: { day: string; time: string; activity: string | null }[]
@@ -84,8 +89,7 @@ export function groupRotation(content: ProgrammeContent): GroupRotation[] {
   })
 }
 
-export interface OpenPoint {
-  dayId: string
+interface OpenPoint {
   blockId: string
   text: string
 }
@@ -96,12 +100,10 @@ export function openPoints(content: ProgrammeContent): OpenPoint[] {
     day.blocks.flatMap(block => {
       const where = [day.name, blockTime(block)].filter(Boolean).join(' ')
       const points: OpenPoint[] = []
-      if (block.toConfirm)
-        points.push({ dayId: day.id, blockId: block.id, text: `${where}: ${block.title}, da confermare` })
+      if (block.toConfirm) points.push({ blockId: block.id, text: `${where}: ${block.title}, da confermare` })
       const undecided = block.groups ? PROGRAMME_GROUPS.filter(group => !block.groups![group].activity).length : 0
       if (undecided) {
         points.push({
-          dayId: day.id,
           blockId: block.id,
           text: `${where}: ${undecided === 1 ? 'un gruppo' : `${undecided} gruppi`} senza attività`,
         })

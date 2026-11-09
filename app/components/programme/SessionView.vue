@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ProgrammeView } from '#shared/types/programmes'
+import { rangeDays } from '#shared/utils/dates'
 import { formatDayRange } from '#shared/utils/format'
 
 // The programme of one session as a family or a staff member reads it (pages famiglia/programma and
@@ -31,7 +32,7 @@ const { data, error, refresh } = await useApiFetch<ProgrammeView>(() => props.ur
         title="Il programma non è ancora pronto"
         description="Lo trovi qui appena l’amministrazione lo prepara."
       />
-      <ProgrammeWeek v-else :content="data.content" :dates="data.dates" />
+      <ProgrammeWeek v-else :content="data.content" :dates="rangeDays(data.session)" />
     </template>
   </IcPage>
 </template>

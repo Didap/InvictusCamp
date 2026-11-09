@@ -1,12 +1,14 @@
 // The week programme (docs/spec.md 3.10): one per year, and the copy a session may have of it. The
 // administration edits both; families and staff of the session read the one the session uses, without
 // the planning aids. Explicit imports only, so the database tests can load this file.
-import { and, eq, isNotNull, ne, or, sql } from 'drizzle-orm'
+import { and, eq, ne, or, sql } from 'drizzle-orm'
 import { emptyWeek, programmeTemplate } from '../../shared/content/programme-template'
 import type { ProgrammeCreateInput, ProgrammeSaveValues } from '../../shared/schemas/programmes'
 import type { ProgrammeContent } from '../../shared/types/domain'
 import type { ProgrammeDto, ProgrammeView, ProgrammeYearItem, SessionProgrammeDto } from '../../shared/types/programmes'
+import type { SessionStatus } from '../../shared/utils/constants'
 import { rangeDays } from '../../shared/utils/dates'
+import { fullName } from '../../shared/utils/format'
 import { canFamilyReadProgramme, canStaffReadProgramme } from '../../shared/utils/programme'
 import { isSessionEditable } from '../../shared/utils/session-status'
 import { campSessions, programmes, sessionFamilies, sessionStaff, users } from '../db/schema'
@@ -18,7 +20,7 @@ import type { Actor } from './families'
 type SessionRow = Pick<typeof campSessions.$inferSelect, 'id' | 'title' | 'startDate' | 'endDate' | 'status'>
 
 /** The year whose programme a session uses: the year it starts in. */
-export function sessionYear(session: Pick<SessionRow, 'startDate'>): number {
+function sessionYear(session: Pick<SessionRow, 'startDate'>): number {
   return Number(session.startDate.slice(0, 4))
 }
 
@@ -40,33 +42,43 @@ export function programmeForViewer(content: ProgrammeContent, viewer: 'family' |
 
 // ─── Reading ───────────────────────────────────────────────────────────────────────────────────────
 
-const dtoColumns = {
-  id: programmes.id,
-  year: programmes.year,
-  sessionId: programmes.sessionId,
-  content: programmes.content,
-  revision: programmes.revision,
-  updatedAt: programmes.updatedAt,
-  updatedByName: sql<string | null>`nullif(trim(concat_ws(' ', ${users.firstName}, ${users.lastName})), '')`,
-}
-
-/** The programme of a year, or the one a session uses: its copy, else the programme of its year. */
+/**
+ * The programme of a year, or the one a session uses: its copy, else, while the session can still
+ * change, the programme of its year. A completed or cancelled session reads only its copy, made when
+ * it closed (freezeSessionProgramme), so later changes to the year never rewrite it.
+ */
 async function findProgramme(
   db: DbOrTx,
-  owner: { year: number } | { session: Pick<SessionRow, 'id' | 'startDate'> },
+  owner: { year: number } | { session: Pick<SessionRow, 'id' | 'startDate' | 'status'> },
 ): Promise<ProgrammeDto | null> {
-  const where =
-    'year' in owner
-      ? eq(programmes.year, owner.year)
-      : or(eq(programmes.sessionId, owner.session.id), eq(programmes.year, sessionYear(owner.session)))
+  let where
+  if ('year' in owner) where = eq(programmes.year, owner.year)
+  else if (isSessionEditable(owner.session.status)) {
+    where = or(eq(programmes.sessionId, owner.session.id), eq(programmes.year, sessionYear(owner.session)))
+  } else where = eq(programmes.sessionId, owner.session.id)
   const [row] = await db
-    .select(dtoColumns)
+    .select({
+      id: programmes.id,
+      year: programmes.year,
+      sessionId: programmes.sessionId,
+      content: programmes.content,
+      revision: programmes.revision,
+      updatedAt: programmes.updatedAt,
+      firstName: users.firstName,
+      lastName: users.lastName,
+    })
     .from(programmes)
     .leftJoin(users, eq(users.id, programmes.updatedBy))
     .where(where)
     .orderBy(sql`${programmes.sessionId} nulls last`)
     .limit(1)
-  return row ? { ...row, updatedAt: row.updatedAt.toISOString() } : null
+  if (!row) return null
+  const { firstName, lastName, updatedAt, ...programme } = row
+  return {
+    ...programme,
+    updatedAt: updatedAt.toISOString(),
+    updatedByName: fullName({ firstName, lastName }) || null,
+  }
 }
 
 async function requireSession(db: DbOrTx, sessionId: string): Promise<SessionRow> {
@@ -87,31 +99,24 @@ async function requireSession(db: DbOrTx, sessionId: string): Promise<SessionRow
 
 /** The years with a programme and the years with sessions but no programme yet, latest first. */
 export async function listYearProgrammes(db: DbOrTx): Promise<ProgrammeYearItem[]> {
-  const [rows, sessions, copies] = await Promise.all([
+  const [rows, sessions] = await Promise.all([
     db
-      .select({ year: programmes.year, updatedAt: programmes.updatedAt })
-      .from(programmes)
-      .where(isNotNull(programmes.year)),
+      .select({ year: programmes.year, sessionId: programmes.sessionId, updatedAt: programmes.updatedAt })
+      .from(programmes),
     db
       .select({ id: campSessions.id, startDate: campSessions.startDate })
       .from(campSessions)
       .where(ne(campSessions.status, 'cancelled')),
-    db.select({ sessionId: programmes.sessionId }).from(programmes).where(isNotNull(programmes.sessionId)),
   ])
-  const withCopy = new Set(copies.map(copy => copy.sessionId))
+  const withCopy = new Set(rows.map(row => row.sessionId))
   const items = new Map<number, ProgrammeYearItem>()
   for (const row of rows) {
-    items.set(row.year!, {
-      year: row.year!,
-      exists: true,
-      updatedAt: row.updatedAt.toISOString(),
-      sessions: 0,
-      copies: 0,
-    })
+    if (row.year)
+      items.set(row.year, { year: row.year, updatedAt: row.updatedAt.toISOString(), sessions: 0, copies: 0 })
   }
   for (const session of sessions) {
     const year = sessionYear(session)
-    const item = items.get(year) ?? { year, exists: false, updatedAt: null, sessions: 0, copies: 0 }
+    const item = items.get(year) ?? { year, updatedAt: null, sessions: 0, copies: 0 }
     item.sessions++
     if (withCopy.has(session.id)) item.copies++
     items.set(year, item)
@@ -138,44 +143,44 @@ export async function adminSessionProgramme(db: DbOrTx, sessionId: string): Prom
   }
 }
 
-async function viewOf(db: DbOrTx, session: SessionRow, viewer: 'family' | 'staff'): Promise<ProgrammeView> {
-  const programme = await findProgramme(db, { session })
-  return {
-    session,
-    dates: rangeDays(session),
-    content: programme ? programmeForViewer(programme.content, viewer) : null,
-  }
-}
-
 const NOT_AVAILABLE = 'Programma non disponibile'
+
+/** What a family or a staff member of the session reads, when `allowed` lets them (spec 3.10). */
+async function viewerProgramme(
+  db: DbOrTx,
+  sessionId: string,
+  viewer: 'family' | 'staff',
+  allowed: (session: SessionStatus) => boolean,
+): Promise<ProgrammeView> {
+  const session = await requireSession(db, sessionId)
+  if (!allowed(session.status)) throw new DomainError(404, NOT_AVAILABLE)
+  const programme = await findProgramme(db, { session })
+  return { session, content: programme ? programmeForViewer(programme.content, viewer) : null }
+}
 
 /** A family reads the programme of a session it is invited to or confirmed in (not cancelled). */
 export async function familyProgramme(
   db: DbOrTx,
   input: { familyId: string; sessionId: string },
 ): Promise<ProgrammeView> {
-  const [participation] = await db
+  const [row] = await db
     .select({ status: sessionFamilies.status })
     .from(sessionFamilies)
     .where(and(eq(sessionFamilies.familyId, input.familyId), eq(sessionFamilies.sessionId, input.sessionId)))
     .limit(1)
-  if (!participation) throw new DomainError(404, NOT_AVAILABLE)
-  const session = await requireSession(db, input.sessionId)
-  if (!canFamilyReadProgramme(participation.status, session.status)) throw new DomainError(404, NOT_AVAILABLE)
-  return viewOf(db, session, 'family')
+  if (!row) throw new DomainError(404, NOT_AVAILABLE)
+  return viewerProgramme(db, input.sessionId, 'family', session => canFamilyReadProgramme(row.status, session))
 }
 
 /** A staff member reads the programme of a session whose convocation they accepted (not cancelled). */
 export async function staffProgramme(db: DbOrTx, input: { userId: string; sessionId: string }): Promise<ProgrammeView> {
-  const [convocation] = await db
+  const [row] = await db
     .select({ status: sessionStaff.status })
     .from(sessionStaff)
     .where(and(eq(sessionStaff.userId, input.userId), eq(sessionStaff.sessionId, input.sessionId)))
     .limit(1)
-  if (!convocation) throw new DomainError(404, NOT_AVAILABLE)
-  const session = await requireSession(db, input.sessionId)
-  if (!canStaffReadProgramme(convocation.status, session.status)) throw new DomainError(404, NOT_AVAILABLE)
-  return viewOf(db, session, 'staff')
+  if (!row) throw new DomainError(404, NOT_AVAILABLE)
+  return viewerProgramme(db, input.sessionId, 'staff', session => canStaffReadProgramme(row.status, session))
 }
 
 // ─── Writing ───────────────────────────────────────────────────────────────────────────────────────
@@ -256,20 +261,16 @@ async function requireEditableSession(db: DbOrTx, sessionId: string): Promise<Se
   return session
 }
 
-/**
- * Gives the session a copy of the programme of its year. Returns the new copy's id, or null when there
- * is no programme of the year or the session already has a copy.
- */
+/** The session's copy of `content`; null when it already has one. */
 async function insertCopy(
   db: DbOrTx,
-  session: Pick<SessionRow, 'id' | 'startDate'>,
+  sessionId: string,
+  content: ProgrammeContent,
   userId: string | null,
 ): Promise<string | null> {
-  const ofYear = await findProgramme(db, { year: sessionYear(session) })
-  if (!ofYear) return null
   const [row] = await db
     .insert(programmes)
-    .values({ sessionId: session.id, content: ofYear.content, updatedBy: userId })
+    .values({ sessionId, content, updatedBy: userId })
     .onConflictDoNothing()
     .returning({ id: programmes.id })
   return row?.id ?? null
@@ -279,8 +280,9 @@ async function insertCopy(
 export async function copyProgrammeToSession(db: DbOrTx, input: { sessionId: string; actor: Actor }): Promise<void> {
   const session = await requireEditableSession(db, input.sessionId)
   const year = sessionYear(session)
-  if (!(await findProgramme(db, { year }))) throw new DomainError(409, `Prima crea il programma del ${year}`)
-  const id = await insertCopy(db, session, input.actor.userId)
+  const ofYear = await findProgramme(db, { year })
+  if (!ofYear) throw new DomainError(409, `Prima crea il programma del ${year}`)
+  const id = await insertCopy(db, session.id, ofYear.content, input.actor.userId)
   if (!id) throw new DomainError(409, 'La sessione ha già un programma suo')
   await writeAudit(db, {
     actorUserId: input.actor.userId,
@@ -293,11 +295,12 @@ export async function copyProgrammeToSession(db: DbOrTx, input: { sessionId: str
 }
 
 /**
- * A completed session keeps the programme it had: without a copy it gets one, so that later changes
- * to the programme of its year do not rewrite what its families and staff read (sessions.ts).
+ * A session that closes (completed or cancelled) keeps the programme it had: without a copy it gets
+ * one of its year's programme (sessions.ts, transitionSession).
  */
 export async function freezeSessionProgramme(db: DbOrTx, session: Pick<SessionRow, 'id' | 'startDate'>): Promise<void> {
-  await insertCopy(db, session, null)
+  const ofYear = await findProgramme(db, { year: sessionYear(session) })
+  if (ofYear) await insertCopy(db, session.id, ofYear.content, null)
 }
 
 export async function saveSessionProgramme(

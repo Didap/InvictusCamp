@@ -19,6 +19,13 @@ export async function parseBody<T extends z.ZodType>(event: H3Event, schema: T):
   return result.data
 }
 
+/** Validates the route params; 404 when they do not match (the address names nothing). */
+export function parseParams<T extends z.ZodType>(event: H3Event, schema: T): z.output<T> {
+  const result = schema.safeParse(getRouterParams(event))
+  if (!result.success) throw createError({ statusCode: 404, message: 'Non trovato' })
+  return result.data
+}
+
 /** Validates the query string. */
 export function parseQuery<T extends z.ZodType>(event: H3Event, schema: T): z.output<T> {
   const result = schema.safeParse(getQuery(event))

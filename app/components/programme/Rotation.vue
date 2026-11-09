@@ -6,7 +6,16 @@ import { groupRotation } from '#shared/utils/programme'
 // What each group does across the week, in order, and where the rotation misses an activity of the
 // list or repeats one (Nicola's check: every group does every activity once).
 const props = defineProps<{ content: ProgrammeContent }>()
-const rows = computed(() => groupRotation(props.content))
+const rows = computed(() =>
+  groupRotation(props.content).map(row => ({
+    ...row,
+    warnings: [
+      { label: 'Più di una volta', items: row.repeated },
+      { label: 'Mai', items: row.missing },
+      { label: 'Non più in lista', items: row.unlisted },
+    ].filter(warning => warning.items.length),
+  })),
+)
 </script>
 
 <template>
@@ -22,22 +31,11 @@ const rows = computed(() => groupRotation(props.content))
           <span class="text-muted">{{ turn.day }} {{ turn.time }}:</span> {{ turn.activity ?? 'da definire' }}
         </li>
       </ol>
-      <p v-if="row.repeated.length" class="mt-1 flex gap-1.5 text-sm text-warning">
+      <p v-for="warning in row.warnings" :key="warning.label" class="mt-1 flex gap-1.5 text-sm text-warning">
         <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        Più di una volta: {{ row.repeated.join(', ') }}
+        {{ warning.label }}: {{ warning.items.join(', ') }}
       </p>
-      <p v-if="row.missing.length" class="mt-1 flex gap-1.5 text-sm text-warning">
-        <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        Mai: {{ row.missing.join(', ') }}
-      </p>
-      <p v-if="row.unlisted.length" class="mt-1 flex gap-1.5 text-sm text-warning">
-        <UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        Non più in lista: {{ row.unlisted.join(', ') }}
-      </p>
-      <p
-        v-if="content.activities.length && !row.repeated.length && !row.missing.length && !row.unlisted.length"
-        class="mt-1 flex gap-1.5 text-sm text-success"
-      >
+      <p v-if="content.activities.length && !row.warnings.length" class="mt-1 flex gap-1.5 text-sm text-success">
         <UIcon name="i-lucide-circle-check" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         Ogni attività una volta
       </p>

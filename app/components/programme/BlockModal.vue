@@ -2,15 +2,9 @@
 import type { FormSubmitEvent } from '@nuxt/ui'
 import type { z } from 'zod'
 import { emptyTurns, programmeBlockSchema } from '#shared/schemas/programmes'
-import { newBlockId } from '#shared/utils/programme'
+import { copyOf, newBlockId } from '#shared/utils/programme'
 import type { ProgrammeBlock, ProgrammeDay, ProgrammeGroupTurn } from '#shared/types/domain'
-import {
-  enumMeta,
-  PROGRAMME_BLOCK_KINDS,
-  PROGRAMME_GROUP_LABELS,
-  PROGRAMME_GROUPS,
-  type ProgrammeGroup,
-} from '#shared/utils/constants'
+import { enumMeta, PROGRAMME_GROUP_LABELS, PROGRAMME_GROUPS, type ProgrammeGroup } from '#shared/utils/constants'
 
 // Adds a block (`block` null) or edits one. Changing the day moves the block to that day, in time
 // order. A `groups` block asks what each group does, from the programme's list of activities.
@@ -46,26 +40,17 @@ const state = reactive<State>(blank())
 const day = ref(props.dayId)
 watch(open, value => {
   if (!value) return
-  const source: ProgrammeBlock | null = props.block ? JSON.parse(JSON.stringify(props.block)) : null
-  Object.assign(state, blank(), source, { groups: source?.groups ?? emptyTurns() })
+  Object.assign(state, blank(), props.block ? copyOf(props.block) : null)
   day.value = props.dayId
 })
 
 const dayItems = computed(() => props.days.map(item => ({ value: item.id, label: item.name })))
-const kindItems = PROGRAMME_BLOCK_KINDS.map(value => {
-  const meta = enumMeta('programmeBlockKind', value)
-  return { value, label: meta.label, icon: meta.icon }
-})
+const kindItems = useEnums().options('programmeBlockKind')
 const kindHelp = computed(() => enumMeta('programmeBlockKind', state.kind).description)
 
-// A select has no empty value: "Da definire" stands for an activity not chosen yet (null).
-const UNDECIDED = '__undecided__'
+/** The list, plus the current activity if it left the list (so the select still shows it). */
 function activityItems(current: string | null) {
-  const list = current && !props.activities.includes(current) ? [...props.activities, current] : props.activities
-  return [{ value: UNDECIDED, label: 'Da definire' }, ...list.map(activity => ({ value: activity, label: activity }))]
-}
-function setActivity(group: ProgrammeGroup, value: string) {
-  state.groups[group].activity = value === UNDECIDED ? null : value
+  return current && !props.activities.includes(current) ? [...props.activities, current] : props.activities
 }
 
 function onSubmit(event: FormSubmitEvent<z.output<typeof programmeBlockSchema>>) {
@@ -113,11 +98,13 @@ function onSubmit(event: FormSubmitEvent<z.output<typeof programmeBlockSchema>>)
                   {{ PROGRAMME_GROUP_LABELS[group] }}
                 </span>
               </template>
-              <USelect
-                :model-value="state.groups[group].activity ?? UNDECIDED"
+              <USelectMenu
+                v-model="state.groups[group].activity"
                 :items="activityItems(state.groups[group].activity)"
+                placeholder="Da definire"
+                :search-input="false"
+                clear
                 class="w-full"
-                @update:model-value="setActivity(group, $event)"
               />
             </UFormField>
             <UFormField :label="`Chi conduce, ${PROGRAMME_GROUP_LABELS[group]}`" hint="Facoltativo">
