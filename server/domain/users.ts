@@ -321,6 +321,11 @@ export async function ensureFirstAdmin(
     .onConflictDoNothing({ target: users.email })
     .returning({ id: users.id })
   if (!user) return 'email-taken'
-  await writeAudit(db, { action: 'user.first_admin', entityType: 'user', entityId: user.id, data: { email: input.email } })
+  await writeAudit(db, {
+    action: 'user.first_admin',
+    entityType: 'user',
+    entityId: user.id,
+    data: { email: input.email },
+  })
   return 'created'
 }
