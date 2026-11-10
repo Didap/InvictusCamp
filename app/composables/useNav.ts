@@ -10,6 +10,7 @@ export function useNav() {
           [
             { label: 'Panoramica', icon: 'i-lucide-layout-dashboard', to: '/admin', exact: true },
             { label: 'Sessioni', icon: 'i-lucide-calendar-range', to: '/admin/sessioni' },
+            { label: 'Programma', icon: 'i-lucide-calendar-clock', to: '/admin/programma' },
             { label: 'Famiglie', icon: 'i-lucide-heart-handshake', to: '/admin/famiglie' },
             { label: 'Staff', icon: 'i-lucide-id-card', to: '/admin/staff' },
             { label: 'Documenti', icon: 'i-lucide-files', to: '/admin/documenti' },

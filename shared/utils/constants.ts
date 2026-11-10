@@ -26,18 +26,7 @@ export type ParticipationStatus = (typeof PARTICIPATION_STATUSES)[number]
 export const STAFF_STATUSES = ['registered', 'applied', 'approved', 'rejected', 'inactive'] as const
 export type StaffStatus = (typeof STAFF_STATUSES)[number]
 
-export const STAFF_ROLES = [
-  'educator',
-  'animator',
-  'oss',
-  'nurse',
-  'physiotherapist',
-  'psychologist',
-  'doctor',
-  'speech_therapist',
-  'volunteer',
-  'other',
-] as const
+export const STAFF_ROLES = ['group_lead', 'activity_lead', 'other'] as const
 export type StaffRole = (typeof STAFF_ROLES)[number]
 
 /** A convocation of a staff member to a session. "Confermata" is derived: accepted + contract signed. */
@@ -105,6 +94,30 @@ export type FilePurpose = (typeof FILE_PURPOSES)[number]
 
 export const EMAIL_STATUSES = ['sent', 'failed', 'simulated'] as const
 export type EmailStatus = (typeof EMAIL_STATUSES)[number]
+
+/** What a block of the week programme is (docs/spec.md 3.10). `staff` blocks are not shown to families. */
+export const PROGRAMME_BLOCK_KINDS = [
+  'groups',
+  'everyone',
+  'adults',
+  'choice',
+  'welcome',
+  'meal',
+  'rest',
+  'free',
+  'staff',
+  'departure',
+] as const
+export type ProgrammeBlockKind = (typeof PROGRAMME_BLOCK_KINDS)[number]
+
+/** The groups that rotate through the activities of `groups` blocks. */
+export const PROGRAMME_GROUPS = ['yellow', 'red', 'blue'] as const
+export type ProgrammeGroup = (typeof PROGRAMME_GROUPS)[number]
+export const PROGRAMME_GROUP_LABELS: Record<ProgrammeGroup, string> = {
+  yellow: 'Giallo',
+  red: 'Rosso',
+  blue: 'Blu',
+}
 
 /** Uploads: 15 MB, PDF or images. Documents to sign are PDF only. */
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024
@@ -205,15 +218,8 @@ const staffStatus: Record<StaffStatus, EnumMeta> = {
 }
 
 const staffRole: Record<StaffRole, EnumMeta> = {
-  educator: { label: 'Educatore/Educatrice', icon: 'i-lucide-graduation-cap', color: 'neutral' },
-  animator: { label: 'Animatore/Animatrice', icon: 'i-lucide-party-popper', color: 'neutral' },
-  oss: { label: 'OSS', icon: 'i-lucide-hand-heart', color: 'neutral' },
-  nurse: { label: 'Infermiere/Infermiera', icon: 'i-lucide-syringe', color: 'neutral' },
-  physiotherapist: { label: 'Fisioterapista', icon: 'i-lucide-activity', color: 'neutral' },
-  psychologist: { label: 'Psicologo/Psicologa', icon: 'i-lucide-brain', color: 'neutral' },
-  doctor: { label: 'Medico', icon: 'i-lucide-stethoscope', color: 'neutral' },
-  speech_therapist: { label: 'Logopedista', icon: 'i-lucide-message-circle', color: 'neutral' },
-  volunteer: { label: 'Volontario/Volontaria', icon: 'i-lucide-heart', color: 'neutral' },
+  group_lead: { label: 'Responsabile di gruppo', icon: 'i-lucide-users', color: 'neutral' },
+  activity_lead: { label: 'Responsabile attività', icon: 'i-lucide-shapes', color: 'neutral' },
   other: { label: 'Altro', icon: 'i-lucide-user', color: 'neutral' },
 }
 
@@ -283,7 +289,26 @@ const emailStatus: Record<EmailStatus, EnumMeta> = {
   },
 }
 
+const programmeBlockKind: Record<ProgrammeBlockKind, EnumMeta> = {
+  groups: { label: 'Attività a gruppi', icon: 'i-lucide-shapes', color: 'primary' },
+  everyone: { label: 'Tutti insieme', icon: 'i-lucide-party-popper', color: 'secondary' },
+  adults: { label: 'Solo adulti', icon: 'i-lucide-coffee', color: 'info' },
+  choice: { label: 'A scelta', icon: 'i-lucide-sparkles', color: 'info' },
+  welcome: { label: 'Accoglienza', icon: 'i-lucide-hand-heart', color: 'neutral' },
+  meal: { label: 'Pasto', icon: 'i-lucide-utensils', color: 'neutral' },
+  rest: { label: 'Riposo', icon: 'i-lucide-moon', color: 'neutral' },
+  free: { label: 'Libero', icon: 'i-lucide-sun', color: 'neutral' },
+  staff: {
+    label: 'Solo staff',
+    icon: 'i-lucide-id-card',
+    color: 'neutral',
+    description: 'Le famiglie non vedono questo blocco',
+  },
+  departure: { label: 'Partenza', icon: 'i-lucide-car-front', color: 'neutral' },
+}
+
 export const ENUM_META = {
+  programmeBlockKind,
   userRole,
   userStatus,
   sessionStatus,

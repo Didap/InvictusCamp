@@ -3,6 +3,7 @@ import type { CalendarEvent } from '~/components/ic/CalendarMonth.vue'
 import type { MyConvocation, MyConvocations } from '#shared/types/staff'
 import { todayIso } from '#shared/utils/dates'
 import { formatDayRange } from '#shared/utils/format'
+import { canStaffReadProgramme } from '#shared/utils/programme'
 
 // The sessions the person accepted: a month calendar (an agenda on phones) and the list, upcoming first.
 const { label } = useEnums()
@@ -79,6 +80,15 @@ const events = computed<CalendarEvent[]>(() =>
               <div class="flex flex-wrap items-center gap-2">
                 <StaffConvocationBadge :status="c.status" :confirmed="c.confirmed" />
                 <UButton
+                  v-if="canStaffReadProgramme(c.status, c.session.status)"
+                  :to="`/staff/programma/${c.session.id}`"
+                  icon="i-lucide-calendar-clock"
+                  label="Programma"
+                  color="neutral"
+                  variant="outline"
+                  class="pointer-coarse:min-h-11"
+                />
+                <UButton
                   class="pointer-coarse:min-h-11"
                   v-if="c.contract === 'pending' && c.contractRequestId"
                   :to="`/firma/${c.contractRequestId}`"
@@ -100,7 +110,18 @@ const events = computed<CalendarEvent[]>(() =>
                   }}<template v-if="c.role"> · {{ label('staffRole', c.role) }}</template>
                 </p>
               </div>
-              <IcStatusBadge kind="sessionStatus" :value="c.session.status" />
+              <div class="flex flex-wrap items-center gap-2">
+                <IcStatusBadge kind="sessionStatus" :value="c.session.status" />
+                <UButton
+                  v-if="canStaffReadProgramme(c.status, c.session.status)"
+                  :to="`/staff/programma/${c.session.id}`"
+                  icon="i-lucide-calendar-clock"
+                  label="Programma"
+                  color="neutral"
+                  variant="outline"
+                  class="pointer-coarse:min-h-11"
+                />
+              </div>
             </li>
           </ul>
         </IcSection>

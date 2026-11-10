@@ -23,7 +23,7 @@ describe the members of the family and their needs, upload documents, answer an 
 regulation and the consents. Rare visits, high stakes: they must never feel judged, rushed or lost.
 Mostly on a phone.
 
-**Staff.** Educators, animators, OSS, nurses, therapists, psychologists, volunteers. They apply, wait for
+**Staff.** Group leads (responsabili di gruppo) and activity leads (responsabili attività); the roles are symbolic for now. They apply, wait for
 the review, give the periods they are available, accept or decline a convocation, sign the contract.
 Phone first.
 

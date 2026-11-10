@@ -36,6 +36,7 @@
     "pdf-lib": "^1.17.1",
     "postgres": "^3.4.9",
     "resend": "^6.37.0",
+    "sortablejs": "1.15.7",
     "vue": "^3.5.45",
     "vue-router": "^5.4.0",
     "zod": "^4.6.7"
@@ -43,6 +44,7 @@
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.151",
     "@types/node": "^26.6.6",
+    "@types/sortablejs": "^1.15.9",
     "drizzle-kit": "^0.31.11",
     "playwright": "^1.62.1",
     "prettier": "^3.9.10",

@@ -262,12 +262,6 @@ export function healthChangedFields(before: MemberHealth, after: MemberHealth): 
 /** PUT /api/family/members/consent */
 export const healthConsentSchema = z.object({ given: z.boolean() })
 
-/** Age in whole years on `today`. */
-export function ageOn(birthDate: string, today: string = todayIso()): number {
-  const years = Number(today.slice(0, 4)) - Number(birthDate.slice(0, 4))
-  return today.slice(5) < birthDate.slice(5) ? years - 1 : years
-}
-
 // ─── Personal documents ─────────────────────────────────────────────────────────────────────────────
 
 /** The text fields that come with an upload (multipart): POST /api/family/documents. */
@@ -294,7 +288,8 @@ export type FamilyListSort = (typeof FAMILY_LIST_SORTS)[number]
 export const adminFamilyListQuerySchema = zListQuery.extend({
   formStatus: z.enum(FAMILY_FORM_STATUSES).optional(),
   province: z.string().trim().toUpperCase().max(40).optional(),
-  /** Families with (yes) or without (no) a member with a disability. Never shown as a column. */
+  region: zRegion.optional(),
+  /** Families with (yes) or without (no) a member with a disability (the list shows only their ages). */
   disability: z.enum(['yes', 'no']).optional(),
   sort: z.enum(FAMILY_LIST_SORTS).default('name'),
   order: z.enum(['asc', 'desc']).default('asc'),

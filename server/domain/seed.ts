@@ -13,6 +13,7 @@ import type {
   ItalianRegion,
   StaffStatus,
 } from '../../shared/utils/constants'
+import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_LOCATION } from '../../shared/utils/constants'
 import * as t from '../db/schema'
 import type { Db } from './db'
@@ -36,6 +37,7 @@ const TABLES = [
   'session_staff',
   'session_families',
   'documents',
+  'programmes',
   'camp_sessions',
   'staff_availability',
   'staff_profiles',
@@ -248,7 +250,7 @@ const STAFF: {
     last: 'Bianchi',
     email: DEMO_ACCOUNTS.staff,
     status: 'approved',
-    roles: ['educator'],
+    roles: ['group_lead'],
     city: 'Lecce',
     availability: [['2027-06-15', '2027-07-31']],
   },
@@ -257,7 +259,7 @@ const STAFF: {
     last: 'Gallo',
     email: DEMO_ACCOUNTS.candidate,
     status: 'applied',
-    roles: ['animator'],
+    roles: ['activity_lead'],
     city: 'Taranto',
     availability: [],
   },
@@ -265,7 +267,7 @@ const STAFF: {
     first: 'Martina',
     last: 'Conti',
     status: 'approved',
-    roles: ['nurse'],
+    roles: ['group_lead'],
     city: 'Bari',
     availability: [['2027-06-20', '2027-06-30']],
   },
@@ -273,7 +275,7 @@ const STAFF: {
     first: 'Andrea',
     last: 'Fontana',
     status: 'approved',
-    roles: ['physiotherapist'],
+    roles: ['activity_lead'],
     city: 'Brindisi',
     availability: [['2027-06-24', '2027-07-20']],
   },
@@ -281,7 +283,7 @@ const STAFF: {
     first: 'Serena',
     last: 'Barbieri',
     status: 'approved',
-    roles: ['psychologist'],
+    roles: ['activity_lead'],
     city: 'Lecce',
     availability: [['2027-08-01', '2027-09-30']],
   },
@@ -289,7 +291,7 @@ const STAFF: {
     first: 'Lorenzo',
     last: 'Moretti',
     status: 'approved',
-    roles: ['animator', 'volunteer'],
+    roles: ['activity_lead', 'other'],
     city: 'Taranto',
     availability: [['2027-06-01', '2027-09-30']],
   },
@@ -297,7 +299,7 @@ const STAFF: {
     first: 'Federica',
     last: 'Rinaldi',
     status: 'approved',
-    roles: ['oss'],
+    roles: ['group_lead'],
     city: 'Grottaglie',
     availability: [['2027-06-21', '2027-06-27']],
   },
@@ -305,12 +307,12 @@ const STAFF: {
     first: 'Simone',
     last: 'Caruso',
     status: 'approved',
-    roles: ['educator'],
+    roles: ['group_lead'],
     city: 'Ostuni',
     availability: [['2027-07-01', '2027-07-31']],
   },
-  { first: 'Ilaria', last: 'Ferri', status: 'applied', roles: ['speech_therapist'], city: 'Bari', availability: [] },
-  { first: 'Gabriele', last: 'Testa', status: 'rejected', roles: ['volunteer'], city: 'Lecce', availability: [] },
+  { first: 'Ilaria', last: 'Ferri', status: 'applied', roles: ['activity_lead'], city: 'Bari', availability: [] },
+  { first: 'Gabriele', last: 'Testa', status: 'rejected', roles: ['other'], city: 'Lecce', availability: [] },
   { first: 'Noemi', last: 'Pellegrini', status: 'registered', roles: [], city: 'Taranto', availability: [] },
 ]
 
@@ -568,6 +570,8 @@ export async function seedDemo(db: Db, options: { passwordHash: string; uploadsD
     staffNeeded: 10,
     responseDeadline: '2027-06-10',
   })
+  // The 2027 programme, from the model week: every 2027 session uses it.
+  await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() })
   await session({
     title: 'Sessione 3 · Settembre 2027',
     startDate: '2027-09-06',
@@ -657,22 +661,22 @@ export async function seedDemo(db: Db, options: { passwordHash: string; uploadsD
     )
   }
   await convoke(past.id, [
-    ['Chiara', 'accepted', 'educator'],
-    ['Martina', 'accepted', 'nurse'],
-    ['Lorenzo', 'accepted', 'animator'],
+    ['Chiara', 'accepted', 'group_lead'],
+    ['Martina', 'accepted', 'group_lead'],
+    ['Lorenzo', 'accepted', 'activity_lead'],
   ])
   await convoke(june.id, [
-    ['Chiara', 'sent', 'educator'],
-    ['Martina', 'accepted', 'nurse'],
-    ['Andrea', 'accepted', 'physiotherapist'],
-    ['Serena', 'declined', 'psychologist'],
-    ['Lorenzo', 'accepted', 'animator'],
-    ['Federica', 'draft', 'oss'],
-    ['Simone', 'sent', 'educator'],
+    ['Chiara', 'sent', 'group_lead'],
+    ['Martina', 'accepted', 'group_lead'],
+    ['Andrea', 'accepted', 'activity_lead'],
+    ['Serena', 'declined', 'activity_lead'],
+    ['Lorenzo', 'accepted', 'activity_lead'],
+    ['Federica', 'draft', 'group_lead'],
+    ['Simone', 'sent', 'group_lead'],
   ])
   await convoke(july.id, [
-    ['Andrea', 'draft', 'physiotherapist'],
-    ['Simone', 'draft', 'educator'],
+    ['Andrea', 'draft', 'activity_lead'],
+    ['Simone', 'draft', 'group_lead'],
   ])
 
   // Documents to read and sign

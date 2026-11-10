@@ -35,13 +35,15 @@ Public: `/accedi`, `/registrati` (family), `/candidati` (staff), `/password-dime
 `/reimposta-password?token`, `/invito?token`, `/verifica-email?token`, `/privacy`.
 
 Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova`, `/admin/sessioni/:id`
-(tabs Panoramica, Famiglie, Staff, Documenti, Comunicazioni), `/admin/famiglie`, `/admin/famiglie/:id`,
+(tabs Panoramica, Famiglie, Staff, Programma, Documenti, Comunicazioni), `/admin/famiglie`, `/admin/famiglie/:id`,
 `/admin/staff`, `/admin/staff/:userId`, `/admin/documenti`, `/admin/documenti/:id`,
-`/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/utenti`.
+`/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/programma`,
+`/admin/programma/:year` (3.10), `/admin/utenti`.
 
 Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
-`/famiglia/membri`, `/famiglia/documenti`. Staff: `/staff` (home), `/staff/candidatura`,
-`/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`.
+`/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`. Staff: `/staff` (home), `/staff/candidatura`,
+`/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`,
+`/staff/programma/:sessionId`.
 Everyone: `/account`, `/firma/:requestId`.
 
 ## 3. Flows
@@ -186,6 +188,33 @@ confirmed/needed), applications to review, families with the family data to conf
 waiting, emails failed in the last 30 days; the upcoming sessions with their progress; a "Da fare" list
 (each item links to where it is done).
 
+### 3.10 The week programme
+
+The week of the camp, block by block, in `/admin/programma`. **One programme per year**: every session
+uses the programme of the year it starts in, unless it has **a copy of its own** (tab Programma of the
+session: "Crea una copia per questa sessione", edited there, valid for that session only; "Torna al
+programma del 2027" deletes the copy). A new year starts from the model week (the 2027 draft by Nicola
+Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or empty.
+
+- **Days and blocks**: Monday to Friday; each block has a time (start, optional end, or none), a title,
+  a kind (attività a gruppi, tutti insieme, solo adulti, a scelta, accoglienza, pasto, riposo, libero,
+  solo staff, partenza), who leads it, a note for everyone, an internal note, and two flags: "Da
+  confermare" and "Novità" (compared with the year before).
+- **Groups**: Giallo, Rosso, Blu rotate through the year's list of activities; a `groups` block says what
+  each group does and who leads it. Beside the week the editor shows each group's rotation, flags an
+  activity done twice or never, and lists what is still open (blocks to confirm, groups without an
+  activity).
+- **Saving**: the whole week at once with Salva; leaving with unsaved changes asks first. A save carries
+  the revision it was loaded at: if someone saved in between, it is refused and nothing is overwritten.
+- **Who reads it**: families invited to or confirmed in the session (link on their session card) and
+  staff who accepted the convocation (`/staff/sessioni`), read-only, once the session is not cancelled.
+  Families never see "solo staff" blocks, internal notes or the "Novità" flag; staff see everything but
+  "Novità". The days carry the session's dates when the session starts on a Monday and is at least as
+  long as the programme.
+- **Closed sessions** keep the programme they had: completing or cancelling a session without a copy
+  gives it one, and a closed session never falls back to the year's programme, so later changes to the
+  year do not rewrite it. A completed or cancelled session's programme is no longer edited.
+
 ## 4. Emails
 
 | Template | When | To |
@@ -213,7 +242,8 @@ Emails never contain health details. Without `NUXT_RESEND_API_KEY` every email i
 ## 5. Privacy and security
 
 - Health details: only after consent; visible to the family and the administration; not in lists, emails,
-  toasts or logs; changes audited (`member.health_update`).
+  toasts or logs; changes audited (`member.health_update`). The one exception: the administration's family
+  list shows the ages of the members with a condition (no names, no details), not in the CSV export.
 - Files are never public: downloads go through an authorised endpoint (`/api/files/:id` or an area endpoint).
 - Every list or detail endpoint checks the role and the ownership; ids from the client are never trusted.
 - Sensitive actions are recorded in `audit_log` (status changes, reviews, signatures, account changes).

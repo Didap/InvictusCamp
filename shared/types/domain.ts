@@ -1,4 +1,10 @@
-import type { ConvocationStatus, ParticipationKind, ParticipationStatus } from '../utils/constants'
+import type {
+  ConvocationStatus,
+  ParticipationKind,
+  ParticipationStatus,
+  ProgrammeBlockKind,
+  ProgrammeGroup,
+} from '../utils/constants'
 
 /**
  * Answers to the questions of the family data (shared/content/family-form.ts), keyed by question id.
@@ -37,3 +43,48 @@ export type Audience =
   | { type: 'users'; userIds: string[] }
 
 export type AudienceType = Audience['type']
+
+/** One group's turn in a `groups` block: the activity (null = still to decide) and who leads it. */
+export interface ProgrammeGroupTurn {
+  activity: string | null
+  lead: string
+}
+
+/**
+ * A block of the week programme (docs/spec.md 3.10). Times are 'HH:MM' or '' (no time, e.g. breakfast).
+ * `note` is for everyone in the session; `toConfirm` too (families read "Da confermare"). `staffNote`
+ * is for administration and staff, `isNew` for the administration only (programmeForViewer).
+ */
+export interface ProgrammeBlock {
+  id: string
+  start: string
+  end: string
+  title: string
+  kind: ProgrammeBlockKind
+  note: string
+  staffNote: string
+  /** Who leads the block. */
+  lead: string
+  /** New compared with the previous year. */
+  isNew: boolean
+  /** Still to confirm. */
+  toConfirm: boolean
+  /** Only on `groups` blocks: what each group does. */
+  groups?: Record<ProgrammeGroup, ProgrammeGroupTurn>
+}
+
+export interface ProgrammeDay {
+  id: string
+  /** e.g. Lunedì. */
+  name: string
+  /** e.g. Arrivo. */
+  subtitle: string
+  blocks: ProgrammeBlock[]
+}
+
+/** The week of a programme (jsonb of `programmes.content`). */
+export interface ProgrammeContent {
+  days: ProgrammeDay[]
+  /** The activities the groups rotate through, in the order the rotation lists them. */
+  activities: string[]
+}

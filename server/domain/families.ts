@@ -2,7 +2,22 @@
 // (special category data: entered only after the explicit consent, every change audited as
 // `member.health_update` with the names of the fields, never their values), its personal documents,
 // and the administration's list and record. Explicit imports only, so the database tests can load it.
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, ne, not, or, sql, type SQL } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  type AnyColumn,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  ne,
+  not,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm'
 import {
   HEALTH_DOCUMENT_CATEGORIES,
   hasHealthData,
@@ -39,8 +54,8 @@ import type {
   OwnFamilyMember,
   PersonalDocumentDto,
 } from '../../shared/types/families'
-import type { ParticipationStatus } from '../../shared/utils/constants'
-import { todayIso } from '../../shared/utils/dates'
+import type { ItalianRegion, ParticipationStatus } from '../../shared/utils/constants'
+import { ageOn, todayIso } from '../../shared/utils/dates'
 import { plural } from '../../shared/utils/format'
 import {
   campSessions,
@@ -747,6 +762,7 @@ function familyListWhere(query: AdminFamilyListQuery): SQL | undefined {
   }
   if (query.formStatus) conditions.push(eq(families.formStatus, query.formStatus))
   if (query.province) conditions.push(eq(families.province, query.province))
+  if (query.region) conditions.push(eq(families.region, query.region))
   if (query.disability) {
     const withDisability = sql`exists (select 1 from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability})`
     conditions.push(query.disability === 'yes' ? withDisability : not(withDisability))
@@ -779,60 +795,83 @@ async function latestSessions(db: DbOrTx, familyIds: string[]): Promise<Map<stri
   return latest
 }
 
+/** The values in use in a column, sorted, in one aggregate (null when there is none). */
+function distinctValues<T>(column: AnyColumn) {
+  return sql<T[] | null>`array_agg(distinct ${column} order by ${column}) filter (where ${column} is not null)`
+}
+
 /** GET /api/admin/families: one page of families, without any health detail. */
 export async function listFamilies(db: DbOrTx, query: AdminFamilyListQuery): Promise<FamilyListResponse> {
   const where = familyListWhere(query)
-  const rows = await db
-    .select({
-      id: families.id,
-      name: families.name,
-      city: families.city,
-      province: families.province,
-      formStatus: families.formStatus,
-      formSubmittedAt: families.formSubmittedAt,
-      createdAt: families.createdAt,
-      memberCount: memberCountSql,
-      referent: {
-        userId: users.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        email: users.email,
-        status: users.status,
-      },
-    })
-    .from(families)
-    .innerJoin(users, eq(users.id, families.userId))
-    .where(where)
-    .orderBy(...familyListOrder(query))
-    .limit(query.pageSize)
-    .offset((query.page - 1) * query.pageSize)
-  const [total] = await db
-    .select({ value: count() })
-    .from(families)
-    .innerJoin(users, eq(users.id, families.userId))
-    .where(where)
-  const provinces = await db
-    .selectDistinct({ province: families.province })
-    .from(families)
-    .where(isNotNull(families.province))
-    .orderBy(asc(families.province))
-  const latest = await latestSessions(
-    db,
-    rows.map(row => row.id),
-  )
+  const [rows, [total], [choices]] = await Promise.all([
+    db
+      .select({
+        id: families.id,
+        name: families.name,
+        city: families.city,
+        province: families.province,
+        region: families.region,
+        formStatus: families.formStatus,
+        formSubmittedAt: families.formSubmittedAt,
+        createdAt: families.createdAt,
+        memberCount: memberCountSql,
+        referent: {
+          userId: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          status: users.status,
+        },
+      })
+      .from(families)
+      .innerJoin(users, eq(users.id, families.userId))
+      .where(where)
+      .orderBy(...familyListOrder(query))
+      .limit(query.pageSize)
+      .offset((query.page - 1) * query.pageSize),
+    db.select({ value: count() }).from(families).innerJoin(users, eq(users.id, families.userId)).where(where),
+    // The choices of the filters: every province and region in use, whatever the filters.
+    db
+      .select({
+        provinces: distinctValues<string>(families.province),
+        regions: distinctValues<ItalianRegion>(families.region),
+      })
+      .from(families),
+  ])
+  const familyIds = rows.map(row => row.id)
+  const [latest, ages] = await Promise.all([latestSessions(db, familyIds), fragileAges(db, familyIds)])
   const items: FamilyListItem[] = rows.map(row => ({
     ...row,
     formSubmittedAt: iso(row.formSubmittedAt),
     createdAt: row.createdAt.toISOString(),
     lastSession: latest.get(row.id) ?? null,
+    fragileAges: ages.get(row.id) ?? [],
   }))
   return {
     items,
     total: total?.value ?? 0,
     page: query.page,
     pageSize: query.pageSize,
-    provinces: provinces.flatMap(row => (row.province ? [row.province] : [])),
+    provinces: choices?.provinces ?? [],
+    regions: choices?.regions ?? [],
   }
+}
+
+/** For each family, the ages of its members with a condition (null without a birth date). */
+async function fragileAges(db: DbOrTx, familyIds: string[]): Promise<Map<string, (number | null)[]>> {
+  const ages = new Map<string, (number | null)[]>()
+  if (!familyIds.length) return ages
+  const today = todayIso()
+  const rows = await db
+    .select({ familyId: familyMembers.familyId, birthDate: familyMembers.birthDate })
+    .from(familyMembers)
+    .where(and(inArray(familyMembers.familyId, familyIds), eq(familyMembers.hasDisability, true)))
+  for (const { familyId, birthDate } of rows) {
+    const list = ages.get(familyId) ?? []
+    list.push(birthDate ? ageOn(birthDate, today) : null)
+    ages.set(familyId, list)
+  }
+  return ages
 }
 
 /** The rows of the CSV export: every family matching the filters, contacts included, no health details. */

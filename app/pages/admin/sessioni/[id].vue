@@ -27,6 +27,7 @@ const TABS = [
   { value: 'panoramica', label: 'Panoramica', icon: 'i-lucide-layout-dashboard', slot: 'panoramica' as const },
   { value: 'famiglie', label: 'Famiglie', icon: 'i-lucide-heart-handshake', slot: 'famiglie' as const },
   { value: 'staff', label: 'Staff', icon: 'i-lucide-id-card', slot: 'staff' as const },
+  { value: 'programma', label: 'Programma', icon: 'i-lucide-calendar-clock', slot: 'programma' as const },
   { value: 'documenti', label: 'Documenti', icon: 'i-lucide-files', slot: 'documenti' as const },
   { value: 'comunicazioni', label: 'Comunicazioni', icon: 'i-lucide-mail', slot: 'comunicazioni' as const },
 ]
@@ -517,6 +518,9 @@ const staffHint = computed(() => {
         </template>
         <template #staff>
           <StaffSessionStaffPanel :session-id="session.id" />
+        </template>
+        <template #programma>
+          <ProgrammeSessionPanel :session-id="session.id" />
         </template>
         <template #documenti>
           <DocumentsSessionDocumentsPanel :session-id="session.id" />

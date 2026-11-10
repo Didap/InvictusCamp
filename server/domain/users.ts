@@ -289,3 +289,43 @@ export async function listUsers(db: DbOrTx, query: UserListQuery): Promise<Pagin
     pageSize,
   }
 }
+
+/**
+ * The first administration account of a new installation (server/plugins/first-admin.ts). Does nothing
+ * while an active admin exists, and never takes over an address that belongs to another account. The
+ * password is hashed only when the account is really created. Run it in a transaction.
+ */
+export async function ensureFirstAdmin(
+  db: DbOrTx,
+  input: { email: string; passwordHash: () => Promise<string> },
+): Promise<'created' | 'admin-exists' | 'email-taken'> {
+  const [admin] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.role, 'admin'), eq(users.status, 'active')))
+    .limit(1)
+  if (admin) return 'admin-exists'
+  const now = new Date()
+  const [user] = await db
+    .insert(users)
+    .values({
+      email: input.email,
+      passwordHash: await input.passwordHash(),
+      role: 'admin',
+      status: 'active',
+      firstName: 'Amministrazione',
+      lastName: 'Invictus Camp',
+      emailVerifiedAt: now,
+      passwordChangedAt: now,
+    })
+    .onConflictDoNothing({ target: users.email })
+    .returning({ id: users.id })
+  if (!user) return 'email-taken'
+  await writeAudit(db, {
+    action: 'user.first_admin',
+    entityType: 'user',
+    entityId: user.id,
+    data: { email: input.email },
+  })
+  return 'created'
+}

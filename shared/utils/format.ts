@@ -115,6 +115,24 @@ export function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }
 
+/** "1 anno", "9 anni". */
+export function formatAge(age: number): string {
+  return age === 1 ? '1 anno' : `${age} anni`
+}
+
+/** "9 e 14 anni", "1 anno", "12 anni, un’età da indicare": ages, youngest first; '' for none. */
+export function formatAges(ages: (number | null)[]): string {
+  const known = ages.filter((age): age is number => age !== null).sort((a, b) => a - b)
+  const unknown = ages.length - known.length
+  const parts: string[] = []
+  if (known.length) {
+    const last = known.at(-1)!
+    parts.push(known.length === 1 ? formatAge(last) : `${known.slice(0, -1).join(', ')} e ${last} anni`)
+  }
+  if (unknown) parts.push(unknown === 1 ? 'un’età da indicare' : `${unknown} età da indicare`)
+  return parts.join(', ')
+}
+
 const numberFormatter = new Intl.NumberFormat(LOCALE)
 
 export function formatNumber(value: number): string {

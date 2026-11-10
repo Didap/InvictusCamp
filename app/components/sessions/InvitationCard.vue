@@ -3,6 +3,7 @@ import { contactSentence, type ContactConfig } from '~/components/ic/ContactLine
 import type { FamilySessionItem } from '#shared/types/sessions'
 import { todayIso } from '#shared/utils/dates'
 import { formatDay, formatDayRange } from '#shared/utils/format'
+import { canFamilyReadProgramme } from '#shared/utils/programme'
 
 // A session as the family sees it: dates, place, where the family stands and, while an invitation is
 // open, "Conferma la partecipazione" and "Rinuncia" (docs/spec.md 3.3). Phone first: big targets.
@@ -18,6 +19,8 @@ const declineOpen = ref(false)
 
 const range = computed(() => formatDayRange(props.item.startDate, props.item.endDate, 'long'))
 const waitingReserve = computed(() => props.item.kind === 'reserve' && props.item.status === 'invited')
+// The same rule the server applies (server/domain/programmes.ts, familyProgramme).
+const showProgramme = computed(() => canFamilyReadProgramme(props.item.status, props.item.sessionStatus))
 // Confirmed and not over yet: the family must know how to tell the camp it can no longer come.
 const canStillCancel = computed(() => props.item.status === 'confirmed' && props.item.sessionStatus !== 'completed')
 
@@ -107,6 +110,16 @@ async function confirmPlace() {
       <UIcon name="i-lucide-calendar-clock" class="size-5 shrink-0 text-muted" aria-hidden="true" />
       {{ deadline }}
     </p>
+
+    <UButton
+      v-if="showProgramme"
+      :to="`/famiglia/programma/${item.sessionId}`"
+      icon="i-lucide-calendar-clock"
+      label="Il programma della settimana"
+      color="neutral"
+      variant="outline"
+      class="mt-4 pointer-coarse:min-h-11"
+    />
 
     <div v-if="item.canConfirm || item.canDecline" class="mt-5 flex flex-col gap-3 sm:flex-row">
       <UButton

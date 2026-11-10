@@ -52,6 +52,17 @@ export function dayCount(range: DayRange): number {
   return daysBetween(range.startDate, range.endDate) + 1
 }
 
+/** Whole years from `birthDate` to `today`: 9 the day before the tenth birthday. */
+export function ageOn(birthDate: IsoDay, today: IsoDay = todayIso()): number {
+  const years = Number(today.slice(0, 4)) - Number(birthDate.slice(0, 4))
+  return today.slice(5) < birthDate.slice(5) ? years - 1 : years
+}
+
+/** Every day of an inclusive range, first to last. */
+export function rangeDays(range: DayRange): IsoDay[] {
+  return Array.from({ length: dayCount(range) }, (_, i) => addDays(range.startDate, i))
+}
+
 /** True when two inclusive ranges share at least one day. */
 export function rangesOverlap(a: DayRange, b: DayRange): boolean {
   return a.startDate <= b.endDate && b.startDate <= a.endDate

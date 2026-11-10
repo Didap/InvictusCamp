@@ -2,13 +2,15 @@
 import type { TableColumn, TableRow } from '@nuxt/ui'
 import { FAMILY_LIST_SORTS, type FamilyListSort } from '#shared/schemas/families'
 import type { FamilyListItem, FamilyListResponse } from '#shared/types/families'
-import { formatDayRange, fullName, plural } from '#shared/utils/format'
+import { formatAges, formatDayRange, fullName, plural } from '#shared/utils/format'
 
-// The families of the camp for the administration: search, filters (questionnaire, province, members
-// with a disability), sortable columns. No health detail is ever shown here (docs/spec.md, 5).
+// The families of the camp for the administration: search, filters (questionnaire, province, region,
+// members with a disability), sortable columns. The only health detail shown is the ages of the members
+// with a condition, never the condition itself (docs/spec.md, 5).
 // Filters live in the query string, so the back button returns to the same list.
 const PAGE_SIZE = 25
 const ALL = 'all'
+const FILTER_KEYS = ['q', 'formStatus', 'province', 'region', 'disability'] as const
 
 const route = useRoute()
 const router = useRouter()
@@ -38,10 +40,7 @@ const order = computed<'asc' | 'desc'>(() => (queryValue('order') === 'desc' ? '
 const page = computed(() => Math.max(1, Number(queryValue('page') ?? 1) || 1))
 
 const filterQuery = computed(() => ({
-  q: queryValue('q'),
-  formStatus: queryValue('formStatus'),
-  province: queryValue('province'),
-  disability: queryValue('disability'),
+  ...Object.fromEntries(FILTER_KEYS.map(key => [key, queryValue(key)])),
   sort: sort.value,
   order: order.value,
 }))
@@ -51,12 +50,10 @@ const { data, status } = await useApiFetch<FamilyListResponse>('/api/admin/famil
 const items = computed(() => data.value?.items ?? [])
 const total = computed(() => data.value?.total ?? 0)
 
-const filtersActive = computed(() =>
-  Boolean(queryValue('q') || queryValue('formStatus') || queryValue('province') || queryValue('disability')),
-)
+const filtersActive = computed(() => FILTER_KEYS.some(key => Boolean(queryValue(key))))
 function resetFilters() {
   search.value = ''
-  setQuery({ q: undefined, formStatus: undefined, province: undefined, disability: undefined })
+  setQuery(Object.fromEntries(FILTER_KEYS.map(key => [key, undefined])))
 }
 
 function filterModel(key: string) {
@@ -67,16 +64,20 @@ function filterModel(key: string) {
 }
 const formStatusFilter = filterModel('formStatus')
 const provinceFilter = filterModel('province')
+const regionFilter = filterModel('region')
 const disabilityFilter = filterModel('disability')
 
 const formStatusItems = [
   { value: ALL, label: 'Tutti' },
   ...options('familyFormStatus').map(option => ({ value: option.value, label: option.label })),
 ]
-const provinceItems = computed(() => [
+/** A select over the values in use, "Tutte" first. */
+const allOf = (values: string[] = []) => [
   { value: ALL, label: 'Tutte' },
-  ...(data.value?.provinces ?? []).map(province => ({ value: province, label: province })),
-])
+  ...values.map(value => ({ value, label: value })),
+]
+const provinceItems = computed(() => allOf(data.value?.provinces))
+const regionItems = computed(() => allOf(data.value?.regions))
 const disabilityItems = [
   { value: ALL, label: 'Tutte le famiglie' },
   { value: 'yes', label: 'Con almeno un componente con disabilità' },
@@ -117,6 +118,7 @@ const columns: TableColumn<FamilyListItem>[] = [
   { id: 'referent', header: 'Referente' },
   { accessorKey: 'city', header: sortHeader('Città', 'city') },
   { accessorKey: 'memberCount', header: sortHeader('Componenti', 'members') },
+  { id: 'fragileAges', header: 'Ragazzi con fragilità' },
   { accessorKey: 'formStatus', header: 'Dati della famiglia' },
   { id: 'lastSession', header: 'Ultima sessione' },
 ]
@@ -146,7 +148,7 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
       </UButton>
     </template>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
       <UFormField label="Cerca" class="sm:col-span-2">
         <UInput
           v-model="search"
@@ -161,6 +163,9 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
       </UFormField>
       <UFormField label="Provincia">
         <USelect v-model="provinceFilter" :items="provinceItems" value-key="value" class="w-full" />
+      </UFormField>
+      <UFormField label="Regione">
+        <USelect v-model="regionFilter" :items="regionItems" value-key="value" class="w-full" />
       </UFormField>
       <UFormField label="Disabilità">
         <USelect v-model="disabilityFilter" :items="disabilityItems" value-key="value" class="w-full" />
@@ -215,7 +220,13 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
           {{ fullName(row.original.referent) }}
         </template>
         <template #city-cell="{ row }">
-          <span :class="place(row.original) ? '' : 'text-dimmed'">{{ place(row.original) || 'Non indicata' }}</span>
+          <p :class="place(row.original) ? '' : 'text-dimmed'">{{ place(row.original) || 'Non indicata' }}</p>
+          <p v-if="row.original.region" class="text-sm text-muted">{{ row.original.region }}</p>
+        </template>
+        <template #fragileAges-cell="{ row }">
+          <span :class="row.original.fragileAges.length ? '' : 'text-dimmed'">
+            {{ formatAges(row.original.fragileAges) || 'Nessuno' }}
+          </span>
         </template>
         <template #memberCount-cell="{ row }">
           <span class="tabular-nums">{{ row.original.memberCount }}</span>
@@ -243,7 +254,10 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
             <div class="min-w-0 flex-1 space-y-1">
               <p class="font-semibold text-primary">{{ family.name }}</p>
               <p class="text-sm text-muted">
-                {{ fullName(family.referent) }}{{ place(family) ? ` · ${place(family)}` : '' }}
+                {{ [fullName(family.referent), place(family), family.region].filter(Boolean).join(' · ') }}
+              </p>
+              <p v-if="family.fragileAges.length" class="text-sm text-muted">
+                Ragazzi con fragilità: {{ formatAges(family.fragileAges) }}
               </p>
               <p class="text-sm text-muted">
                 {{ plural(family.memberCount, 'componente', 'componenti')

@@ -40,7 +40,7 @@ app/
   layouts/        default (dashboard shell), auth (public pages)
   components/ic/  shared building blocks <Ic...>: Page, Section, StatusBadge, StatCard, DataList,
                   CalendarMonth, FileUpload, FileLink, PdfViewer, PasswordInput, EmailSent, Logo, ConfirmModal
-  components/<area>/   sessions, staff, families, documents, communications, dashboard, users
+  components/<area>/   sessions, staff, families, documents, communications, dashboard, users, programme
   composables/    useApi, useApiFetch, useEnums, useConfirm, useNav
   utils/errors.ts notifyError, notifySuccess, apiErrorMessage
 server/
@@ -57,6 +57,7 @@ shared/
   schemas/        zod schemas shared by UForm and parseBody
   types/          DTOs of the API, jsonb shapes, the session user
   content/        family-form.ts (placeholder questionnaire, sprint 1)
+                  programme-template.ts (the model week: Nicola's 2027 draft)
 tests/unit, tests/db   vitest projects `unit` and `db`
 ```
 
@@ -71,7 +72,8 @@ tests/unit, tests/db   vitest projects `unit` and `db`
 - **Emails**: `deliver()` sends with Resend or records them as simulated; everything lands in `email_log`.
   Access links and codes are `sensitive` (not stored). No health details in emails.
 - **Health data** (`family_members.disability`): only after the family's explicit consent, only in the
-  family's pages and the admin family page, audited on change.
+  family's pages and the admin family page, audited on change. The admin family list shows only the ages
+  of the members with a condition (`hasDisability`), never the details; the CSV export shows neither.
 - **Files**: never public; upload with `readUpload` + `saveFile`, download through an authorised endpoint.
 - **Imports**: shared code explicitly from `#shared/...`; domain and email modules with explicit imports
   only (no auto-imports) so tests can load them.
