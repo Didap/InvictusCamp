@@ -13,7 +13,9 @@ export default defineNitroPlugin(() => {
   const parsed = firstAdminSchema.safeParse(firstAdmin)
   if (!parsed.success) {
     const problems = parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ')
-    console.error(`first-admin: NUXT_FIRST_ADMIN_EMAIL / NUXT_FIRST_ADMIN_PASSWORD not valid (${problems}), no account created`)
+    console.error(
+      `first-admin: NUXT_FIRST_ADMIN_EMAIL / NUXT_FIRST_ADMIN_PASSWORD not valid (${problems}), no account created`,
+    )
     return
   }
   const { email, password } = parsed.data

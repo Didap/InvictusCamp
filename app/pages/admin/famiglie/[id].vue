@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { adminNotesSchema, ageOn } from '#shared/schemas/families'
+import { adminNotesSchema } from '#shared/schemas/families'
+import { ageOn } from '#shared/utils/dates'
 import type { AdminFamilyDetail, FamilyMemberDto } from '#shared/types/families'
 import { enumLabel } from '#shared/utils/constants'
-import { formatDay, formatDateTime, fullName, isEmptyCard, memberName, plural } from '#shared/utils/format'
+import { formatAge, formatDay, formatDateTime, fullName, isEmptyCard, memberName, plural } from '#shared/utils/format'
 
 // The record of one family for the administration: data and contacts, members (health details only
 // in the reserved section, loaded on demand), sessions (A1), questionnaire, personal documents,
@@ -44,7 +45,7 @@ function memberSummary(member: FamilyMemberDto): string {
   const relationship = enumLabel('memberRelationship', member.relationship)
   if (!member.birthDate) return relationship
   const age = ageOn(member.birthDate)
-  return `${relationship} · ${age === 1 ? '1 anno' : `${age} anni`} (${formatDay(member.birthDate)})`
+  return `${relationship} · ${formatAge(age)} (${formatDay(member.birthDate)})`
 }
 
 const writeTo = computed(() =>

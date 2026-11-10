@@ -262,12 +262,6 @@ export function healthChangedFields(before: MemberHealth, after: MemberHealth): 
 /** PUT /api/family/members/consent */
 export const healthConsentSchema = z.object({ given: z.boolean() })
 
-/** Age in whole years on `today`. */
-export function ageOn(birthDate: string, today: string = todayIso()): number {
-  const years = Number(today.slice(0, 4)) - Number(birthDate.slice(0, 4))
-  return today.slice(5) < birthDate.slice(5) ? years - 1 : years
-}
-
 // ─── Personal documents ─────────────────────────────────────────────────────────────────────────────
 
 /** The text fields that come with an upload (multipart): POST /api/family/documents. */

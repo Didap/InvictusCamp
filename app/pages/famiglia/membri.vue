@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ageOn } from '#shared/schemas/families'
+import { ageOn } from '#shared/utils/dates'
 import type { FamilyMembersResponse, OwnFamilyMember } from '#shared/types/families'
 import { enumLabel } from '#shared/utils/constants'
-import { isEmptyCard, memberName, plural } from '#shared/utils/format'
+import { formatAge, isEmptyCard, memberName, plural } from '#shared/utils/format'
 
 // The members of the family. Health details (disability) only after the explicit consent, which the
 // family gives or withdraws at the bottom of the page (docs/spec.md, 3.8).
@@ -46,7 +46,7 @@ function summary(member: OwnFamilyMember): string {
   const relationship = enumLabel('memberRelationship', member.relationship)
   if (!member.birthDate) return relationship
   const age = ageOn(member.birthDate)
-  return `${relationship} · ${age === 1 ? '1 anno' : `${age} anni`}`
+  return `${relationship} · ${formatAge(age)}`
 }
 
 async function remove(member: OwnFamilyMember) {

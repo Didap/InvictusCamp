@@ -4,11 +4,13 @@ import { FAMILY_LIST_SORTS, type FamilyListSort } from '#shared/schemas/families
 import type { FamilyListItem, FamilyListResponse } from '#shared/types/families'
 import { formatAges, formatDayRange, fullName, plural } from '#shared/utils/format'
 
-// The families of the camp for the administration: search, filters (questionnaire, province, members
-// with a disability), sortable columns. No health detail is ever shown here (docs/spec.md, 5).
+// The families of the camp for the administration: search, filters (questionnaire, province, region,
+// members with a disability), sortable columns. The only health detail shown is the ages of the members
+// with a condition, never the condition itself (docs/spec.md, 5).
 // Filters live in the query string, so the back button returns to the same list.
 const PAGE_SIZE = 25
 const ALL = 'all'
+const FILTER_KEYS = ['q', 'formStatus', 'province', 'region', 'disability'] as const
 
 const route = useRoute()
 const router = useRouter()
@@ -38,11 +40,7 @@ const order = computed<'asc' | 'desc'>(() => (queryValue('order') === 'desc' ? '
 const page = computed(() => Math.max(1, Number(queryValue('page') ?? 1) || 1))
 
 const filterQuery = computed(() => ({
-  q: queryValue('q'),
-  formStatus: queryValue('formStatus'),
-  province: queryValue('province'),
-  region: queryValue('region'),
-  disability: queryValue('disability'),
+  ...Object.fromEntries(FILTER_KEYS.map(key => [key, queryValue(key)])),
   sort: sort.value,
   order: order.value,
 }))
@@ -52,12 +50,10 @@ const { data, status } = await useApiFetch<FamilyListResponse>('/api/admin/famil
 const items = computed(() => data.value?.items ?? [])
 const total = computed(() => data.value?.total ?? 0)
 
-const filtersActive = computed(() =>
-  ['q', 'formStatus', 'province', 'region', 'disability'].some(key => Boolean(queryValue(key))),
-)
+const filtersActive = computed(() => FILTER_KEYS.some(key => Boolean(queryValue(key))))
 function resetFilters() {
   search.value = ''
-  setQuery({ q: undefined, formStatus: undefined, province: undefined, region: undefined, disability: undefined })
+  setQuery(Object.fromEntries(FILTER_KEYS.map(key => [key, undefined])))
 }
 
 function filterModel(key: string) {
@@ -75,14 +71,13 @@ const formStatusItems = [
   { value: ALL, label: 'Tutti' },
   ...options('familyFormStatus').map(option => ({ value: option.value, label: option.label })),
 ]
-const provinceItems = computed(() => [
+/** A select over the values in use, "Tutte" first. */
+const allOf = (values: string[] = []) => [
   { value: ALL, label: 'Tutte' },
-  ...(data.value?.provinces ?? []).map(province => ({ value: province, label: province })),
-])
-const regionItems = computed(() => [
-  { value: ALL, label: 'Tutte' },
-  ...(data.value?.regions ?? []).map(region => ({ value: region, label: region })),
-])
+  ...values.map(value => ({ value, label: value })),
+]
+const provinceItems = computed(() => allOf(data.value?.provinces))
+const regionItems = computed(() => allOf(data.value?.regions))
 const disabilityItems = [
   { value: ALL, label: 'Tutte le famiglie' },
   { value: 'yes', label: 'Con almeno un componente con disabilità' },

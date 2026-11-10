@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Sortable from 'sortablejs'
+import type Sortable from 'sortablejs'
 import type { ProgrammeBlock, ProgrammeContent, ProgrammeDay } from '#shared/types/domain'
 import { formatDay } from '#shared/utils/format'
 import { dayDates, type BlockMove } from '#shared/utils/programme'
@@ -31,10 +31,13 @@ function detach() {
   sortables.forEach(sortable => sortable.destroy())
   sortables = []
 }
-// Again whenever the days change (another programme loaded): new lists need their own instance.
-function attach() {
-  detach()
+// Again whenever the days change (another programme loaded): new lists need their own instance. The
+// library loads only in the editor: families and staff read the week without it.
+async function attach() {
   if (!props.sortable) return
+  const { default: Sortable } = await import('sortablejs')
+  if (unmounted) return
+  detach()
   sortables = (lists.value ?? []).map(list =>
     Sortable.create(list, {
       group: 'programme-week',
@@ -52,9 +55,13 @@ function attach() {
     }),
   )
 }
+let unmounted = false
 onMounted(attach)
 watch(() => props.content.days.map(day => day.id).join(), attach, { flush: 'post' })
-onBeforeUnmount(detach)
+onBeforeUnmount(() => {
+  unmounted = true
+  detach()
+})
 </script>
 
 <template>
