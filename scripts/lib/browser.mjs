@@ -10,6 +10,7 @@ export const ACCOUNTS = {
   famiglia: 'famiglia@invictuscamp.local',
   staff: 'staff@invictuscamp.local',
   candidato: 'candidato@invictuscamp.local',
+  nuova: 'nuova@invictuscamp.local',
 }
 
 export function launch() {

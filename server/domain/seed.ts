@@ -26,6 +26,8 @@ export const DEMO_ACCOUNTS = {
   family: 'famiglia@invictuscamp.local',
   staff: 'staff@invictuscamp.local',
   candidate: 'candidato@invictuscamp.local',
+  /** Just registered: no members yet, the family data and the questionnaire still to fill in. */
+  newFamily: 'nuova@invictuscamp.local',
 } as const
 
 const TABLES = [
@@ -233,7 +235,15 @@ const FAMILIES: {
       },
     ],
   },
-  { first: 'Giuseppe', last: 'Santoro', city: 'Martina Franca', province: 'TA', submitted: false, members: [] },
+  {
+    first: 'Giuseppe',
+    last: 'Santoro',
+    email: DEMO_ACCOUNTS.newFamily,
+    city: 'Martina Franca',
+    province: 'TA',
+    submitted: false,
+    members: [],
+  },
 ]
 
 const STAFF: {
