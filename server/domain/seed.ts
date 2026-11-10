@@ -1,4 +1,5 @@
-// Demo data for development (POST /api/dev/seed, scripts/dev-seed.mjs). Every person, family and
+// Demo data for development (POST /api/dev/seed, scripts/dev-seed.mjs) and for a test installation
+// (NUXT_DEMO_SEED, server/plugins/start.ts). Every person, family and
 // document is invented; health details are placeholders marked "(esempio)". Dates are fixed around the
 // 2026 and 2027 summer seasons.
 import { sql } from 'drizzle-orm'
@@ -16,7 +17,7 @@ import type {
 import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_LOCATION } from '../../shared/utils/constants'
 import * as t from '../db/schema'
-import type { Db } from './db'
+import type { Db, DbOrTx } from './db'
 import { storeFile } from './storage'
 
 export const DEMO_PASSWORD = 'invictus-demo'
@@ -26,6 +27,8 @@ export const DEMO_ACCOUNTS = {
   family: 'famiglia@invictuscamp.local',
   staff: 'staff@invictuscamp.local',
   candidate: 'candidato@invictuscamp.local',
+  /** Just registered: no members yet, the family data and the questionnaire still to fill in. */
+  newFamily: 'nuova@invictuscamp.local',
 } as const
 
 const TABLES = [
@@ -233,7 +236,15 @@ const FAMILIES: {
       },
     ],
   },
-  { first: 'Giuseppe', last: 'Santoro', city: 'Martina Franca', province: 'TA', submitted: false, members: [] },
+  {
+    first: 'Giuseppe',
+    last: 'Santoro',
+    email: DEMO_ACCOUNTS.newFamily,
+    city: 'Martina Franca',
+    province: 'TA',
+    submitted: false,
+    members: [],
+  },
 ]
 
 const STAFF: {
@@ -397,8 +408,24 @@ export interface SeedSummary {
   password: string
 }
 
-/** Fills an empty database with a believable season. */
-export async function seedDemo(db: Db, options: { passwordHash: string; uploadsDir: string }): Promise<SeedSummary> {
+/**
+ * The demo data, only on an installation without families (its admins share a public password): at start
+ * with NUXT_DEMO_SEED (server/plugins/start.ts) and from POST /api/dev/seed. Null when families exist.
+ * Run it in a transaction.
+ */
+export async function seedDemoIfMissing(
+  db: DbOrTx,
+  options: { passwordHash: () => Promise<string>; uploadsDir: string },
+): Promise<SeedSummary | null> {
+  if (await db.$count(t.families)) return null
+  return seedDemo(db, { passwordHash: await options.passwordHash(), uploadsDir: options.uploadsDir })
+}
+
+/** Fills a database without families with a believable season (beside its own admins, if any). */
+export async function seedDemo(
+  db: DbOrTx,
+  options: { passwordHash: string; uploadsDir: string },
+): Promise<SeedSummary> {
   const verified = new Date('2026-09-01T09:00:00Z')
   const createUser = async (
     values: Pick<typeof t.users.$inferInsert, 'email' | 'role' | 'firstName' | 'lastName'> & { phone?: string },
@@ -571,7 +598,7 @@ export async function seedDemo(db: Db, options: { passwordHash: string; uploadsD
     responseDeadline: '2027-06-10',
   })
   // The 2027 programme, from the model week: every 2027 session uses it.
-  await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() })
+  await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() }).onConflictDoNothing()
   await session({
     title: 'Sessione 3 · Settembre 2027',
     startDate: '2027-09-06',
