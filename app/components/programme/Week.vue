@@ -8,7 +8,8 @@ import { dayDates, type BlockMove } from '#shared/utils/programme'
 // session, shown next to each day when the session is as long as the programme. Slots for the editor:
 // `block-actions` beside each block, `day-footer` under each day. `sortable`: each block gets a grip to
 // drag it within its day or to another one (SortableJS, touch included); the drop is emitted as `move`
-// and the data moves it, Vue keeps the DOM. Keyboards move blocks from the block menu instead.
+// and the data moves it, Vue keeps the DOM. Keyboards and a single tap move blocks from the block menu
+// instead (up, down, to another day).
 const props = defineProps<{ content: ProgrammeContent; dates?: string[]; sortable?: boolean }>()
 const emit = defineEmits<{ move: [value: BlockMove] }>()
 defineSlots<{
@@ -26,7 +27,13 @@ const captions = computed(() => {
 
 const lists = useTemplateRef<HTMLUListElement[]>('lists')
 let sortables: Sortable[] = []
-onMounted(() => {
+function detach() {
+  sortables.forEach(sortable => sortable.destroy())
+  sortables = []
+}
+// Again whenever the days change (another programme loaded): new lists need their own instance.
+function attach() {
+  detach()
   if (!props.sortable) return
   sortables = (lists.value ?? []).map(list =>
     Sortable.create(list, {
@@ -44,8 +51,10 @@ onMounted(() => {
       },
     }),
   )
-})
-onBeforeUnmount(() => sortables.forEach(sortable => sortable.destroy()))
+}
+onMounted(attach)
+watch(() => props.content.days.map(day => day.id).join(), attach, { flush: 'post' })
+onBeforeUnmount(detach)
 </script>
 
 <template>
