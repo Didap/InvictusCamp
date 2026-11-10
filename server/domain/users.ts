@@ -289,3 +289,35 @@ export async function listUsers(db: DbOrTx, query: UserListQuery): Promise<Pagin
     pageSize,
   }
 }
+
+/**
+ * The first administration account of a new installation, from NUXT_FIRST_ADMIN_EMAIL and
+ * NUXT_FIRST_ADMIN_PASSWORD (server/plugins/first-admin.ts). Does nothing once any admin exists, so the
+ * variables can stay set until they are removed; refuses an address that already belongs to another account.
+ */
+export async function ensureFirstAdmin(
+  db: DbOrTx,
+  input: { email: string; passwordHash: string },
+): Promise<'created' | 'admin-exists' | 'email-taken'> {
+  const email = input.email.trim().toLowerCase()
+  const [admin] = await db.select({ id: users.id }).from(users).where(eq(users.role, 'admin')).limit(1)
+  if (admin) return 'admin-exists'
+  const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1)
+  if (taken) return 'email-taken'
+  const now = new Date()
+  const [user] = await db
+    .insert(users)
+    .values({
+      email,
+      passwordHash: input.passwordHash,
+      role: 'admin',
+      status: 'active',
+      firstName: 'Amministrazione',
+      lastName: 'Invictus Camp',
+      emailVerifiedAt: now,
+      passwordChangedAt: now,
+    })
+    .returning({ id: users.id })
+  await writeAudit(db, { action: 'user.first_admin', entityType: 'user', entityId: user!.id, data: { email } })
+  return 'created'
+}

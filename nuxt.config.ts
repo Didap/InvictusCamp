@@ -43,6 +43,8 @@ export default defineNuxtConfig({
     emailReplyTo: '',
     /** Uploaded files live on the filesystem (a persistent volume in production). */
     uploadsDir: './.data/uploads',
+    /** First administration account of a new installation (server/plugins/first-admin.ts). */
+    firstAdmin: { email: '', password: '' },
     session: {
       name: 'invictus-session',
       maxAge: 60 * 60 * 24 * 14,

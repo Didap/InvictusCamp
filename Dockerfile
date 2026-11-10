@@ -6,7 +6,9 @@
 # At start the container applies pending migrations, then serves on :3000.
 # Runtime variables: DATABASE_URL, NUXT_APP_SECRET (openssl rand -base64 32), NUXT_APP_URL,
 # NUXT_RESEND_API_KEY, NUXT_EMAIL_FROM, NUXT_UPLOADS_DIR (a persistent volume, e.g. /data/uploads);
-# on a shared Postgres server DATABASE_ADMIN_URL for the first start only (see scripts/migrate.mjs).
+# on a shared Postgres server DATABASE_ADMIN_URL for the first start only (see scripts/migrate.mjs);
+# on a new installation NUXT_FIRST_ADMIN_EMAIL and NUXT_FIRST_ADMIN_PASSWORD until the first sign-in
+# (server/plugins/first-admin.ts).
 
 ARG NODE_VERSION=24
 
