@@ -1,13 +1,13 @@
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { describe, expect, it, vi } from 'vitest'
-import { DEMO_ACCOUNTS, seedDemo } from '../../server/domain/seed'
+import { DEMO_ACCOUNTS, seedDemoIfMissing } from '../../server/domain/seed'
 import { requestSignatures } from '../../server/domain/signature-requests'
 import { consumeToken, issueToken, peekToken } from '../../server/domain/tokens'
 import { ensureFirstAdmin } from '../../server/domain/users'
-import { makeDocument, makeUser, t, useTestDb } from './helpers'
+import { makeDocument, makeFamily, makeUser, t, useTestDb } from './helpers'
 
 const db = useTestDb()
 
@@ -79,14 +79,28 @@ describe('first admin', () => {
 })
 
 describe('demo seed', () => {
-  it('fills an installation that already has its own admin, with a family still to fill in', async () => {
-    await makeUser(db, { role: 'admin', email: 'vera@invictus.local' })
+  const seed = (uploadsDir: string) =>
+    db.transaction(tx => seedDemoIfMissing(tx, { passwordHash: async () => 'hash', uploadsDir }))
+
+  it('fills an installation with its own admin and programme once, with a family still to fill in', async () => {
     const uploadsDir = await mkdtemp(join(tmpdir(), 'invictus-seed-'))
-    const summary = await seedDemo(db, { passwordHash: 'hash', uploadsDir })
-    expect(summary.families).toBeGreaterThan(1)
-    const [user] = await db.select().from(t.users).where(eq(t.users.email, DEMO_ACCOUNTS.newFamily))
-    const [family] = await db.select().from(t.families).where(eq(t.families.userId, user!.id))
-    expect(family).toMatchObject({ formStatus: 'draft', formAnswers: {} })
-    expect(await db.$count(t.familyMembers, eq(t.familyMembers.familyId, family!.id))).toBe(1)
+    try {
+      await makeUser(db, { role: 'admin', email: 'vera@invictus.local' })
+      await db.insert(t.programmes).values({ year: 2027, content: { days: [] } })
+      const summary = await seed(uploadsDir)
+      expect(summary).toMatchObject({ families: expect.any(Number) })
+      const [user] = await db.select().from(t.users).where(eq(t.users.email, DEMO_ACCOUNTS.newFamily))
+      const [family] = await db.select().from(t.families).where(eq(t.families.userId, user!.id))
+      expect(family).toMatchObject({ formStatus: 'draft', formAnswers: {} })
+      expect(await seed(uploadsDir)).toBe('already-there')
+    } finally {
+      await rm(uploadsDir, { recursive: true, force: true })
+    }
+  })
+
+  it('never seeds beside families', async () => {
+    await makeFamily(db)
+    expect(await seed('/nonexistent')).toBe('has-families')
+    expect(await db.$count(t.users, eq(t.users.email, DEMO_ACCOUNTS.admin))).toBe(0)
   })
 })

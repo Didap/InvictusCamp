@@ -1,7 +1,7 @@
 // Demo data for development (POST /api/dev/seed, scripts/dev-seed.mjs). Every person, family and
 // document is invented; health details are placeholders marked "(esempio)". Dates are fixed around the
 // 2026 and 2027 summer seasons.
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { DisabilityInfo, FormAnswers } from '../../shared/types/domain'
 import type {
@@ -16,7 +16,7 @@ import type {
 import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_LOCATION } from '../../shared/utils/constants'
 import * as t from '../db/schema'
-import type { Db } from './db'
+import type { Db, DbOrTx } from './db'
 import { storeFile } from './storage'
 
 export const DEMO_PASSWORD = 'invictus-demo'
@@ -407,8 +407,29 @@ export interface SeedSummary {
   password: string
 }
 
-/** Fills an empty database with a believable season. */
-export async function seedDemo(db: Db, options: { passwordHash: string; uploadsDir: string }): Promise<SeedSummary> {
+/**
+ * The demo data beside an installation without families (NUXT_DEMO_SEED, server/plugins/demo-seed.ts):
+ * once, and never where families exist, since its admins share a public password. Run it in a transaction.
+ */
+export async function seedDemoIfMissing(
+  db: DbOrTx,
+  options: { passwordHash: () => Promise<string>; uploadsDir: string },
+): Promise<SeedSummary | 'already-there' | 'has-families'> {
+  const [demoAdmin] = await db
+    .select({ id: t.users.id })
+    .from(t.users)
+    .where(eq(t.users.email, DEMO_ACCOUNTS.admin))
+    .limit(1)
+  if (demoAdmin) return 'already-there'
+  if (await db.$count(t.families)) return 'has-families'
+  return seedDemo(db, { passwordHash: await options.passwordHash(), uploadsDir: options.uploadsDir })
+}
+
+/** Fills a database without families with a believable season (beside its own admins, if any). */
+export async function seedDemo(
+  db: DbOrTx,
+  options: { passwordHash: string; uploadsDir: string },
+): Promise<SeedSummary> {
   const verified = new Date('2026-09-01T09:00:00Z')
   const createUser = async (
     values: Pick<typeof t.users.$inferInsert, 'email' | 'role' | 'firstName' | 'lastName'> & { phone?: string },
@@ -581,7 +602,7 @@ export async function seedDemo(db: Db, options: { passwordHash: string; uploadsD
     responseDeadline: '2027-06-10',
   })
   // The 2027 programme, from the model week: every 2027 session uses it.
-  await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() })
+  await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() }).onConflictDoNothing()
   await session({
     title: 'Sessione 3 · Settembre 2027',
     startDate: '2027-09-06',
