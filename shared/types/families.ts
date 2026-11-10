@@ -36,8 +36,9 @@ export interface FamilyListItem {
   region: ItalianRegion | null
   memberCount: number
   /**
-   * Ages of the members with a condition (null: no birth date), youngest first. Health data: set only
-   * with the family's consent (withdrawing it clears the condition), shown to the administration only.
+   * Ages of the members with a condition (null: no birth date), unsorted (formatAges orders them). Health
+   * data: set only with the family's consent (withdrawing it clears the condition), shown to the
+   * administration only.
    */
   fragileAges: (number | null)[]
   formStatus: FamilyFormStatus

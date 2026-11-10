@@ -855,7 +855,9 @@ async function fragileAges(db: DbOrTx, familyIds: string[]): Promise<Map<string,
     .from(familyMembers)
     .where(and(inArray(familyMembers.familyId, familyIds), eq(familyMembers.hasDisability, true)))
   for (const { familyId, birthDate } of rows) {
-    ages.set(familyId, [...(ages.get(familyId) ?? []), birthDate ? ageOn(birthDate, today) : null])
+    const list = ages.get(familyId) ?? []
+    list.push(birthDate ? ageOn(birthDate, today) : null)
+    ages.set(familyId, list)
   }
   return ages
 }
