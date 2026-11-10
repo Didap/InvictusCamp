@@ -132,6 +132,13 @@ function blockItems(day: ProgrammeDay, block: ProgrammeBlock, index: number): Dr
         disabled: index === day.blocks.length - 1,
         onSelect: () => move(day, index, 1),
       },
+      {
+        label: 'Sposta a',
+        icon: 'i-lucide-calendar-days',
+        children: draft.value.days
+          .filter(other => other.id !== day.id)
+          .map(other => ({ label: other.name, onSelect: () => applyBlock({ dayId: other.id, block }) })),
+      },
     ],
     [{ label: 'Elimina', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => remove(day, index) }],
   ]
