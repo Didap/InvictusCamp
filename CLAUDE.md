@@ -19,7 +19,7 @@ pnpm db:up                 # Postgres in Docker (container invictuscamp-db, port
 pnpm db:generate           # after editing server/db/schema.ts
 pnpm db:migrate            # apply migrations (one line)
 pnpm dev                   # http://localhost:3080
-pnpm db:seed [--fresh]     # demo data through the dev server: admin@ famiglia@ staff@ candidato@
+pnpm db:seed [--fresh]     # demo data through the dev server: admin@ famiglia@ staff@ candidato@ nuova@
                            #   invictuscamp.local, password invictus-demo
 pnpm test                  # unit + database tests (the db project recreates invictuscamp_test)
 pnpm exec vue-tsc -b --noEmit 2>&1 | grep "error TS"     # typecheck, filtered

@@ -291,7 +291,7 @@ export async function listUsers(db: DbOrTx, query: UserListQuery): Promise<Pagin
 }
 
 /**
- * The first administration account of a new installation (server/plugins/first-admin.ts). Does nothing
+ * The first administration account of a new installation (server/plugins/start.ts). Does nothing
  * while an active admin exists, and never takes over an address that belongs to another account. The
  * password is hashed only when the account is really created. Run it in a transaction.
  */

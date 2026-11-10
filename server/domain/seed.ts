@@ -1,7 +1,8 @@
-// Demo data for development (POST /api/dev/seed, scripts/dev-seed.mjs). Every person, family and
+// Demo data for development (POST /api/dev/seed, scripts/dev-seed.mjs) and for a test installation
+// (NUXT_DEMO_SEED, server/plugins/start.ts). Every person, family and
 // document is invented; health details are placeholders marked "(esempio)". Dates are fixed around the
 // 2026 and 2027 summer seasons.
-import { eq, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { DisabilityInfo, FormAnswers } from '../../shared/types/domain'
 import type {
@@ -408,20 +409,15 @@ export interface SeedSummary {
 }
 
 /**
- * The demo data beside an installation without families (NUXT_DEMO_SEED, server/plugins/demo-seed.ts):
- * once, and never where families exist, since its admins share a public password. Run it in a transaction.
+ * The demo data, only on an installation without families (its admins share a public password): at start
+ * with NUXT_DEMO_SEED (server/plugins/start.ts) and from POST /api/dev/seed. Null when families exist.
+ * Run it in a transaction.
  */
 export async function seedDemoIfMissing(
   db: DbOrTx,
   options: { passwordHash: () => Promise<string>; uploadsDir: string },
-): Promise<SeedSummary | 'already-there' | 'has-families'> {
-  const [demoAdmin] = await db
-    .select({ id: t.users.id })
-    .from(t.users)
-    .where(eq(t.users.email, DEMO_ACCOUNTS.admin))
-    .limit(1)
-  if (demoAdmin) return 'already-there'
-  if (await db.$count(t.families)) return 'has-families'
+): Promise<SeedSummary | null> {
+  if (await db.$count(t.families)) return null
   return seedDemo(db, { passwordHash: await options.passwordHash(), uploadsDir: options.uploadsDir })
 }
 
