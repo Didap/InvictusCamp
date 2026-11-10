@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { requestSignatures } from '../../server/domain/signature-requests'
 import { consumeToken, issueToken, peekToken } from '../../server/domain/tokens'
 import { ensureFirstAdmin } from '../../server/domain/users'
-import { makeAdmin, makeDocument, makeUser, t, useTestDb } from './helpers'
+import { makeDocument, makeUser, t, useTestDb } from './helpers'
 
 const db = useTestDb()
 
@@ -52,23 +52,24 @@ describe('signature requests', () => {
 })
 
 describe('first admin', () => {
-  const input = { email: ' Segreteria@Invictus.local ', passwordHash: 'hash' }
+  const input = { email: 'segreteria@invictus.local', passwordHash: async () => 'hash' }
 
-  it('creates an active admin only while there is none', async () => {
+  it('creates an active admin only while there is none, hashing only then', async () => {
     expect(await ensureFirstAdmin(db, input)).toBe('created')
     const [admin] = await db.select().from(t.users).where(eq(t.users.role, 'admin'))
     expect(admin).toMatchObject({ email: 'segreteria@invictus.local', status: 'active', passwordHash: 'hash' })
     expect(admin!.emailVerifiedAt).not.toBeNull()
-    expect(await ensureFirstAdmin(db, { ...input, email: 'altra@invictus.local' })).toBe('admin-exists')
+    const hash = vi.fn(async () => 'altro')
+    expect(await ensureFirstAdmin(db, { email: 'altra@invictus.local', passwordHash: hash })).toBe('admin-exists')
+    expect(hash).not.toHaveBeenCalled()
     expect(await db.$count(t.users)).toBe(1)
   })
 
-  it('leaves an existing installation and a taken address alone', async () => {
-    await makeAdmin(db)
-    expect(await ensureFirstAdmin(db, input)).toBe('admin-exists')
-    await db.delete(t.users)
+  it('ignores a disabled admin and never takes over an address in use', async () => {
+    await makeUser(db, { role: 'admin', status: 'disabled' })
     await makeUser(db, { email: 'segreteria@invictus.local' })
     expect(await ensureFirstAdmin(db, input)).toBe('email-taken')
-    expect(await db.$count(t.users, eq(t.users.role, 'admin'))).toBe(0)
+    expect(await ensureFirstAdmin(db, { ...input, email: 'nuova@invictus.local' })).toBe('created')
+    expect(await db.$count(t.users, eq(t.users.role, 'admin'))).toBe(2)
   })
 })

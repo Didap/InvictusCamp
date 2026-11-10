@@ -291,25 +291,26 @@ export async function listUsers(db: DbOrTx, query: UserListQuery): Promise<Pagin
 }
 
 /**
- * The first administration account of a new installation, from NUXT_FIRST_ADMIN_EMAIL and
- * NUXT_FIRST_ADMIN_PASSWORD (server/plugins/first-admin.ts). Does nothing once any admin exists, so the
- * variables can stay set until they are removed; refuses an address that already belongs to another account.
+ * The first administration account of a new installation (server/plugins/first-admin.ts). Does nothing
+ * while an active admin exists, and never takes over an address that belongs to another account. The
+ * password is hashed only when the account is really created. Run it in a transaction.
  */
 export async function ensureFirstAdmin(
   db: DbOrTx,
-  input: { email: string; passwordHash: string },
+  input: { email: string; passwordHash: () => Promise<string> },
 ): Promise<'created' | 'admin-exists' | 'email-taken'> {
-  const email = input.email.trim().toLowerCase()
-  const [admin] = await db.select({ id: users.id }).from(users).where(eq(users.role, 'admin')).limit(1)
+  const [admin] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.role, 'admin'), eq(users.status, 'active')))
+    .limit(1)
   if (admin) return 'admin-exists'
-  const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1)
-  if (taken) return 'email-taken'
   const now = new Date()
   const [user] = await db
     .insert(users)
     .values({
-      email,
-      passwordHash: input.passwordHash,
+      email: input.email,
+      passwordHash: await input.passwordHash(),
       role: 'admin',
       status: 'active',
       firstName: 'Amministrazione',
@@ -317,7 +318,9 @@ export async function ensureFirstAdmin(
       emailVerifiedAt: now,
       passwordChangedAt: now,
     })
+    .onConflictDoNothing({ target: users.email })
     .returning({ id: users.id })
-  await writeAudit(db, { action: 'user.first_admin', entityType: 'user', entityId: user!.id, data: { email } })
+  if (!user) return 'email-taken'
+  await writeAudit(db, { action: 'user.first_admin', entityType: 'user', entityId: user.id, data: { email: input.email } })
   return 'created'
 }
