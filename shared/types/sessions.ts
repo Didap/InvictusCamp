@@ -23,13 +23,14 @@ export interface SlotCounts {
   reserves: number
 }
 
-/** Staff of a session: convocations by state and the derived "Confermata". */
+/**
+ * Staff of a session. `needed` and the four counts after it are the progress of the people who count
+ * toward it (the staff team, coordinators aside: countsTowardNeeded); `open` and `drafts` count every
+ * convocation, whatever the team, for the actions on them.
+ */
 export interface StaffCounts {
   needed: number
-  /**
-   * Accepted and, when the session has a contract, contract signed: only the people who count toward
-   * `needed` (the staff team, coordinators aside, countsTowardNeeded).
-   */
+  /** Accepted and, when the session has a contract, contract signed. */
   confirmed: number
   /** Accepted, contract signed or not. */
   accepted: number
@@ -37,6 +38,10 @@ export interface StaffCounts {
   waiting: number
   /** Chosen for the session, convocation not sent yet. */
   toSend: number
+  /** Every convocation still in play (draft, sent, accepted). */
+  open: number
+  /** Every convocation not sent yet. */
+  drafts: number
 }
 
 /**

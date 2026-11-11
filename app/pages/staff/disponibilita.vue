@@ -86,7 +86,7 @@ async function answer(session: MyAvailabilitySession, value: boolean) {
             </div>
             <USwitch
               :model-value="session.available"
-              :disabled="!data.canEdit || saving === session.id"
+              :disabled="saving === session.id"
               :loading="saving === session.id"
               label="Ci sono"
               class="shrink-0 pt-0.5 pointer-coarse:min-h-11"

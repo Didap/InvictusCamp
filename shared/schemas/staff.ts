@@ -83,9 +83,17 @@ export function applicationMissing(profile: ApplicationFields): ApplicationPart[
   return APPLICATION_CHECKLIST.filter(part => !filled[part])
 }
 
-/** `staffNeeded` counts the people of the staff team, the coordinators aside (spec 3.5). */
+/**
+ * Where a person sits in the base of a session (spec 3.5): a coordinator (one per team), or one of the
+ * staff (counted toward `staffNeeded`) or of the v-team.
+ */
+export function staffSlot(person: { team: StaffTeam; role: StaffRole | null }): 'coordinator' | StaffTeam {
+  return person.role === 'coordinator' ? 'coordinator' : person.team
+}
+
+/** `staffNeeded` counts the people of the staff team, the coordinators aside. */
 export function countsTowardNeeded(person: { team: StaffTeam; role: StaffRole | null }): boolean {
-  return person.team === 'staff' && person.role !== 'coordinator'
+  return staffSlot(person) === 'staff'
 }
 
 // ─── Review ────────────────────────────────────────────────────────────────────────────────────────

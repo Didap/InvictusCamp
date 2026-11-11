@@ -46,18 +46,17 @@ watch(
   { immediate: true },
 )
 
-const teamItems = [
-  {
-    label: 'Staff',
-    value: 'staff',
-    description: 'Lavori al camp con un ruolo: responsabile di gruppo, delle attività, coordinamento.',
-  },
-  {
-    label: 'V-team',
-    value: 'volunteer',
-    description: 'Dai una mano come volontario o volontaria, accanto allo staff.',
-  },
-]
+const TEAM_HELP: Record<StaffTeam, string> = {
+  staff: 'Lavori al camp con un ruolo: responsabile di gruppo, delle attività, coordinamento.',
+  volunteer: 'Dai una mano come volontario o volontaria, accanto allo staff.',
+}
+const teamItems = computed(() =>
+  options('staffTeam').map(option => ({
+    label: option.label,
+    value: option.value,
+    description: TEAM_HELP[option.value as StaffTeam],
+  })),
+)
 
 const roleItems = computed(() =>
   options('staffRole').map(option => ({ label: option.label, value: option.value as StaffRole })),

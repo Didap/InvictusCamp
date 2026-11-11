@@ -19,6 +19,7 @@ import type {
   StaffCounts,
 } from '../../shared/types/sessions'
 import {
+  OPEN_CONVOCATIONS,
   enumLabel,
   type ParticipationKind,
   type ParticipationStatus,
@@ -195,45 +196,55 @@ async function slotCountsOf(
   return new Map(sessions.map(s => [s.id, slotSummary(s.familySlots, bySession.get(s.id) ?? [])]))
 }
 
-/** Convocations by state; "Confermata" = accepted and, when the session has a contract, signed. */
-async function staffCountsOf(
+/** The staff counts of sessions (StaffCounts); "Confermata" = accepted and, with a contract, signed. */
+export async function staffCountsOf(
   db: DbOrTx,
   sessions: Pick<SessionRow, 'id' | 'staffNeeded' | 'contractDocumentId'>[],
 ): Promise<Map<string, StaffCounts>> {
   const ids = sessions.map(s => s.id)
-  const convocations = ids.length
-    ? await db
-        .select({
-          sessionId: sessionStaff.sessionId,
-          userId: sessionStaff.userId,
-          status: sessionStaff.status,
-          role: sessionStaff.role,
-          team: staffProfiles.team,
-        })
-        .from(sessionStaff)
-        .leftJoin(staffProfiles, eq(staffProfiles.userId, sessionStaff.userId))
-        .where(inArray(sessionStaff.sessionId, ids))
-    : []
   const contractIds = [...new Set(sessions.map(s => s.contractDocumentId).filter((id): id is string => !!id))]
-  const signed = contractIds.length
-    ? await db
-        .select({ documentId: signatureRequests.documentId, userId: signatureRequests.userId })
-        .from(signatureRequests)
-        .where(and(inArray(signatureRequests.documentId, contractIds), eq(signatureRequests.status, 'signed')))
-    : []
+  const [convocations, signed] = await Promise.all([
+    ids.length
+      ? db
+          .select({
+            sessionId: sessionStaff.sessionId,
+            userId: sessionStaff.userId,
+            status: sessionStaff.status,
+            role: sessionStaff.role,
+            team: staffProfiles.team,
+          })
+          .from(sessionStaff)
+          .innerJoin(staffProfiles, eq(staffProfiles.userId, sessionStaff.userId))
+          .where(inArray(sessionStaff.sessionId, ids))
+      : [],
+    contractIds.length
+      ? db
+          .select({ documentId: signatureRequests.documentId, userId: signatureRequests.userId })
+          .from(signatureRequests)
+          .where(and(inArray(signatureRequests.documentId, contractIds), eq(signatureRequests.status, 'signed')))
+      : [],
+  ])
   const signedKeys = new Set(signed.map(row => `${row.documentId}:${row.userId}`))
   const bySession = groupBy(convocations, row => row.sessionId)
   return new Map(
     sessions.map(session => {
-      const counts: StaffCounts = { needed: session.staffNeeded, confirmed: 0, accepted: 0, waiting: 0, toSend: 0 }
+      const counts: StaffCounts = {
+        needed: session.staffNeeded,
+        confirmed: 0,
+        accepted: 0,
+        waiting: 0,
+        toSend: 0,
+        open: 0,
+        drafts: 0,
+      }
       for (const convocation of bySession.get(session.id) ?? []) {
+        if (OPEN_CONVOCATIONS.includes(convocation.status)) counts.open++
+        if (convocation.status === 'draft') counts.drafts++
+        if (!countsTowardNeeded(convocation)) continue
         if (convocation.status === 'accepted') {
           counts.accepted++
           const contract = session.contractDocumentId
-          const signedOrNone = !contract || signedKeys.has(`${contract}:${convocation.userId}`)
-          if (signedOrNone && countsTowardNeeded({ team: convocation.team ?? 'staff', role: convocation.role })) {
-            counts.confirmed++
-          }
+          if (!contract || signedKeys.has(`${contract}:${convocation.userId}`)) counts.confirmed++
         } else if (convocation.status === 'sent') counts.waiting++
         else if (convocation.status === 'draft') counts.toSend++
       }

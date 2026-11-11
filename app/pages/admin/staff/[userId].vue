@@ -51,13 +51,14 @@ async function changeTeam(team: StaffTeam) {
   try {
     const url: string = `/api/admin/staff/${userId.value}/team`
     await api(url, { method: 'PUT', body: { team } })
+    if (person.value) person.value = { ...person.value, team }
     notifySuccess('Squadra cambiata', `${name.value}: ${label('staffTeam', team)}`)
   } catch (error) {
     notifyError(error)
+    await refresh()
   } finally {
     savingTeam.value = false
   }
-  await refresh()
 }
 
 const NO_EMAIL = 'Nessuna email parte adesso: l’esito lo comunichi tu, quando vuoi, con «Comunica l’esito».'

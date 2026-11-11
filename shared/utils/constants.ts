@@ -37,6 +37,9 @@ export type StaffTeam = (typeof STAFF_TEAMS)[number]
 export const DOCUMENT_AUDIENCES = ['family', ...STAFF_TEAMS] as const
 export type DocumentAudience = (typeof DOCUMENT_AUDIENCES)[number]
 
+/** A convocation still in play: prepared, sent or accepted. */
+export const OPEN_CONVOCATIONS: readonly ConvocationStatus[] = ['draft', 'sent', 'accepted']
+
 /** A convocation of a staff member to a session. "Confermata" is derived: accepted + contract signed. */
 export const CONVOCATION_STATUSES = ['draft', 'sent', 'accepted', 'declined', 'cancelled'] as const
 export type ConvocationStatus = (typeof CONVOCATION_STATUSES)[number]
@@ -237,6 +240,28 @@ const staffTeam: Record<StaffTeam, EnumMeta> = {
   volunteer: { label: 'V-team', icon: 'i-lucide-hand-heart', color: 'neutral', description: 'Volontari' },
 }
 
+/** On a convocation: whether the person said they can come to the whole session. */
+const staffAvailability: Record<'available' | 'missing', EnumMeta> = {
+  available: {
+    label: 'Disponibile',
+    icon: 'i-lucide-calendar-check',
+    color: 'success',
+    description: 'Ha detto che c’è per tutta la sessione',
+  },
+  missing: {
+    label: 'Senza disponibilità',
+    icon: 'i-lucide-calendar-x',
+    color: 'warning',
+    description: 'Non ha dato disponibilità per questa sessione, o l’ha tolta',
+  },
+}
+
+const documentAudience: Record<DocumentAudience, EnumMeta> = {
+  family: { label: 'Famiglie', icon: 'i-lucide-house-heart', color: 'neutral' },
+  staff: { label: 'Staff', icon: 'i-lucide-id-card', color: 'neutral' },
+  volunteer: { label: 'V-team', icon: 'i-lucide-hand-heart', color: 'neutral' },
+}
+
 const convocationStatus: Record<ConvocationStatus, EnumMeta> = {
   draft: {
     label: 'Da inviare',
@@ -331,12 +356,14 @@ export const ENUM_META = {
   staffStatus,
   staffRole,
   staffTeam,
+  staffAvailability,
   convocationStatus,
   memberRelationship,
   memberKind,
   familyFormStatus,
   documentCategory,
   signatureStatus,
+  documentAudience,
   personalDocumentCategory,
   emailStatus,
 } as const

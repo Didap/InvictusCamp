@@ -77,7 +77,7 @@ const rows = computed(() => props.sessions)
 function staffToDo({ staff, status }: SessionListItem): string[] {
   if (!isSessionEditable(status)) return []
   const missing = Math.max(0, staff.needed - staff.accepted - staff.waiting - staff.toSend)
-  return [staff.toSend ? `${staff.toSend} da inviare` : '', missing ? `${missing} da trovare` : ''].filter(Boolean)
+  return [staff.drafts ? `${staff.drafts} da inviare` : '', missing ? `${missing} da trovare` : ''].filter(Boolean)
 }
 </script>
 

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { SessionConvocation, SessionStaffData } from '#shared/types/staff'
-import { STAFF_TEAMS, type StaffRole } from '#shared/utils/constants'
-import { formatDateTime, fullName } from '#shared/utils/format'
+import { staffSlot } from '#shared/schemas/staff'
+import { OPEN_CONVOCATIONS, STAFF_TEAMS, type StaffRole, type StaffTeam } from '#shared/utils/constants'
+import { formatDateTime, fullName, plural } from '#shared/utils/format'
 
 // CONTRACT (docs/BUILD.md): owned by A2 Staff. Admin session page, tab "Staff": the convocations of the
 // session (staff and v-team) with their status and the derived "Confermata" (accepted and contract
@@ -55,8 +56,7 @@ const describe = (c: SessionConvocation) =>
   `${label('staffTeam', c.team)} · ${c.staffRoles.map(role => label('staffRole', role)).join(', ') || 'Ruoli non indicati'}`
 
 const roleItems = computed(() => options('staffRole').map(option => ({ label: option.label, value: option.value })))
-const roleEditable = (c: SessionConvocation) =>
-  editable.value && (c.status === 'draft' || c.status === 'sent' || c.status === 'accepted')
+const roleEditable = (c: SessionConvocation) => editable.value && OPEN_CONVOCATIONS.includes(c.status)
 
 async function changeRole(c: SessionConvocation, role: StaffRole) {
   if (role === c.role) return
@@ -148,14 +148,14 @@ function statusNote(c: SessionConvocation): string {
 
 // The base of a session (spec 3.5): `staffNeeded` people of the staff, plus a coordinator for the staff
 // and one for the v-team. Counted on the convocations still open (draft, sent, accepted).
-const live = computed(() => convocations.value.filter(c => c.status !== 'declined' && c.status !== 'cancelled'))
-const staffConfirmed = computed(() => counts.value?.confirmed ?? 0)
-const volunteersConfirmed = computed(
-  () => convocations.value.filter(c => c.confirmed && c.team === 'volunteer' && c.role !== 'coordinator').length,
-)
+const confirmedAs = (slot: StaffTeam) => convocations.value.filter(c => c.confirmed && staffSlot(c) === slot).length
+const staffConfirmed = computed(() => confirmedAs('staff'))
+const volunteersConfirmed = computed(() => confirmedAs('volunteer'))
 const coordinators = computed(() =>
   STAFF_TEAMS.map(team => {
-    const found = live.value.filter(c => c.team === team && c.role === 'coordinator')
+    const found = convocations.value.filter(
+      c => c.team === team && staffSlot(c) === 'coordinator' && OPEN_CONVOCATIONS.includes(c.status),
+    )
     return { team, names: found.map(c => (c.confirmed ? fullName(c) : `${fullName(c)} (non ancora confermato)`)) }
   }),
 )
@@ -211,7 +211,7 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
     <IcSection
       v-else-if="session"
       title="Staff e v-team della sessione"
-      :description="`Staff: ${staffConfirmed} ${staffConfirmed === 1 ? 'confermato' : 'confermati'} su ${session.staffNeeded} ${session.staffNeeded === 1 ? 'necessario' : 'necessari'} · V-team: ${volunteersConfirmed} ${volunteersConfirmed === 1 ? 'confermato' : 'confermati'}`"
+      :description="`Staff: ${plural(staffConfirmed, 'confermato', 'confermati')} su ${plural(session.staffNeeded, 'necessario', 'necessari')} · V-team: ${plural(volunteersConfirmed, 'confermato', 'confermati')}`"
     >
       <template #actions>
         <UButton
@@ -331,7 +331,7 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
             <span v-else>{{ row.original.role ? label('staffRole', row.original.role) : 'Non indicato' }}</span>
           </template>
           <template #available-cell="{ row }">
-            <StaffAvailabilityBadge :available="row.original.available" />
+            <IcStatusBadge kind="staffAvailability" :value="row.original.available ? 'available' : 'missing'" />
           </template>
           <template #status-cell="{ row }">
             <div class="flex flex-wrap gap-1.5">
@@ -384,7 +384,7 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
             </div>
             <div class="flex flex-wrap gap-2">
               <StaffConvocationBadge :status="c.status" :confirmed="c.confirmed" />
-              <StaffAvailabilityBadge :available="c.available" />
+              <IcStatusBadge kind="staffAvailability" :value="c.available ? 'available' : 'missing'" />
               <StaffContractBadge v-if="c.status === 'accepted' && !c.confirmed" :state="c.contract" />
             </div>
             <p v-if="c.declineReason" class="text-sm text-muted">«{{ c.declineReason }}»</p>

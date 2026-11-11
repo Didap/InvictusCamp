@@ -8,7 +8,6 @@ import { alias } from 'drizzle-orm/pg-core'
 import {
   applicationMissing,
   canMoveStaff,
-  countsTowardNeeded,
   isReviewMove,
   type ConvocationAddInput,
   type ConvocationSendInput,
@@ -32,12 +31,13 @@ import type {
   StaffListItem,
   StaffOutcomeTemplate,
 } from '../../shared/types/staff'
-import type {
-  ConvocationStatus,
-  SignatureStatus,
-  StaffRole,
-  StaffStatus,
-  StaffTeam,
+import {
+  OPEN_CONVOCATIONS,
+  type ConvocationStatus,
+  type SignatureStatus,
+  type StaffRole,
+  type StaffStatus,
+  type StaffTeam,
 } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
 import { SESSION_EDITABLE_STATUSES, isSessionEditable } from '../../shared/utils/session-status'
@@ -97,10 +97,8 @@ export function toFileDto(
 const availabilitySession = {
   id: campSessions.id,
   title: campSessions.title,
-  location: campSessions.location,
   startDate: campSessions.startDate,
   endDate: campSessions.endDate,
-  status: campSessions.status,
 }
 
 async function profileOf(db: DbOrTx, userId: string, options: { lock?: boolean } = {}): Promise<ProfileRow> {
@@ -672,7 +670,6 @@ export async function cancelConvocation(
 }
 
 /** Convocations a cancelled session withdraws. */
-const OPEN_CONVOCATIONS: ConvocationStatus[] = ['draft', 'sent', 'accepted']
 
 /**
  * The session is being cancelled (server/domain/sessions.ts, transitionSession, before the status
@@ -809,7 +806,7 @@ export async function staffList(
 ): Promise<StaffListItem[]> {
   const today = options.today ?? todayIso()
   const session = options.sessionId ? await sessionFor(db, options.sessionId) : null
-  const rows = await db
+  const people = db
     .select({
       userId: users.id,
       firstName: users.firstName,
@@ -825,14 +822,18 @@ export async function staffList(
     .from(staffProfiles)
     .innerJoin(users, eq(users.id, staffProfiles.userId))
     .orderBy(asc(users.lastName), asc(users.firstName))
-  const counts = await db
+  const answered = db
     .select({ userId: sessionAvailability.userId, count: sql<number>`count(*)::int` })
     .from(sessionAvailability)
     .innerJoin(campSessions, eq(campSessions.id, sessionAvailability.sessionId))
     .where(openForAvailability(today))
     .groupBy(sessionAvailability.userId)
+  const [rows, counts, forSession] = await Promise.all([
+    people,
+    answered,
+    session ? availableFor(db, session.id) : null,
+  ])
   const countOf = new Map(counts.map(row => [row.userId, row.count]))
-  const forSession = session ? await availableFor(db, session.id) : null
   return rows.map(row => ({
     ...row,
     appliedAt: iso(row.appliedAt),
@@ -996,36 +997,43 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
   if (!row) throw createError({ statusCode: 404, message: 'Sessione non trovata' })
   const { session } = row
 
-  const convocationRows = await db
-    .select({
-      convocation: sessionStaff,
-      firstName: users.firstName,
-      lastName: users.lastName,
-      email: users.email,
-      accountStatus: users.status,
-      profileStatus: staffProfiles.status,
-      team: staffProfiles.team,
-      staffRoles: staffProfiles.roles,
-    })
-    .from(sessionStaff)
-    .innerJoin(users, eq(users.id, sessionStaff.userId))
-    .leftJoin(staffProfiles, eq(staffProfiles.userId, sessionStaff.userId))
-    .where(eq(sessionStaff.sessionId, sessionId))
-    .orderBy(asc(users.lastName), asc(users.firstName))
-  const approved = await db
-    .select({
-      userId: users.id,
-      firstName: users.firstName,
-      lastName: users.lastName,
-      team: staffProfiles.team,
-      roles: staffProfiles.roles,
-      city: staffProfiles.city,
-    })
-    .from(staffProfiles)
-    .innerJoin(users, eq(users.id, staffProfiles.userId))
-    .where(and(eq(staffProfiles.status, 'approved'), ne(users.status, 'disabled')))
-    .orderBy(asc(users.lastName), asc(users.firstName))
-  const availableIds = await availableFor(db, sessionId)
+  const [convocationRows, availablePeople, availableIds] = await Promise.all([
+    db
+      .select({
+        convocation: sessionStaff,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        accountStatus: users.status,
+        profileStatus: staffProfiles.status,
+        team: staffProfiles.team,
+        staffRoles: staffProfiles.roles,
+      })
+      .from(sessionStaff)
+      .innerJoin(users, eq(users.id, sessionStaff.userId))
+      .leftJoin(staffProfiles, eq(staffProfiles.userId, sessionStaff.userId))
+      .where(eq(sessionStaff.sessionId, sessionId))
+      .orderBy(asc(users.lastName), asc(users.firstName)),
+    // Approved people who said they can come to this session.
+    db
+      .select({
+        userId: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        team: staffProfiles.team,
+        roles: staffProfiles.roles,
+        city: staffProfiles.city,
+      })
+      .from(staffProfiles)
+      .innerJoin(users, eq(users.id, staffProfiles.userId))
+      .innerJoin(
+        sessionAvailability,
+        and(eq(sessionAvailability.userId, staffProfiles.userId), eq(sessionAvailability.sessionId, sessionId)),
+      )
+      .where(and(eq(staffProfiles.status, 'approved'), ne(users.status, 'disabled')))
+      .orderBy(asc(users.lastName), asc(users.firstName)),
+    availableFor(db, sessionId),
+  ])
 
   const contractId = session.contractDocumentId
   const requests = contractId
@@ -1064,17 +1072,15 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
     })
     .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || TEAM_ORDER[a.team] - TEAM_ORDER[b.team])
 
-  const open = new Set(
-    convocations.filter(c => c.status === 'draft' || c.status === 'sent' || c.status === 'accepted').map(c => c.userId),
-  )
+  const open = new Set(convocations.filter(c => OPEN_CONVOCATIONS.includes(c.status)).map(c => c.userId))
   const previous = new Map(
     convocations.flatMap(c => (c.status === 'declined' || c.status === 'cancelled' ? [[c.userId, c.status]] : [])) as [
       string,
       'declined' | 'cancelled',
     ][],
   )
-  const available: AvailableStaff[] = approved
-    .filter(person => availableIds.has(person.userId) && !open.has(person.userId))
+  const available: AvailableStaff[] = availablePeople
+    .filter(person => !open.has(person.userId))
     .map(person => ({ ...person, previousStatus: previous.get(person.userId) ?? null }))
     .sort((a, b) => TEAM_ORDER[a.team] - TEAM_ORDER[b.team])
 
@@ -1090,7 +1096,7 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
       contract: contractId ? { id: contractId, title: row.contractTitle ?? 'Contratto' } : null,
     },
     counts: {
-      confirmed: convocations.filter(c => c.confirmed && countsTowardNeeded(c)).length,
+      confirmed: convocations.filter(c => c.confirmed).length,
       accepted: convocations.filter(c => c.status === 'accepted').length,
       waiting: convocations.filter(c => c.status === 'sent').length,
       draft: convocations.filter(c => c.status === 'draft').length,
@@ -1218,8 +1224,10 @@ export async function myConvocations(
 
 /** The home of the signed-in staff member, whatever the status of the application. */
 export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string = todayIso()): Promise<StaffHome> {
-  const convocations = await myConvocations(db, profile.userId, { approved: profile.status === 'approved' })
-  const { sessions } = await myAvailability(db, profile, today)
+  const [convocations, { sessions }] = await Promise.all([
+    myConvocations(db, profile.userId, { approved: profile.status === 'approved' }),
+    myAvailability(db, profile, today),
+  ])
   const available = sessions.filter(session => session.available).length
   return {
     status: profile.status,

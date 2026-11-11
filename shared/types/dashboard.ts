@@ -1,6 +1,7 @@
 // GET /api/admin/dashboard: the Panoramica of the administration (docs/spec.md, 3.9).
 import type { IsoDay } from '../utils/dates'
 import type { SessionStatus } from '../utils/constants'
+import type { StaffCounts } from './sessions'
 
 /** A session that has not ended yet, with the progress of its families and staff. */
 export interface DashboardSession {
@@ -21,16 +22,7 @@ export interface DashboardSession {
     /** Reserves waiting to be called. */
     reserves: number
   }
-  staff: {
-    needed: number
-    /** Accepted and, when the session has a contract, signed. */
-    confirmed: number
-    accepted: number
-    /** Convocations sent, still to answer. */
-    awaiting: number
-    /** Convocations prepared and not sent. */
-    toSend: number
-  }
+  staff: StaffCounts
 }
 
 /** One thing to do, with the page where it is done. */

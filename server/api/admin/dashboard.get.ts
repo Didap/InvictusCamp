@@ -5,7 +5,7 @@ import {
   type DashboardSession,
   type DashboardTodo,
 } from '#shared/types/dashboard'
-import { countsTowardNeeded } from '#shared/schemas/staff'
+import { staffCountsOf } from '~~/server/domain/sessions'
 import { enumLabel, type SessionStatus } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDay, plural } from '#shared/utils/format'
@@ -45,9 +45,8 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
     .where(inArray(t.campSessions.status, ACTIVE))
     .orderBy(asc(t.campSessions.startDate))
   const ids = sessions.map(s => s.id)
-  const contracts = sessions.flatMap(s => (s.contractDocumentId ? [s.contractDocumentId] : []))
 
-  const [participations, convocations, signedContracts, counts, expiredInvites, overdueSignatures] = await Promise.all([
+  const [participations, staffCounts, counts, expiredInvites, overdueSignatures] = await Promise.all([
     ids.length
       ? db
           .select({
@@ -60,25 +59,7 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
           .from(t.sessionFamilies)
           .where(inArray(t.sessionFamilies.sessionId, ids))
       : [],
-    ids.length
-      ? db
-          .select({
-            sessionId: t.sessionStaff.sessionId,
-            userId: t.sessionStaff.userId,
-            status: t.sessionStaff.status,
-            role: t.sessionStaff.role,
-            team: t.staffProfiles.team,
-          })
-          .from(t.sessionStaff)
-          .leftJoin(t.staffProfiles, eq(t.staffProfiles.userId, t.sessionStaff.userId))
-          .where(inArray(t.sessionStaff.sessionId, ids))
-      : [],
-    contracts.length
-      ? db
-          .select({ documentId: t.signatureRequests.documentId, userId: t.signatureRequests.userId })
-          .from(t.signatureRequests)
-          .where(and(inArray(t.signatureRequests.documentId, contracts), eq(t.signatureRequests.status, 'signed')))
-      : [],
+    staffCountsOf(db, sessions),
     Promise.all([
       total(db.select({ total: count() }).from(t.staffProfiles).where(eq(t.staffProfiles.status, 'applied'))),
       total(db.select({ total: count() }).from(t.families).where(eq(t.families.formStatus, 'draft'))),
@@ -136,12 +117,9 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
     ),
   ])
 
-  const signed = new Set(signedContracts.map(s => `${s.documentId}:${s.userId}`))
   const progress = sessions.map((s): DashboardSession & { endsBeforeToday: boolean } => {
     const own = participations.filter(p => p.sessionId === s.id)
-    const staff = convocations.filter(c => c.sessionId === s.id)
     const slots = slotSummary(s.familySlots, own)
-    const accepted = staff.filter(c => c.status === 'accepted')
     return {
       id: s.id,
       title: s.title,
@@ -157,18 +135,7 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
         free: slots.free,
         reserves: slots.reserves,
       },
-      staff: {
-        needed: s.staffNeeded,
-        // Only who counts toward `needed`: the staff team, coordinators aside.
-        confirmed: accepted.filter(
-          c =>
-            countsTowardNeeded({ team: c.team ?? 'staff', role: c.role }) &&
-            (!s.contractDocumentId || signed.has(`${s.contractDocumentId}:${c.userId}`)),
-        ).length,
-        accepted: accepted.length,
-        awaiting: staff.filter(c => c.status === 'sent').length,
-        toSend: staff.filter(c => c.status === 'draft').length,
-      },
+      staff: staffCounts.get(s.id)!,
       endsBeforeToday: s.endDate < today,
     }
   })
@@ -209,16 +176,16 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
         icon: 'i-lucide-phone',
       })
     }
-    if (s.staff.toSend > 0) {
+    if (s.staff.drafts > 0) {
       todo.push({
         key: `${s.id}:convocations`,
-        label: `«${s.title}»: ${plural(s.staff.toSend, 'convocazione da inviare', 'convocazioni da inviare')}`,
+        label: `«${s.title}»: ${plural(s.staff.drafts, 'convocazione da inviare', 'convocazioni da inviare')}`,
         to: sessionTab(s.id, 'staff'),
         icon: 'i-lucide-send',
       })
     }
     // "Da trovare": people nobody has been convoked for yet (the same words as the session pages).
-    const missing = s.staff.needed - s.staff.accepted - s.staff.awaiting - s.staff.toSend
+    const missing = s.staff.needed - s.staff.accepted - s.staff.waiting - s.staff.toSend
     if (open && missing > 0) {
       todo.push({
         key: `${s.id}:staff`,

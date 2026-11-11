@@ -25,10 +25,8 @@ export type ContractState = 'none' | 'missing' | 'pending' | 'signed'
 export interface AvailabilitySession {
   id: string
   title: string
-  location: string
   startDate: IsoDay
   endDate: IsoDay
-  status: SessionStatus
 }
 
 /** A personal document of a staff account (titles, certificates, ID). */
