@@ -14,7 +14,7 @@ import type {
   CommunicationOptions,
   CommunicationSendResult,
   EmailPreview,
-  EmailTemplate,
+  MessageTemplate,
 } from '#shared/types/communications'
 import type { AudienceType } from '#shared/types/domain'
 import { plural } from '#shared/utils/format'
@@ -52,7 +52,7 @@ const state = reactive({ subject: '', body: '', audience: computed(() => audienc
 
 const [{ data: options }, { data: templates }] = await Promise.all([
   useApiFetch<CommunicationOptions>('/api/admin/communications/options'),
-  useApiFetch<EmailTemplate[]>('/api/admin/email-templates'),
+  useApiFetch<MessageTemplate[]>('/api/admin/message-templates'),
 ])
 
 if (draftId.value) {
@@ -72,35 +72,29 @@ if (draftId.value) {
 }
 
 // ─── Template ──────────────────────────────────────────────────────────────────────────────────────
-const templateItems = computed(() => (templates.value ?? []).map(t => ({ label: t.name, value: t.id })))
-const templateId = ref<string>()
-/** Remounts the select when a template is refused, so it does not show the one refused. */
-const templateSelectKey = ref(0)
 /** Writes the template's subject and body in, after asking when that replaces what is written. */
-async function applyTemplate(id: string | undefined, ask = true) {
-  const template = templates.value?.find(t => t.id === id)
-  if (!template) {
-    if (!ask) warn('Modello non trovato: forse è stato eliminato.')
-    return
-  }
+async function applyTemplate(template: MessageTemplate) {
   const written = state.subject.trim() || state.body.trim()
   const same = state.subject === template.subject && state.body === template.body
-  if (ask && written && !same) {
+  if (written && !same) {
     const ok = await confirm({
       title: 'Sostituisci oggetto e testo?',
       description: `Quello che hai scritto lascia il posto al modello «${template.name}». Nessuna email parte.`,
       confirmLabel: 'Usa il modello',
     })
-    if (!ok) {
-      templateSelectKey.value++
-      return
-    }
+    if (!ok) return
   }
-  templateId.value = template.id
   state.subject = template.subject
   state.body = template.body
 }
-if (!draftId.value && UUID.test(queryText('modello'))) await applyTemplate(queryText('modello'), false)
+const templateItems = computed(() =>
+  (templates.value ?? []).map(template => ({ label: template.name, onSelect: () => applyTemplate(template) })),
+)
+if (!draftId.value && UUID.test(queryText('modello'))) {
+  const template = templates.value?.find(t => t.id === queryText('modello'))
+  if (template) await applyTemplate(template)
+  else warn('Modello non trovato: forse è stato eliminato.')
+}
 
 // ─── Live count ────────────────────────────────────────────────────────────────────────────────────
 const summary = ref<AudienceSummary | null>(null)
@@ -152,13 +146,13 @@ function filledFor(firstName: string | undefined) {
   return { subject: fillMessageFields(state.subject, values), body: fillMessageFields(state.body, values) }
 }
 
+const firstRecipient = computed(() => summary.value?.recipients[0])
+const previewText = computed(() => filledFor(firstRecipient.value?.firstName))
 const preview = ref<EmailPreview | null>(null)
 let previewRequest = 0
-// The key is a string, so a change of the audience that leaves the text as it was asks for nothing.
 watchDebounced(
-  () => JSON.stringify(filledFor(summary.value?.recipients[0]?.firstName)),
-  async key => {
-    const { subject, body } = JSON.parse(key) as { subject: string; body: string }
+  [() => previewText.value.subject, () => previewText.value.body],
+  async ([subject, body]) => {
     const request = ++previewRequest
     try {
       const result = await api<EmailPreview>('/api/admin/communications/preview', {
@@ -332,16 +326,15 @@ const sendLabel = computed(() => (count.value ? `Invia a ${plural(count.value, '
           description="Testo semplice: una riga vuota separa i paragrafi. Non scrivere dettagli sulla salute delle persone."
         >
           <div class="space-y-5">
-            <UFormField v-if="templateItems.length" label="Parti da un modello" hint="Facoltativo">
-              <USelect
-                :key="templateSelectKey"
-                :model-value="templateId"
-                :items="templateItems"
-                placeholder="Scegli un modello"
-                class="w-full sm:w-72"
-                @update:model-value="applyTemplate"
+            <UDropdownMenu v-if="templateItems.length" :items="templateItems" :content="{ align: 'start' }">
+              <UButton
+                label="Parti da un modello"
+                icon="i-lucide-file-text"
+                trailing-icon="i-lucide-chevron-down"
+                color="neutral"
+                variant="outline"
               />
-            </UFormField>
+            </UDropdownMenu>
             <UFormField label="Oggetto" name="subject" required>
               <UInput v-model="state.subject" maxlength="200" class="w-full" />
             </UFormField>
@@ -359,8 +352,8 @@ const sendLabel = computed(() => (count.value ? `Invia a ${plural(count.value, '
         <IcSection
           title="Anteprima"
           :description="
-            summary?.recipients[0]
-              ? `Così arriva nella casella di posta di ${summary.recipients[0].name}.`
+            firstRecipient
+              ? `Così arriva nella casella di posta di ${firstRecipient.name}.`
               : 'Così arriva nella casella di posta.'
           "
         >

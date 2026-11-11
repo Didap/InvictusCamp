@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { emailTemplateSchema, type EmailTemplateInput } from '#shared/schemas/communications'
-import type { EmailTemplate } from '#shared/types/communications'
+import { messageTemplateSchema, type MessageTemplateInput } from '#shared/schemas/communications'
+import type { MessageTemplate } from '#shared/types/communications'
 import { MESSAGE_FIELDS_HELP } from '#shared/utils/message-fields'
 
 // A saved message (docs/spec.md, 3.7): name, subject, body. A new one when `template` is null.
 const open = defineModel<boolean>('open', { default: false })
-const props = defineProps<{ template: EmailTemplate | null }>()
+const props = defineProps<{ template: MessageTemplate | null }>()
 const emit = defineEmits<{ saved: [] }>()
 
 const api = useApi()
-const state = reactive<EmailTemplateInput>({ name: '', subject: '', body: '' })
+const state = reactive<MessageTemplateInput>({ name: '', subject: '', body: '' })
 watch(open, value => {
   if (value) {
     Object.assign(state, {
@@ -25,8 +25,8 @@ async function onSubmit() {
   saving.value = true
   try {
     const url: string = props.template
-      ? `/api/admin/email-templates/${props.template.id}`
-      : '/api/admin/email-templates'
+      ? `/api/admin/message-templates/${props.template.id}`
+      : '/api/admin/message-templates'
     await api(url, { method: props.template ? 'PUT' : 'POST', body: state })
     notifySuccess('Modello salvato', 'Nessuna email è partita.')
     emit('saved')
@@ -47,7 +47,7 @@ async function onSubmit() {
     :ui="{ content: 'sm:max-w-2xl' }"
   >
     <template #body>
-      <UForm :schema="emailTemplateSchema" :state="state" class="space-y-5" @submit="onSubmit">
+      <UForm :schema="messageTemplateSchema" :state="state" class="space-y-5" @submit="onSubmit">
         <UFormField
           label="Nome del modello"
           name="name"

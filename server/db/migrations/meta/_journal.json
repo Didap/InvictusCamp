@@ -47,8 +47,8 @@
     {
       "idx": 6,
       "version": "7",
-      "when": 1794427635126,
-      "tag": "0006_email_templates",
+      "when": 1794428841447,
+      "tag": "0006_message_templates",
       "breakpoints": true
     }
   ]

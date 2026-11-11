@@ -1,4 +1,4 @@
-CREATE TABLE "email_templates" (
+CREATE TABLE "message_templates" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
 	"subject" text NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE "email_templates" (
 );
 
 --> statement-breakpoint
-INSERT INTO "email_templates" ("name", "subject", "body") VALUES
+INSERT INTO "message_templates" ("name", "subject", "body") VALUES
 ('Convocazione staff', 'Ti aspettiamo a {sessione}', 'Ciao {nome},
 
 ti aspettiamo a {sessione}, {date}.

@@ -9,7 +9,7 @@ import type { Paginated } from '../../shared/types/api'
 import type { CommunicationDetail, CommunicationListItem } from '../../shared/types/communications'
 import type { Audience } from '../../shared/types/domain'
 import { EMAIL_STATUSES, type EmailStatus, type UserRole, type UserStatus } from '../../shared/utils/constants'
-import { fillMessageFields, messageFieldValues } from '../../shared/utils/message-fields'
+import { fillMessageFields, messageFieldValues, type FieldSession } from '../../shared/utils/message-fields'
 import {
   campSessions,
   communications,
@@ -33,19 +33,12 @@ export interface Recipient {
   role: UserRole
 }
 
-/** The session of an audience: its description and the fields {sessione} and {date} need it. */
-export interface AudienceSession {
-  title: string
-  startDate: string
-  endDate: string
-}
-
 export interface ResolvedAudience {
   recipients: Recipient[]
   /** Accounts that match the audience but cannot receive email. */
   excluded: number
   /** The session written to, for the families or the staff of a session. */
-  session: AudienceSession | null
+  session: FieldSession | null
 }
 
 interface Candidate extends Recipient {
@@ -68,7 +61,7 @@ export function canReceive(user: { status: UserStatus; emailVerifiedAt: Date | n
   return user.status === 'active' && user.emailVerifiedAt !== null
 }
 
-async function requireSession(db: DbOrTx, sessionId: string): Promise<AudienceSession> {
+async function requireSession(db: DbOrTx, sessionId: string): Promise<FieldSession> {
   const [session] = await db
     .select({ title: campSessions.title, startDate: campSessions.startDate, endDate: campSessions.endDate })
     .from(campSessions)
@@ -133,11 +126,14 @@ async function candidates(db: DbOrTx, audience: Audience): Promise<Candidate[]> 
 /** The people an audience reaches, by surname, each once; a session that does not exist is a 404. */
 export async function resolveAudience(db: DbOrTx, audience: Audience): Promise<ResolvedAudience> {
   const sessionId = audienceSessionId(audience)
-  const session = sessionId === null ? null : await requireSession(db, sessionId)
+  const [session, matches] = await Promise.all([
+    sessionId === null ? null : requireSession(db, sessionId),
+    candidates(db, audience),
+  ])
   const seen = new Set<string>()
   const recipients: Recipient[] = []
   let excluded = 0
-  for (const candidate of await candidates(db, audience)) {
+  for (const candidate of matches) {
     if (seen.has(candidate.userId)) continue
     seen.add(candidate.userId)
     if (!canReceive(candidate)) {

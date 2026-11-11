@@ -10,11 +10,11 @@ import {
   updateDraft,
 } from '../../server/domain/audiences'
 import {
-  createEmailTemplate,
-  deleteEmailTemplate,
-  listEmailTemplates,
-  updateEmailTemplate,
-} from '../../server/domain/email-templates'
+  createMessageTemplate,
+  deleteMessageTemplate,
+  listMessageTemplates,
+  updateMessageTemplate,
+} from '../../server/domain/message-templates'
 import { inviteUser, listUsers, resendInvite, sendPasswordReset, setUserEnabled } from '../../server/domain/users'
 import { issueToken } from '../../server/domain/tokens'
 import { bodyParagraphs } from '../../server/emails/communications'
@@ -294,7 +294,7 @@ describe('communications', () => {
 
 describe('email templates', () => {
   it('the examples come with the migrations and survive the reset of the demo data', async () => {
-    const names = (await listEmailTemplates(db)).map(template => template.name)
+    const names = (await listMessageTemplates(db)).map(template => template.name)
     expect(names).toEqual(
       expect.arrayContaining(['Convocazione famiglie', 'Convocazione staff', 'Promemoria documenti']),
     )
@@ -302,16 +302,16 @@ describe('email templates', () => {
 
   it('are added, edited and deleted; an unknown id is a 404', async () => {
     const input = { name: 'Zaini', subject: 'Cosa mettere nello zaino', body: 'Ciao {nome},\n\nporta [cosa].' }
-    const id = await createEmailTemplate(db, input)
-    expect((await listEmailTemplates(db)).find(template => template.id === id)).toMatchObject(input)
+    const id = await createMessageTemplate(db, input)
+    expect((await listMessageTemplates(db)).find(template => template.id === id)).toMatchObject(input)
 
-    await updateEmailTemplate(db, id, { ...input, subject: 'Lo zaino' })
-    expect((await listEmailTemplates(db)).find(template => template.id === id)?.subject).toBe('Lo zaino')
+    await updateMessageTemplate(db, id, { ...input, subject: 'Lo zaino' })
+    expect((await listMessageTemplates(db)).find(template => template.id === id)?.subject).toBe('Lo zaino')
 
-    await deleteEmailTemplate(db, id)
-    expect((await listEmailTemplates(db)).some(template => template.id === id)).toBe(false)
-    await expect(deleteEmailTemplate(db, id)).rejects.toMatchObject({ statusCode: 404 })
-    await expect(updateEmailTemplate(db, id, input)).rejects.toMatchObject({ statusCode: 404 })
+    await deleteMessageTemplate(db, id)
+    expect((await listMessageTemplates(db)).some(template => template.id === id)).toBe(false)
+    await expect(deleteMessageTemplate(db, id)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(updateMessageTemplate(db, id, input)).rejects.toMatchObject({ statusCode: 404 })
   })
 })
 

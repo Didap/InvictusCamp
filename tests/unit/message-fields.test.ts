@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { communicationSchema, emailTemplateSchema } from '#shared/schemas/communications'
+import { communicationSchema, messageTemplateSchema } from '#shared/schemas/communications'
 import { fillMessageFields, messageFieldValues, messageIssue } from '#shared/utils/message-fields'
 
 const session = { title: 'Sessione 6', startDate: '2027-05-31', endDate: '2027-06-04' }
@@ -22,7 +22,7 @@ describe('message fields', () => {
     expect(messageIssue('Ritrovo [orario] in piazza', true)).toBe('Completa [orario] prima dell’invio.')
     expect(messageIssue('Ciao {cognome}', true)).toContain('{cognome} non si compila da solo')
     expect(messageIssue('Ciao {constructor}', true)).toBe(
-      '{constructor} non si compila da solo: usa {nome}, {sessione}, {date}.',
+      '{constructor} non si compila da solo: usa {nome}, {sessione} o {date}.',
     )
     expect(messageIssue('A presto a {sessione}', false)).toBe(
       '{sessione} si compila solo se scrivi alle famiglie o allo staff di una sessione.',
@@ -49,9 +49,10 @@ describe('message fields', () => {
     expect(toSession.success).toBe(true)
 
     expect(
-      emailTemplateSchema.safeParse({ name: 'Convocazione', subject: '{sessione}', body: 'Ritrovo [orario]' }).success,
+      messageTemplateSchema.safeParse({ name: 'Convocazione', subject: '{sessione}', body: 'Ritrovo [orario]' })
+        .success,
     ).toBe(true)
-    const typo = emailTemplateSchema.safeParse({ name: 'Convocazione', subject: 'Ciao', body: 'Ciao {nmoe}' })
+    const typo = messageTemplateSchema.safeParse({ name: 'Convocazione', subject: 'Ciao', body: 'Ciao {nmoe}' })
     expect(typo.error?.issues[0]?.path).toEqual(['body'])
   })
 })

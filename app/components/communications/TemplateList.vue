@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import type { EmailTemplate } from '#shared/types/communications'
+import type { MessageTemplate } from '#shared/types/communications'
 
 // The saved messages (docs/spec.md, 3.7): each one opens the composer already written; add, edit, delete.
 const api = useApi()
 const confirm = useConfirm()
-const { data, refresh } = useApiFetch<EmailTemplate[]>('/api/admin/email-templates')
+const { data, refresh } = useApiFetch<MessageTemplate[]>('/api/admin/message-templates')
 
-const editing = ref<EmailTemplate | null>(null)
+const editing = ref<MessageTemplate | null>(null)
 const modalOpen = ref(false)
-function edit(template: EmailTemplate | null) {
+function edit(template: MessageTemplate | null) {
   editing.value = template
   modalOpen.value = true
 }
 
-async function remove(template: EmailTemplate) {
+async function remove(template: MessageTemplate) {
   const ok = await confirm({
     title: `Elimini «${template.name}»?`,
     description: 'I messaggi già scritti partendo da questo modello restano come sono. Nessuna email parte.',
@@ -22,7 +22,7 @@ async function remove(template: EmailTemplate) {
   })
   if (!ok) return
   try {
-    const url: string = `/api/admin/email-templates/${template.id}`
+    const url: string = `/api/admin/message-templates/${template.id}`
     await api(url, { method: 'DELETE' })
     notifySuccess('Modello eliminato')
     await refresh()

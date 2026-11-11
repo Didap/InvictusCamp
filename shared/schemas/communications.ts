@@ -12,8 +12,8 @@ import {
   type ParticipationKind,
   type ParticipationStatus,
 } from '../utils/constants'
-import { plural } from '../utils/format'
-import { messageIssue, unknownFieldIssue } from '../utils/message-fields'
+import { orList, plural } from '../utils/format'
+import { fieldIssue, messageIssue } from '../utils/message-fields'
 import { zListQuery, zRequiredText, zText } from './common'
 
 export const AUDIENCE_TYPES = [
@@ -90,6 +90,16 @@ const communicationFields = z.object({
   audience: zAudience,
 })
 
+/** Adds the issue `check` finds in the subject and in the body, each under its own field. */
+function checkTexts(check: (text: string) => string | null) {
+  return (message: { subject: string; body: string }, ctx: z.RefinementCtx) => {
+    for (const key of ['subject', 'body'] as const) {
+      const issue = check(message[key])
+      if (issue) ctx.addIssue({ code: 'custom', path: [key], message: issue })
+    }
+  }
+}
+
 /**
  * A message sent now. Plain text body: blank lines separate paragraphs. The fields in braces must be
  * ones filled by themselves, and the parts in square brackets of a template must be completed.
@@ -97,10 +107,7 @@ const communicationFields = z.object({
 export const communicationSchema = communicationFields.superRefine((message, ctx) => {
   // A session audience whose session is still to choose counts as one: its own error says what is missing.
   const hasSession = audienceSessionId(message.audience) !== null
-  for (const key of ['subject', 'body'] as const) {
-    const issue = messageIssue(message[key], hasSession)
-    if (issue) ctx.addIssue({ code: 'custom', path: [key], message: issue })
-  }
+  checkTexts(text => messageIssue(text, hasSession))(message, ctx)
 })
 export type CommunicationInput = z.infer<typeof communicationSchema>
 
@@ -111,15 +118,10 @@ export type CommunicationDraftInput = z.infer<typeof communicationDraftSchema>
 export const emailPreviewSchema = z.object({ subject: zText(200), body: zText(20_000) })
 
 /** A saved message to start from. Its parts in square brackets are completed in each message. */
-export const emailTemplateSchema = z
+export const messageTemplateSchema = z
   .object({ name: zRequiredText(80), subject: zRequiredText(200), body: zRequiredText(20_000) })
-  .superRefine((template, ctx) => {
-    for (const key of ['subject', 'body'] as const) {
-      const issue = unknownFieldIssue(template[key])
-      if (issue) ctx.addIssue({ code: 'custom', path: [key], message: issue })
-    }
-  })
-export type EmailTemplateInput = z.infer<typeof emailTemplateSchema>
+  .superRefine(checkTexts(text => fieldIssue(text)))
+export type MessageTemplateInput = z.infer<typeof messageTemplateSchema>
 
 /** Empty query values ("?status=") read as missing. */
 const optional = <T extends z.ZodType>(schema: T) =>
@@ -229,11 +231,6 @@ export function audienceSessionId(audience: Audience): string | null {
 }
 
 /** "a, b o c". */
-function orList(items: string[]): string {
-  if (items.length <= 1) return items.join('')
-  return `${items.slice(0, -1).join(', ')} o ${items.at(-1)}`
-}
-
 /** One line that says who receives a message: "Famiglie di «Sessione 1» (titolari e riserve; invitata o confermata)". */
 export function describeAudience(audience: Audience, sessionTitle?: string | null): string {
   const session = sessionTitle ? `«${sessionTitle}»` : 'una sessione'

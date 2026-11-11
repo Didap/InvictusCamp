@@ -107,8 +107,8 @@ export interface EmailLogDetail extends EmailLogItem {
   html: string | null
 }
 
-/** A row of GET /api/admin/email-templates: a saved message the composer starts from. */
-export interface EmailTemplate {
+/** A row of GET /api/admin/message-templates: a saved message the composer starts from. */
+export interface MessageTemplate {
   id: string
   name: string
   subject: string

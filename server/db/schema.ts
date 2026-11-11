@@ -456,9 +456,8 @@ export const communications = pgTable(
 /**
  * A saved message the composer starts from ("Convocazione staff"). Subject and body may hold the fields
  * filled for each recipient ({nome}, {sessione}, {date}) and parts in square brackets to complete by hand.
- * No foreign key on purpose: `truncate users cascade` (the reset of the demo data) would empty it too.
  */
-export const emailTemplates = pgTable('email_templates', {
+export const messageTemplates = pgTable('message_templates', {
   id: pk(),
   name: text().notNull(),
   subject: text().notNull(),
