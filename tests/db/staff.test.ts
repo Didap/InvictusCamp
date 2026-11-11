@@ -4,20 +4,21 @@ import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
-  addAvailability,
   addConvocations,
   answerConvocation,
   approveApplications,
   cancelConvocation,
   cancelSessionConvocations,
   changeStaffStatus,
+  myAvailability,
   myConvocations,
-  removeAvailability,
   replaceCv,
   saveApplicationDraft,
   sendConvocations,
   sessionStaffData,
+  setAvailability,
   setConvocationRole,
+  setStaffTeam,
   staffDetail,
   staffHome,
   staffList,
@@ -32,6 +33,7 @@ const ctx = { appUrl: 'https://gestionale.test' }
 const TODAY = '2026-11-06'
 
 const APPLICATION = {
+  team: 'staff' as const,
   birthDate: '1995-04-10',
   city: 'Lecce',
   roles: ['group_lead', 'other'] as ('group_lead' | 'other')[],
@@ -295,72 +297,90 @@ describe('review', () => {
 })
 
 describe('availability', () => {
-  it('only approved staff add and remove periods', async () => {
+  const answers = async (userId: string) =>
+    (await db.select().from(t.sessionAvailability).where(eq(t.sessionAvailability.userId, userId))).map(
+      row => row.sessionId,
+    )
+
+  it('only approved staff answer, once per session, and can take it back', async () => {
+    const session = await makeSession(db)
     const applied = await makeStaff(db, 'applied')
-    const period = { startDate: '2027-06-01', endDate: '2027-06-30' }
-    await expect(addAvailability(db, applied.user.id, period, TODAY)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(
+      setAvailability(db, { userId: applied.user.id, sessionId: session.id, available: true }, TODAY),
+    ).rejects.toMatchObject({ statusCode: 403 })
 
-    const approved = await makeStaff(db, 'approved')
-    const added = await addAvailability(db, approved.user.id, { ...period, notes: ' Solo pomeriggio ' }, TODAY)
-    expect(added).toMatchObject({ ...period, notes: 'Solo pomeriggio' })
-
-    await db.update(t.staffProfiles).set({ status: 'inactive' }).where(eq(t.staffProfiles.userId, approved.user.id))
-    await expect(removeAvailability(db, approved.user.id, added.id)).rejects.toMatchObject({ statusCode: 403 })
+    const { user } = await makeStaff(db, 'approved')
+    await setAvailability(db, { userId: user.id, sessionId: session.id, available: true }, TODAY)
+    await setAvailability(db, { userId: user.id, sessionId: session.id, available: true }, TODAY)
+    expect(await answers(user.id)).toEqual([session.id])
+    await setAvailability(db, { userId: user.id, sessionId: session.id, available: false }, TODAY)
+    expect(await answers(user.id)).toEqual([])
   })
 
-  it('refuses periods already over, reversed or overlapping another', async () => {
+  it('refuses sessions already started, concluded or cancelled', async () => {
     const { user } = await makeStaff(db, 'approved')
+    const started = await makeSession(db, { startDate: TODAY, endDate: '2026-11-12' })
+    const cancelled = await makeSession(db, { status: 'cancelled' })
+    for (const session of [started, cancelled]) {
+      await expect(
+        setAvailability(db, { userId: user.id, sessionId: session.id, available: true }, TODAY),
+      ).rejects.toMatchObject({ statusCode: 409 })
+    }
     await expect(
-      addAvailability(db, user.id, { startDate: '2026-10-01', endDate: '2026-10-05' }, TODAY),
-    ).rejects.toMatchObject({ statusCode: 400 })
-    await expect(
-      addAvailability(db, user.id, { startDate: '2027-06-10', endDate: '2027-06-01' }, TODAY),
-    ).rejects.toMatchObject({ statusCode: 400 })
-    await addAvailability(db, user.id, { startDate: '2027-06-01', endDate: '2027-06-30' }, TODAY)
-    await expect(
-      addAvailability(db, user.id, { startDate: '2027-06-30', endDate: '2027-07-10' }, TODAY),
+      setAvailability(db, { userId: user.id, sessionId: randomUUID(), available: true }, TODAY),
     ).rejects.toMatchObject({ statusCode: 409 })
-    // The day after is fine, and so is a period that started earlier but is not over.
-    await addAvailability(db, user.id, { startDate: '2027-07-01', endDate: '2027-07-10' }, TODAY)
-    await addAvailability(db, user.id, { startDate: '2026-11-01', endDate: '2026-11-30' }, TODAY)
   })
 
-  it('a person removes only their own periods', async () => {
-    const anna = await makeStaff(db, 'approved')
-    const luca = await makeStaff(db, 'approved')
-    const period = await addAvailability(db, anna.user.id, { startDate: '2027-06-01', endDate: '2027-06-30' }, TODAY)
-    await expect(removeAvailability(db, luca.user.id, period.id)).rejects.toMatchObject({ statusCode: 404 })
-    await removeAvailability(db, anna.user.id, period.id)
-    expect(await db.select().from(t.staffAvailability)).toHaveLength(0)
-  })
-
-  it('the list shows the next period that has not ended', async () => {
+  it('the staff page lists the sessions not started yet with the answer and the convocation', async () => {
+    const june = await makeSession(db, { startDate: '2027-06-21', endDate: '2027-06-27' })
+    const july = await makeSession(db, { startDate: '2027-07-12', endDate: '2027-07-18', status: 'draft' })
+    await makeSession(db, { startDate: '2026-07-13', endDate: '2026-07-19', status: 'completed' })
     const { user } = await makeStaff(db, 'approved')
-    await db.insert(t.staffAvailability).values([
-      { userId: user.id, startDate: '2026-07-01', endDate: '2026-07-10' },
-      { userId: user.id, startDate: '2027-08-01', endDate: '2027-08-10' },
-      { userId: user.id, startDate: '2027-06-01', endDate: '2027-06-10' },
+    await setAvailability(db, { userId: user.id, sessionId: june.id, available: true }, TODAY)
+    await db.insert(t.sessionStaff).values({ sessionId: june.id, userId: user.id, status: 'sent' })
+    const mine = await myAvailability(db, { userId: user.id, status: 'approved' }, TODAY)
+    expect(mine.canEdit).toBe(true)
+    expect(mine.sessions.map(s => [s.id, s.available, s.convoked])).toEqual([
+      [june.id, true, true],
+      [july.id, false, false],
     ])
-    const [row] = await staffList(db, { today: TODAY })
-    expect(row!.nextAvailability).toEqual({ startDate: '2027-06-01', endDate: '2027-06-10' })
-    expect(row!.coverage).toBeNull()
+    const home = await staffHome(db, await profileStatus(user.id), TODAY)
+    expect(home.availability).toEqual({ available: 1, total: 2 })
   })
 
-  it('the list carries the coverage of a chosen session', async () => {
-    const session = await makeSession(db, { startDate: '2027-06-21', endDate: '2027-06-27' })
-    const full = await makeStaff(db, 'approved')
-    const partial = await makeStaff(db, 'approved')
+  it('the list counts the sessions ahead and answers for a chosen session', async () => {
+    const june = await makeSession(db, { startDate: '2027-06-21', endDate: '2027-06-27' })
+    const july = await makeSession(db, { startDate: '2027-07-12', endDate: '2027-07-18' })
+    const both = await makeStaff(db, 'approved')
+    const julyOnly = await makeStaff(db, 'approved')
     await makeStaff(db, 'approved')
-    await db.insert(t.staffAvailability).values([
-      { userId: full.user.id, startDate: '2027-06-01', endDate: '2027-06-30' },
-      { userId: partial.user.id, startDate: '2027-06-25', endDate: '2027-07-05' },
+    await db.insert(t.sessionAvailability).values([
+      { sessionId: june.id, userId: both.user.id },
+      { sessionId: july.id, userId: both.user.id },
+      { sessionId: july.id, userId: julyOnly.user.id },
     ])
-    const rows = await staffList(db, { today: TODAY, sessionId: session.id })
-    const coverage = Object.fromEntries(rows.map(row => [row.userId, row.coverage]))
-    expect(coverage[full.user.id]).toBe('full')
-    expect(coverage[partial.user.id]).toBe('partial')
-    expect(rows.filter(row => row.coverage === 'none')).toHaveLength(1)
+    const all = await staffList(db, { today: TODAY })
+    expect(Object.fromEntries(all.map(row => [row.userId, row.availableSessions]))).toMatchObject({
+      [both.user.id]: 2,
+      [julyOnly.user.id]: 1,
+    })
+    expect(all.every(row => row.available === null)).toBe(true)
+    const rows = await staffList(db, { today: TODAY, sessionId: june.id })
+    expect(rows.filter(row => row.available).map(row => row.userId)).toEqual([both.user.id])
     await expect(staffList(db, { sessionId: randomUUID() })).rejects.toMatchObject({ statusCode: 404 })
+  })
+})
+
+describe('team', () => {
+  it('is chosen in the application and changed by the administration, audited', async () => {
+    const admin = await makeAdmin(db)
+    const { user } = await makeStaff(db, 'registered')
+    await saveApplicationDraft(db, user.id, { team: 'volunteer' })
+    expect((await staffDetail(db, user.id)).team).toBe('volunteer')
+    await setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } })
+    await setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } })
+    expect((await staffDetail(db, user.id)).team).toBe('staff')
+    expect((await auditActions(user.id)).filter(action => action === 'staff.team')).toHaveLength(1)
   })
 })
 
@@ -635,26 +655,37 @@ describe('convocations', () => {
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
-  it('the Staff tab shows the coverage of the session dates, best first', async () => {
-    const session = await makeSession(db, { startDate: '2027-06-21', endDate: '2027-06-27' })
-    const full = await makeStaff(db, 'approved')
-    const partial = await makeStaff(db, 'approved')
-    const none = await makeStaff(db, 'approved')
+  it('the Staff tab offers only who is available for the session, staff first', async () => {
+    const admin = await makeAdmin(db)
+    const session = await makeSession(db)
+    const volunteer = await makeStaff(db, 'approved')
+    const staff = await makeStaff(db, 'approved')
+    const notAvailable = await makeStaff(db, 'approved')
     const applied = await makeStaff(db, 'applied')
-    await db.insert(t.staffAvailability).values([
-      { userId: full.user.id, startDate: '2027-06-15', endDate: '2027-06-23' },
-      { userId: full.user.id, startDate: '2027-06-24', endDate: '2027-07-31' },
-      { userId: partial.user.id, startDate: '2027-06-25', endDate: '2027-07-10' },
-      { userId: none.user.id, startDate: '2027-08-01', endDate: '2027-08-31' },
-    ])
+    await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.userId, volunteer.user.id))
+    await db
+      .insert(t.sessionAvailability)
+      .values([volunteer, staff, applied].map(person => ({ sessionId: session.id, userId: person.user.id })))
     const data = await sessionStaffData(db, session.id)
-    expect(data.available.map(person => [person.userId, person.coverage])).toEqual([
-      [full.user.id, 'full'],
-      [partial.user.id, 'partial'],
-      [none.user.id, 'none'],
+    expect(data.available.map(person => [person.userId, person.team])).toEqual([
+      [staff.user.id, 'staff'],
+      [volunteer.user.id, 'volunteer'],
     ])
-    expect(data.available.find(person => person.userId === applied.user.id)).toBeUndefined()
-    expect(data.available[0]!.periods).toHaveLength(2)
-    expect(data.available[2]!.periods).toHaveLength(0)
+
+    // A person convoked without (or after withdrawing) availability shows it on the convocation.
+    await addConvocations(db, {
+      sessionId: session.id,
+      people: [
+        { userId: staff.user.id, role: 'coordinator' },
+        { userId: notAvailable.user.id, role: 'other' },
+      ],
+      actor: { userId: admin.id },
+    })
+    const after = await sessionStaffData(db, session.id)
+    expect(after.available.map(person => person.userId)).toEqual([volunteer.user.id])
+    expect(Object.fromEntries(after.convocations.map(c => [c.userId, [c.available, c.role]]))).toEqual({
+      [staff.user.id]: [true, 'coordinator'],
+      [notAvailable.user.id]: [false, 'other'],
+    })
   })
 })

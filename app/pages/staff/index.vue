@@ -2,7 +2,7 @@
 import { APPLICATION_CHECKLIST } from '#shared/schemas/staff'
 import type { StaffHome } from '#shared/types/staff'
 import { todayIso } from '#shared/utils/dates'
-import { formatDay, formatDayRange } from '#shared/utils/format'
+import { formatDay, formatDayRange, plural } from '#shared/utils/format'
 
 // The staff home: it follows the application (spec 3.4). Registered: complete the application. Applied:
 // wait for the review. Approved: convocations to answer, next sessions, documents to sign, availability.
@@ -145,16 +145,16 @@ const started = computed(() => checklist.value.some(item => item.done))
         </IcSection>
 
         <IcSection v-if="home.status === 'approved'" title="La tua disponibilità">
-          <div v-if="home.availability.next" class="flex flex-wrap items-center justify-between gap-3">
+          <p v-if="!home.availability.total" class="max-w-prose text-muted">
+            Non ci sono sessioni in programma: quando l’amministrazione le prepara, indichi qui a quali puoi venire.
+          </p>
+          <div v-else-if="home.availability.available" class="flex flex-wrap items-center justify-between gap-3">
             <p class="max-w-prose">
-              {{
-                home.availability.upcoming === 1
-                  ? 'Hai indicato un periodo:'
-                  : `Hai indicato ${home.availability.upcoming} periodi. Il prossimo:`
-              }}
-              <span class="font-semibold text-highlighted">
-                {{ formatDayRange(home.availability.next.startDate, home.availability.next.endDate, 'long') }}
-              </span>
+              Ci sei per
+              <span class="font-semibold text-highlighted">{{
+                plural(home.availability.available, 'sessione', 'sessioni')
+              }}</span>
+              su {{ home.availability.total }} in programma.
             </p>
             <UButton
               class="pointer-coarse:min-h-11"
@@ -170,8 +170,10 @@ const started = computed(() => checklist.value.some(item => item.done))
             color="warning"
             variant="subtle"
             icon="i-lucide-calendar-plus"
-            title="Indica quando sei disponibile"
-            description="Ti convochiamo per le sessioni che cadono nei periodi che ci indichi."
+            title="Indica a quali sessioni puoi venire"
+            :description="`${
+              home.availability.total === 1 ? 'C’è una sessione' : `Ci sono ${home.availability.total} sessioni`
+            } in programma: ti convochiamo solo per quelle a cui ci sei, dal primo all’ultimo giorno.`"
             :actions="[
               {
                 label: 'Indica la disponibilità',

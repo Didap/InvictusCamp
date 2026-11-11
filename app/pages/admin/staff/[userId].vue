@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { StaffDetail } from '#shared/types/staff'
-import type { StaffStatus } from '#shared/utils/constants'
+import type { StaffStatus, StaffTeam } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDateTime, formatDay, formatDayRange, fullName } from '#shared/utils/format'
 
@@ -11,7 +11,7 @@ const route = useRoute()
 const userId = computed(() => String(route.params.userId))
 const api = useApi()
 const confirm = useConfirm()
-const { label, meta } = useEnums()
+const { label, meta, options } = useEnums()
 const { data: person, refresh } = await useApiFetch<StaffDetail>(() => `/api/admin/staff/${userId.value}`)
 
 const name = computed(() => (person.value ? fullName(person.value) : ''))
@@ -40,6 +40,24 @@ async function saveNotes() {
   } finally {
     savingNotes.value = false
   }
+}
+
+// ─── Team: staff or v-team, chosen in the application ───
+const teamItems = computed(() => options('staffTeam').map(option => ({ label: option.label, value: option.value })))
+const savingTeam = ref(false)
+async function changeTeam(team: StaffTeam) {
+  if (!person.value || team === person.value.team) return
+  savingTeam.value = true
+  try {
+    const url: string = `/api/admin/staff/${userId.value}/team`
+    await api(url, { method: 'PUT', body: { team } })
+    notifySuccess('Squadra cambiata', `${name.value}: ${label('staffTeam', team)}`)
+  } catch (error) {
+    notifyError(error)
+  } finally {
+    savingTeam.value = false
+  }
+  await refresh()
 }
 
 const NO_EMAIL = 'Nessuna email parte adesso: l’esito lo comunichi tu, quando vuoi, con «Comunica l’esito».'
@@ -151,9 +169,10 @@ const texts = computed(() => {
   ]
 })
 
-const periods = computed(() => {
+/** The sessions the person can come to: the ones still ahead first. */
+const availability = computed(() => {
   const all = person.value?.availability ?? []
-  return { upcoming: all.filter(p => p.endDate >= today), past: all.filter(p => p.endDate < today) }
+  return [...all.filter(s => s.startDate > today), ...all.filter(s => s.startDate <= today).reverse()]
 })
 
 function convocationNote(c: StaffDetail['convocations'][number]): string {
@@ -204,6 +223,15 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               <IcStatusBadge v-if="person.accountStatus !== 'active'" kind="userStatus" :value="person.accountStatus" />
             </div>
             <p class="text-sm text-muted">{{ statusLine }}</p>
+            <UFormField label="Squadra" help="Scelta nella candidatura. Chi è nel v-team è un volontario.">
+              <USelect
+                :model-value="person.team"
+                :items="teamItems"
+                :loading="savingTeam"
+                class="w-full"
+                @update:model-value="value => changeTeam(value as StaffTeam)"
+              />
+            </UFormField>
 
             <UAlert
               v-if="outcomePending"
@@ -328,29 +356,30 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           </div>
         </IcSection>
 
-        <IcSection title="Disponibilità" description="I periodi in cui può venire al camp, giorni inclusi.">
-          <p v-if="!person.availability.length" class="text-muted">
+        <IcSection title="Disponibilità" description="Le sessioni a cui ha detto che c’è, dal primo all’ultimo giorno.">
+          <p v-if="!availability.length" class="text-muted">
             {{
               person.status === 'approved'
-                ? 'Non ha ancora indicato periodi di disponibilità.'
+                ? 'Non ha ancora indicato sessioni.'
                 : 'La disponibilità si indica dopo l’approvazione della candidatura.'
             }}
           </p>
           <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
             <li
-              v-for="period in [...periods.upcoming, ...periods.past]"
-              :key="period.id"
+              v-for="session in availability"
+              :key="session.id"
               class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3"
             >
-              <span
-                class="font-semibold tabular-nums"
-                :class="period.endDate < today ? 'text-muted' : 'text-highlighted'"
+              <ULink
+                :to="`/admin/sessioni/${session.id}?tab=staff`"
+                class="font-semibold hover:underline"
+                :class="session.startDate > today ? 'text-primary' : 'text-muted'"
               >
-                {{ formatDayRange(period.startDate, period.endDate, 'long') }}
-              </span>
-              <span class="text-sm text-muted">
-                <template v-if="period.endDate < today">Passato</template>
-                <template v-if="period.endDate < today && period.notes"> · </template>{{ period.notes }}
+                {{ session.title }}
+              </ULink>
+              <span class="text-sm text-muted tabular-nums">
+                {{ formatDayRange(session.startDate, session.endDate, 'long')
+                }}<template v-if="session.startDate <= today"> · Passata</template>
               </span>
             </li>
           </ul>

@@ -7,7 +7,6 @@ import {
   daysBetween,
   isIsoDay,
   monthBounds,
-  rangeCoverage,
   rangesOverlap,
   todayIso,
   weekdayIndex,
@@ -44,31 +43,6 @@ describe('dates', () => {
   it('detects overlaps on inclusive ranges', () => {
     expect(rangesOverlap(session, { startDate: '2027-06-27', endDate: '2027-07-02' })).toBe(true)
     expect(rangesOverlap(session, { startDate: '2027-06-28', endDate: '2027-07-02' })).toBe(false)
-  })
-
-  it('measures how availability covers a session', () => {
-    expect(rangeCoverage([{ startDate: '2027-06-01', endDate: '2027-06-30' }], session)).toBe('full')
-    expect(
-      rangeCoverage(
-        [
-          { startDate: '2027-06-21', endDate: '2027-06-23' },
-          { startDate: '2027-06-24', endDate: '2027-06-27' },
-        ],
-        session,
-      ),
-    ).toBe('full')
-    expect(
-      rangeCoverage(
-        [
-          { startDate: '2027-06-21', endDate: '2027-06-23' },
-          { startDate: '2027-06-25', endDate: '2027-06-27' },
-        ],
-        session,
-      ),
-    ).toBe('partial')
-    expect(rangeCoverage([{ startDate: '2027-06-24', endDate: '2027-07-20' }], session)).toBe('partial')
-    expect(rangeCoverage([{ startDate: '2027-08-01', endDate: '2027-09-30' }], session)).toBe('none')
-    expect(rangeCoverage([], session)).toBe('none')
   })
 })
 

@@ -2,7 +2,7 @@
 import { staffApplicationSchema } from '#shared/schemas/staff'
 import type { FileDto } from '#shared/types/api'
 import type { StaffApplicationDto } from '#shared/types/staff'
-import type { StaffRole } from '#shared/utils/constants'
+import type { StaffRole, StaffTeam } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDay } from '#shared/utils/format'
 
@@ -16,6 +16,7 @@ const { data: application, refresh } = await useApiFetch<StaffApplicationDto>('/
 
 const today = todayIso()
 const state = reactive({
+  team: 'staff' as StaffTeam,
   birthDate: '',
   city: '',
   roles: [] as StaffRole[],
@@ -31,6 +32,7 @@ watch(
   value => {
     if (!value || filled.value) return
     Object.assign(state, {
+      team: value.team,
       birthDate: value.birthDate ?? '',
       city: value.city ?? '',
       roles: [...value.roles],
@@ -44,6 +46,19 @@ watch(
   { immediate: true },
 )
 
+const teamItems = [
+  {
+    label: 'Staff',
+    value: 'staff',
+    description: 'Lavori al camp con un ruolo: responsabile di gruppo, delle attività, coordinamento.',
+  },
+  {
+    label: 'V-team',
+    value: 'volunteer',
+    description: 'Dai una mano come volontario o volontaria, accanto allo staff.',
+  },
+]
+
 const roleItems = computed(() =>
   options('staffRole').map(option => ({ label: option.label, value: option.value as StaffRole })),
 )
@@ -52,6 +67,7 @@ const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date
 
 function draftBody() {
   return {
+    team: state.team,
     birthDate: state.birthDate || null,
     city: state.city.trim() || null,
     roles: state.roles,
@@ -115,6 +131,7 @@ const details = computed(() => {
   const a = application.value
   if (!a) return []
   return [
+    { label: 'Ti candidi per', value: label('staffTeam', a.team) },
     { label: 'Data di nascita', value: formatDay(a.birthDate, 'long') },
     { label: 'Città', value: a.city },
   ]
@@ -184,6 +201,21 @@ const texts = computed(() => {
           Raccontaci chi sei e cosa sai fare: ci aiuta a capire in quale ruolo puoi dare il meglio al camp. Tutti i
           campi servono per l’invio, ma puoi salvare la bozza e riprendere quando vuoi.
         </p>
+
+        <IcSection
+          title="Ti candidi per"
+          description="Lo staff lavora al camp con un ruolo; il v-team è la squadra dei volontari."
+        >
+          <UFormField name="team">
+            <URadioGroup
+              v-model="state.team"
+              :items="teamItems"
+              legend="Ti candidi per"
+              variant="card"
+              :ui="{ legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }"
+            />
+          </UFormField>
+        </IcSection>
 
         <IcSection title="Su di te">
           <div class="grid gap-5 sm:grid-cols-2">

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import {
   PERSONAL_DOCUMENT_CATEGORIES,
   STAFF_ROLES,
+  STAFF_TEAMS,
   type PersonalDocumentCategory,
   type StaffStatus,
 } from '../utils/constants'
@@ -11,6 +12,7 @@ import { todayIso } from '../utils/dates'
 import { zIsoDay, zRequiredText, zText, zUuid } from './common'
 
 export const zStaffRole = z.enum(STAFF_ROLES)
+export const zStaffTeam = z.enum(STAFF_TEAMS)
 
 const zBirthDate = zIsoDay.refine(day => day >= '1920-01-01' && day < todayIso(), {
   error: 'Data di nascita non valida',
@@ -20,6 +22,7 @@ const zBirthDate = zIsoDay.refine(day => day >= '1920-01-01' && day < todayIso()
 
 /** POST /api/staff/application/submit: the whole application (the CV is checked on the server). */
 export const staffApplicationSchema = z.object({
+  team: zStaffTeam,
   birthDate: zBirthDate,
   city: zRequiredText(100),
   roles: z.array(zStaffRole).min(1, { error: 'Scegli almeno un ruolo' }).max(STAFF_ROLES.length),
@@ -31,6 +34,7 @@ export type StaffApplicationInput = z.infer<typeof staffApplicationSchema>
 
 /** PUT /api/staff/application: a draft, every field may be empty. */
 export const staffApplicationDraftSchema = z.object({
+  team: zStaffTeam.optional(),
   birthDate: zBirthDate.nullable().optional(),
   city: zText(100).nullable().optional(),
   roles: z.array(zStaffRole).max(STAFF_ROLES.length).optional(),
@@ -108,6 +112,9 @@ export const staffStatusSchema = z.object({
 })
 export type StaffStatusInput = z.infer<typeof staffStatusSchema>
 
+/** PUT /api/admin/staff/:userId/team */
+export const staffTeamSchema = z.object({ team: zStaffTeam })
+
 /** PUT /api/admin/staff/:userId/notes */
 export const staffNotesSchema = z.object({ notes: zText(4000) })
 
@@ -122,23 +129,12 @@ export const staffBulkApproveSchema = z.object({
 
 // ─── Availability ──────────────────────────────────────────────────────────────────────────────────
 
-/** POST /api/staff/availability: inclusive days, not already over. */
-export const availabilitySchema = z
-  .object({
-    startDate: zIsoDay,
-    endDate: zIsoDay,
-    notes: zText(300).nullable().optional(),
-  })
-  .refine(value => value.endDate >= value.startDate, {
-    path: ['endDate'],
-    error: 'L’ultimo giorno viene prima del primo',
-  })
-  .refine(value => value.endDate >= todayIso(), { path: ['endDate'], error: 'Il periodo è già passato' })
-export type AvailabilityInput = z.infer<typeof availabilitySchema>
+/** PUT /api/staff/availability/:sessionId: whether the person can come to the whole session. */
+export const availabilityAnswerSchema = z.object({ available: z.boolean() })
 
 // ─── Convocations ──────────────────────────────────────────────────────────────────────────────────
 
-/** GET /api/admin/staff?sessionId=: the coverage of that session's dates for each person. */
+/** GET /api/admin/staff?sessionId=: whether each person gave availability for that session. */
 export const staffListQuerySchema = z.object({ sessionId: zUuid.optional() })
 
 /** GET /api/admin/convocations?sessionId= */

@@ -29,6 +29,20 @@
       "when": 1794225361231,
       "tag": "0003_staff_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794423488676,
+      "tag": "0004_session_availability",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794423507213,
+      "tag": "0005_drop_staff_periods",
+      "breakpoints": true
     }
   ]
 }

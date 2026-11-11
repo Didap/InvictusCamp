@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { SessionConvocation, SessionStaffData } from '#shared/types/staff'
-import type { StaffRole } from '#shared/utils/constants'
+import type { StaffRole, StaffTeam } from '#shared/utils/constants'
 import { formatDateTime, fullName } from '#shared/utils/format'
 
 // CONTRACT (docs/BUILD.md): owned by A2 Staff. Admin session page, tab "Staff": the convocations of the
-// session with their status and the derived "Confermata" (accepted and contract signed), the approved
-// staff to add with the coverage of the session dates, "Invia la convocazione" (one or the selected
-// ones, optional message), cancel (spec 3.5). Props are final.
+// session (staff and v-team) with their status and the derived "Confermata" (accepted and contract
+// signed), the coordinator of each team, the people to add among those available for the session,
+// "Invia la convocazione" (one or the selected ones, optional message), cancel (spec 3.5). Props are final.
 const props = defineProps<{ sessionId: string }>()
 
 const api = useApi()
@@ -49,6 +49,10 @@ async function afterChange() {
   selected.value = []
   await refresh()
 }
+
+/** Team and roles of the application: "V-team · Altro". */
+const describe = (c: SessionConvocation) =>
+  `${label('staffTeam', c.team)} · ${c.staffRoles.map(role => label('staffRole', role)).join(', ') || 'Ruoli non indicati'}`
 
 const roleItems = computed(() => options('staffRole').map(option => ({ label: option.label, value: option.value })))
 const roleEditable = (c: SessionConvocation) =>
@@ -142,6 +146,21 @@ function statusNote(c: SessionConvocation): string {
   }
 }
 
+// The base of a session (spec 3.5): `staffNeeded` people of the staff, plus a coordinator for the staff
+// and one for the v-team. Counted on the convocations still open (draft, sent, accepted).
+const live = computed(() => convocations.value.filter(c => c.status !== 'declined' && c.status !== 'cancelled'))
+const staffConfirmed = computed(
+  () => convocations.value.filter(c => c.confirmed && c.team === 'staff' && c.role !== 'coordinator').length,
+)
+const volunteersConfirmed = computed(() => convocations.value.filter(c => c.confirmed && c.team === 'volunteer').length)
+const TEAMS: StaffTeam[] = ['staff', 'volunteer']
+const coordinators = computed(() =>
+  TEAMS.map(team => {
+    const found = live.value.filter(c => c.team === team && c.role === 'coordinator')
+    return { team, names: found.map(c => (c.confirmed ? fullName(c) : `${fullName(c)} (non ancora confermato)`)) }
+  }),
+)
+
 const sendLabel = computed(() => {
   if (selected.value.length) {
     return selected.value.length === 1
@@ -167,7 +186,7 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
   ...(editable.value && drafts.value.length ? [{ id: 'select' }] : []),
   { id: 'person', header: 'Persona' },
   { id: 'role', header: 'Ruolo nella sessione' },
-  { id: 'coverage', header: 'Disponibilità' },
+  { id: 'available', header: 'Disponibilità' },
   { id: 'status', header: 'Stato' },
   { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Azioni') },
 ])
@@ -192,8 +211,8 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
 
     <IcSection
       v-else-if="session"
-      title="Staff della sessione"
-      :description="`${counts?.confirmed ?? 0} ${counts?.confirmed === 1 ? 'confermato' : 'confermati'} su ${session.staffNeeded} ${session.staffNeeded === 1 ? 'necessario' : 'necessari'}`"
+      title="Staff e v-team della sessione"
+      :description="`Staff: ${staffConfirmed} ${staffConfirmed === 1 ? 'confermato' : 'confermati'} su ${session.staffNeeded} ${session.staffNeeded === 1 ? 'necessario' : 'necessari'} · V-team: ${volunteersConfirmed} ${volunteersConfirmed === 1 ? 'confermato' : 'confermati'}`"
     >
       <template #actions>
         <UButton
@@ -208,7 +227,7 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
           class="pointer-coarse:min-h-11"
           v-if="editable"
           icon="i-lucide-user-plus"
-          label="Aggiungi staff"
+          label="Aggiungi persone"
           :color="drafts.length ? 'neutral' : 'primary'"
           :variant="drafts.length ? 'outline' : 'solid'"
           @click="addOpen = true"
@@ -225,13 +244,23 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
       <div class="mb-6 space-y-3">
         <UProgress
           v-if="session.staffNeeded > 0"
-          :model-value="Math.min(counts?.confirmed ?? 0, session.staffNeeded)"
+          :model-value="Math.min(staffConfirmed, session.staffNeeded)"
           :max="session.staffNeeded"
           size="sm"
-          :aria-label="`Staff confermato: ${counts?.confirmed ?? 0} su ${session.staffNeeded}`"
+          :aria-label="`Staff confermato: ${staffConfirmed} su ${session.staffNeeded}`"
           class="max-w-md"
         />
         <p v-if="summary" class="text-sm text-muted">{{ summary }}</p>
+        <ul class="space-y-1 text-sm">
+          <li v-for="item in coordinators" :key="item.team" class="flex items-start gap-2">
+            <UIcon name="i-lucide-flag" class="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
+            <p>
+              <span class="text-muted">Coordinatore {{ item.team === 'staff' ? 'staff' : 'v-team' }}:</span>{{ ' ' }}
+              <span v-if="item.names.length">{{ item.names.join(', ') }}</span>
+              <span v-else class="text-warning">da scegliere</span>
+            </p>
+          </li>
+        </ul>
         <p class="flex max-w-prose items-start gap-2 text-sm text-muted">
           <UIcon name="i-lucide-signature" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span v-if="session.contract">
@@ -258,11 +287,11 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
         title="Nessuna persona convocata"
         :description="
           editable
-            ? 'Aggiungi le persone dello staff approvato: vedi subito chi è disponibile nelle date della sessione. Le convocazioni partono solo quando le invii.'
+            ? 'Aggiungi le persone dello staff e del v-team che hanno detto che ci sono per questa sessione. Le convocazioni partono solo quando le invii.'
             : 'Questa sessione non ha avuto staff convocato.'
         "
         :actions="
-          editable ? [{ label: 'Aggiungi staff', icon: 'i-lucide-user-plus', onClick: () => (addOpen = true) }] : []
+          editable ? [{ label: 'Aggiungi persone', icon: 'i-lucide-user-plus', onClick: () => (addOpen = true) }] : []
         "
       />
 
@@ -287,9 +316,7 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
             <ULink :to="`/admin/staff/${row.original.userId}`" class="font-semibold text-primary hover:underline">
               {{ fullName(row.original) }}
             </ULink>
-            <p class="text-sm text-muted">
-              {{ row.original.staffRoles.map(role => label('staffRole', role)).join(', ') || 'Ruoli non indicati' }}
-            </p>
+            <p class="text-sm text-muted">{{ describe(row.original) }}</p>
           </template>
           <template #role-cell="{ row }">
             <USelect
@@ -304,8 +331,8 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
             />
             <span v-else>{{ row.original.role ? label('staffRole', row.original.role) : 'Non indicato' }}</span>
           </template>
-          <template #coverage-cell="{ row }">
-            <StaffCoverageBadge :coverage="row.original.coverage" />
+          <template #available-cell="{ row }">
+            <StaffAvailabilityBadge :available="row.original.available" />
           </template>
           <template #status-cell="{ row }">
             <div class="flex flex-wrap gap-1.5">
@@ -342,6 +369,7 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
                 <ULink :to="`/admin/staff/${c.userId}`" class="font-semibold text-primary hover:underline">
                   {{ fullName(c) }}
                 </ULink>
+                <p class="text-sm text-muted">{{ describe(c) }}</p>
                 <p v-if="statusNote(c)" class="text-sm text-muted">{{ statusNote(c) }}</p>
               </div>
               <UDropdownMenu :items="rowActions(c)" :content="{ align: 'end' }">
@@ -357,7 +385,7 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
             </div>
             <div class="flex flex-wrap gap-2">
               <StaffConvocationBadge :status="c.status" :confirmed="c.confirmed" />
-              <StaffCoverageBadge :coverage="c.coverage" />
+              <StaffAvailabilityBadge :available="c.available" />
               <StaffContractBadge v-if="c.status === 'accepted' && !c.confirmed" :state="c.contract" />
             </div>
             <p v-if="c.declineReason" class="text-sm text-muted">«{{ c.declineReason }}»</p>

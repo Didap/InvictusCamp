@@ -9,8 +9,6 @@ export interface DayRange {
   endDate: IsoDay
 }
 
-export type Coverage = 'full' | 'partial' | 'none'
-
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 const DAY_MS = 86_400_000
 
@@ -66,29 +64,6 @@ export function rangeDays(range: DayRange): IsoDay[] {
 /** True when two inclusive ranges share at least one day. */
 export function rangesOverlap(a: DayRange, b: DayRange): boolean {
   return a.startDate <= b.endDate && b.startDate <= a.endDate
-}
-
-/**
- * How much of `target` the ranges cover, counting inclusive days: every day ('full'), some days
- * ('partial') or none. Used to match staff availability against the dates of a session.
- */
-export function rangeCoverage(ranges: DayRange[], target: DayRange): Coverage {
-  const clipped = ranges
-    .filter(range => rangesOverlap(range, target))
-    .map(range => ({
-      start: range.startDate < target.startDate ? target.startDate : range.startDate,
-      end: range.endDate > target.endDate ? target.endDate : range.endDate,
-    }))
-    .sort((a, b) => a.start.localeCompare(b.start))
-  if (!clipped.length) return 'none'
-  // `cursor` is the first day of the target not yet covered.
-  let cursor = target.startDate
-  for (const range of clipped) {
-    if (range.start > cursor) return 'partial'
-    if (range.end >= cursor) cursor = addDays(range.end, 1)
-    if (cursor > target.endDate) return 'full'
-  }
-  return cursor > target.endDate ? 'full' : 'partial'
 }
 
 /** The first and last day of the month that contains `day`. */

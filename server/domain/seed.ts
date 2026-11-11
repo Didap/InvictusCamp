@@ -13,6 +13,7 @@ import type {
   StaffRole,
   ItalianRegion,
   StaffStatus,
+  StaffTeam,
 } from '../../shared/utils/constants'
 import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_LOCATION } from '../../shared/utils/constants'
@@ -41,8 +42,8 @@ const TABLES = [
   'session_families',
   'documents',
   'programmes',
+  'session_availability',
   'camp_sessions',
-  'staff_availability',
   'staff_profiles',
   'family_members',
   'families',
@@ -247,14 +248,18 @@ const FAMILIES: {
   },
 ]
 
+type DemoSession = 'june' | 'july' | 'september'
+
 const STAFF: {
   first: string
   last: string
   email?: string
   status: StaffStatus
+  team?: StaffTeam
   roles: StaffRole[]
   city: string
-  availability: [string, string][]
+  /** The 2027 sessions the person said they can come to. */
+  sessions: DemoSession[]
 }[] = [
   {
     first: 'Chiara',
@@ -263,7 +268,7 @@ const STAFF: {
     status: 'approved',
     roles: ['group_lead'],
     city: 'Lecce',
-    availability: [['2027-06-15', '2027-07-31']],
+    sessions: ['june', 'july'],
   },
   {
     first: 'Paolo',
@@ -272,7 +277,7 @@ const STAFF: {
     status: 'applied',
     roles: ['activity_lead'],
     city: 'Taranto',
-    availability: [],
+    sessions: [],
   },
   {
     first: 'Martina',
@@ -280,7 +285,7 @@ const STAFF: {
     status: 'approved',
     roles: ['group_lead'],
     city: 'Bari',
-    availability: [['2027-06-20', '2027-06-30']],
+    sessions: ['june'],
   },
   {
     first: 'Andrea',
@@ -288,7 +293,7 @@ const STAFF: {
     status: 'approved',
     roles: ['activity_lead'],
     city: 'Brindisi',
-    availability: [['2027-06-24', '2027-07-20']],
+    sessions: ['june', 'july'],
   },
   {
     first: 'Serena',
@@ -296,15 +301,15 @@ const STAFF: {
     status: 'approved',
     roles: ['activity_lead'],
     city: 'Lecce',
-    availability: [['2027-08-01', '2027-09-30']],
+    sessions: ['september'],
   },
   {
     first: 'Lorenzo',
     last: 'Moretti',
     status: 'approved',
-    roles: ['activity_lead', 'other'],
+    roles: ['coordinator', 'activity_lead'],
     city: 'Taranto',
-    availability: [['2027-06-01', '2027-09-30']],
+    sessions: ['june', 'july', 'september'],
   },
   {
     first: 'Federica',
@@ -312,7 +317,7 @@ const STAFF: {
     status: 'approved',
     roles: ['group_lead'],
     city: 'Grottaglie',
-    availability: [['2027-06-21', '2027-06-27']],
+    sessions: ['june'],
   },
   {
     first: 'Simone',
@@ -320,11 +325,47 @@ const STAFF: {
     status: 'approved',
     roles: ['group_lead'],
     city: 'Ostuni',
-    availability: [['2027-07-01', '2027-07-31']],
+    sessions: ['june', 'july'],
   },
-  { first: 'Ilaria', last: 'Ferri', status: 'applied', roles: ['activity_lead'], city: 'Bari', availability: [] },
-  { first: 'Gabriele', last: 'Testa', status: 'rejected', roles: ['other'], city: 'Lecce', availability: [] },
-  { first: 'Noemi', last: 'Pellegrini', status: 'registered', roles: [], city: 'Taranto', availability: [] },
+  {
+    first: 'Giulia',
+    last: 'Marino',
+    status: 'approved',
+    team: 'volunteer',
+    roles: ['coordinator'],
+    city: 'Maruggio',
+    sessions: ['june', 'july', 'september'],
+  },
+  {
+    first: 'Matteo',
+    last: 'Greco',
+    status: 'approved',
+    team: 'volunteer',
+    roles: ['other'],
+    city: 'Manduria',
+    sessions: ['june'],
+  },
+  {
+    first: 'Elisa',
+    last: 'Romano',
+    status: 'approved',
+    team: 'volunteer',
+    roles: ['other'],
+    city: 'Taranto',
+    sessions: ['july', 'september'],
+  },
+  {
+    first: 'Davide',
+    last: 'Leone',
+    status: 'applied',
+    team: 'volunteer',
+    roles: ['other'],
+    city: 'Sava',
+    sessions: [],
+  },
+  { first: 'Ilaria', last: 'Ferri', status: 'applied', roles: ['activity_lead'], city: 'Bari', sessions: [] },
+  { first: 'Gabriele', last: 'Testa', status: 'rejected', roles: ['other'], city: 'Lecce', sessions: [] },
+  { first: 'Noemi', last: 'Pellegrini', status: 'registered', roles: [], city: 'Taranto', sessions: [] },
 ]
 
 const DEMO_ANSWERS: FormAnswers = {
@@ -523,7 +564,7 @@ export async function seedDemo(
   }
 
   // Staff
-  const staff: { userId: string; email: string; firstName: string; status: StaffStatus }[] = []
+  const staff: { userId: string; email: string; firstName: string; status: StaffStatus; sessions: DemoSession[] }[] = []
   for (const [index, s] of STAFF.entries()) {
     const user = await createUser({
       email: s.email ?? `${slug(`${s.first} ${s.last}`)}@demo.invictuscamp.local`,
@@ -539,6 +580,7 @@ export async function seedDemo(
     await db.insert(t.staffProfiles).values({
       userId: user.id,
       status: s.status,
+      team: s.team ?? 'staff',
       city: s.city,
       birthDate: `199${index % 10}-0${(index % 9) + 1}-1${index % 9}`,
       roles: s.roles,
@@ -552,12 +594,13 @@ export async function seedDemo(
       reviewedAt: s.status === 'approved' || s.status === 'rejected' ? new Date('2026-10-12T09:00:00Z') : null,
       reviewedBy: s.status === 'approved' || s.status === 'rejected' ? admin.id : null,
     })
-    if (s.availability.length) {
-      await db
-        .insert(t.staffAvailability)
-        .values(s.availability.map(([startDate, endDate]) => ({ userId: user.id, startDate, endDate })))
-    }
-    staff.push({ userId: user.id, email: user.email, firstName: user.firstName, status: s.status })
+    staff.push({
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      status: s.status,
+      sessions: s.sessions,
+    })
   }
 
   // Sessions
@@ -609,7 +652,7 @@ export async function seedDemo(
   })
   // The 2027 programme, from the model week: every 2027 session uses it.
   await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() }).onConflictDoNothing()
-  await session({
+  const september = await session({
     title: 'Sessione 3 · Settembre 2027',
     startDate: '2027-09-06',
     endDate: '2027-09-12',
@@ -683,6 +726,11 @@ export async function seedDemo(
     [1, 'reserve', 'selected', 1],
   ])
 
+  // Availability: one answer per session (spec 3.5).
+  const demoSessions: Record<DemoSession, string> = { june: june.id, july: july.id, september: september.id }
+  const answers = staff.flatMap(s => s.sessions.map(key => ({ sessionId: demoSessions[key], userId: s.userId })))
+  if (answers.length) await db.insert(t.sessionAvailability).values(answers)
+
   const byName = (first: string) => staff.find(s => s.firstName === first)!
   const convoke = async (sessionId: string, rows: [string, ConvocationStatus, StaffRole][]) => {
     await db.insert(t.sessionStaff).values(
@@ -707,9 +755,11 @@ export async function seedDemo(
     ['Martina', 'accepted', 'group_lead'],
     ['Andrea', 'accepted', 'activity_lead'],
     ['Serena', 'declined', 'activity_lead'],
-    ['Lorenzo', 'accepted', 'activity_lead'],
+    ['Lorenzo', 'accepted', 'coordinator'],
     ['Federica', 'draft', 'group_lead'],
     ['Simone', 'sent', 'group_lead'],
+    ['Giulia', 'accepted', 'coordinator'],
+    ['Matteo', 'sent', 'other'],
   ])
   await convoke(july.id, [
     ['Andrea', 'draft', 'activity_lead'],

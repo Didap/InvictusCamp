@@ -26,8 +26,16 @@ export type ParticipationStatus = (typeof PARTICIPATION_STATUSES)[number]
 export const STAFF_STATUSES = ['registered', 'applied', 'approved', 'rejected', 'inactive'] as const
 export type StaffStatus = (typeof STAFF_STATUSES)[number]
 
-export const STAFF_ROLES = ['group_lead', 'activity_lead', 'other'] as const
+export const STAFF_ROLES = ['coordinator', 'group_lead', 'activity_lead', 'other'] as const
 export type StaffRole = (typeof STAFF_ROLES)[number]
+
+/** The two teams of the staff side: the staff and the volunteers (v-team). Each has its own coordinator. */
+export const STAFF_TEAMS = ['staff', 'volunteer'] as const
+export type StaffTeam = (typeof STAFF_TEAMS)[number]
+
+/** Who a document went to, for the filter of the documents list: families, or one of the two teams. */
+export const DOCUMENT_AUDIENCES = ['family', ...STAFF_TEAMS] as const
+export type DocumentAudience = (typeof DOCUMENT_AUDIENCES)[number]
 
 /** A convocation of a staff member to a session. "Confermata" is derived: accepted + contract signed. */
 export const CONVOCATION_STATUSES = ['draft', 'sent', 'accepted', 'declined', 'cancelled'] as const
@@ -218,9 +226,15 @@ const staffStatus: Record<StaffStatus, EnumMeta> = {
 }
 
 const staffRole: Record<StaffRole, EnumMeta> = {
+  coordinator: { label: 'Coordinatore', icon: 'i-lucide-flag', color: 'neutral' },
   group_lead: { label: 'Responsabile di gruppo', icon: 'i-lucide-users', color: 'neutral' },
   activity_lead: { label: 'Responsabile attività', icon: 'i-lucide-shapes', color: 'neutral' },
   other: { label: 'Altro', icon: 'i-lucide-user', color: 'neutral' },
+}
+
+const staffTeam: Record<StaffTeam, EnumMeta> = {
+  staff: { label: 'Staff', icon: 'i-lucide-id-card', color: 'neutral' },
+  volunteer: { label: 'V-team', icon: 'i-lucide-hand-heart', color: 'neutral', description: 'Volontari' },
 }
 
 const convocationStatus: Record<ConvocationStatus, EnumMeta> = {
@@ -316,6 +330,7 @@ export const ENUM_META = {
   participationStatus,
   staffStatus,
   staffRole,
+  staffTeam,
   convocationStatus,
   memberRelationship,
   memberKind,

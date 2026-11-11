@@ -24,7 +24,7 @@ interface ConvocationSession {
 const DEFAULT_OUTCOME: Record<StaffOutcomeTemplate, string> = {
   'staff.approved': [
     'la tua candidatura per lo staff di Invictus Camp è stata accettata: ti diamo il benvenuto nella squadra.',
-    'Ora puoi indicare nel gestionale i periodi in cui sei disponibile. Ti convocheremo per le sessioni che corrispondono alle tue date, e potrai accettare o rifiutare ogni convocazione.',
+    'Ora puoi indicare nel gestionale a quali sessioni puoi venire. Ti convocheremo per quelle, e potrai accettare o rifiutare ogni convocazione.',
     'Grazie per aver scelto di esserci.',
   ].join('\n\n'),
   'staff.rejected': [

@@ -17,7 +17,13 @@ import type {
   SignaturePage,
   SignatureRequestRow,
 } from '../../shared/types/documents'
-import { LOCALE, TIME_ZONE, type DocumentCategory } from '../../shared/utils/constants'
+import {
+  DOCUMENT_AUDIENCES,
+  LOCALE,
+  TIME_ZONE,
+  type DocumentAudience,
+  type DocumentCategory,
+} from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
 import { fullName } from '../../shared/utils/format'
 import {
@@ -1092,6 +1098,25 @@ export async function listDocuments(db: DbOrTx, options: { sessionId?: string } 
     )
     .groupBy(documents.id, campSessions.id)
     .orderBy(desc(documents.createdAt))
+  // Who each document went to (point 7: filter families / staff / v-team), from its live requests.
+  const audienceRows = await db
+    .selectDistinct({
+      documentId: signatureRequests.documentId,
+      audience: sql<DocumentAudience>`case when ${users.role} = 'family' then 'family' when ${staffProfiles.team} = 'volunteer' then 'volunteer' else 'staff' end`,
+    })
+    .from(signatureRequests)
+    .innerJoin(users, eq(users.id, signatureRequests.userId))
+    .leftJoin(staffProfiles, eq(staffProfiles.userId, users.id))
+    .where(
+      and(
+        ne(signatureRequests.status, 'cancelled'),
+        ne(users.role, 'admin'),
+        sessionId ? eq(signatureRequests.sessionId, sessionId) : undefined,
+      ),
+    )
+  const audiences = new Map<string, DocumentAudience[]>()
+  for (const row of audienceRows)
+    audiences.set(row.documentId, [...(audiences.get(row.documentId) ?? []), row.audience])
   return rows.map(row => ({
     id: row.id,
     title: row.title,
@@ -1099,6 +1124,7 @@ export async function listDocuments(db: DbOrTx, options: { sessionId?: string } 
     requiresSignature: row.requiresSignature,
     session: row.sessionId && row.sessionTitle ? { id: row.sessionId, title: row.sessionTitle } : null,
     progress: { assigned: row.assigned, signed: row.signed },
+    audiences: DOCUMENT_AUDIENCES.filter(audience => audiences.get(row.id)?.includes(audience)),
     createdAt: row.createdAt.toISOString(),
     archivedAt: row.archivedAt?.toISOString() ?? null,
   }))

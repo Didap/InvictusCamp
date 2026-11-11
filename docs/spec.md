@@ -10,7 +10,8 @@ docs/BUILD.md who builds what. Data model: `server/db/schema.ts`; enumerations: 
 - **Riserva** (`kind: reserve`): a family waiting, in `reserveRank` order, for a place to free up.
 - **Invito**: a family is asked to confirm or decline its place. Sent when the session changes status.
 - **Candidatura**: a person's application to the staff. **Staff approvato**: an accepted application.
-- **Disponibilità**: a period (inclusive days) in which a staff member can come.
+- **Squadra**: the staff side has two teams, **Staff** and **V-team** (volunteers), each with its coordinator.
+- **Disponibilità**: a staff or v-team member says "ci sono" for a whole session (never part of it).
 - **Convocazione**: a staff member called to a session. **Confermata** = accepted and, if the session
   has a contract, contract signed (derived, not stored).
 - **Firma**: a simple electronic signature (FES) confirmed by a one-time code sent by email.
@@ -100,19 +101,24 @@ sessione avviene al cambio di stato": the status change is the moment invitation
 
 ### 3.4 Staff application and review
 
-`registered` → (the person completes and sends the application: birth date, city, roles, qualifications,
-experience, motivation, CV as PDF) → `applied` → the administration reviews: `approved` or `rejected`,
+`registered` → (the person completes and sends the application: team (staff or v-team), birth date, city,
+roles, qualifications, experience, motivation, CV as PDF) → `applied` → the administration reviews: `approved` or `rejected`,
 with internal notes never shown to the person → `inactive` when someone is no longer convoked.
 The outcome email (`staff.approved` / `staff.rejected`) is **not automatic**: the administration sends it
 from the dashboard when it chooses, with a message it can edit. Until approved, a staff member cannot give
-availability or receive convocations.
+availability or receive convocations. The administration can move a person to the other team from their page
+(audited).
 
 ### 3.5 Availability, convocations, contract
 
-- Approved staff add periods (inclusive days, optional note) and remove them.
-- In a session's Staff tab the administration sees the approved staff with how their availability covers
-  the session (`rangeCoverage`: full, partial, none) and their roles, and adds people as convocations
-  `draft` with a role for the session.
+- `/staff/disponibilita` lists the sessions not started yet (neither concluded nor cancelled), by date: approved
+  staff and v-team switch "Ci sono" on or off for each one, for the whole session (`session_availability`).
+  Taking it back keeps the convocations already received; the administration sees it on them.
+- In a session's Staff tab the administration adds people as convocations `draft` with a role for the session,
+  choosing only among the approved staff and v-team who said they are available for that session (the server
+  does not refuse the others: the rule is about what is offered). The base of a session is `staffNeeded`
+  people of the staff (10 by default) plus a **coordinator** of the staff and one of the v-team (role
+  `coordinator`); the tab shows both coordinators, or "da scegliere".
 - **Invia la convocazione** (one or many, optional message) → `sent` + `staff.convocation` email. Sending
   is always an explicit action ("puntualmente dalla dashboard").
 - The staff member accepts or declines (with reason) from `/staff/convocazioni`. On accept, when the
@@ -134,6 +140,7 @@ availability or receive convocations.
   when in Italian time, IP, SHA-256, request id, method "Firma elettronica semplice con codice OTP inviato
   via email"). Confirmation email `signature.signed`.
 - Reminders (`signature.reminder`) one by one or for all pending; cancelling a request.
+- `/admin/documenti` filters by who the live requests went to: families, staff, v-team.
 - Requests signed in the demo data have no signed copy: the copy is generated at the first download.
 - Legal note: an FES is valid but freely assessed by a judge (eIDAS art. 25, CAD art. 20). A qualified
   provider (FEA/FEQ) can be added later behind the same flow if the contracts require it.

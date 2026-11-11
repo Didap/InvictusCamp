@@ -60,7 +60,7 @@ Endpoints other areas call:
 - A4 signing page `/firma/:requestId` (linked from emails and PendingSignatures).
 - Foundation `requestSignatures()` + `signatureRequestEmails()` (A2 on accept, A4 on assign).
 
-Tables you write: A1 `camp_sessions`, `session_families`; A2 `staff_profiles`, `staff_availability`,
+Tables you write: A1 `camp_sessions`, `session_families`; A2 `staff_profiles`, `session_availability`,
 `session_staff`, `personal_documents` of staff accounts; A3 `families`, `family_members`,
 `personal_documents` of family accounts; A4 `documents`, `signature_requests`, signed copies in `files`;
 A5 `communications`, `users` (status, invitations) and their tokens. Everyone writes `audit_log` through
@@ -156,25 +156,24 @@ Files: `app/pages/admin/staff/**`, `app/pages/staff/**`, `app/components/staff/*
 
 P0:
 - `/admin/staff` with tabs: Da valutare (`applied`), Staff approvato, Tutti; search; filter by role;
-  columns name, roles, city, status, applied on, next availability.
+  columns name, team, roles, city, status, applied on, sessions available (Nov 2026: per session).
 - `/admin/staff/:userId`: contacts, application (roles, qualifications, experience, motivation, CV),
-  availability periods, convocations, personal documents, `UserSignatures`; review: approve or reject
+  team, sessions available, convocations, personal documents, `UserSignatures`; review: approve or reject
   with internal notes; "Comunica l’esito" (explicit, message prefilled and editable, `staff.approved` /
   `staff.rejected`); deactivate / reactivate (spec 3.4).
 - `SessionStaffPanel`: convocations of the session with status and derived "Confermata" (contract
-  signed); add approved staff from a list showing coverage of the session dates (`rangeCoverage`) and
-  roles; choose the role for the session; "Invia la convocazione" (one or selected, optional message);
+  signed); add approved staff and v-team, only those available for the session, with team and roles; choose the role for the session; "Invia la convocazione" (one or selected, optional message);
   cancel (spec 3.5).
 - Staff side: `/staff` home that adapts to the status (complete the application, waiting, approved:
   next convocations, `PendingSignatures`, availability prompt; not selected: a kind message);
   `/staff/candidatura` (form + CV upload as PDF, send → `applied`; editable while `registered`);
-  `/staff/disponibilita` (periods: add, remove; refused before approval); `/staff/convocazioni` (accept,
+  `/staff/disponibilita` ("Ci sono" per session; refused before approval); `/staff/convocazioni` (accept,
   decline with reason; accept creates the contract request with `requestSignatures` and sends it);
   `/staff/sessioni` (calendar and list of accepted sessions); `/staff/documenti` (`PendingSignatures` +
   personal documents upload with category and title).
 - Database tests: review, convocation send, accept with and without contract, availability rules.
 
-P1: bulk approve; filter staff by coverage of a session.
+P1: bulk approve; filter staff by availability for a session.
 
 ### A3. Famiglie (family records, questionnaire, members, documents)
 

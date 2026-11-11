@@ -187,6 +187,18 @@ describe('assigning a document', () => {
     expect(await progress(second.id)).toEqual({ assigned: 1, signed: 0 })
   })
 
+  it('the list says who each document went to: families, staff, v-team (cancelled requests aside)', async () => {
+    const { document, user } = await pendingRequest()
+    const staff = await makeStaff(db, 'approved')
+    const volunteer = await makeStaff(db, 'approved')
+    await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.userId, volunteer.user.id))
+    await requestSignatures(db, { documentId: document.id, userIds: [staff.user.id, volunteer.user.id] })
+    const audiences = async () => (await listDocuments(db)).find(item => item.id === document.id)?.audiences
+    expect(await audiences()).toEqual(['family', 'staff', 'volunteer'])
+    await db.update(t.signatureRequests).set({ status: 'cancelled' }).where(eq(t.signatureRequests.userId, user.id))
+    expect(await audiences()).toEqual(['staff', 'volunteer'])
+  })
+
   it('reminds only who still has to sign', async () => {
     const { admin, document, user } = await pendingRequest()
     const other = await makeFamily(db)
