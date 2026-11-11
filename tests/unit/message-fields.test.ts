@@ -21,7 +21,9 @@ describe('message fields', () => {
   it('stop a message with parts to complete, unknown fields, or session fields without a session', () => {
     expect(messageIssue('Ritrovo [orario] in piazza', true)).toBe('Completa [orario] prima dell’invio.')
     expect(messageIssue('Ciao {cognome}', true)).toContain('{cognome} non si compila da solo')
-    expect(messageIssue('Ciao {constructor}', true)).toContain('{constructor} non si compila da solo')
+    expect(messageIssue('Ciao {constructor}', true)).toBe(
+      '{constructor} non si compila da solo: usa {nome}, {sessione}, {date}.',
+    )
     expect(messageIssue('A presto a {sessione}', false)).toBe(
       '{sessione} si compila solo se scrivi alle famiglie o allo staff di una sessione.',
     )

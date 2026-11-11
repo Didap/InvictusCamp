@@ -18,7 +18,7 @@ import type {
 } from '#shared/types/communications'
 import type { AudienceType } from '#shared/types/domain'
 import { plural } from '#shared/utils/format'
-import { MESSAGE_FIELDS_HELP } from '#shared/utils/message-fields'
+import { fillMessageFields, MESSAGE_FIELDS_HELP, messageFieldValues } from '#shared/utils/message-fields'
 
 // The composer (docs/spec.md, 3.7): audience, live count of the recipients, subject and plain text
 // body, the email previewed by the real template, confirmation with the number of emails, send.
@@ -74,10 +74,15 @@ if (draftId.value) {
 // ─── Template ──────────────────────────────────────────────────────────────────────────────────────
 const templateItems = computed(() => (templates.value ?? []).map(t => ({ label: t.name, value: t.id })))
 const templateId = ref<string>()
+/** Remounts the select when a template is refused, so it does not show the one refused. */
+const templateSelectKey = ref(0)
 /** Writes the template's subject and body in, after asking when that replaces what is written. */
 async function applyTemplate(id: string | undefined, ask = true) {
   const template = templates.value?.find(t => t.id === id)
-  if (!template) return
+  if (!template) {
+    if (!ask) warn('Modello non trovato: forse è stato eliminato.')
+    return
+  }
   const written = state.subject.trim() || state.body.trim()
   const same = state.subject === template.subject && state.body === template.body
   if (ask && written && !same) {
@@ -86,7 +91,10 @@ async function applyTemplate(id: string | undefined, ask = true) {
       description: `Quello che hai scritto lascia il posto al modello «${template.name}». Nessuna email parte.`,
       confirmLabel: 'Usa il modello',
     })
-    if (!ok) return
+    if (!ok) {
+      templateSelectKey.value++
+      return
+    }
   }
   templateId.value = template.id
   state.subject = template.subject
@@ -135,22 +143,27 @@ async function refreshSummary(): Promise<AudienceSummary | null> {
 watchDebounced(() => JSON.stringify(state.audience), refreshSummary, { debounce: 300, immediate: true })
 
 // ─── Preview ───────────────────────────────────────────────────────────────────────────────────────
+const chosenSession = computed(
+  () => options.value?.sessions.find(session => session.id === audienceSessionId(state.audience)) ?? null,
+)
+/** Subject and body as one recipient receives them: {nome}, {sessione}, {date} written in. */
+function filledFor(firstName: string | undefined) {
+  const values = messageFieldValues(firstName, chosenSession.value)
+  return { subject: fillMessageFields(state.subject, values), body: fillMessageFields(state.body, values) }
+}
+
 const preview = ref<EmailPreview | null>(null)
 let previewRequest = 0
+// The key is a string, so a change of the audience that leaves the text as it was asks for nothing.
 watchDebounced(
-  () =>
-    [
-      state.subject,
-      state.body,
-      audienceSessionId(state.audience) || undefined,
-      summary.value?.recipients[0]?.firstName,
-    ] as const,
-  async ([subject, body, sessionId, firstName]) => {
+  () => JSON.stringify(filledFor(summary.value?.recipients[0]?.firstName)),
+  async key => {
+    const { subject, body } = JSON.parse(key) as { subject: string; body: string }
     const request = ++previewRequest
     try {
       const result = await api<EmailPreview>('/api/admin/communications/preview', {
         method: 'POST',
-        body: { subject: subject.slice(0, 200), body: body.slice(0, 20_000), sessionId, firstName },
+        body: { subject: subject.slice(0, 200), body: body.slice(0, 20_000) },
       })
       if (request === previewRequest) preview.value = result
     } catch {
@@ -186,7 +199,7 @@ async function send() {
     const who = names.length <= 3 ? names.join(', ') : fresh.label
     const ok = await confirm({
       title: `Invierai ${emails}`,
-      description: `Destinatari: ${who}. ${fresh.count === 1 ? 'Riceve' : 'Ognuno riceve'} «${message.subject.trim()}» al proprio indirizzo. Dopo l’invio il messaggio non si può ritirare.`,
+      description: `Destinatari: ${who}. ${fresh.count === 1 ? 'Riceve' : 'Ognuno riceve'} «${filledFor(fresh.recipients[0]?.firstName).subject.trim()}» al proprio indirizzo. Dopo l’invio il messaggio non si può ritirare.`,
       confirmLabel: `Invia ${emails}`,
     })
     if (!ok) return
@@ -320,18 +333,14 @@ const sendLabel = computed(() => (count.value ? `Invia a ${plural(count.value, '
         >
           <div class="space-y-5">
             <UFormField v-if="templateItems.length" label="Parti da un modello" hint="Facoltativo">
-              <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <USelect
-                  :model-value="templateId"
-                  :items="templateItems"
-                  placeholder="Scegli un modello"
-                  class="w-full sm:w-72"
-                  @update:model-value="applyTemplate"
-                />
-                <ULink to="/admin/comunicazioni?tab=modelli" class="text-sm text-primary hover:underline">
-                  Gestisci i modelli
-                </ULink>
-              </div>
+              <USelect
+                :key="templateSelectKey"
+                :model-value="templateId"
+                :items="templateItems"
+                placeholder="Scegli un modello"
+                class="w-full sm:w-72"
+                @update:model-value="applyTemplate"
+              />
             </UFormField>
             <UFormField label="Oggetto" name="subject" required>
               <UInput v-model="state.subject" maxlength="200" class="w-full" />

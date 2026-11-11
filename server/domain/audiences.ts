@@ -33,10 +33,19 @@ export interface Recipient {
   role: UserRole
 }
 
+/** The session of an audience: its description and the fields {sessione} and {date} need it. */
+export interface AudienceSession {
+  title: string
+  startDate: string
+  endDate: string
+}
+
 export interface ResolvedAudience {
   recipients: Recipient[]
   /** Accounts that match the audience but cannot receive email. */
   excluded: number
+  /** The session written to, for the families or the staff of a session. */
+  session: AudienceSession | null
 }
 
 interface Candidate extends Recipient {
@@ -59,9 +68,9 @@ export function canReceive(user: { status: UserStatus; emailVerifiedAt: Date | n
   return user.status === 'active' && user.emailVerifiedAt !== null
 }
 
-async function requireSession(db: DbOrTx, sessionId: string) {
+async function requireSession(db: DbOrTx, sessionId: string): Promise<AudienceSession> {
   const [session] = await db
-    .select({ id: campSessions.id, title: campSessions.title })
+    .select({ title: campSessions.title, startDate: campSessions.startDate, endDate: campSessions.endDate })
     .from(campSessions)
     .where(eq(campSessions.id, sessionId))
     .limit(1)
@@ -86,7 +95,6 @@ async function candidates(db: DbOrTx, audience: Audience): Promise<Candidate[]> 
           ),
         )
     case 'session_families': {
-      await requireSession(db, audience.sessionId)
       if (audience.kinds?.length === 0 || audience.statuses?.length === 0) return []
       return db
         .select(candidateColumns)
@@ -102,7 +110,6 @@ async function candidates(db: DbOrTx, audience: Audience): Promise<Candidate[]> 
         )
     }
     case 'session_staff': {
-      await requireSession(db, audience.sessionId)
       if (audience.statuses?.length === 0) return []
       return db
         .select(candidateColumns)
@@ -123,8 +130,10 @@ async function candidates(db: DbOrTx, audience: Audience): Promise<Candidate[]> 
   }
 }
 
-/** The people an audience reaches, by surname, each once. */
+/** The people an audience reaches, by surname, each once; a session that does not exist is a 404. */
 export async function resolveAudience(db: DbOrTx, audience: Audience): Promise<ResolvedAudience> {
+  const sessionId = audienceSessionId(audience)
+  const session = sessionId === null ? null : await requireSession(db, sessionId)
   const seen = new Set<string>()
   const recipients: Recipient[] = []
   let excluded = 0
@@ -144,23 +153,7 @@ export async function resolveAudience(db: DbOrTx, audience: Audience): Promise<R
       a.firstName.localeCompare(b.firstName, 'it', { sensitivity: 'base' }) ||
       a.email.localeCompare(b.email),
   )
-  return { recipients, excluded }
-}
-
-/** The title of the session an audience belongs to (for its description). */
-export async function audienceSessionTitle(db: DbOrTx, audience: Audience): Promise<string | null> {
-  const sessionId = audienceSessionId(audience)
-  return sessionId ? ((await sessionForFields(db, sessionId))?.title ?? null) : null
-}
-
-/** What {sessione} and {date} need: the title and the days of the session. */
-export async function sessionForFields(db: DbOrTx, sessionId: string) {
-  const [session] = await db
-    .select({ title: campSessions.title, startDate: campSessions.startDate, endDate: campSessions.endDate })
-    .from(campSessions)
-    .where(eq(campSessions.id, sessionId))
-    .limit(1)
-  return session ?? null
+  return { recipients, excluded, session }
 }
 
 export interface CommunicationContent {
@@ -241,7 +234,7 @@ export async function sendCommunication(
   input: SendCommunicationInput,
   now = new Date(),
 ): Promise<{ communicationId: string; recipients: Recipient[]; messages: EmailMessage[] }> {
-  const { recipients } = await resolveAudience(db, input.audience)
+  const { recipients, session } = await resolveAudience(db, input.audience)
   if (!recipients.length) {
     throw httpError(400, 'Nessun destinatario: nessun account attivo corrisponde alla scelta')
   }
@@ -268,7 +261,6 @@ export async function sendCommunication(
     const [row] = await db.insert(communications).values(values).returning({ id: communications.id })
     communicationId = row!.id
   }
-  const session = sessionId ? await sessionForFields(db, sessionId) : null
   const messages = recipients.map(recipient => {
     const values = messageFieldValues(recipient.firstName, session)
     return communicationEmail(ctx, {

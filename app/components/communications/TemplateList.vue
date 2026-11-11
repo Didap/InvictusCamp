@@ -30,8 +30,6 @@ async function remove(template: EmailTemplate) {
     notifyError(error)
   }
 }
-
-const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
 </script>
 
 <template>
@@ -53,13 +51,13 @@ const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
         <div class="min-w-0 flex-1">
           <p class="font-semibold text-highlighted">{{ template.name }}</p>
           <p class="mt-1 text-sm text-default">{{ template.subject }}</p>
-          <p class="mt-1 line-clamp-2 text-sm text-muted">{{ oneLine(template.body) }}</p>
+          <p class="mt-1 line-clamp-2 text-sm text-muted">{{ template.body }}</p>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
           <UButton
             :to="`/admin/comunicazioni/nuova?modello=${template.id}`"
             label="Usa"
-            :aria-label="`Scrivi un messaggio da «${template.name}»`"
+            :aria-label="`Usa «${template.name}»`"
             icon="i-lucide-pen-line"
             color="neutral"
             variant="outline"

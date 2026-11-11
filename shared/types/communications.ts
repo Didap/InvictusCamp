@@ -113,5 +113,4 @@ export interface EmailTemplate {
   name: string
   subject: string
   body: string
-  updatedAt: string
 }

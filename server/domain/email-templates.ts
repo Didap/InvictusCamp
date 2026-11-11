@@ -12,14 +12,12 @@ const columns = {
   name: emailTemplates.name,
   subject: emailTemplates.subject,
   body: emailTemplates.body,
-  updatedAt: emailTemplates.updatedAt,
 }
 
 const notFound = () => httpError(404, 'Modello non trovato')
 
 export async function listEmailTemplates(db: DbOrTx): Promise<EmailTemplate[]> {
-  const rows = await db.select(columns).from(emailTemplates).orderBy(asc(emailTemplates.name))
-  return rows.map(row => ({ ...row, updatedAt: row.updatedAt.toISOString() }))
+  return db.select(columns).from(emailTemplates).orderBy(asc(emailTemplates.name))
 }
 
 export async function createEmailTemplate(db: DbOrTx, input: EmailTemplateInput): Promise<string> {

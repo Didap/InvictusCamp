@@ -95,7 +95,8 @@ const communicationFields = z.object({
  * ones filled by themselves, and the parts in square brackets of a template must be completed.
  */
 export const communicationSchema = communicationFields.superRefine((message, ctx) => {
-  const hasSession = Boolean(audienceSessionId(message.audience))
+  // A session audience whose session is still to choose counts as one: its own error says what is missing.
+  const hasSession = audienceSessionId(message.audience) !== null
   for (const key of ['subject', 'body'] as const) {
     const issue = messageIssue(message[key], hasSession)
     if (issue) ctx.addIssue({ code: 'custom', path: [key], message: issue })
@@ -107,13 +108,7 @@ export type CommunicationInput = z.infer<typeof communicationSchema>
 export const communicationDraftSchema = communicationFields.extend({ body: zText(20_000) })
 export type CommunicationDraftInput = z.infer<typeof communicationDraftSchema>
 
-/** The preview fills the fields it can: the session chosen, the first name of the first recipient. */
-export const emailPreviewSchema = z.object({
-  subject: zText(200),
-  body: zText(20_000),
-  sessionId: z.uuid().optional(),
-  firstName: zText(100).optional(),
-})
+export const emailPreviewSchema = z.object({ subject: zText(200), body: zText(20_000) })
 
 /** A saved message to start from. Its parts in square brackets are completed in each message. */
 export const emailTemplateSchema = z
