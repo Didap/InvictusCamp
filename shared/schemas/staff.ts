@@ -6,7 +6,9 @@ import {
   STAFF_ROLES,
   STAFF_TEAMS,
   type PersonalDocumentCategory,
+  type StaffRole,
   type StaffStatus,
+  type StaffTeam,
 } from '../utils/constants'
 import { todayIso } from '../utils/dates'
 import { zIsoDay, zRequiredText, zText, zUuid } from './common'
@@ -79,6 +81,11 @@ export function applicationMissing(profile: ApplicationFields): ApplicationPart[
     'CV in PDF': Boolean(profile.cvFileId || profile.cv),
   }
   return APPLICATION_CHECKLIST.filter(part => !filled[part])
+}
+
+/** `staffNeeded` counts the people of the staff team, the coordinators aside (spec 3.5). */
+export function countsTowardNeeded(person: { team: StaffTeam; role: StaffRole | null }): boolean {
+  return person.team === 'staff' && person.role !== 'coordinator'
 }
 
 // ─── Review ────────────────────────────────────────────────────────────────────────────────────────

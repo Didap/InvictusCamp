@@ -328,7 +328,7 @@ describe('availability', () => {
     }
     await expect(
       setAvailability(db, { userId: user.id, sessionId: randomUUID(), available: true }, TODAY),
-    ).rejects.toMatchObject({ statusCode: 409 })
+    ).rejects.toMatchObject({ statusCode: 404 })
   })
 
   it('the staff page lists the sessions not started yet with the answer and the convocation', async () => {
@@ -346,6 +346,12 @@ describe('availability', () => {
     ])
     const home = await staffHome(db, await profileStatus(user.id), TODAY)
     expect(home.availability).toEqual({ available: 1, total: 2 })
+
+    // Before approval the sessions are not shown at all.
+    expect(await myAvailability(db, { userId: user.id, status: 'applied' }, TODAY)).toEqual({
+      canEdit: false,
+      sessions: [],
+    })
   })
 
   it('the list counts the sessions ahead and answers for a chosen session', async () => {
@@ -377,6 +383,11 @@ describe('team', () => {
     const { user } = await makeStaff(db, 'registered')
     await saveApplicationDraft(db, user.id, { team: 'volunteer' })
     expect((await staffDetail(db, user.id)).team).toBe('volunteer')
+    // While the application is a draft the choice is the person's.
+    await expect(
+      setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } }),
+    ).rejects.toMatchObject({ statusCode: 409 })
+    await db.update(t.staffProfiles).set({ status: 'applied' }).where(eq(t.staffProfiles.userId, user.id))
     await setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } })
     await setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } })
     expect((await staffDetail(db, user.id)).team).toBe('staff')

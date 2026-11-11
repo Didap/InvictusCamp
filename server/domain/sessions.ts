@@ -4,6 +4,7 @@
 // Explicit imports only, so the database tests can load this file (tests/db/sessions.test.ts).
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
 import type { SessionInput } from '../../shared/schemas/sessions'
+import { countsTowardNeeded } from '../../shared/schemas/staff'
 import type {
   ContractOption,
   FamilyParticipationItem,
@@ -49,6 +50,7 @@ import {
   sessionFamilies,
   sessionStaff,
   signatureRequests,
+  staffProfiles,
   users,
 } from '../db/schema'
 import {
@@ -201,8 +203,15 @@ async function staffCountsOf(
   const ids = sessions.map(s => s.id)
   const convocations = ids.length
     ? await db
-        .select({ sessionId: sessionStaff.sessionId, userId: sessionStaff.userId, status: sessionStaff.status })
+        .select({
+          sessionId: sessionStaff.sessionId,
+          userId: sessionStaff.userId,
+          status: sessionStaff.status,
+          role: sessionStaff.role,
+          team: staffProfiles.team,
+        })
         .from(sessionStaff)
+        .leftJoin(staffProfiles, eq(staffProfiles.userId, sessionStaff.userId))
         .where(inArray(sessionStaff.sessionId, ids))
     : []
   const contractIds = [...new Set(sessions.map(s => s.contractDocumentId).filter((id): id is string => !!id))]
@@ -221,7 +230,10 @@ async function staffCountsOf(
         if (convocation.status === 'accepted') {
           counts.accepted++
           const contract = session.contractDocumentId
-          if (!contract || signedKeys.has(`${contract}:${convocation.userId}`)) counts.confirmed++
+          const signedOrNone = !contract || signedKeys.has(`${contract}:${convocation.userId}`)
+          if (signedOrNone && countsTowardNeeded({ team: convocation.team ?? 'staff', role: convocation.role })) {
+            counts.confirmed++
+          }
         } else if (convocation.status === 'sent') counts.waiting++
         else if (convocation.status === 'draft') counts.toSend++
       }

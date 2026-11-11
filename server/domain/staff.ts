@@ -8,6 +8,7 @@ import { alias } from 'drizzle-orm/pg-core'
 import {
   applicationMissing,
   canMoveStaff,
+  countsTowardNeeded,
   isReviewMove,
   type ConvocationAddInput,
   type ConvocationSendInput,
@@ -285,13 +286,18 @@ export async function approveApplications(
   return { approved: waiting.length, skipped: userIds.length - waiting.length }
 }
 
-/** Internal notes of the review, never shown to the person. */
-/** Moves a person between staff and v-team; their convocations keep the role they have. */
+/**
+ * Moves a person between staff and v-team; their convocations keep the role they have. While the
+ * application is a draft the team is the person's choice, in the form.
+ */
 export async function setStaffTeam(
   db: DbOrTx,
   input: { userId: string; team: StaffTeam; actor: Actor },
 ): Promise<void> {
   const profile = await profileOf(db, input.userId, { lock: true })
+  if (profile.status === 'registered') {
+    throw createError({ statusCode: 409, message: 'La squadra la sceglie la persona, finché non invia la candidatura' })
+  }
   if (profile.team === input.team) return
   await db.update(staffProfiles).set({ team: input.team }).where(eq(staffProfiles.id, profile.id))
   await writeAudit(db, {
@@ -304,6 +310,7 @@ export async function setStaffTeam(
   })
 }
 
+/** Internal notes of the review, never shown to the person. */
 export async function saveReviewNotes(db: DbOrTx, userId: string, notes: string): Promise<void> {
   const profile = await profileOf(db, userId)
   await db
@@ -377,12 +384,8 @@ export async function setAvailability(
 ): Promise<void> {
   const profile = await profileOf(db, input.userId)
   if (profile.status !== 'approved') throw createError({ statusCode: 403, message: BEFORE_APPROVAL })
-  const [session] = await db
-    .select({ id: campSessions.id })
-    .from(campSessions)
-    .where(and(eq(campSessions.id, input.sessionId), openForAvailability(today)))
-    .limit(1)
-  if (!session) {
+  const session = await sessionFor(db, input.sessionId)
+  if (!isSessionEditable(session.status) || session.startDate <= today) {
     throw createError({ statusCode: 409, message: 'La sessione è già iniziata, conclusa o annullata' })
   }
   if (input.available) {
@@ -888,7 +891,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     .select(availabilitySession)
     .from(sessionAvailability)
     .innerJoin(campSessions, eq(campSessions.id, sessionAvailability.sessionId))
-    .where(eq(sessionAvailability.userId, userId))
+    .where(and(eq(sessionAvailability.userId, userId), ne(campSessions.status, 'cancelled')))
     .orderBy(asc(campSessions.startDate))
 
   const convocationRows = await db
@@ -1087,7 +1090,7 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
       contract: contractId ? { id: contractId, title: row.contractTitle ?? 'Contratto' } : null,
     },
     counts: {
-      confirmed: convocations.filter(c => c.confirmed).length,
+      confirmed: convocations.filter(c => c.confirmed && countsTowardNeeded(c)).length,
       accepted: convocations.filter(c => c.status === 'accepted').length,
       waiting: convocations.filter(c => c.status === 'sent').length,
       draft: convocations.filter(c => c.status === 'draft').length,
@@ -1126,14 +1129,16 @@ export async function myApplication(db: DbOrTx, userId: string): Promise<StaffAp
 }
 
 /**
- * The sessions availability is asked for, by date, with the person's answer; answering is for approved
- * staff. A session they are convoked to (sent or accepted) says so.
+ * The sessions availability is asked for, by date, with the person's answer: approved staff only. A
+ * session they are convoked to (sent or accepted) says so.
  */
 export async function myAvailability(
   db: DbOrTx,
   profile: Pick<ProfileRow, 'userId' | 'status'>,
   today: string = todayIso(),
 ): Promise<MyAvailability> {
+  // Only approved staff see the sessions: before approval (or after a rejection) they are not theirs to know.
+  if (profile.status !== 'approved') return { canEdit: false, sessions: [] }
   const rows = await db
     .select({ session: availabilitySession, answer: sessionAvailability.id, convocation: sessionStaff.status })
     .from(campSessions)
@@ -1145,7 +1150,7 @@ export async function myAvailability(
     .where(openForAvailability(today))
     .orderBy(asc(campSessions.startDate))
   return {
-    canEdit: profile.status === 'approved',
+    canEdit: true,
     sessions: rows.map(row => ({
       ...row.session,
       available: row.answer !== null,

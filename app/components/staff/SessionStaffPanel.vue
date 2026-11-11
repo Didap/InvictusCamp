@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { SessionConvocation, SessionStaffData } from '#shared/types/staff'
-import type { StaffRole, StaffTeam } from '#shared/utils/constants'
+import { STAFF_TEAMS, type StaffRole } from '#shared/utils/constants'
 import { formatDateTime, fullName } from '#shared/utils/format'
 
 // CONTRACT (docs/BUILD.md): owned by A2 Staff. Admin session page, tab "Staff": the convocations of the
@@ -149,13 +149,12 @@ function statusNote(c: SessionConvocation): string {
 // The base of a session (spec 3.5): `staffNeeded` people of the staff, plus a coordinator for the staff
 // and one for the v-team. Counted on the convocations still open (draft, sent, accepted).
 const live = computed(() => convocations.value.filter(c => c.status !== 'declined' && c.status !== 'cancelled'))
-const staffConfirmed = computed(
-  () => convocations.value.filter(c => c.confirmed && c.team === 'staff' && c.role !== 'coordinator').length,
+const staffConfirmed = computed(() => counts.value?.confirmed ?? 0)
+const volunteersConfirmed = computed(
+  () => convocations.value.filter(c => c.confirmed && c.team === 'volunteer' && c.role !== 'coordinator').length,
 )
-const volunteersConfirmed = computed(() => convocations.value.filter(c => c.confirmed && c.team === 'volunteer').length)
-const TEAMS: StaffTeam[] = ['staff', 'volunteer']
 const coordinators = computed(() =>
-  TEAMS.map(team => {
+  STAFF_TEAMS.map(team => {
     const found = live.value.filter(c => c.team === team && c.role === 'coordinator')
     return { team, names: found.map(c => (c.confirmed ? fullName(c) : `${fullName(c)} (non ancora confermato)`)) }
   }),
@@ -255,7 +254,7 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
           <li v-for="item in coordinators" :key="item.team" class="flex items-start gap-2">
             <UIcon name="i-lucide-flag" class="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
             <p>
-              <span class="text-muted">Coordinatore {{ item.team === 'staff' ? 'staff' : 'v-team' }}:</span>{{ ' ' }}
+              <span class="text-muted">Coordinatore {{ label('staffTeam', item.team).toLowerCase() }}:</span>{{ ' ' }}
               <span v-if="item.names.length">{{ item.names.join(', ') }}</span>
               <span v-else class="text-warning">da scegliere</span>
             </p>

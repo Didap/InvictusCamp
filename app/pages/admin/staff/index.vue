@@ -4,7 +4,7 @@ import type { SessionListItem } from '#shared/types/sessions'
 import type { StaffListItem } from '#shared/types/staff'
 import type { StaffRole, StaffTeam } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
-import { formatDay, formatDayRange, fullName } from '#shared/utils/format'
+import { formatDay, formatDayRange, fullName, plural } from '#shared/utils/format'
 
 // Staff of the camp: applications to review, approved staff, everyone (spec 3.4). Tab in the query string.
 const route = useRoute()
@@ -99,9 +99,7 @@ const rolesOf = (person: StaffListItem) => person.roles.map(r => label('staffRol
 /** The day (in Italy) an application was sent. */
 const appliedOn = (person: StaffListItem) => (person.appliedAt ? formatDay(todayIso(new Date(person.appliedAt))) : '')
 const availabilityOf = (person: StaffListItem) =>
-  person.availableSessions
-    ? `${person.availableSessions} ${person.availableSessions === 1 ? 'sessione' : 'sessioni'}`
-    : 'Nessuna sessione'
+  person.availableSessions ? plural(person.availableSessions, 'sessione', 'sessioni') : 'Nessuna sessione'
 
 // Bulk approval (Da valutare): no email leaves, the outcome is communicated person by person.
 const selection = ref<Record<string, boolean>>({})

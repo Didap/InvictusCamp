@@ -223,11 +223,19 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               <IcStatusBadge v-if="person.accountStatus !== 'active'" kind="userStatus" :value="person.accountStatus" />
             </div>
             <p class="text-sm text-muted">{{ statusLine }}</p>
-            <UFormField label="Squadra" help="Scelta nella candidatura. Chi è nel v-team è un volontario.">
+            <UFormField
+              label="Squadra"
+              :help="
+                person.status === 'registered'
+                  ? 'La sceglie la persona nella candidatura, finché non la invia.'
+                  : 'Scelta nella candidatura. Chi è nel v-team è un volontario.'
+              "
+            >
               <USelect
                 :model-value="person.team"
                 :items="teamItems"
                 :loading="savingTeam"
+                :disabled="person.status === 'registered'"
                 class="w-full"
                 @update:model-value="value => changeTeam(value as StaffTeam)"
               />
@@ -379,7 +387,8 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               </ULink>
               <span class="text-sm text-muted tabular-nums">
                 {{ formatDayRange(session.startDate, session.endDate, 'long')
-                }}<template v-if="session.startDate <= today"> · Passata</template>
+                }}<template v-if="session.endDate < today"> · Passata</template
+                ><template v-else-if="session.startDate <= today"> · In corso</template>
               </span>
             </li>
           </ul>

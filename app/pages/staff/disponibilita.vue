@@ -6,6 +6,7 @@ import { formatDayRange, plural } from '#shared/utils/format'
 // Availability (spec 3.5): the sessions not started yet, and for each one whether the person can come to
 // the whole of it. The administration convokes only among those who said yes. Only approved staff answer.
 const api = useApi()
+const confirm = useConfirm()
 const { data, refresh } = await useApiFetch<MyAvailability>('/api/staff/availability')
 
 const sessions = computed(() => data.value?.sessions ?? [])
@@ -13,11 +14,27 @@ const available = computed(() => sessions.value.filter(session => session.availa
 
 const saving = ref<string | null>(null)
 async function answer(session: MyAvailabilitySession, value: boolean) {
+  if (!value && session.convoked) {
+    const ok = await confirm({
+      title: `Togli la disponibilità per ${session.title}?`,
+      description:
+        'Hai già una convocazione per questa sessione: resta com’è, ma l’amministrazione vedrà che hai tolto la disponibilità.',
+      confirmLabel: 'Togli la disponibilità',
+      danger: true,
+    })
+    if (!ok) return
+  }
   saving.value = session.id
   try {
     const url: string = `/api/staff/availability/${session.id}`
     await api(url, { method: 'PUT', body: { available: value } })
-    session.available = value
+    // The fetched data is a shallow ref: replace it, so the count above follows.
+    if (data.value) {
+      data.value = {
+        ...data.value,
+        sessions: data.value.sessions.map(s => (s.id === session.id ? { ...s, available: value } : s)),
+      }
+    }
     notifySuccess(value ? 'Disponibilità indicata' : 'Disponibilità tolta', session.title)
   } catch (error) {
     notifyError(error, 'Disponibilità non salvata')
@@ -69,7 +86,7 @@ async function answer(session: MyAvailabilitySession, value: boolean) {
             </div>
             <USwitch
               :model-value="session.available"
-              :disabled="!data.canEdit"
+              :disabled="!data.canEdit || saving === session.id"
               :loading="saving === session.id"
               label="Ci sono"
               class="shrink-0 pt-0.5 pointer-coarse:min-h-11"

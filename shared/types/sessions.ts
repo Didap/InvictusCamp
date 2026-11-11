@@ -26,7 +26,10 @@ export interface SlotCounts {
 /** Staff of a session: convocations by state and the derived "Confermata". */
 export interface StaffCounts {
   needed: number
-  /** Accepted and, when the session has a contract, contract signed. */
+  /**
+   * Accepted and, when the session has a contract, contract signed: only the people who count toward
+   * `needed` (the staff team, coordinators aside, countsTowardNeeded).
+   */
   confirmed: number
   /** Accepted, contract signed or not. */
   accepted: number

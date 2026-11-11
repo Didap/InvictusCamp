@@ -5,6 +5,7 @@ import {
   type DashboardSession,
   type DashboardTodo,
 } from '#shared/types/dashboard'
+import { countsTowardNeeded } from '#shared/schemas/staff'
 import { enumLabel, type SessionStatus } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDay, plural } from '#shared/utils/format'
@@ -61,8 +62,15 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
       : [],
     ids.length
       ? db
-          .select({ sessionId: t.sessionStaff.sessionId, userId: t.sessionStaff.userId, status: t.sessionStaff.status })
+          .select({
+            sessionId: t.sessionStaff.sessionId,
+            userId: t.sessionStaff.userId,
+            status: t.sessionStaff.status,
+            role: t.sessionStaff.role,
+            team: t.staffProfiles.team,
+          })
           .from(t.sessionStaff)
+          .leftJoin(t.staffProfiles, eq(t.staffProfiles.userId, t.sessionStaff.userId))
           .where(inArray(t.sessionStaff.sessionId, ids))
       : [],
     contracts.length
@@ -151,8 +159,12 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
       },
       staff: {
         needed: s.staffNeeded,
-        confirmed: accepted.filter(c => !s.contractDocumentId || signed.has(`${s.contractDocumentId}:${c.userId}`))
-          .length,
+        // Only who counts toward `needed`: the staff team, coordinators aside.
+        confirmed: accepted.filter(
+          c =>
+            countsTowardNeeded({ team: c.team ?? 'staff', role: c.role }) &&
+            (!s.contractDocumentId || signed.has(`${s.contractDocumentId}:${c.userId}`)),
+        ).length,
         accepted: accepted.length,
         awaiting: staff.filter(c => c.status === 'sent').length,
         toSend: staff.filter(c => c.status === 'draft').length,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import type { DocumentListItem } from '#shared/types/documents'
-import { enumLabel, type DocumentAudience } from '#shared/utils/constants'
+import { DOCUMENT_AUDIENCES, enumLabel, type DocumentAudience } from '#shared/utils/constants'
 import { formatDay } from '#shared/utils/format'
 
 // Documents of the administration: what each one asks (to sign or to read), its session, how many
@@ -52,12 +52,12 @@ const kindItems = [
 ]
 
 // Point 7: who the document went to. A document not assigned yet shows only with "Tutti i destinatari".
-const AUDIENCE_LABELS: Record<DocumentAudience, string> = { family: 'Famiglie', staff: 'Staff', volunteer: 'V-team' }
+const audienceLabel = (a: DocumentAudience) => (a === 'family' ? 'Famiglie' : enumLabel('staffTeam', a))
 const audienceItems = [
   { label: 'Tutti i destinatari', value: 'all' },
-  ...Object.entries(AUDIENCE_LABELS).map(([value, label]) => ({ label, value })),
+  ...DOCUMENT_AUDIENCES.map(value => ({ label: audienceLabel(value), value })),
 ]
-const audiencesOf = (d: DocumentListItem) => d.audiences.map(a => AUDIENCE_LABELS[a]).join(', ')
+const audiencesOf = (d: DocumentListItem) => d.audiences.map(audienceLabel).join(', ')
 
 function clearFilters() {
   search.value = ''

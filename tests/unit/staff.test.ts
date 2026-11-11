@@ -16,6 +16,7 @@ import {
   applicationMissing,
   availabilityAnswerSchema,
   canMoveStaff,
+  countsTowardNeeded,
   isReviewMove,
   staffApplicationSchema,
   staffDocumentSchema,
@@ -103,6 +104,15 @@ describe('convocation', () => {
     expect(isConfirmed('accepted', 'pending')).toBe(false)
     expect(isConfirmed('accepted', 'missing')).toBe(false)
     expect(isConfirmed('sent', 'none')).toBe(false)
+  })
+})
+
+describe('staffNeeded', () => {
+  it('counts the staff team, coordinators and v-team aside', () => {
+    expect(countsTowardNeeded({ team: 'staff', role: 'group_lead' })).toBe(true)
+    expect(countsTowardNeeded({ team: 'staff', role: null })).toBe(true)
+    expect(countsTowardNeeded({ team: 'staff', role: 'coordinator' })).toBe(false)
+    expect(countsTowardNeeded({ team: 'volunteer', role: 'other' })).toBe(false)
   })
 })
 
