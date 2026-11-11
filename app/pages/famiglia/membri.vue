@@ -44,7 +44,7 @@ const title = (member: OwnFamilyMember) => memberName(member, members.value)
 function summary(member: OwnFamilyMember): string {
   if (isEmptyCard(member) || !member.relationship) return 'Scheda da compilare: nome, parentela, data di nascita'
   const relationship = enumLabel('memberRelationship', member.relationship)
-  if (!member.birthDate) return relationship
+  if (!member.birthDate) return member.kind === 'adult' ? `${relationship} · manca la data di nascita` : relationship
   const age = ageOn(member.birthDate)
   return `${relationship} · ${formatAge(age)}`
 }

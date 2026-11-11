@@ -247,8 +247,13 @@ export const memberSchema = z
   .refine(member => member.kind !== 'adult' || Boolean(member.birthDate), {
     path: ['birthDate'],
     error: 'Campo obbligatorio',
-    // Also while another field is wrong, so the form shows every missing field at once.
-    when: ({ issues }) => !issues.some(issue => issue.path?.[0] === 'kind' || issue.path?.[0] === 'birthDate'),
+    // Also while another field is wrong, so the form shows every missing field at once; not when the
+    // input is no object at all (a root issue has no field).
+    when: ({ issues }) =>
+      issues.every(issue => {
+        const field = issue.path?.[0]
+        return field !== undefined && field !== 'kind' && field !== 'birthDate'
+      }),
   })
 export type MemberInput = z.output<typeof memberSchema>
 

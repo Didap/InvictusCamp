@@ -43,7 +43,7 @@ const contacts = computed(() => {
 function memberSummary(member: FamilyMemberDto): string {
   if (isEmptyCard(member) || !member.relationship) return 'Scheda non ancora compilata dalla famiglia'
   const relationship = enumLabel('memberRelationship', member.relationship)
-  if (!member.birthDate) return relationship
+  if (!member.birthDate) return member.kind === 'adult' ? `${relationship} · manca la data di nascita` : relationship
   const age = ageOn(member.birthDate)
   return `${relationship} · ${formatAge(age)} (${formatDay(member.birthDate)})`
 }

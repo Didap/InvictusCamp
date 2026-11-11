@@ -36,6 +36,11 @@ describe('family member', () => {
     expect(memberSchema.safeParse(young).success).toBe(true)
   })
 
+  it('refuses what is not a member, without throwing', () => {
+    expect(memberSchema.safeParse(null).success).toBe(false)
+    expect(memberSchema.safeParse(undefined).success).toBe(false)
+  })
+
   it('shows the missing birth date with the other missing fields', () => {
     expect(refused(memberSchema.safeParse({ ...adult, birthDate: null, relationship: undefined }))).toEqual([
       'relationship',

@@ -73,8 +73,8 @@ const condition = computed({
   set: (value: string) => (state.health.hasDisability = value === 'yes'),
 })
 const conditionItems = [
-  { label: 'No', value: 'no' },
   { label: 'Sì', value: 'yes' },
+  { label: 'No', value: 'no' },
 ]
 
 const { options } = useEnums()

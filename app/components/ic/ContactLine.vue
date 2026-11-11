@@ -50,7 +50,7 @@ import type { ContactAudience } from '~/composables/useContact'
 const props = withDefaults(defineProps<{ lead?: string; as?: 'p' | 'span'; audience?: ContactAudience }>(), {
   as: 'p',
 })
-const contact = useContact(props.audience)
+const contact = useContact(() => props.audience)
 const parts = computed(() => contactParts(contact.value, props.lead))
 </script>
 
