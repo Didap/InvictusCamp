@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { contactSentence } from '~/components/ic/ContactLine.vue'
 import type { FamilySessionItem } from '#shared/types/sessions'
 import { todayIso } from '#shared/utils/dates'
 import { formatDay, formatDayRange } from '#shared/utils/format'
@@ -12,7 +11,7 @@ const emit = defineEmits<{ answered: [] }>()
 
 const api = useApi()
 const confirm = useConfirm()
-const contact = useContact('families')
+const contact = useContact()
 const titleId = useId()
 const saving = ref(false)
 const declineOpen = ref(false)

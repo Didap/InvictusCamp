@@ -30,6 +30,8 @@ async function onSubmit() {
     loading.value = false
   }
 }
+
+const contact = useContact(true)
 </script>
 
 <template>
@@ -74,9 +76,7 @@ async function onSubmit() {
       <UButton type="submit" block size="lg" :loading="loading" label="Crea l’account" />
     </UForm>
 
-    <p class="mt-8 text-sm text-muted">
-      Ti occorre supporto per la registrazione? <IcContactLine as="span" audience="families" />
-    </p>
+    <p class="mt-8 text-sm text-muted">{{ contact.question }} <IcContactLine as="span" families /></p>
     <p class="mt-2 text-sm text-muted">
       Hai già un account? <ULink to="/accedi" class="font-semibold text-primary">Accedi</ULink>
     </p>

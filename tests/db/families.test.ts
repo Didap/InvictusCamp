@@ -349,7 +349,8 @@ describe('family data', () => {
       ['young', null],
     ])
     const home = await familyHome(db, { userId: actor.userId, firstName: 'Anna', familyId: family.id })
-    expect(home).toMatchObject({ memberCount: 4, cardsToComplete: 3 })
+    // The three new cards, and Anna's: an adult without the birth date.
+    expect(home).toMatchObject({ memberCount: 4, cardsToComplete: 4 })
 
     // Saving again creates only what is missing, and the date of the first confirmation stays.
     const again = await saveFamilyData(db, {

@@ -14,6 +14,7 @@ import {
   type PersonalDocumentCategory,
 } from '../utils/constants'
 import { isIsoDay, todayIso } from '../utils/dates'
+import { missingBirthDate } from '../utils/format'
 import { zListQuery, zPersonName, zPhone, zRequiredPhone, zRequiredText, zText, zUuid } from './common'
 
 /** An Italian province as its two-letter code ("TA"); empty is allowed. */
@@ -234,27 +235,23 @@ const zBirthDate = z
  * A member of the family; an adult's birth date is required. `health` is accepted only with the consent;
  * when absent it stays as it is.
  */
-export const memberSchema = z
-  .object({
-    firstName: zPersonName,
-    lastName: zPersonName,
-    birthDate: z.preprocess(value => (value === '' ? null : value), zBirthDate.nullable()).optional(),
-    relationship: z.enum(MEMBER_RELATIONSHIPS, { error: 'Scegli la parentela' }),
-    kind: z.enum(MEMBER_KINDS, { error: 'Indica se è un adulto o un ragazzo o ragazza' }),
-    isReferent: z.boolean().default(false),
-    health: memberHealthSchema.optional(),
-  })
-  .refine(member => member.kind !== 'adult' || Boolean(member.birthDate), {
-    path: ['birthDate'],
-    error: 'Campo obbligatorio',
-    // Also while another field is wrong, so the form shows every missing field at once; not when the
-    // input is no object at all (a root issue has no field).
-    when: ({ issues }) =>
-      issues.every(issue => {
-        const field = issue.path?.[0]
-        return field !== undefined && field !== 'kind' && field !== 'birthDate'
-      }),
-  })
+const memberFields = z.object({
+  firstName: zPersonName,
+  lastName: zPersonName,
+  birthDate: z.preprocess(value => (value === '' ? null : value), zBirthDate.nullable()).optional(),
+  relationship: z.enum(MEMBER_RELATIONSHIPS, { error: 'Scegli la parentela' }),
+  kind: z.enum(MEMBER_KINDS, { error: 'Indica se è un adulto o un ragazzo o ragazza' }),
+  isReferent: z.boolean().default(false),
+  health: memberHealthSchema.optional(),
+})
+const birthDateFields = memberFields.pick({ kind: true, birthDate: true })
+
+export const memberSchema = memberFields.refine(member => !missingBirthDate(member), {
+  path: ['birthDate'],
+  error: 'Campo obbligatorio',
+  // Whenever kind and birth date are valid, also while another field is wrong: every missing field at once.
+  when: ({ value }) => birthDateFields.safeParse(value).success,
+})
 export type MemberInput = z.output<typeof memberSchema>
 
 export const NO_HEALTH: MemberHealth = { hasDisability: false, disability: null }

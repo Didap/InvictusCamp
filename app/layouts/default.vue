@@ -8,6 +8,7 @@ import { fullName, initials } from '#shared/utils/format'
 const { user, clear } = useUserSession()
 const nav = useNav()
 const showHelp = computed(() => user.value?.role === 'family' || user.value?.role === 'staff')
+const contact = useContact()
 
 async function logout() {
   await $fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
@@ -51,9 +52,7 @@ const accountItems = computed<DropdownMenuItem[][]>(() => [
           />
         </nav>
         <div v-if="showHelp && !collapsed" class="mt-auto rounded-lg bg-muted px-3 py-2.5 text-sm">
-          <p class="font-semibold text-highlighted">
-            {{ user?.role === 'family' ? 'Ti occorre supporto per la registrazione?' : 'Serve aiuto?' }}
-          </p>
+          <p class="font-semibold text-highlighted">{{ contact.question }}</p>
           <IcContactLine class="mt-1 text-muted" />
         </div>
       </template>

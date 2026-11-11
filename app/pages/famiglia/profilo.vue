@@ -10,7 +10,7 @@ import {
 } from '#shared/schemas/families'
 import type { FormAnswers } from '#shared/types/domain'
 import type { FamilyDataResult, FamilyProfileDto } from '#shared/types/families'
-import type { ItalianRegion } from '#shared/utils/constants'
+import { YES_NO_ITEMS, type ItalianRegion } from '#shared/utils/constants'
 import { formatDateTime, plural } from '#shared/utils/format'
 
 // The family data (docs/spec.md, 3.8): the first form of the family, editable afterwards. Confirming it
@@ -39,7 +39,7 @@ const state = reactive({
 // The answers to the questions: one record per kind of field, so every input gets a value of its own type.
 const texts = reactive<Record<string, string>>({})
 const choices = reactive<Record<string, string[]>>({})
-const yesNo = reactive<Record<string, string | undefined>>({})
+const yesNo = reactive<Record<string, boolean | undefined>>({})
 
 // Loaded once: a save updates `profile` without overwriting what is being typed.
 if (profile.value) {
@@ -58,8 +58,7 @@ if (profile.value) {
   for (const question of FAMILY_FORM_QUESTIONS) {
     const answer = value.formAnswers[question.id]
     if (question.type === 'multiselect') choices[question.id] = Array.isArray(answer) ? [...answer] : []
-    else if (question.type === 'boolean')
-      yesNo[question.id] = answer === true ? 'yes' : answer === false ? 'no' : undefined
+    else if (question.type === 'boolean') yesNo[question.id] = typeof answer === 'boolean' ? answer : undefined
     else texts[question.id] = typeof answer === 'string' ? answer : ''
   }
 }
@@ -69,7 +68,7 @@ function answers(): FormAnswers {
   for (const question of FAMILY_FORM_QUESTIONS) {
     if (question.type === 'multiselect') result[question.id] = [...(choices[question.id] ?? [])]
     else if (question.type === 'boolean') {
-      result[question.id] = yesNo[question.id] === 'yes' ? true : yesNo[question.id] === 'no' ? false : null
+      result[question.id] = yesNo[question.id] ?? null
     } else result[question.id] = texts[question.id] ?? ''
   }
   return result
@@ -126,11 +125,6 @@ async function save() {
     saving.value = false
   }
 }
-
-const booleanItems = [
-  { label: 'Sì', value: 'yes' },
-  { label: 'No', value: 'no' },
-]
 </script>
 
 <template>
@@ -259,7 +253,7 @@ const booleanItems = [
             <URadioGroup
               v-else
               v-model="yesNo[question.id]"
-              :items="booleanItems"
+              :items="YES_NO_ITEMS"
               orientation="horizontal"
               :legend="question.label"
               :ui="{ legend: 'sr-only' }"

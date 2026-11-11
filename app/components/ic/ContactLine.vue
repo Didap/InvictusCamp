@@ -1,56 +1,9 @@
-<script lang="ts">
-export interface ContactConfig {
-  email?: string
-  phone?: string
-  hours?: string
-}
-
-interface ContactPart {
-  text: string
-  href?: string
-}
-
-/**
- * How to reach the camp, as one sentence of text and links: "Se cambi idea, scrivi a info@… o chiama il
- * 099… (orari)." Only the contacts that are set appear; with none, it names the administration.
- */
-export function contactParts(contact: ContactConfig, lead?: string): ContactPart[] {
-  const email = contact.email?.trim()
-  const phone = contact.phone?.trim()
-  const hours = contact.hours?.trim()
-  const start = (verb: string) => (lead ? `${lead}, ${verb}` : verb.charAt(0).toUpperCase() + verb.slice(1))
-  if (!email && !phone) return [{ text: `${start('scrivi')} all’amministrazione del camp.` }]
-  const parts: ContactPart[] = []
-  if (email) parts.push({ text: `${start('scrivi a')} ` }, { text: email, href: `mailto:${email}` })
-  if (phone) {
-    parts.push(
-      { text: email ? ' o chiama il ' : `${start('chiama il')} ` },
-      { text: phone, href: `tel:${phone.replace(/[^\d+]/g, '')}` },
-    )
-    if (hours) parts.push({ text: ` (${hours})` })
-  }
-  parts.push({ text: '.' })
-  return parts
-}
-
-/** The same sentence as plain text, for places that take no links (the description of a confirmation). */
-export function contactSentence(contact: ContactConfig, lead?: string): string {
-  return contactParts(contact, lead)
-    .map(part => part.text)
-    .join('')
-}
-</script>
-
 <script setup lang="ts">
-import type { ContactAudience } from '~/composables/useContact'
-
-// The way out of every "write to the camp": the public contacts of nuxt.config.ts (useContact) as mailto:
-// and tel: links. <IcContactLine lead="Se hai domande" />; inside a sentence, as="span"; on a public page,
-// audience="families" (signed in, the role decides).
-const props = withDefaults(defineProps<{ lead?: string; as?: 'p' | 'span'; audience?: ContactAudience }>(), {
-  as: 'p',
-})
-const contact = useContact(() => props.audience)
+// The way out of every "write to the camp": the contacts of useContact as mailto: and tel: links.
+// <IcContactLine lead="Se hai domande" />; inside a sentence, as="span"; on a public page for families,
+// `families` (signed in, the role decides).
+const props = withDefaults(defineProps<{ lead?: string; as?: 'p' | 'span'; families?: boolean }>(), { as: 'p' })
+const contact = useContact(() => props.families)
 const parts = computed(() => contactParts(contact.value, props.lead))
 </script>
 

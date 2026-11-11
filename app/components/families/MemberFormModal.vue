@@ -2,7 +2,7 @@
 import { DISABILITY_FIELDS, memberSchema } from '#shared/schemas/families'
 import type { DisabilityInfo } from '#shared/types/domain'
 import type { OwnFamilyMember } from '#shared/types/families'
-import type { MemberKind, MemberRelationship } from '#shared/utils/constants'
+import { YES_NO_ITEMS, type MemberKind, type MemberRelationship } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { fullName, isEmptyCard } from '#shared/utils/format'
 
@@ -66,16 +66,6 @@ async function close() {
   }
   open.value = false
 }
-
-// A plain yes or no, so whoever has no condition sees at once there is nothing more to write.
-const condition = computed({
-  get: () => (state.health.hasDisability ? 'yes' : 'no'),
-  set: (value: string) => (state.health.hasDisability = value === 'yes'),
-})
-const conditionItems = [
-  { label: 'Sì', value: 'yes' },
-  { label: 'No', value: 'no' },
-]
 
 const { options } = useEnums()
 const relationships = options('memberRelationship')
@@ -197,8 +187,8 @@ async function save() {
             Patologie e disabilità
           </legend>
           <URadioGroup
-            v-model="condition"
-            :items="conditionItems"
+            v-model="state.health.hasDisability"
+            :items="YES_NO_ITEMS"
             value-key="value"
             orientation="horizontal"
             legend="Ha una patologia grave o cronica, un disturbo del neurosviluppo o una disabilità, anche genetica?"
