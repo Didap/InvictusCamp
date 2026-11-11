@@ -50,7 +50,7 @@ Everyone: `/account`, `/firma/:requestId`.
 
 ### 3.1 Accounts (foundation, done)
 
-- A family registers at `/registrati` (family name, referent, email, password, privacy): user `family`,
+- A family registers at `/registrati` (family name, referent, email, phone, password, privacy): user `family`,
   a `families` row and the referent as first member (an adult); an email confirms the address (48 h).
   Sign-in is refused until the address is confirmed. The "Partecipa" or "Iscriviti" button of the camp's
   website links here. Once in, the first thing to do is the family data (3.8).
@@ -152,7 +152,7 @@ availability or receive convocations.
 ### 3.8 The family: family data, member cards, documents
 
 - **Family data** (`/famiglia/profilo`, "Dati della famiglia"), the first form of the family: family name
-  and phone; residence (street and number, city, CAP and region required, province optional); the
+  and phone (required); residence (street and number, city, CAP and region required, province optional); the
   composition, i.e. how many adults (the account holder included), how many young people with a severe or
   chronic illness, a neurodevelopmental disorder or a disability, how many without; and the questions of
   `shared/content/family-form.ts` (how they found the camp, association, preferred sessions: weekend with 2
@@ -170,9 +170,10 @@ availability or receive convocations.
   yet, the form asks for it next to the composition and gives it with the save (`family.health_consent`).
   Without it, the save is refused.
 - **Member cards** (`/famiglia/membri`, "Componenti"): name, birth date, relationship, adult or young
-  person, referent, and, with the consent, "ha una patologia o disabilità" and its details (`DisabilityInfo`,
-  placeholder fields). An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling
-  it in requires name, surname and relationship. Before the family data is confirmed the page shows only
+  person, referent, and, with the consent, the question "ha una patologia o disabilità?" (Sì/No, No by
+  default: nothing more to write) and, on Sì, its details (`DisabilityInfo`, placeholder fields, all
+  required). An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling it in
+  requires name, surname, relationship and, for an adult, the birth date. Before the family data is confirmed the page shows only
   the account holder's card and points to the family data, and adding a card is refused (409); afterwards
   cards can also be added by hand, at most 12 per number of the composition (the most the form takes).
 - The health data consent (`healthDataConsentAt`) can be given or withdrawn in Componenti; withdrawing

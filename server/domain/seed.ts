@@ -491,23 +491,33 @@ export async function seedDemo(
       .returning({ id: t.families.id })
     const members: DemoMember[] = [{ firstName: f.first, relationship: 'parent' }, ...f.members]
     await db.insert(t.familyMembers).values(
-      members.map((m, position) => ({
-        familyId: family!.id,
-        firstName: m.firstName,
-        lastName: f.last,
-        relationship: m.relationship,
-        kind: m.relationship === 'child' || m.relationship === 'sibling' ? ('young' as const) : ('adult' as const),
-        birthDate: m.birthDate ?? null,
-        isReferent: position === 0,
-        hasDisability: Boolean(m.disability),
-        disability: m.disability
-          ? ({
-              description: m.disability,
-              supportNeeds: 'Supporto nelle autonomie quotidiane (esempio).',
-            } satisfies DisabilityInfo)
-          : null,
-        position,
-      })),
+      members.map((m, position) => {
+        const kind =
+          m.relationship === 'child' || m.relationship === 'sibling' ? ('young' as const) : ('adult' as const)
+        return {
+          familyId: family!.id,
+          firstName: m.firstName,
+          lastName: f.last,
+          relationship: m.relationship,
+          kind,
+          // An adult's birth date is required by the form: one per demo adult, between 1972 and 1986.
+          birthDate:
+            m.birthDate ??
+            (kind === 'adult' ? `${1972 + ((index * 3 + position) % 15)}-0${(position % 9) + 1}-15` : null),
+          isReferent: position === 0,
+          hasDisability: Boolean(m.disability),
+          disability: m.disability
+            ? ({
+                description: m.disability,
+                supportNeeds: 'Supporto nelle autonomie quotidiane (esempio).',
+                mobility: 'Niente da segnalare (esempio).',
+                communication: 'Comunica a voce, con frasi brevi (esempio).',
+                medicalNotes: 'Nessuna terapia, nessuna allergia (esempio).',
+              } satisfies DisabilityInfo)
+            : null,
+          position,
+        }
+      }),
     )
     families.push({ userId: user.id, familyId: family!.id, email: user.email, firstName: user.firstName })
   }

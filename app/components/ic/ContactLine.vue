@@ -42,11 +42,16 @@ export function contactSentence(contact: ContactConfig, lead?: string): string {
 </script>
 
 <script setup lang="ts">
-// The way out of every "write to the camp": the public contacts of nuxt.config.ts (runtimeConfig.public
-// .contact) as mailto: and tel: links. <IcContactLine lead="Se hai domande" />; inside a sentence, as="span".
-const props = withDefaults(defineProps<{ lead?: string; as?: 'p' | 'span' }>(), { as: 'p' })
-const contact = useRuntimeConfig().public.contact as ContactConfig
-const parts = computed(() => contactParts(contact, props.lead))
+import type { ContactAudience } from '~/composables/useContact'
+
+// The way out of every "write to the camp": the public contacts of nuxt.config.ts (useContact) as mailto:
+// and tel: links. <IcContactLine lead="Se hai domande" />; inside a sentence, as="span"; on a public page,
+// audience="families" (signed in, the role decides).
+const props = withDefaults(defineProps<{ lead?: string; as?: 'p' | 'span'; audience?: ContactAudience }>(), {
+  as: 'p',
+})
+const contact = useContact(props.audience)
+const parts = computed(() => contactParts(contact.value, props.lead))
 </script>
 
 <template>

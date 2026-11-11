@@ -28,6 +28,9 @@ export const zPhone = z
   .max(40)
   .regex(/^[+0-9 ().-]*$/, { error: 'Numero di telefono non valido' })
 
+/** A phone the camp needs to call: the family's. */
+export const zRequiredPhone = zPhone.min(1, { error: 'Campo obbligatorio' })
+
 /** Free text, trimmed, with a maximum length. */
 export const zText = (max: number) =>
   z

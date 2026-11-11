@@ -67,6 +67,16 @@ async function close() {
   open.value = false
 }
 
+// A plain yes or no, so whoever has no condition sees at once there is nothing more to write.
+const condition = computed({
+  get: () => (state.health.hasDisability ? 'yes' : 'no'),
+  set: (value: string) => (state.health.hasDisability = value === 'yes'),
+})
+const conditionItems = [
+  { label: 'No', value: 'no' },
+  { label: 'Sì', value: 'yes' },
+]
+
 const { options } = useEnums()
 const relationships = options('memberRelationship')
 const kinds = options('memberKind')
@@ -146,7 +156,12 @@ async function save() {
           <UFormField label="Cognome" name="lastName" required>
             <UInput v-model="state.lastName" autocomplete="off" class="w-full" />
           </UFormField>
-          <UFormField label="Data di nascita" name="birthDate" hint="Facoltativo">
+          <UFormField
+            label="Data di nascita"
+            name="birthDate"
+            :required="state.kind === 'adult'"
+            :hint="state.kind === 'adult' ? undefined : 'Facoltativo'"
+          >
             <UInput v-model="state.birthDate" type="date" :max="today" min="1900-01-01" class="w-full" />
           </UFormField>
           <UFormField label="Parentela" name="relationship" required>
@@ -179,24 +194,30 @@ async function save() {
         <fieldset v-if="consent" class="space-y-5 rounded-lg border border-default p-4">
           <legend class="flex items-center gap-2 px-1 font-semibold text-highlighted">
             <UIcon name="i-lucide-lock" class="size-4 text-muted" aria-hidden="true" />
-            Dati sulla salute, riservati
+            Patologie e disabilità
           </legend>
-          <p class="text-sm text-muted">
-            Li vedete solo voi e l’amministrazione del camp. Non finiscono mai nelle email.
-          </p>
-          <USwitch
-            v-model="state.health.hasDisability"
-            label="Ha una patologia grave o cronica, un disturbo del neurosviluppo o una disabilità"
-            description="Anche una condizione genetica."
+          <URadioGroup
+            v-model="condition"
+            :items="conditionItems"
+            value-key="value"
+            orientation="horizontal"
+            legend="Ha una patologia grave o cronica, un disturbo del neurosviluppo o una disabilità, anche genetica?"
+            :ui="{ legend: 'font-normal text-default' }"
           />
-          <template v-if="state.health.hasDisability">
+          <p v-if="!state.health.hasDisability" class="text-sm text-muted">Se la risposta è no, non serve altro.</p>
+          <template v-else>
+            <p class="max-w-prose text-sm text-muted">
+              Compila tutti i campi: servono al camp per organizzare il soggiorno. Li vedete solo voi e
+              l’amministrazione, e non finiscono mai nelle email. Se in un campo non c’è nulla da segnalare, scrivi
+              «niente».
+            </p>
             <UFormField
               v-for="field in DISABILITY_FIELDS"
               :key="field.key"
               :label="field.label"
               :help="field.help"
               :name="`health.disability.${field.key}`"
-              hint="Facoltativo"
+              required
             >
               <UTextarea v-model="state.health.disability[field.key]" autoresize :rows="4" class="w-full" />
             </UFormField>

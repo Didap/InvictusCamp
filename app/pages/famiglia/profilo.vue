@@ -166,7 +166,7 @@ const booleanItems = [
           >
             <UInput v-model="state.name" class="w-full" />
           </UFormField>
-          <UFormField label="Telefono" name="phone" data-field="phone" hint="Facoltativo">
+          <UFormField label="Telefono" name="phone" data-field="phone" required>
             <UInput v-model="state.phone" type="tel" autocomplete="tel" class="w-full" />
           </UFormField>
         </div>

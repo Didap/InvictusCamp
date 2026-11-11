@@ -26,12 +26,12 @@ export default defineEventHandler(async event => {
           status: 'active',
           firstName: input.firstName,
           lastName: input.lastName,
-          phone: input.phone || null,
+          phone: input.phone,
         })
         .returning()
       const [family] = await tx
         .insert(tables.families)
-        .values({ userId: user!.id, name: input.familyName, phone: input.phone || null, privacyConsentAt: new Date() })
+        .values({ userId: user!.id, name: input.familyName, phone: input.phone, privacyConsentAt: new Date() })
         .returning({ id: tables.families.id })
       // The person who signs up is the first member and the referent of the family.
       await tx.insert(tables.familyMembers).values({

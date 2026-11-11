@@ -1,0 +1,16 @@
+import type { ContactConfig } from '~/components/ic/ContactLine.vue'
+
+export type ContactAudience = 'families' | 'staff'
+
+/**
+ * How to reach the camp (runtimeConfig.public.contact): families write to their own address, everyone
+ * else to the general one. Without an audience, the role of the signed-in user decides.
+ */
+export function useContact(audience?: ContactAudience) {
+  const { user } = useUserSession()
+  const { familiesEmail, ...contact } = useRuntimeConfig().public.contact
+  return computed<ContactConfig>(() => {
+    const families = audience ? audience === 'families' : user.value?.role === 'family'
+    return families && familiesEmail ? { ...contact, email: familiesEmail } : contact
+  })
+}
