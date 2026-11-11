@@ -9,6 +9,7 @@ import type { Paginated } from '../../shared/types/api'
 import type { CommunicationDetail, CommunicationListItem } from '../../shared/types/communications'
 import type { Audience } from '../../shared/types/domain'
 import { EMAIL_STATUSES, type EmailStatus, type UserRole, type UserStatus } from '../../shared/utils/constants'
+import { fillMessageFields, messageFieldValues } from '../../shared/utils/message-fields'
 import {
   campSessions,
   communications,
@@ -149,13 +150,17 @@ export async function resolveAudience(db: DbOrTx, audience: Audience): Promise<R
 /** The title of the session an audience belongs to (for its description). */
 export async function audienceSessionTitle(db: DbOrTx, audience: Audience): Promise<string | null> {
   const sessionId = audienceSessionId(audience)
-  if (!sessionId) return null
+  return sessionId ? ((await sessionForFields(db, sessionId))?.title ?? null) : null
+}
+
+/** What {sessione} and {date} need: the title and the days of the session. */
+export async function sessionForFields(db: DbOrTx, sessionId: string) {
   const [session] = await db
-    .select({ title: campSessions.title })
+    .select({ title: campSessions.title, startDate: campSessions.startDate, endDate: campSessions.endDate })
     .from(campSessions)
     .where(eq(campSessions.id, sessionId))
     .limit(1)
-  return session?.title ?? null
+  return session ?? null
 }
 
 export interface CommunicationContent {
@@ -263,16 +268,18 @@ export async function sendCommunication(
     const [row] = await db.insert(communications).values(values).returning({ id: communications.id })
     communicationId = row!.id
   }
-  const messages = recipients.map(recipient =>
-    communicationEmail(ctx, {
+  const session = sessionId ? await sessionForFields(db, sessionId) : null
+  const messages = recipients.map(recipient => {
+    const values = messageFieldValues(recipient.firstName, session)
+    return communicationEmail(ctx, {
       to: recipient.email,
       toUserId: recipient.userId,
-      subject: input.subject,
-      body: input.body,
+      subject: fillMessageFields(input.subject, values),
+      body: fillMessageFields(input.body, values),
       communicationId,
       sessionId,
-    }),
-  )
+    })
+  })
   return { communicationId, recipients, messages }
 }
 

@@ -43,6 +43,13 @@
       "when": 1794423507213,
       "tag": "0005_drop_staff_periods",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794427635126,
+      "tag": "0006_email_templates",
+      "breakpoints": true
     }
   ]
 }

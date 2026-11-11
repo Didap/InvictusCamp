@@ -9,6 +9,12 @@ import {
   sendCommunication,
   updateDraft,
 } from '../../server/domain/audiences'
+import {
+  createEmailTemplate,
+  deleteEmailTemplate,
+  listEmailTemplates,
+  updateEmailTemplate,
+} from '../../server/domain/email-templates'
 import { inviteUser, listUsers, resendInvite, sendPasswordReset, setUserEnabled } from '../../server/domain/users'
 import { issueToken } from '../../server/domain/tokens'
 import { bodyParagraphs } from '../../server/emails/communications'
@@ -211,6 +217,27 @@ describe('communications', () => {
     expect(message.text).toContain('l’arrivo è alle <10>.\nPortate il cappello.')
   })
 
+  it('the fields are filled for each recipient; the message keeps them as written', async () => {
+    const admin = await makeAdmin(db)
+    const session = await makeSession(db, { title: 'Sessione 6', startDate: '2027-05-31', endDate: '2027-06-04' })
+    const anna = await makeFamily(db)
+    await db.update(t.users).set({ firstName: 'Anna' }).where(eq(t.users.id, anna.user.id))
+    await participate(session.id, anna.family.id, 'slot', 'confirmed')
+
+    const result = await sendCommunication(db, ctx, {
+      subject: 'Ti aspettiamo a {sessione}',
+      body: 'Ciao {nome},\n\nci vediamo {date}.',
+      audience: { type: 'session_families', sessionId: session.id },
+      sentBy: admin.id,
+    })
+    const message = result.messages[0]!
+    expect(message.subject).toBe('Ti aspettiamo a Sessione 6')
+    expect(message.text).toContain('Ciao Anna,')
+    expect(message.text).toContain('ci vediamo 31 maggio\u2009–\u20094 giugno 2027.')
+    const [row] = await db.select().from(t.communications).where(eq(t.communications.id, result.communicationId))
+    expect(row).toMatchObject({ subject: 'Ti aspettiamo a {sessione}', body: 'Ciao {nome},\n\nci vediamo {date}.' })
+  })
+
   it('an audience that reaches nobody is refused', async () => {
     const admin = await makeAdmin(db)
     await expect(
@@ -262,6 +289,29 @@ describe('communications', () => {
     await deleteDraft(db, id)
     expect(await db.select().from(t.communications)).toHaveLength(0)
     await expect(deleteDraft(db, id)).rejects.toMatchObject({ statusCode: 404 })
+  })
+})
+
+describe('email templates', () => {
+  it('the examples come with the migrations and survive the reset of the demo data', async () => {
+    const names = (await listEmailTemplates(db)).map(template => template.name)
+    expect(names).toEqual(
+      expect.arrayContaining(['Convocazione famiglie', 'Convocazione staff', 'Promemoria documenti']),
+    )
+  })
+
+  it('are added, edited and deleted; an unknown id is a 404', async () => {
+    const input = { name: 'Zaini', subject: 'Cosa mettere nello zaino', body: 'Ciao {nome},\n\nporta [cosa].' }
+    const id = await createEmailTemplate(db, input)
+    expect((await listEmailTemplates(db)).find(template => template.id === id)).toMatchObject(input)
+
+    await updateEmailTemplate(db, id, { ...input, subject: 'Lo zaino' })
+    expect((await listEmailTemplates(db)).find(template => template.id === id)?.subject).toBe('Lo zaino')
+
+    await deleteEmailTemplate(db, id)
+    expect((await listEmailTemplates(db)).some(template => template.id === id)).toBe(false)
+    await expect(deleteEmailTemplate(db, id)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(updateEmailTemplate(db, id, input)).rejects.toMatchObject({ statusCode: 404 })
   })
 })
 

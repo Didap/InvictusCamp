@@ -13,6 +13,7 @@ import {
   type ParticipationStatus,
 } from '../utils/constants'
 import { plural } from '../utils/format'
+import { messageIssue, unknownFieldIssue } from '../utils/message-fields'
 import { zListQuery, zRequiredText, zText } from './common'
 
 export const AUDIENCE_TYPES = [
@@ -83,19 +84,47 @@ export const zAudience = z.discriminatedUnion('type', [
 
 export const audienceRequestSchema = z.object({ audience: zAudience })
 
-/** A message sent now. Plain text body: blank lines separate paragraphs. */
-export const communicationSchema = z.object({
+const communicationFields = z.object({
   subject: zRequiredText(200),
   body: zRequiredText(20_000),
   audience: zAudience,
 })
+
+/**
+ * A message sent now. Plain text body: blank lines separate paragraphs. The fields in braces must be
+ * ones filled by themselves, and the parts in square brackets of a template must be completed.
+ */
+export const communicationSchema = communicationFields.superRefine((message, ctx) => {
+  const hasSession = Boolean(audienceSessionId(message.audience))
+  for (const key of ['subject', 'body'] as const) {
+    const issue = messageIssue(message[key], hasSession)
+    if (issue) ctx.addIssue({ code: 'custom', path: [key], message: issue })
+  }
+})
 export type CommunicationInput = z.infer<typeof communicationSchema>
 
-/** A draft can be saved before the body is written. */
-export const communicationDraftSchema = communicationSchema.extend({ body: zText(20_000) })
+/** A draft can be saved before the body is written, and with the template's parts still to complete. */
+export const communicationDraftSchema = communicationFields.extend({ body: zText(20_000) })
 export type CommunicationDraftInput = z.infer<typeof communicationDraftSchema>
 
-export const emailPreviewSchema = z.object({ subject: zText(200), body: zText(20_000) })
+/** The preview fills the fields it can: the session chosen, the first name of the first recipient. */
+export const emailPreviewSchema = z.object({
+  subject: zText(200),
+  body: zText(20_000),
+  sessionId: z.uuid().optional(),
+  firstName: zText(100).optional(),
+})
+
+/** A saved message to start from. Its parts in square brackets are completed in each message. */
+export const emailTemplateSchema = z
+  .object({ name: zRequiredText(80), subject: zRequiredText(200), body: zRequiredText(20_000) })
+  .superRefine((template, ctx) => {
+    for (const key of ['subject', 'body'] as const) {
+      const issue = unknownFieldIssue(template[key])
+      if (issue) ctx.addIssue({ code: 'custom', path: [key], message: issue })
+    }
+  })
+export type EmailTemplateInput = z.infer<typeof emailTemplateSchema>
 
 /** Empty query values ("?status=") read as missing. */
 const optional = <T extends z.ZodType>(schema: T) =>

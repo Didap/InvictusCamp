@@ -2,6 +2,7 @@
 import {
   AUDIENCE_TYPES,
   audienceFromDraft,
+  audienceSessionId,
   communicationSchema,
   draftFromAudience,
   emptyAudienceDraft,
@@ -13,14 +14,17 @@ import type {
   CommunicationOptions,
   CommunicationSendResult,
   EmailPreview,
+  EmailTemplate,
 } from '#shared/types/communications'
 import type { AudienceType } from '#shared/types/domain'
 import { plural } from '#shared/utils/format'
+import { MESSAGE_FIELDS_HELP } from '#shared/utils/message-fields'
 
 // The composer (docs/spec.md, 3.7): audience, live count of the recipients, subject and plain text
 // body, the email previewed by the real template, confirmation with the number of emails, send.
 // Opened with ?audience=session_families&sessionId=…, ?audience=session_staff&sessionId=…,
-// ?userIds=id1,id2 (the "Scrivi" buttons of the other pages) or ?bozza=<id> (a saved draft).
+// ?userIds=id1,id2 (the "Scrivi" buttons of the other pages), ?bozza=<id> (a saved draft) or
+// ?modello=<id> (a saved template, from the Modelli tab).
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
@@ -46,7 +50,10 @@ const draftId = ref(UUID.test(queryText('bozza')) ? queryText('bozza') : null)
 const audienceDraft = ref<AudienceDraft>(prefilled())
 const state = reactive({ subject: '', body: '', audience: computed(() => audienceFromDraft(audienceDraft.value)) })
 
-const { data: options } = await useApiFetch<CommunicationOptions>('/api/admin/communications/options')
+const [{ data: options }, { data: templates }] = await Promise.all([
+  useApiFetch<CommunicationOptions>('/api/admin/communications/options'),
+  useApiFetch<EmailTemplate[]>('/api/admin/email-templates'),
+])
 
 if (draftId.value) {
   try {
@@ -63,6 +70,29 @@ if (draftId.value) {
     draftId.value = null
   }
 }
+
+// ─── Template ──────────────────────────────────────────────────────────────────────────────────────
+const templateItems = computed(() => (templates.value ?? []).map(t => ({ label: t.name, value: t.id })))
+const templateId = ref<string>()
+/** Writes the template's subject and body in, after asking when that replaces what is written. */
+async function applyTemplate(id: string | undefined, ask = true) {
+  const template = templates.value?.find(t => t.id === id)
+  if (!template) return
+  const written = state.subject.trim() || state.body.trim()
+  const same = state.subject === template.subject && state.body === template.body
+  if (ask && written && !same) {
+    const ok = await confirm({
+      title: 'Sostituisci oggetto e testo?',
+      description: `Quello che hai scritto lascia il posto al modello «${template.name}». Nessuna email parte.`,
+      confirmLabel: 'Usa il modello',
+    })
+    if (!ok) return
+  }
+  templateId.value = template.id
+  state.subject = template.subject
+  state.body = template.body
+}
+if (!draftId.value && UUID.test(queryText('modello'))) await applyTemplate(queryText('modello'), false)
 
 // ─── Live count ────────────────────────────────────────────────────────────────────────────────────
 const summary = ref<AudienceSummary | null>(null)
@@ -108,13 +138,19 @@ watchDebounced(() => JSON.stringify(state.audience), refreshSummary, { debounce:
 const preview = ref<EmailPreview | null>(null)
 let previewRequest = 0
 watchDebounced(
-  () => [state.subject, state.body] as const,
-  async ([subject, body]) => {
+  () =>
+    [
+      state.subject,
+      state.body,
+      audienceSessionId(state.audience) || undefined,
+      summary.value?.recipients[0]?.firstName,
+    ] as const,
+  async ([subject, body, sessionId, firstName]) => {
     const request = ++previewRequest
     try {
       const result = await api<EmailPreview>('/api/admin/communications/preview', {
         method: 'POST',
-        body: { subject: subject.slice(0, 200), body: body.slice(0, 20_000) },
+        body: { subject: subject.slice(0, 200), body: body.slice(0, 20_000), sessionId, firstName },
       })
       if (request === previewRequest) preview.value = result
     } catch {
@@ -283,10 +319,24 @@ const sendLabel = computed(() => (count.value ? `Invia a ${plural(count.value, '
           description="Testo semplice: una riga vuota separa i paragrafi. Non scrivere dettagli sulla salute delle persone."
         >
           <div class="space-y-5">
+            <UFormField v-if="templateItems.length" label="Parti da un modello" hint="Facoltativo">
+              <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <USelect
+                  :model-value="templateId"
+                  :items="templateItems"
+                  placeholder="Scegli un modello"
+                  class="w-full sm:w-72"
+                  @update:model-value="applyTemplate"
+                />
+                <ULink to="/admin/comunicazioni?tab=modelli" class="text-sm text-primary hover:underline">
+                  Gestisci i modelli
+                </ULink>
+              </div>
+            </UFormField>
             <UFormField label="Oggetto" name="subject" required>
               <UInput v-model="state.subject" maxlength="200" class="w-full" />
             </UFormField>
-            <UFormField label="Testo" name="body" required>
+            <UFormField label="Testo" name="body" required :help="MESSAGE_FIELDS_HELP">
               <UTextarea v-model="state.body" :rows="10" autoresize :maxrows="30" class="w-full" />
             </UFormField>
           </div>
@@ -297,7 +347,14 @@ const sendLabel = computed(() => (count.value ? `Invia a ${plural(count.value, '
         class="min-w-0 lg:sticky lg:top-0 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start"
         aria-label="Anteprima dell’email"
       >
-        <IcSection title="Anteprima" description="Così arriva nella casella di posta.">
+        <IcSection
+          title="Anteprima"
+          :description="
+            summary?.recipients[0]
+              ? `Così arriva nella casella di posta di ${summary.recipients[0].name}.`
+              : 'Così arriva nella casella di posta.'
+          "
+        >
           <CommunicationsEmailFrame v-if="preview" :html="preview.html" title="Anteprima dell’email" />
           <USkeleton v-else class="h-96 w-full" />
         </IcSection>

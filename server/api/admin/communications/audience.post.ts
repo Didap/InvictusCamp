@@ -16,6 +16,12 @@ export default defineEventHandler(async (event): Promise<AudienceSummary> => {
     label: describeAudience(audience, sessionTitle),
     count: recipients.length,
     excluded,
-    recipients: recipients.map(r => ({ userId: r.userId, name: fullName(r), email: r.email, role: r.role })),
+    recipients: recipients.map(r => ({
+      userId: r.userId,
+      firstName: r.firstName,
+      name: fullName(r),
+      email: r.email,
+      role: r.role,
+    })),
   }
 })

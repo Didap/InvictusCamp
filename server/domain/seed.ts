@@ -52,7 +52,10 @@ const TABLES = [
   'users',
 ]
 
-/** Empties every table. Development and tests only. */
+/**
+ * Empties every table but `email_templates`: its examples come from migration 0006, and an administration
+ * keeps its templates across a reset of the demo data. Development and tests only.
+ */
 export async function truncateAll(db: Db): Promise<void> {
   await db.execute(sql.raw(`truncate table ${TABLES.join(', ')} restart identity cascade`))
 }
