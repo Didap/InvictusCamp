@@ -28,6 +28,7 @@ node scripts/check-pages.mjs                # every page of every role, desktop 
 node scripts/check-contrast.mjs             # the palette passes WCAG AA (DESIGN.md, Verified Rule)
 node scripts/check-icons.mjs                # every i-lucide-* icon exists
 node scripts/ci-local.mjs                   # local CI: format, types, icons, contrast, unit, db, build
+node --env-file-if-exists=.env scripts/create-calendar.mjs [--apply]   # 2027 sessions as drafts in DATABASE_URL
 ```
 
 Every check prints a few lines and exits with a code: read the outcome, not logs.

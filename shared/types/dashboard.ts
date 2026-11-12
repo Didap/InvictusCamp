@@ -37,8 +37,8 @@ export interface DashboardTodo {
 export interface DashboardDto {
   today: IsoDay
   nextSession: DashboardSession | null
-  /** Sessions not ended yet (draft, inviting, confirmed), first to start first. */
-  upcoming: DashboardSession[]
+  /** The three sessions not ended yet (draft, inviting, confirmed) after the next one: a season is on the sessions page. */
+  following: DashboardSession[]
   counts: {
     /** Staff applications `applied`. */
     applicationsToReview: number

@@ -1,6 +1,9 @@
 // Every fixed enumeration of the gestionale. Values are stable English keys stored in the database;
 // labels, icons and colours of the (Italian) interface live in ENUM_META. A colour is never the only
 // signal: badges always show the icon and the label together.
+//
+// No imports: scripts/create-calendar.mjs loads this file with Node's type stripping
+// (tests/unit/calendar.test.ts runs it).
 
 export const USER_ROLES = ['admin', 'family', 'staff'] as const
 export type UserRole = (typeof USER_ROLES)[number]
@@ -151,6 +154,10 @@ export const LOCALE = 'it-IT'
 
 /** Default place of a session. */
 export const DEFAULT_LOCATION = 'Invictus Camp, Maruggio (TA)'
+/** Default places for families of a new session. */
+export const DEFAULT_FAMILY_SLOTS = 8
+/** The base of a session: 10 people of the staff, plus the coordinators of the staff and of the v-team. */
+export const DEFAULT_STAFF_NEEDED = 10
 
 export type Tone = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 

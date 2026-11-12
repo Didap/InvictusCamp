@@ -7,8 +7,6 @@ import { formatNumber } from '#shared/utils/format'
 // "Da fare"; emails not delivered get a tile only when there are some, otherwise one quiet line.
 const { data, error, refresh } = await useApiFetch<DashboardDto>('/api/admin/dashboard')
 
-const others = computed(() => data.value?.upcoming.filter(s => s.id !== data.value?.nextSession?.id) ?? [])
-
 const tiles = computed(() => {
   const counts = data.value?.counts
   if (!counts) return []
@@ -102,8 +100,8 @@ const tiles = computed(() => {
         <template #actions>
           <UButton to="/admin/sessioni" label="Tutte le sessioni" color="neutral" variant="ghost" />
         </template>
-        <ul v-if="others.length" class="divide-y divide-default rounded-lg border border-default bg-elevated">
-          <li v-for="session in others" :key="session.id" class="p-5 sm:p-6">
+        <ul v-if="data.following.length" class="divide-y divide-default rounded-lg border border-default bg-elevated">
+          <li v-for="session in data.following" :key="session.id" class="p-5 sm:p-6">
             <DashboardSessionProgress :session="session" :today="data.today" />
           </li>
         </ul>
