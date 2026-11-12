@@ -145,13 +145,13 @@ function participationsOf(db: DbOrTx, sessionId: string): Promise<ParticipationR
 }
 
 /** The session row, locked until the end of the transaction so that moves and places never race. */
-async function lockSession(db: DbOrTx, sessionId: string): Promise<SessionRow> {
+export async function lockSession(db: DbOrTx, sessionId: string): Promise<SessionRow> {
   const [session] = await db.select().from(campSessions).where(eq(campSessions.id, sessionId)).for('update')
   if (!session) throw new DomainError(404, 'Sessione non trovata')
   return session
 }
 
-function requireEditable(session: SessionRow, what: string) {
+export function requireEditable(session: SessionRow, what: string) {
   if (!isSessionEditable(session.status)) {
     throw new DomainError(409, `La sessione è «${enumLabel('sessionStatus', session.status)}»: ${what}`)
   }
@@ -707,7 +707,7 @@ export async function transitionSession(
     staffEmails = await cancelSessionConvocations(db, ctx, { sessionId: session.id, actor: input.actor })
     await db
       .update(sessionFamilies)
-      .set({ status: 'cancelled' })
+      .set({ status: 'cancelled', lodgingId: null })
       .where(and(eq(sessionFamilies.sessionId, session.id), inArray(sessionFamilies.status, ACTIVE_STATUSES)))
   }
   await db.update(campSessions).set({ status: to, statusChangedAt: now }).where(eq(campSessions.id, session.id))
@@ -1020,6 +1020,8 @@ export async function answerInvitation(
       status: input.answer,
       respondedAt: now,
       declineReason: input.answer === 'declined' ? input.reason?.trim() || null : null,
+      // A family that declines frees its lodging too.
+      ...(input.answer === 'declined' && { lodgingId: null }),
     })
     .where(eq(sessionFamilies.id, row.id))
   if (row.kind === 'reserve') await renumberReserves(db, row.sessionId)
@@ -1054,7 +1056,10 @@ export async function cancelParticipation(
     throw new DomainError(409, `${target.familyName} non è più nella sessione`)
   }
   const wasInvited = target.status !== 'selected'
-  await db.update(sessionFamilies).set({ status: 'cancelled' }).where(eq(sessionFamilies.id, target.id))
+  await db
+    .update(sessionFamilies)
+    .set({ status: 'cancelled', lodgingId: null })
+    .where(eq(sessionFamilies.id, target.id))
   if (target.kind === 'reserve') await renumberReserves(db, session.id)
   const emails = wasInvited && canReceive(target) ? [familyEmail(ctx, 'session.removed', target, session)] : []
   await writeAudit(db, {
@@ -1149,7 +1154,30 @@ function csvCell(value: string | number | null | undefined): string {
   return /[";\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
-/** The families of a session as CSV (semicolons, for spreadsheets in Italian). No health details. */
+/**
+ * A CSV file about a session (semicolons, for spreadsheets in Italian), named after it:
+ * "<prefix>-<title>-<start day>.csv".
+ */
+export function sessionCsv(
+  session: { title: string; startDate: string },
+  prefix: string,
+  header: string[],
+  rows: (string | number | null | undefined)[][],
+): { filename: string; csv: string } {
+  const slug = session.title
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+  const lines = [header, ...rows].map(row => row.map(csvCell).join(';'))
+  return {
+    filename: `${prefix}-${slug || 'sessione'}-${formatDay(session.startDate, 'numeric').replaceAll('/', '-')}.csv`,
+    csv: `\ufeff${lines.join('\r\n')}\r\n`,
+  }
+}
+
+/** The families of a session as CSV. No health details. */
 export async function participantsCsv(db: DbOrTx, sessionId: string): Promise<{ filename: string; csv: string }> {
   const [session] = await db.select().from(campSessions).where(eq(campSessions.id, sessionId)).limit(1)
   if (!session) throw new DomainError(404, 'Sessione non trovata')
@@ -1167,31 +1195,18 @@ export async function participantsCsv(db: DbOrTx, sessionId: string): Promise<{ 
     'Risposta il',
     'Motivo della rinuncia',
   ]
-  const lines = dto.participations.map(p =>
-    [
-      p.familyName,
-      p.referent,
-      p.email,
-      p.phone,
-      p.city,
-      enumLabel('participationKind', p.kind),
-      enumLabel('participationStatus', p.status),
-      p.kind === 'reserve' && isWaitingReserve(p) ? p.reserveRank : null,
-      formatDateTime(p.invitedAt),
-      formatDateTime(p.respondedAt),
-      p.declineReason,
-    ]
-      .map(csvCell)
-      .join(';'),
-  )
-  const slug = session.title
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-  return {
-    filename: `partecipanti-${slug || 'sessione'}-${formatDay(session.startDate, 'numeric').replaceAll('/', '-')}.csv`,
-    csv: `﻿${[header.map(csvCell).join(';'), ...lines].join('\r\n')}\r\n`,
-  }
+  const lines = dto.participations.map(p => [
+    p.familyName,
+    p.referent,
+    p.email,
+    p.phone,
+    p.city,
+    enumLabel('participationKind', p.kind),
+    enumLabel('participationStatus', p.status),
+    p.kind === 'reserve' && isWaitingReserve(p) ? p.reserveRank : null,
+    formatDateTime(p.invitedAt),
+    formatDateTime(p.respondedAt),
+    p.declineReason,
+  ])
+  return sessionCsv(session, 'partecipanti', header, lines)
 }

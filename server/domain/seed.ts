@@ -40,6 +40,7 @@ const TABLES = [
   'signature_requests',
   'session_staff',
   'session_families',
+  'lodgings',
   'documents',
   'programmes',
   'session_availability',
@@ -378,6 +379,24 @@ const DEMO_ANSWERS: FormAnswers = {
   sessionPreferences: ['Sessioni nel weekend (2 notti)', 'Sessioni settimanali estive (4 notti)'],
   accommodationNeeds: ['Bagno senza barriere architettoniche'],
 }
+
+/** An example layout of the camp: villette with a kitchen, rooms in the residence. */
+const DEMO_LODGINGS: (typeof t.lodgings.$inferInsert)[] = [
+  ...[1, 2, 3, 4, 5, 6].map(n => ({
+    name: `Villetta ${n}`,
+    area: 'Villette',
+    beds: n <= 2 ? 4 : 5,
+    features: n <= 2 ? (['kitchen', 'accessible_bathroom', 'microwave'] as const) : (['kitchen', 'microwave'] as const),
+    description: n <= 2 ? '1 matrimoniale e 2 singoli, piano terra' : '1 matrimoniale, 1 a castello e 1 divano letto',
+  })),
+  ...[1, 2, 3, 4].map(n => ({
+    name: `Camera ${n}`,
+    area: 'Residence',
+    beds: n === 1 ? 3 : 4,
+    features: n === 1 ? (['accessible_bathroom', 'microwave'] as const) : (['microwave'] as const),
+    description: n === 1 ? '1 matrimoniale e 1 singolo, piano terra' : '1 matrimoniale e 2 singoli, primo piano',
+  })),
+].map(row => ({ ...row, features: [...row.features] }))
 
 /** Region and CAP of the main town of each province of the demo families. */
 const DEMO_PROVINCES: Record<string, { region: ItalianRegion; postalCode: string }> = {
@@ -728,6 +747,31 @@ export async function seedDemo(
     [11, 'slot', 'selected'],
     [0, 'slot', 'selected'],
     [1, 'reserve', 'selected', 1],
+  ])
+
+  // Lodgings (spec 3.11): an example layout until the camp gives the real one, used by two sessions.
+  const lodgingRows = await db.insert(t.lodgings).values(DEMO_LODGINGS).returning({ id: t.lodgings.id })
+  const lodge = async (sessionId: string, rows: [familyIndex: number, lodgingIndex: number][]) => {
+    for (const [familyIndex, lodgingIndex] of rows) {
+      await db
+        .update(t.sessionFamilies)
+        .set({ lodgingId: lodgingRows[lodgingIndex]!.id })
+        .where(
+          sql`${t.sessionFamilies.sessionId} = ${sessionId} and ${t.sessionFamilies.familyId} = ${families[familyIndex]!.familyId}`,
+        )
+    }
+  }
+  await lodge(past.id, [
+    [0, 0],
+    [1, 1],
+    [2, 2],
+    [3, 6],
+    [4, 7],
+  ])
+  await lodge(june.id, [
+    [1, 0],
+    [2, 3],
+    [3, 7],
   ])
 
   // Availability: one answer per session (spec 3.5).
