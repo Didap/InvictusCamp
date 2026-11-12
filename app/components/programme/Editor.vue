@@ -153,8 +153,9 @@ function showBlock(blockId: string) {
 
 <template>
   <div>
+    <!-- Negative top = the body padding of IcPage (p-4 sm:p-6 lg:p-8): the bar sits flush under the navbar. -->
     <div
-      class="sticky top-0 z-10 mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-default bg-default py-3"
+      class="sticky -top-4 z-10 mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-default bg-default py-3 sm:-top-6 lg:-top-8"
     >
       <p class="flex items-center gap-2 text-sm" role="status">
         <template v-if="dirty">
