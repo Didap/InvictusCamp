@@ -10,6 +10,7 @@ import type {
   MemberRelationship,
   ParticipationKind,
   ParticipationStatus,
+  ProgrammeGroup,
   StaffRole,
   ItalianRegion,
   StaffStatus,
@@ -752,17 +753,24 @@ export async function seedDemo(
 
   // Lodgings (spec 3.11): an example layout until the camp gives the real one, used by two sessions.
   const lodgingRows = await db.insert(t.lodgings).values(DEMO_LODGINGS).returning({ id: t.lodgings.id })
+  /** Changes the participation of a demo family in a session. */
+  const setParticipation = (
+    sessionId: string,
+    familyIndex: number,
+    values: Partial<typeof t.sessionFamilies.$inferInsert>,
+  ) =>
+    db
+      .update(t.sessionFamilies)
+      .set(values)
+      .where(
+        and(
+          eq(t.sessionFamilies.sessionId, sessionId),
+          eq(t.sessionFamilies.familyId, families[familyIndex]!.familyId),
+        ),
+      )
   const lodge = async (sessionId: string, rows: [familyIndex: number, lodgingIndex: number][]) => {
     for (const [familyIndex, lodgingIndex] of rows) {
-      await db
-        .update(t.sessionFamilies)
-        .set({ lodgingId: lodgingRows[lodgingIndex]!.id })
-        .where(
-          and(
-            eq(t.sessionFamilies.sessionId, sessionId),
-            eq(t.sessionFamilies.familyId, families[familyIndex]!.familyId),
-          ),
-        )
+      await setParticipation(sessionId, familyIndex, { lodgingId: lodgingRows[lodgingIndex]!.id })
     }
   }
   await lodge(past.id, [
@@ -777,6 +785,21 @@ export async function seedDemo(
     [2, 3],
     [3, 7],
   ])
+
+  // Activity groups (spec 3.12): the completed session split in full, June still to finish.
+  const groups: [sessionId: string, familyIndex: number, group: ProgrammeGroup][] = [
+    [past.id, 0, 'yellow'],
+    [past.id, 1, 'red'],
+    [past.id, 2, 'blue'],
+    [past.id, 3, 'yellow'],
+    [past.id, 4, 'red'],
+    [june.id, 1, 'yellow'],
+    [june.id, 2, 'red'],
+    [june.id, 3, 'blue'],
+  ]
+  for (const [sessionId, familyIndex, group] of groups) {
+    await setParticipation(sessionId, familyIndex, { activityGroup: group })
+  }
 
   // Availability: one answer per session (spec 3.5).
   const demoSessions: Record<DemoSession, string> = { june: june.id, july: july.id, september: september.id }
@@ -817,6 +840,16 @@ export async function seedDemo(
     ['Andrea', 'draft', 'activity_lead'],
     ['Simone', 'draft', 'group_lead'],
   ])
+  const lead = (sessionId: string, first: string, group: ProgrammeGroup) =>
+    db
+      .update(t.sessionStaff)
+      .set({ activityGroup: group })
+      .where(and(eq(t.sessionStaff.sessionId, sessionId), eq(t.sessionStaff.userId, byName(first).userId)))
+  await lead(past.id, 'Chiara', 'yellow')
+  await lead(past.id, 'Martina', 'red')
+  await lead(past.id, 'Lorenzo', 'blue')
+  await lead(june.id, 'Martina', 'yellow')
+  await lead(june.id, 'Chiara', 'red')
 
   // Documents to read and sign
   const document = async (

@@ -30,6 +30,7 @@ import type {
   ParticipationKind,
   ParticipationStatus,
   PersonalDocumentCategory,
+  ProgrammeGroup,
   SessionStatus,
   SignatureStatus,
   StaffRole,
@@ -39,6 +40,7 @@ import type {
   UserRole,
   UserStatus,
 } from '../../shared/utils/constants'
+import { OPEN_CONVOCATIONS } from '../../shared/utils/constants'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 
 const tz = { withTimezone: true } as const
@@ -288,6 +290,8 @@ export const sessionFamilies = pgTable(
     declineReason: text(),
     /** Where the family sleeps; only while it holds a place (cleared when it declines or is removed). */
     lodgingId: uuid().references(() => lodgings.id, { onDelete: 'set null' }),
+    /** The activity group of the family (docs/spec.md 3.12); like the lodging, only while it holds a place. */
+    activityGroup: text().$type<ProgrammeGroup>(),
     /** Internal notes. */
     notes: text(),
     createdAt: createdAt(),
@@ -302,6 +306,10 @@ export const sessionFamilies = pgTable(
     check(
       'session_families_lodging',
       sql`${t.lodgingId} is null or (${t.kind} = 'slot' and ${t.status} in (${sql.raw(ACTIVE_STATUSES.map(status => `'${status}'`).join(', '))}))`,
+    ),
+    check(
+      'session_families_activity_group',
+      sql`${t.activityGroup} is null or (${t.kind} = 'slot' and ${t.status} in (${sql.raw(ACTIVE_STATUSES.map(status => `'${status}'`).join(', '))}))`,
     ),
   ],
 )
@@ -344,12 +352,20 @@ export const sessionStaff = pgTable(
     sentAt: timestamp(tz),
     respondedAt: timestamp(tz),
     declineReason: text(),
+    /** The activity group this person is responsible for (docs/spec.md 3.12): one per group. */
+    activityGroup: text().$type<ProgrammeGroup>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   t => [
     uniqueIndex('session_staff_session_user_key').on(t.sessionId, t.userId),
     index('session_staff_user_idx').on(t.userId),
+    uniqueIndex('session_staff_activity_group_key').on(t.sessionId, t.activityGroup),
+    // A convocation declined or withdrawn leads no group.
+    check(
+      'session_staff_activity_group',
+      sql`${t.activityGroup} is null or ${t.status} in (${sql.raw(OPEN_CONVOCATIONS.map(status => `'${status}'`).join(', '))})`,
+    ),
   ],
 )
 

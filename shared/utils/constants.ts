@@ -121,7 +121,10 @@ export const PROGRAMME_BLOCK_KINDS = [
 ] as const
 export type ProgrammeBlockKind = (typeof PROGRAMME_BLOCK_KINDS)[number]
 
-/** The groups that rotate through the activities of `groups` blocks. */
+/**
+ * The activity groups: the families of a session are split among them (docs/spec.md 3.12) and they rotate
+ * through the activities of `groups` blocks.
+ */
 export const PROGRAMME_GROUPS = ['yellow', 'red', 'blue'] as const
 export type ProgrammeGroup = (typeof PROGRAMME_GROUPS)[number]
 export const PROGRAMME_GROUP_LABELS: Record<ProgrammeGroup, string> = {

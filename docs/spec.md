@@ -36,7 +36,7 @@ Public: `/accedi`, `/registrati` (family), `/candidati` (staff), `/password-dime
 `/reimposta-password?token`, `/invito?token`, `/verifica-email?token`, `/privacy`.
 
 Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova`, `/admin/sessioni/:id`
-(tabs Panoramica, Famiglie, Alloggi, Staff, Programma, Documenti, Comunicazioni), `/admin/famiglie`, `/admin/famiglie/:id`,
+(tabs Panoramica, Famiglie, Alloggi, Gruppi, Staff, Programma, Documenti, Comunicazioni), `/admin/famiglie`, `/admin/famiglie/:id`,
 `/admin/staff`, `/admin/staff/:userId`, `/admin/documenti`, `/admin/documenti/:id`,
 `/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/programma`,
 `/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/utenti`.
@@ -255,6 +255,26 @@ Where each family sleeps during a session.
   schema (CSV)" downloads it with the families still without a lodging at the end (audited).
 - A family that declines or is removed frees its lodging, and so does cancelling the session. A
   completed session keeps its layout, read-only. Families and staff do not see the lodgings.
+
+### 3.12 Activity groups
+
+The families of a session split into the groups of the programme (3.10), Giallo, Rosso and Blu, that
+rotate through the activities together.
+
+- **The Gruppi tab** of a session lists the families holding a place (titolari selected, invited or
+  confirmed), each with its people: the first name, and the age at the start of the session for the young
+  ones; never the health details. A family is in one group; the families without one are listed first.
+- **Each group** shows how many families and people it has, and its leader: one person of the session staff
+  (a convocation to send, sent or accepted). A person leads one group: choosing who leads another one moves
+  them there.
+- **"Dividi le famiglie senza gruppo"** puts every family without a group into one, the largest family first
+  into the group with the fewest people, so the groups stay even; the families already in a group stay.
+  Moving a family by hand is always possible.
+- "Scarica i gruppi (CSV)" downloads one row per person, group by group with its leader, then the families
+  without a group (audited). Saving a group or a leader sends no email and is audited.
+- A family that declines or is removed leaves its group, and so does cancelling the session; a leader who
+  declines or whose convocation is withdrawn leaves the group without one. A completed session keeps its
+  groups, read-only. For now families and staff do not see the groups.
 
 ## 4. Emails
 

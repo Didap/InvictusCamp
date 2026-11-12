@@ -648,7 +648,10 @@ export async function cancelConvocation(
     await writeAudit(db, { ...audit, action: 'convocation.remove' })
     return { emails: [], removed: true }
   }
-  await db.update(sessionStaff).set({ status: 'cancelled' }).where(eq(sessionStaff.id, convocation.id))
+  await db
+    .update(sessionStaff)
+    .set({ status: 'cancelled', activityGroup: null })
+    .where(eq(sessionStaff.id, convocation.id))
   if (convocation.status === 'accepted' && session.contractDocumentId) {
     await releaseContract(db, { documentId: session.contractDocumentId, userId: convocation.userId })
   }
@@ -755,6 +758,8 @@ export async function answerConvocation(
       status: accept ? 'accepted' : 'declined',
       respondedAt: new Date(),
       declineReason: accept ? null : input.reason?.trim() || null,
+      // Who declines leads no activity group.
+      ...(!accept && { activityGroup: null }),
     })
     .where(eq(sessionStaff.id, convocation.id))
   await writeAudit(db, {
