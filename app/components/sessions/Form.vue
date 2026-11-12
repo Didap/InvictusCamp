@@ -2,8 +2,8 @@
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { sessionSchema, type SessionInput } from '#shared/schemas/sessions'
 import type { ContractOption } from '#shared/types/sessions'
-import { DEFAULT_LOCATION } from '#shared/utils/constants'
-import { addDays, isIsoDay } from '#shared/utils/dates'
+import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '#shared/utils/constants'
+import { addDays, isIsoDay, weekdayIndex } from '#shared/utils/dates'
 
 // Create and edit a session (/admin/sessioni/nuova and the Panoramica tab of the session page). The same
 // zod schema validates here and on the server.
@@ -28,19 +28,19 @@ const state = reactive({
   location: props.initial?.location ?? DEFAULT_LOCATION,
   startDate: props.initial?.startDate ?? '',
   endDate: props.initial?.endDate ?? '',
-  familySlots: props.initial?.familySlots ?? 8,
-  // The base of a session: 10 people of the staff, plus the coordinators of the staff and of the v-team.
-  staffNeeded: props.initial?.staffNeeded ?? 10,
+  familySlots: props.initial?.familySlots ?? DEFAULT_FAMILY_SLOTS,
+  staffNeeded: props.initial?.staffNeeded ?? DEFAULT_STAFF_NEEDED,
   responseDeadline: props.initial?.responseDeadline ?? '',
   contractDocumentId: (props.initial?.contractDocumentId ?? null) as string | null,
   notes: props.initial?.notes ?? '',
 })
 
-// A camp session usually lasts a week: suggest the last day once the first is chosen.
+// The calendar has weekends (Friday to Sunday) and weeks (Monday to Friday): suggest the last day once the
+// first is chosen.
 watch(
   () => state.startDate,
   start => {
-    if (isIsoDay(start) && !state.endDate) state.endDate = addDays(start, 6)
+    if (isIsoDay(start) && !state.endDate) state.endDate = addDays(start, weekdayIndex(start) === 4 ? 2 : 4)
   },
 )
 

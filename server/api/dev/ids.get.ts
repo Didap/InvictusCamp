@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { DEMO_ACCOUNTS } from '../../domain/seed'
 
 /**
@@ -9,13 +9,17 @@ export default defineEventHandler(async event => {
   if (!import.meta.dev) throw createError({ statusCode: 404, message: 'Non trovato' })
   const db = useDb()
   const { campSessions, families, users, documents, signatureRequests, communications } = tables
+  // The first one with families: the calendar adds empty drafts before the demo's.
   const sessionIn = async (status: 'inviting' | 'draft' | 'completed') =>
     (
       await db
         .select({ id: campSessions.id })
         .from(campSessions)
         .where(eq(campSessions.status, status))
-        .orderBy(asc(campSessions.startDate))
+        .orderBy(
+          desc(sql`exists (select 1 from ${tables.sessionFamilies} where session_id = ${campSessions.id})`),
+          asc(campSessions.startDate),
+        )
         .limit(1)
     )[0]?.id ?? null
   const userId = async (email: string) =>

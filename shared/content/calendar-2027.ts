@@ -66,3 +66,34 @@ export function calendarTitle(session: CalendarSession): string {
         : 'Weekend d’autunno'
   return `Sessione ${session.number} · ${kind}`
 }
+
+export interface ExistingSession {
+  title: string
+  status: string
+  startDate: string
+  endDate: string
+}
+
+/**
+ * Which calendar sessions a database still needs. One is skipped when a session there has its title, in any
+ * status (a session the camp cancelled or moved stays as they left it), or when a session not cancelled
+ * overlaps its days.
+ */
+export function calendarPlan(existing: readonly ExistingSession[]): {
+  create: CalendarSession[]
+  skipped: { session: CalendarSession; by: ExistingSession }[]
+} {
+  const create: CalendarSession[] = []
+  const skipped: { session: CalendarSession; by: ExistingSession }[] = []
+  for (const session of CALENDAR_2027) {
+    const title = calendarTitle(session)
+    const by =
+      existing.find(row => row.title === title) ??
+      existing.find(
+        row => row.status !== 'cancelled' && row.startDate <= session.endDate && row.endDate >= session.startDate,
+      )
+    if (by) skipped.push({ session, by })
+    else create.push(session)
+  }
+  return { create, skipped }
+}

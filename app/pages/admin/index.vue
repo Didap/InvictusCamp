@@ -7,7 +7,8 @@ import { formatNumber } from '#shared/utils/format'
 // "Da fare"; emails not delivered get a tile only when there are some, otherwise one quiet line.
 const { data, error, refresh } = await useApiFetch<DashboardDto>('/api/admin/dashboard')
 
-const others = computed(() => data.value?.upcoming.filter(s => s.id !== data.value?.nextSession?.id) ?? [])
+// The next three: a whole season is on the sessions page ("Tutte le sessioni").
+const others = computed(() => data.value?.upcoming.filter(s => s.id !== data.value?.nextSession?.id).slice(0, 3) ?? [])
 
 const tiles = computed(() => {
   const counts = data.value?.counts

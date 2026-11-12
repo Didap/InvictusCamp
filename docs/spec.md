@@ -68,9 +68,11 @@ Everyone: `/account`, `/firma/:requestId`.
 
 The 2027 calendar (`shared/content/calendar-2027.ts`) has 25 sessions numbered through the year: S1-S5
 spring weekends (Friday to Sunday), S6-S18 summer weeks (Monday to Friday), S19-S25 autumn weekends.
-Titles say the number and the kind ("Sessione 19 · Weekend d’autunno"), not the dates, which every list,
-page and email shows beside them. `scripts/create-calendar.mjs --apply` creates them as drafts in a
-database, skipping dates a session already takes; the demo seed uses the same calendar.
+Titles say the number and the kind ("Sessione 19 · Weekend d’autunno"), not the dates, which every list and
+page, and the body of every email, show beside them. `scripts/create-calendar.mjs --apply --by <admin>`
+creates them as drafts in a database, in the name of that administrator (audited), skipping a session
+whose title is already there (cancelled or moved too) or whose days a session not cancelled takes; the
+demo seed uses the same calendar. The admin Panoramica lists the next session and the three after it.
 
 `draft` (Bozza) → `inviting` (Inviti aperti) → `confirmed` (Confermata) → `completed` (Conclusa);
 `cancelled` (Annullata) from any of the first three. No other moves (`shared/utils/session-status.ts`).

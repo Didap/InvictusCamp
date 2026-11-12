@@ -18,7 +18,7 @@ import type {
 } from '../../shared/utils/constants'
 import { CALENDAR_2027, calendarTitle } from '../../shared/content/calendar-2027'
 import { programmeTemplate } from '../../shared/content/programme-template'
-import { DEFAULT_LOCATION } from '../../shared/utils/constants'
+import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '../../shared/utils/constants'
 import * as t from '../db/schema'
 import type { Db, DbOrTx } from './db'
 import { storeFile } from './storage'
@@ -256,6 +256,8 @@ const FAMILIES: {
 ]
 
 type DemoSession = 'june' | 'july' | 'september'
+/** The sessions of the 2027 calendar (by number) that carry the demo: same first days as before the calendar. */
+const DEMO_CALENDAR: Record<DemoSession, number> = { june: 9, july: 11, september: 18 }
 
 const STAFF: {
   first: string
@@ -662,7 +664,7 @@ export async function seedDemo(
     return { title: calendarTitle(entry), startDate: entry.startDate, endDate: entry.endDate }
   }
   const june = await session({
-    ...calendar(9),
+    ...calendar(DEMO_CALENDAR.june),
     description: 'Settimana estiva del calendario 2027.',
     status: 'inviting',
     familySlots: 6,
@@ -671,7 +673,7 @@ export async function seedDemo(
     statusChangedAt: new Date('2026-10-25T09:00:00Z'),
   })
   const july = await session({
-    ...calendar(11),
+    ...calendar(DEMO_CALENDAR.july),
     status: 'draft',
     familySlots: 8,
     staffNeeded: 10,
@@ -679,15 +681,20 @@ export async function seedDemo(
   })
   // The 2027 programme, from the model week: every 2027 session uses it.
   await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() }).onConflictDoNothing()
-  const september = await session({ ...calendar(18), status: 'draft', familySlots: 8, staffNeeded: 10 })
-  const demoNumbers = new Set([9, 11, 18])
+  const september = await session({
+    ...calendar(DEMO_CALENDAR.september),
+    status: 'draft',
+    familySlots: DEFAULT_FAMILY_SLOTS,
+    staffNeeded: DEFAULT_STAFF_NEEDED,
+  })
+  const demoNumbers = new Set(Object.values(DEMO_CALENDAR))
   await db.insert(t.campSessions).values(
     CALENDAR_2027.filter(entry => !demoNumbers.has(entry.number)).map(entry => ({
       ...calendar(entry.number),
       location: DEFAULT_LOCATION,
       createdBy: admin.id,
-      familySlots: 8,
-      staffNeeded: 10,
+      familySlots: DEFAULT_FAMILY_SLOTS,
+      staffNeeded: DEFAULT_STAFF_NEEDED,
     })),
   )
 
@@ -821,7 +828,7 @@ export async function seedDemo(
         status,
         sentAt: status === 'draft' ? null : new Date('2026-10-28T09:00:00Z'),
         respondedAt: status === 'accepted' || status === 'declined' ? new Date('2026-10-30T09:00:00Z') : null,
-        message: status === 'draft' ? null : 'Ti aspettiamo al camp per la prima sessione della stagione.',
+        message: status === 'draft' ? null : 'Ti aspettiamo al camp per la settimana di fine giugno.',
       })),
     )
   }
