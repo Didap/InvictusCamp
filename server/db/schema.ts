@@ -17,6 +17,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import type { Audience, DisabilityInfo, FormAnswers, ProgrammeContent } from '../../shared/types/domain'
+import type { FeedbackArchive } from '../../shared/types/feedback'
 import type {
   ConvocationStatus,
   DocumentCategory,
@@ -395,6 +396,19 @@ export const programmes = pgTable(
     check('programmes_owner', sql`(${t.year} is null) <> (${t.sessionId} is null)`),
   ],
 )
+
+/**
+ * A year of end-of-session feedback imported from outside (docs/spec.md 3.13): the 2026 pages of the camp,
+ * kept whole. Administration only; the staff part has names.
+ */
+export const feedbackArchives = pgTable('feedback_archives', {
+  year: integer().primaryKey(),
+  data: jsonb().$type<FeedbackArchive>().notNull(),
+  /** Where it came from, e.g. the address of the pages. */
+  source: text(),
+  importedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+  importedAt: timestamp(tz).notNull().defaultNow(),
+})
 
 // ─── Documents and signatures ──────────────────────────────────────────────────────────────────────
 

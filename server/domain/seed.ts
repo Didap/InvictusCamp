@@ -5,6 +5,7 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { DisabilityInfo, FormAnswers } from '../../shared/types/domain'
+import type { FeedbackArchive } from '../../shared/types/feedback'
 import type {
   ConvocationStatus,
   MemberRelationship,
@@ -37,6 +38,7 @@ export const DEMO_ACCOUNTS = {
 const TABLES = [
   'audit_log',
   'email_log',
+  'feedback_archives',
   'communications',
   'personal_documents',
   'signature_requests',
@@ -254,6 +256,112 @@ const FAMILIES: {
     members: [],
   },
 ]
+
+/** A small invented year of feedback (docs/spec.md 3.13): three sessions, a few questions, comments, staff. */
+function demoFeedback(): FeedbackArchive {
+  const sessions = [
+    { number: 1, respondents: 6 },
+    { number: 2, respondents: 5 },
+    { number: 3, respondents: 7 },
+  ]
+  const items: FeedbackArchive['items'] = [
+    { label: 'Piscina', kind: 'activity' },
+    { label: 'Spiaggia', kind: 'activity' },
+    { label: 'Arte', kind: 'activity' },
+    { label: 'Parco avventura', kind: 'activity' },
+    { label: 'Accoglienza del primo giorno', kind: 'other' },
+    { label: 'Staff', kind: 'other' },
+  ]
+  const pattern = [5, 5, 4, 5, 3, 5, 4]
+  const votes = sessions.flatMap(({ number, respondents }) =>
+    Array.from({ length: respondents }, (_, family) =>
+      items.map((_, item): [number, number, number] => [
+        number,
+        item,
+        pattern[(number * 7 + family * 3 + item * 5) % 7]!,
+      ]),
+    ).flat(),
+  )
+  const lead = (
+    session: number,
+    activity: string,
+    five: number,
+    four: number,
+    low: number,
+    note: string | null = null,
+  ) => ({
+    session,
+    activity,
+    votes: { five, four, low },
+    note,
+  })
+  return {
+    sessions,
+    items,
+    votes,
+    themes: [
+      {
+        title: 'Più tempo in piscina',
+        families: 4,
+        sessions: [1, 3],
+        detail: 'Più turni in piscina durante la settimana, anche per i più grandi (esempio).',
+      },
+      {
+        title: 'Il programma prima di arrivare',
+        families: 3,
+        sessions: [2],
+        detail: 'Ricevere il programma della settimana qualche giorno prima (esempio).',
+      },
+    ],
+    comments: {
+      questions: ['Suggerimenti e feedback', 'Che cos’è Invictus Camp per te', 'Messaggio a staff e volontari'],
+      items: [
+        { session: 1, family: 1, question: 0, text: 'Più tempo in piscina per i ragazzi più grandi (esempio).' },
+        {
+          session: 1,
+          family: 2,
+          question: 1,
+          text: 'Una settimana in cui sentirci una famiglia come le altre (esempio).',
+        },
+        {
+          session: 2,
+          family: 1,
+          question: 0,
+          text: 'Ci sarebbe piaciuto avere il programma qualche giorno prima (esempio).',
+        },
+        { session: 2, family: 3, question: 2, text: 'Grazie a tutti i volontari, siete stati fantastici (esempio).' },
+        {
+          session: 3,
+          family: 2,
+          question: 1,
+          text: 'Un posto dove nostro figlio ha fatto cose che non pensavamo possibili (esempio).',
+        },
+        { session: 3, family: 5, question: 2, text: 'Grazie per la pazienza e i sorrisi di ogni giorno (esempio).' },
+      ],
+    },
+    staff: {
+      note: null,
+      people: [
+        {
+          name: 'Chiara Bianchi',
+          sessions: [1, 2, 3],
+          leads: [lead(1, 'Piscina', 5, 1, 0), lead(2, 'Piscina', 3, 1, 1), lead(3, 'Piscina', 6, 1, 0)],
+        },
+        {
+          name: 'Lorenzo Fontana',
+          sessions: [1, 3],
+          leads: [lead(1, 'Arte', 4, 1, 1, 'condotta in coppia con Sara Galli'), lead(3, 'Parco avventura', 5, 2, 0)],
+        },
+        {
+          name: 'Sara Galli',
+          sessions: [1],
+          leads: [lead(1, 'Arte', 4, 1, 1, 'condotta in coppia con Lorenzo Fontana')],
+        },
+        { name: 'Martina Greco', sessions: [2], leads: [] },
+      ],
+    },
+  }
+}
 
 type DemoSession = 'june' | 'july' | 'september'
 /** The sessions of the 2027 calendar (by number) that carry the demo: same first days as before the calendar. */
@@ -683,6 +791,10 @@ export async function seedDemo(
   })
   // The 2027 programme, from the model week: every 2027 session uses it.
   await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() }).onConflictDoNothing()
+  // Feedback of 2026, invented (the real one comes from scripts/import-feedback.mjs).
+  await db
+    .insert(t.feedbackArchives)
+    .values({ year: 2026, data: demoFeedback(), source: 'Dati di esempio', importedBy: admin.id })
   const september = await session({
     ...calendar(DEMO_CALENDAR.september),
     status: 'draft',

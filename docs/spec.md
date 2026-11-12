@@ -39,7 +39,7 @@ Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova
 (tabs Panoramica, Famiglie, Alloggi, Gruppi, Staff, Programma, Documenti, Comunicazioni), `/admin/famiglie`, `/admin/famiglie/:id`,
 `/admin/staff`, `/admin/staff/:userId`, `/admin/documenti`, `/admin/documenti/:id`,
 `/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/programma`,
-`/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/utenti`.
+`/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/feedback` (3.13), `/admin/utenti`.
 
 Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
 `/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`. Staff: `/staff` (home), `/staff/candidatura`,
@@ -284,6 +284,27 @@ rotate through the activities together.
   declines or whose convocation is withdrawn leaves the group without one. A completed session keeps its
   groups, read-only. For now families and staff do not see the groups.
 
+### 3.13 Feedback of the families
+
+What the families said at the end of their session, year by year, administration only (`/admin/feedback`,
+`?anno=` and `?vista=commenti|staff`). Three tabs:
+
+- **Voti**: the questions with a vote from 1 to 5, for the year or one session. Each shows how its votes
+  split into 5, 4 and 1-3 (a thin bar: 5 solid, 4 lighter, 1-3 in the warning colour; the percentages are in
+  the text). Activities first, then reception, spaces and staff; the most liked first. Then the suggestions
+  that came back from several families.
+- **Commenti**: the written answers question by question, with search and filters by session and question.
+  Anonymous: a family is a number within its session.
+- **Staff**: presences per session and the votes of the activities each person led, per person (open a
+  person for the sessions) or per activity (the same activity session by session). It has names.
+
+2026 comes from the pages the camp published (Nicola): `scripts/import-feedback.mjs <folder> --apply --by
+<admin>` reads `feedback-2026.html`, `commenti-2026.html` and `staff-2026.html` and keeps the year whole in
+`feedback_archives` (one row per year, `data` as `shared/types/feedback.ts`), audited (`feedback.import`). The
+numbers of the staff part are Nicola's (a vote of a turn led in pairs counts for both activities). From 2027
+the end-of-session questionnaire of the families will fill the same pages (next PR). The demo seed has an
+invented 2026.
+
 ## 4. Emails
 
 | Template | When | To |
@@ -317,6 +338,8 @@ Emails never contain health details. Without `NUXT_RESEND_API_KEY` every email i
 - Every list or detail endpoint checks the role and the ownership; ids from the client are never trusted.
 - Sensitive actions are recorded in `audit_log` (status changes, reviews, signatures, account changes).
 - Rate limits on sign-in, registration, reset and signature codes.
+- Feedback (3.13): administration only. The comments are anonymous but may speak of the children; the staff
+  part names people and their votes.
 
 ## 6. Not in sprint 1
 
