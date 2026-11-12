@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ACCOMMODATION_NEED_FEATURES, FAMILY_FORM_QUESTIONS } from '../../shared/content/family-form'
 import { LODGING_FEATURES } from '../../shared/utils/constants'
-import { accommodationNeeds, lodgingWarnings, sortLodgings } from '../../shared/utils/lodgings'
+import { accommodationNeeds, groupByArea, lodgingWarnings, sortLodgings } from '../../shared/utils/lodgings'
 
 describe('accommodation needs', () => {
   it('maps every option of the question to a lodging feature, and every feature has an option', () => {
@@ -29,6 +29,22 @@ describe('lodgings', () => {
       { name: 'Camera 1', area: 'Residence' },
     ])
     expect(sorted.map(item => item.name)).toEqual(['Camera 1', 'villetta 2', 'Villetta 10', 'Tenda'])
+  })
+
+  it('keeps areas that differ only by case apart, each under one heading', () => {
+    const groups = groupByArea(
+      sortLodgings([
+        { name: 'Villetta 1', area: 'Villette' },
+        { name: 'Villetta 2', area: 'villette' },
+        { name: 'Villetta 3', area: 'Villette' },
+        { name: 'Tenda', area: null },
+      ]),
+    )
+    expect(groups.map(group => [group.area, group.items.length])).toEqual([
+      ['villette', 1],
+      ['Villette', 2],
+      ['Altri alloggi', 1],
+    ])
   })
 
   it('says what does not fit: more people than beds, the needs the lodging lacks', () => {

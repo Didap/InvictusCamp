@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { SelectMenuItem } from '@nuxt/ui'
-import type { Lodging, SessionLodgingFamily, SessionLodgingsDto } from '#shared/types/lodgings'
-import { enumMeta } from '#shared/utils/constants'
+import type { SessionLodgingFamily, SessionLodgingsDto } from '#shared/types/lodgings'
 import { plural } from '#shared/utils/format'
-import { lodgingWarnings } from '#shared/utils/lodgings'
+import { featureLabels, groupByArea, lodgingWarnings } from '#shared/utils/lodgings'
 
-// The Alloggi tab of a session (docs/spec.md 3.11): each family holding a place gets a lodging of the
+// The Alloggi tab of a session (docs/spec.md 3.11): each titolare holding a place gets a lodging of the
 // layout, chosen by its size and needs; below, the layout of the session lodging by lodging. Saving a
 // choice sends no email.
 const props = defineProps<{ sessionId: string }>()
@@ -15,49 +14,72 @@ const { data, status, refresh } = useApiFetch<SessionLodgingsDto>(
   () => `/api/admin/sessions/${props.sessionId}/lodgings`,
 )
 
-const lodgingById = computed(() => new Map(data.value?.lodgings.map(lodging => [lodging.id, lodging])))
 const familyByLodging = computed(
   () =>
     new Map(data.value?.families.flatMap(family => (family.lodgingId ? [[family.lodgingId, family] as const] : []))),
 )
-const placed = computed(() => data.value?.families.filter(family => family.lodgingId).length ?? 0)
-const free = computed(() => (data.value?.lodgings.length ?? 0) - placed.value)
 
 const summary = computed(() => {
   const d = data.value
   if (!d) return undefined
   const families = d.families.length
+  const placed = familyByLodging.value.size
   return [
-    families && `${placed.value} ${families === 1 ? 'famiglia' : 'famiglie'} su ${families} con un alloggio`,
-    plural(free.value, 'alloggio libero', 'alloggi liberi'),
+    families && `${placed} ${families === 1 ? 'famiglia' : 'famiglie'} su ${families} con un alloggio`,
+    plural(d.lodgings.length - placed, 'alloggio libero', 'alloggi liberi'),
   ]
     .filter(Boolean)
     .join(' · ')
 })
 
-const features = (lodging: Pick<Lodging, 'features'>) =>
-  lodging.features.map(feature => enumMeta('lodgingFeature', feature).label).join(', ')
 const beds = (n: number) => plural(n, 'posto letto', 'posti letto')
+/** How many people: without cards the beds cannot be checked, and the page says so. */
+const people = (family: SessionLodgingFamily) =>
+  family.people ? plural(family.people, 'persona', 'persone') : 'Componenti non ancora indicati'
 
-/** The lodgings of the layout, by area, the ones of other families named and not selectable. */
-function lodgingItems(family: SessionLodgingFamily): SelectMenuItem[][] {
-  const groups = new Map<string, SelectMenuItem[]>()
-  for (const lodging of data.value?.lodgings ?? []) {
-    const holder = familyByLodging.value.get(lodging.id)
-    const taken = holder && holder.id !== family.id
-    const area = lodging.area ?? 'Altri alloggi'
-    if (!groups.has(area)) groups.set(area, [{ type: 'label', label: area }])
-    groups.get(area)!.push({
-      label: lodging.name,
-      value: lodging.id,
-      description: taken
-        ? `Assegnato a ${holder.familyName}`
-        : [beds(lodging.beds), features(lodging)].filter(Boolean).join(' · '),
-      disabled: taken,
-    })
+/** The layout of the session, by area: each lodging with its family and what does not fit. */
+const layout = computed(() =>
+  groupByArea(
+    (data.value?.lodgings ?? []).map(lodging => {
+      const family = familyByLodging.value.get(lodging.id)
+      return { ...lodging, family, warnings: family ? lodgingWarnings(family, lodging) : [] }
+    }),
+  ),
+)
+
+/** The choices of each family: the lodgings by area, those of other families named and not selectable. */
+const choices = computed(() => {
+  const result = new Map<string, SelectMenuItem[][]>()
+  for (const family of data.value?.families ?? []) {
+    result.set(
+      family.id,
+      layout.value.map(group => [
+        { type: 'label', label: group.area },
+        ...group.items.map(lodging => {
+          const taken = lodging.family && lodging.family.id !== family.id
+          return {
+            label: lodging.name,
+            value: lodging.id,
+            description: taken
+              ? `Assegnato a ${lodging.family!.familyName}`
+              : [beds(lodging.beds), featureLabels(lodging.features)].filter(Boolean).join(' · '),
+            disabled: taken,
+          }
+        }),
+      ]),
+    )
   }
-  return [...groups.values()]
-}
+  return result
+})
+
+const warningsOf = computed(
+  () =>
+    new Map(
+      layout.value.flatMap(group =>
+        group.items.flatMap(item => (item.family ? [[item.family.id, item.warnings] as const] : [])),
+      ),
+    ),
+)
 
 const saving = ref<string | null>(null)
 async function assign(family: SessionLodgingFamily, lodgingId: string | null | undefined) {
@@ -73,23 +95,6 @@ async function assign(family: SessionLodgingFamily, lodgingId: string | null | u
     saving.value = null
   }
 }
-
-const warningsOf = (family: SessionLodgingFamily) => {
-  const lodging = family.lodgingId ? lodgingById.value.get(family.lodgingId) : undefined
-  return lodging ? lodgingWarnings(family, lodging) : []
-}
-
-/** The layout of the session, by area: each lodging with its family. */
-const layout = computed(() => {
-  const groups = new Map<string, { lodging: Lodging; family?: SessionLodgingFamily; warnings: string[] }[]>()
-  for (const lodging of data.value?.lodgings ?? []) {
-    const family = familyByLodging.value.get(lodging.id)
-    const area = lodging.area ?? 'Altri alloggi'
-    if (!groups.has(area)) groups.set(area, [])
-    groups.get(area)!.push({ lodging, family, warnings: family ? lodgingWarnings(family, lodging) : [] })
-  }
-  return [...groups.entries()].map(([area, items]) => ({ area, items }))
-})
 </script>
 
 <template>
@@ -174,11 +179,11 @@ const layout = computed(() => {
                 <IcStatusBadge kind="participationStatus" :value="family.status" />
               </div>
               <p class="text-sm text-muted">
-                {{ family.people ? plural(family.people, 'persona', 'persone') : 'Componenti non ancora indicati' }}
-                <template v-if="family.needs.length"> · Esigenze: {{ features({ features: family.needs }) }} </template>
+                {{ people(family) }}
+                <template v-if="family.needs.length"> · Esigenze: {{ featureLabels(family.needs) }}</template>
               </p>
               <p
-                v-for="warning in warningsOf(family)"
+                v-for="warning in warningsOf.get(family.id) ?? []"
                 :key="warning"
                 class="flex items-start gap-1.5 text-sm text-warning"
               >
@@ -189,12 +194,13 @@ const layout = computed(() => {
             <UFormField label="Alloggio" class="w-full shrink-0 md:w-72">
               <USelectMenu
                 :model-value="family.lodgingId ?? undefined"
-                :items="lodgingItems(family)"
+                :items="choices.get(family.id) ?? []"
                 value-key="value"
                 placeholder="Nessun alloggio"
                 :search-input="data.lodgings.length > 8 ? { placeholder: 'Cerca un alloggio' } : false"
                 :disabled="!data.editable || saving !== null"
                 :loading="saving === family.id"
+                :aria-label="`Alloggio di ${family.familyName}`"
                 clear
                 class="w-full"
                 @update:model-value="value => assign(family, value as string | null | undefined)"
@@ -213,20 +219,20 @@ const layout = computed(() => {
           <ul class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <li
               v-for="item in group.items"
-              :key="item.lodging.id"
+              :key="item.id"
               class="rounded-lg border p-4"
               :class="item.family ? 'border-default bg-elevated' : 'border-dashed border-default'"
             >
-              <p class="font-semibold text-highlighted">{{ item.lodging.name }}</p>
+              <p class="font-semibold text-highlighted">{{ item.name }}</p>
               <p class="text-sm text-muted">
-                {{ beds(item.lodging.beds)
-                }}<template v-if="item.lodging.features.length"> · {{ features(item.lodging) }}</template>
+                {{ beds(item.beds)
+                }}<template v-if="item.features.length"> · {{ featureLabels(item.features) }}</template>
               </p>
-              <p v-if="item.lodging.description" class="text-sm text-muted">{{ item.lodging.description }}</p>
+              <p v-if="item.description" class="text-sm text-muted">{{ item.description }}</p>
               <p v-if="item.family" class="mt-2 flex items-center gap-1.5 text-sm">
                 <UIcon name="i-lucide-heart-handshake" class="size-4 shrink-0 text-muted" aria-hidden="true" />
                 <span class="font-medium text-default">{{ item.family.familyName }}</span>
-                <span class="text-muted">· {{ plural(item.family.people, 'persona', 'persone') }}</span>
+                <span class="text-muted">· {{ people(item.family) }}</span>
               </p>
               <p v-else class="mt-2 text-sm text-muted">Libero</p>
               <p

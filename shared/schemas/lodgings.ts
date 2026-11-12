@@ -1,12 +1,6 @@
 import { z } from 'zod'
 import { LODGING_FEATURES } from '../utils/constants'
-import { zRequiredText, zText, zUuid } from './common'
-
-/** Optional free text: empty becomes null. */
-const zOptionalText = (max: number) =>
-  zText(max)
-    .nullish()
-    .transform(value => value || null)
+import { zOptionalText, zRequiredText, zUuid } from './common'
 
 /** A lodging of the camp (docs/spec.md 3.11): what the bed layout says about it. */
 export const lodgingSchema = z.object({

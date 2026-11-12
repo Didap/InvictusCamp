@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ProgrammeGroupTurn } from '../types/domain'
 import { PROGRAMME_BLOCK_KINDS, PROGRAMME_GROUPS, type ProgrammeGroup } from '../utils/constants'
-import { zRequiredText, zText } from './common'
+import { zOptionalText, zRequiredText, zText } from './common'
 
 const MAX_PROGRAMME_DAYS = 14
 const MAX_BLOCKS_PER_DAY = 30
@@ -20,9 +20,7 @@ const zId = z.string().min(1).max(40)
 
 const groupTurnSchema = z.object({
   // Null (or cleared: undefined) while still to decide.
-  activity: zText(80)
-    .nullish()
-    .transform(value => value || null),
+  activity: zOptionalText(80),
   lead: zText(120),
 })
 

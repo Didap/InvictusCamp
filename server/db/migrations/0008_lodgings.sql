@@ -12,4 +12,5 @@ CREATE TABLE "lodgings" (
 --> statement-breakpoint
 ALTER TABLE "session_families" ADD COLUMN "lodging_id" uuid;--> statement-breakpoint
 ALTER TABLE "session_families" ADD CONSTRAINT "session_families_lodging_id_lodgings_id_fk" FOREIGN KEY ("lodging_id") REFERENCES "public"."lodgings"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "session_families_session_lodging_key" ON "session_families" USING btree ("session_id","lodging_id");
+CREATE UNIQUE INDEX "session_families_lodging_session_key" ON "session_families" USING btree ("lodging_id","session_id");--> statement-breakpoint
+ALTER TABLE "session_families" ADD CONSTRAINT "session_families_lodging" CHECK ("session_families"."lodging_id" is null or ("session_families"."kind" = 'slot' and "session_families"."status" in ('selected', 'invited', 'confirmed')));

@@ -11,11 +11,12 @@ export interface SlotParticipation {
   createdAt?: string | Date
 }
 
-const HOLDING: readonly ParticipationStatus[] = ['selected', 'invited', 'confirmed']
+/** The statuses of a titolare that holds a place (the check session_families_lodging repeats them). */
+export const HOLDING_STATUSES: readonly ParticipationStatus[] = ['selected', 'invited', 'confirmed']
 
 /** A titolare holds a place unless the family declined or the participation was cancelled. */
 export function holdsSlot(participation: SlotParticipation): boolean {
-  return participation.kind === 'slot' && HOLDING.includes(participation.status)
+  return participation.kind === 'slot' && HOLDING_STATUSES.includes(participation.status)
 }
 
 /** A reserve is still waiting to be called. */

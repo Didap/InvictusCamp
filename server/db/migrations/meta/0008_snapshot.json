@@ -1,5 +1,5 @@
 {
-  "id": "bd67957d-6248-497b-b445-3f13d7986529",
+  "id": "6b071cfa-ce9f-415d-80fb-8b5bac41f75b",
   "prevId": "d5e1d5ed-11cf-48f6-ace3-2f3b99169d69",
   "version": "7",
   "dialect": "postgresql",
@@ -1873,17 +1873,17 @@
           "method": "btree",
           "with": {}
         },
-        "session_families_session_lodging_key": {
-          "name": "session_families_session_lodging_key",
+        "session_families_lodging_session_key": {
+          "name": "session_families_lodging_session_key",
           "columns": [
             {
-              "expression": "session_id",
+              "expression": "lodging_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "lodging_id",
+              "expression": "session_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1939,7 +1939,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "session_families_lodging": {
+          "name": "session_families_lodging",
+          "value": "\"session_families\".\"lodging_id\" is null or (\"session_families\".\"kind\" = 'slot' and \"session_families\".\"status\" in ('selected', 'invited', 'confirmed'))"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.session_staff": {

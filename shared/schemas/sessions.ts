@@ -1,12 +1,6 @@
 import { z } from 'zod'
 import { PARTICIPATION_KINDS, SESSION_STATUSES } from '../utils/constants'
-import { zIsoDay, zRequiredText, zText, zUuid } from './common'
-
-/** Optional free text: empty becomes null. */
-const zOptionalText = (max: number) =>
-  zText(max)
-    .nullish()
-    .transform(value => value || null)
+import { zIsoDay, zOptionalText, zRequiredText, zUuid } from './common'
 
 /** Optional day: an empty date field becomes null. */
 const zOptionalDay = z

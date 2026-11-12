@@ -1,19 +1,21 @@
 // The lodgings of the camp and where each family sleeps in a session (docs/spec.md 3.11). The layout
-// (lodgings) is entered once and used by every session; a family holding a place gets one lodging,
-// a lodging hosts one family per session (session_families.lodgingId).
+// (lodgings) is entered once and used by every session; a titolare holding a place gets one lodging, a
+// lodging hosts one family per session (session_families.lodgingId, with its unique index and check).
 // Explicit imports only, so the database tests can load this file (tests/db/lodgings.test.ts).
-import { and, count, eq, ne, sql } from 'drizzle-orm'
+import { and, count, eq, inArray, ne, sql } from 'drizzle-orm'
 import type { LodgingValues } from '../../shared/schemas/lodgings'
 import type { LodgingListItem, SessionLodgingFamily, SessionLodgingsDto } from '../../shared/types/lodgings'
-import { enumLabel, type LodgingFeature } from '../../shared/utils/constants'
-import { accommodationNeeds, lodgingWarnings, sortLodgings } from '../../shared/utils/lodgings'
+import { accommodationNeeds, featureLabels, lodgingWarnings, sortLodgings } from '../../shared/utils/lodgings'
 import { isSessionEditable } from '../../shared/utils/session-status'
-import { holdsSlot } from '../../shared/utils/slots'
+import { HOLDING_STATUSES } from '../../shared/utils/slots'
 import { campSessions, families, familyMembers, lodgings, sessionFamilies } from '../db/schema'
 import { writeAudit } from './audit'
+import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
-import { lockSession, requireEditable, sessionCsv, type Actor } from './sessions'
+import { lockSession, requireEditable, type Actor } from './sessions'
+
+type SessionRow = typeof campSessions.$inferSelect
 
 const columns = {
   id: lodgings.id,
@@ -43,35 +45,58 @@ export async function createLodging(db: DbOrTx, input: LodgingValues): Promise<s
   return row!.id
 }
 
+/** Changes a lodging everywhere it is used, completed sessions included: it is the same place. */
 export async function updateLodging(db: DbOrTx, id: string, input: LodgingValues): Promise<void> {
   const [row] = await db.update(lodgings).set(input).where(eq(lodgings.id, id)).returning({ id: lodgings.id })
   if (!row) throw notFound()
 }
 
-/** Deletes a lodging: the families placed in it, in any session, are left without one. */
-export async function deleteLodging(db: DbOrTx, id: string): Promise<void> {
-  const [row] = await db.delete(lodgings).where(eq(lodgings.id, id)).returning({ id: lodgings.id })
-  if (!row) throw notFound()
+/**
+ * Deletes a lodging. The families placed in it in an open session are left without one (audited); a
+ * lodging in the layout of a completed session is kept, so that its layout stays as it was.
+ */
+export async function deleteLodging(db: DbOrTx, id: string, actor: Actor): Promise<void> {
+  const [lodging] = await db.select(columns).from(lodgings).where(eq(lodgings.id, id)).for('update')
+  if (!lodging) throw notFound()
+  const placed = await db
+    .select({ id: sessionFamilies.id, sessionId: sessionFamilies.sessionId, status: campSessions.status })
+    .from(sessionFamilies)
+    .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
+    .where(eq(sessionFamilies.lodgingId, id))
+  const closed = placed.filter(row => !isSessionEditable(row.status)).length
+  if (closed) {
+    throw new DomainError(
+      409,
+      `«${lodging.name}» è nello schema di ${closed === 1 ? 'una sessione conclusa' : `${closed} sessioni concluse`}: non si può eliminare`,
+    )
+  }
+  await db.delete(lodgings).where(eq(lodgings.id, id))
+  await writeAudit(db, {
+    actorUserId: actor.userId,
+    action: 'lodging.delete',
+    entityType: 'lodging',
+    entityId: id,
+    data: { name: lodging.name, freed: placed.map(row => ({ participationId: row.id, sessionId: row.sessionId })) },
+    ip: actor.ip,
+  })
 }
 
 // ─── A session ─────────────────────────────────────────────────────────────────────────────────────
 
-async function sessionRow(db: DbOrTx, sessionId: string) {
+async function sessionRow(db: DbOrTx, sessionId: string): Promise<SessionRow> {
   const [session] = await db.select().from(campSessions).where(eq(campSessions.id, sessionId)).limit(1)
   if (!session) throw new DomainError(404, 'Sessione non trovata')
   return session
 }
 
-/** The families holding a place in the session, by name, with their size and needs. */
+/** The titolari holding a place in the session, by name, with their size and needs. */
 async function lodgingFamilies(db: DbOrTx, sessionId: string): Promise<SessionLodgingFamily[]> {
   const rows = await db
     .select({
       id: sessionFamilies.id,
       familyId: sessionFamilies.familyId,
       familyName: families.name,
-      kind: sessionFamilies.kind,
       status: sessionFamilies.status,
-      reserveRank: sessionFamilies.reserveRank,
       formAnswers: families.formAnswers,
       people:
         sql<number>`(select count(*) from ${familyMembers} where ${familyMembers.familyId} = ${families.id})`.mapWith(
@@ -81,33 +106,34 @@ async function lodgingFamilies(db: DbOrTx, sessionId: string): Promise<SessionLo
     })
     .from(sessionFamilies)
     .innerJoin(families, eq(families.id, sessionFamilies.familyId))
-    .where(eq(sessionFamilies.sessionId, sessionId))
+    .where(
+      and(
+        eq(sessionFamilies.sessionId, sessionId),
+        eq(sessionFamilies.kind, 'slot'),
+        inArray(sessionFamilies.status, [...HOLDING_STATUSES]),
+      ),
+    )
   return rows
-    .filter(holdsSlot)
     .sort((a, b) => a.familyName.localeCompare(b.familyName, 'it'))
-    .map(row => ({
-      id: row.id,
-      familyId: row.familyId,
-      familyName: row.familyName,
-      status: row.status,
-      people: row.people,
-      needs: accommodationNeeds(row.formAnswers),
-      lodgingId: row.lodgingId,
-    }))
+    .map(({ formAnswers, ...row }) => ({ ...row, needs: accommodationNeeds(formAnswers) }))
+}
+
+async function layoutOf(db: DbOrTx, session: SessionRow): Promise<SessionLodgingsDto> {
+  const [layout, placed] = await Promise.all([db.select(columns).from(lodgings), lodgingFamilies(db, session.id)])
+  return {
+    sessionId: session.id,
+    editable: isSessionEditable(session.status),
+    lodgings: sortLodgings(layout),
+    families: placed,
+  }
 }
 
 /** GET /api/admin/sessions/:id/lodgings: the layout and the families to place in it. */
 export async function sessionLodgingsOf(db: DbOrTx, sessionId: string): Promise<SessionLodgingsDto> {
-  const session = await sessionRow(db, sessionId)
-  return {
-    sessionId,
-    editable: isSessionEditable(session.status),
-    lodgings: sortLodgings(await db.select(columns).from(lodgings)),
-    families: await lodgingFamilies(db, sessionId),
-  }
+  return layoutOf(db, await sessionRow(db, sessionId))
 }
 
-/** Places a family of the session in a lodging, or takes it out (lodgingId null). */
+/** Places a titolare of the session in a lodging, or takes it out (lodgingId null). */
 export async function assignLodging(
   db: DbOrTx,
   input: { sessionId: string; participationId: string; lodgingId: string | null; actor: Actor },
@@ -115,16 +141,17 @@ export async function assignLodging(
   const session = await lockSession(db, input.sessionId)
   requireEditable(session, 'gli alloggi non si cambiano più')
   const [row] = await db
-    .select({
-      id: sessionFamilies.id,
-      kind: sessionFamilies.kind,
-      status: sessionFamilies.status,
-      reserveRank: sessionFamilies.reserveRank,
-      lodgingId: sessionFamilies.lodgingId,
-    })
+    .select({ id: sessionFamilies.id, lodgingId: sessionFamilies.lodgingId })
     .from(sessionFamilies)
-    .where(and(eq(sessionFamilies.id, input.participationId), eq(sessionFamilies.sessionId, session.id)))
-  if (!row || !holdsSlot(row)) throw new DomainError(404, 'La famiglia non ha un posto in questa sessione')
+    .where(
+      and(
+        eq(sessionFamilies.id, input.participationId),
+        eq(sessionFamilies.sessionId, session.id),
+        eq(sessionFamilies.kind, 'slot'),
+        inArray(sessionFamilies.status, [...HOLDING_STATUSES]),
+      ),
+    )
+  if (!row) throw new DomainError(404, 'La famiglia non ha un posto in questa sessione')
   if (input.lodgingId) {
     const [lodging] = await db.select(columns).from(lodgings).where(eq(lodgings.id, input.lodgingId))
     if (!lodging) throw notFound()
@@ -159,28 +186,29 @@ export async function assignLodging(
  */
 export async function lodgingsCsv(db: DbOrTx, sessionId: string): Promise<{ filename: string; csv: string }> {
   const session = await sessionRow(db, sessionId)
-  const { lodgings: layout, families: placed } = await sessionLodgingsOf(db, sessionId)
-  const labels = (features: readonly LodgingFeature[]) =>
-    features.map(feature => enumLabel('lodgingFeature', feature)).join(', ')
-  const familyCells = (family: SessionLodgingFamily | undefined) =>
-    family ? [family.familyName, family.people, labels(family.needs)] : [null, null, null]
+  const { lodgings: layout, families: placed } = await layoutOf(db, session)
   const byLodging = new Map(placed.flatMap(family => (family.lodgingId ? [[family.lodgingId, family] as const] : [])))
-  const header = ['Zona', 'Alloggio', 'Posti letto', 'Dotazioni', 'Famiglia', 'Persone', 'Esigenze', 'Da controllare']
-  const rows = [
+  /** Family, people, needs, what to check. Without cards the beds cannot be checked. */
+  const familyCells = (family: SessionLodgingFamily, warnings: string[]) => [
+    family.familyName,
+    family.people || null,
+    featureLabels(family.needs),
+    [...(family.people ? [] : ['Componenti non ancora indicati']), ...warnings].join('. ') || null,
+  ]
+  return sessionCsv(session, 'alloggi', [
+    ['Zona', 'Alloggio', 'Posti letto', 'Dotazioni', 'Famiglia', 'Persone', 'Esigenze', 'Da controllare'],
     ...layout.map(lodging => {
       const family = byLodging.get(lodging.id)
       return [
         lodging.area,
         lodging.name,
         lodging.beds,
-        labels(lodging.features),
-        ...familyCells(family),
-        family ? lodgingWarnings(family, lodging).join('. ') : null,
+        featureLabels(lodging.features),
+        ...(family ? familyCells(family, lodgingWarnings(family, lodging)) : [null, null, null, null]),
       ]
     }),
     ...placed
       .filter(family => !family.lodgingId)
-      .map(family => [null, null, null, null, ...familyCells(family), 'Senza alloggio']),
-  ]
-  return sessionCsv(session, 'alloggi', header, rows)
+      .map(family => [null, null, null, null, ...familyCells(family, ['Senza alloggio'])]),
+  ])
 }

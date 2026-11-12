@@ -295,8 +295,13 @@ export const sessionFamilies = pgTable(
   t => [
     uniqueIndex('session_families_session_family_key').on(t.sessionId, t.familyId),
     index('session_families_family_idx').on(t.familyId),
-    // One family per lodging in a session.
-    uniqueIndex('session_families_session_lodging_key').on(t.sessionId, t.lodgingId),
+    // One family per lodging in a session; lodging first, for the lookups by lodging.
+    uniqueIndex('session_families_lodging_session_key').on(t.lodgingId, t.sessionId),
+    // Only a titolare holding a place sleeps in a lodging (shared/utils/slots.ts, holdsSlot).
+    check(
+      'session_families_lodging',
+      sql`${t.lodgingId} is null or (${t.kind} = 'slot' and ${t.status} in ('selected', 'invited', 'confirmed'))`,
+    ),
   ],
 )
 

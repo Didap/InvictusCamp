@@ -66,6 +66,7 @@ import {
 } from '../emails/sessions'
 import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
+import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
 import { freezeSessionProgramme } from './programmes'
@@ -1147,36 +1148,6 @@ export async function resendInvitation(
 
 // ─── Export (P1) ───────────────────────────────────────────────────────────────────────────────────
 
-function csvCell(value: string | number | null | undefined): string {
-  let text = value === null || value === undefined ? '' : String(value)
-  // A cell that starts like a formula is read as text by spreadsheets.
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`
-  return /[";\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
-}
-
-/**
- * A CSV file about a session (semicolons, for spreadsheets in Italian), named after it:
- * "<prefix>-<title>-<start day>.csv".
- */
-export function sessionCsv(
-  session: { title: string; startDate: string },
-  prefix: string,
-  header: string[],
-  rows: (string | number | null | undefined)[][],
-): { filename: string; csv: string } {
-  const slug = session.title
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-  const lines = [header, ...rows].map(row => row.map(csvCell).join(';'))
-  return {
-    filename: `${prefix}-${slug || 'sessione'}-${formatDay(session.startDate, 'numeric').replaceAll('/', '-')}.csv`,
-    csv: `\ufeff${lines.join('\r\n')}\r\n`,
-  }
-}
-
 /** The families of a session as CSV. No health details. */
 export async function participantsCsv(db: DbOrTx, sessionId: string): Promise<{ filename: string; csv: string }> {
   const [session] = await db.select().from(campSessions).where(eq(campSessions.id, sessionId)).limit(1)
@@ -1208,5 +1179,5 @@ export async function participantsCsv(db: DbOrTx, sessionId: string): Promise<{ 
     formatDateTime(p.respondedAt),
     p.declineReason,
   ])
-  return sessionCsv(session, 'partecipanti', header, lines)
+  return sessionCsv(session, 'partecipanti', [header, ...lines])
 }

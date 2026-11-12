@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { LodgingListItem } from '#shared/types/lodgings'
-import { enumMeta } from '#shared/utils/constants'
 import { plural } from '#shared/utils/format'
+import { featureLabels, groupByArea } from '#shared/utils/lodgings'
 
 // Alloggi (docs/spec.md 3.11): the bed layout of the camp, entered once and used by every session,
 // where the Alloggi tab places each family in a lodging.
@@ -21,7 +21,7 @@ async function remove(lodging: LodgingListItem) {
     title: `Elimini «${lodging.name}»?`,
     description: [
       lodging.sessions
-        ? `È assegnato a una famiglia in ${plural(lodging.sessions, 'sessione', 'sessioni')}: lì la famiglia resta senza alloggio.`
+        ? `È assegnato a una famiglia in ${plural(lodging.sessions, 'sessione', 'sessioni')}: nelle sessioni aperte la famiglia resta senza alloggio; se una è conclusa, non si può eliminare.`
         : 'Non è assegnato a nessuna famiglia.',
       'Non parte nessuna email.',
     ].join(' '),
@@ -45,17 +45,7 @@ const totals = computed(() => {
   return `${plural(list.length, 'alloggio', 'alloggi')} · ${plural(beds, 'posto letto', 'posti letto')}`
 })
 
-const groups = computed(() => {
-  const byArea = new Map<string, LodgingListItem[]>()
-  for (const lodging of data.value ?? []) {
-    const area = lodging.area ?? 'Altri alloggi'
-    byArea.set(area, [...(byArea.get(area) ?? []), lodging])
-  }
-  return [...byArea.entries()].map(([area, items]) => ({ area, items }))
-})
-
-const features = (lodging: LodgingListItem) =>
-  lodging.features.map(feature => enumMeta('lodgingFeature', feature).label).join(', ')
+const groups = computed(() => groupByArea(data.value ?? []))
 </script>
 
 <template>
@@ -106,7 +96,9 @@ const features = (lodging: LodgingListItem) =>
                 {{ plural(lodging.beds, 'posto letto', 'posti letto')
                 }}<template v-if="lodging.description"> · {{ lodging.description }}</template>
               </p>
-              <p v-if="lodging.features.length" class="mt-1 text-sm text-muted">{{ features(lodging) }}</p>
+              <p v-if="lodging.features.length" class="mt-1 text-sm text-muted">
+                {{ featureLabels(lodging.features) }}
+              </p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
               <UButton

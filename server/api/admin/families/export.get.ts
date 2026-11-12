@@ -2,6 +2,7 @@ import { adminFamilyListQuerySchema } from '#shared/schemas/families'
 import { enumLabel } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDateTime } from '#shared/utils/format'
+import { toCsv } from '../../../domain/csv'
 import { familiesForExport } from '../../../domain/families'
 
 /**
@@ -50,16 +51,5 @@ export default defineEventHandler(async event => {
     entityType: 'family',
     data: { count: rows.length },
   })
-  setResponseHeaders(event, {
-    'Content-Type': 'text/csv; charset=utf-8',
-    'Content-Disposition': `attachment; filename="famiglie-${todayIso()}.csv"`,
-    'Cache-Control': 'private, no-store',
-  })
-  return `﻿${[header, ...lines].map(cells => cells.map(csvCell).join(';')).join('\r\n')}\r\n`
+  return sendCsv(event, { filename: `famiglie-${todayIso()}.csv`, csv: toCsv([header, ...lines]) })
 })
-
-/** A CSV cell: quoted when needed, and never read as a formula by a spreadsheet. */
-function csvCell(value: string): string {
-  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
-  return /[";\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe
-}

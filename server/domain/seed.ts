@@ -2,7 +2,7 @@
 // (NUXT_DEMO_SEED, server/plugins/start.ts). Every person, family and
 // document is invented; health details are placeholders marked "(esempio)". Dates are fixed around the
 // 2026 and 2027 summer seasons.
-import { sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { DisabilityInfo, FormAnswers } from '../../shared/types/domain'
 import type {
@@ -757,7 +757,10 @@ export async function seedDemo(
         .update(t.sessionFamilies)
         .set({ lodgingId: lodgingRows[lodgingIndex]!.id })
         .where(
-          sql`${t.sessionFamilies.sessionId} = ${sessionId} and ${t.sessionFamilies.familyId} = ${families[familyIndex]!.familyId}`,
+          and(
+            eq(t.sessionFamilies.sessionId, sessionId),
+            eq(t.sessionFamilies.familyId, families[familyIndex]!.familyId),
+          ),
         )
     }
   }
