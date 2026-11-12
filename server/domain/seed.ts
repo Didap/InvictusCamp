@@ -795,6 +795,7 @@ export async function seedDemo(
   await db
     .insert(t.feedbackArchives)
     .values({ year: 2026, data: demoFeedback(), source: 'Dati di esempio', importedBy: admin.id })
+    .onConflictDoNothing()
   const september = await session({
     ...calendar(DEMO_CALENDAR.september),
     status: 'draft',

@@ -35,10 +35,3 @@ export interface FeedbackArchive {
     }[]
   }
 }
-
-/** GET /api/admin/feedback: the years there are, newest first. */
-export interface FeedbackYear {
-  year: number
-  source: string | null
-  importedAt: string
-}

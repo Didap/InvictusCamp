@@ -6,7 +6,7 @@ const props = defineProps<{ year: number }>()
 const route = useRoute()
 const router = useRouter()
 
-const { data: archive, status } = useApiFetch<FeedbackArchive>(() => `/api/admin/feedback/${props.year}`)
+const { data: archive, status, refresh } = useApiFetch<FeedbackArchive>(() => `/api/admin/feedback/${props.year}`)
 
 const TABS = [
   { label: 'Voti', value: 'voti', icon: 'i-lucide-chart-bar' },
@@ -22,11 +22,18 @@ const tab = computed({
 <template>
   <div>
     <UTabs v-model="tab" :items="TABS" :content="false" variant="link" class="mb-8" />
-    <p v-if="status === 'pending' && !archive" class="text-muted">Carico il feedback del {{ year }}…</p>
-    <template v-else-if="archive">
-      <FeedbackVotes v-if="tab === 'voti'" :archive="archive" />
-      <FeedbackComments v-else-if="tab === 'commenti'" :archive="archive" />
-      <FeedbackStaff v-else :archive="archive" />
-    </template>
+    <USkeleton v-if="status === 'pending' && !archive" class="h-40 w-full" />
+    <UAlert
+      v-else-if="!archive"
+      color="error"
+      variant="subtle"
+      icon="i-lucide-circle-alert"
+      :title="`Non riesco a caricare il feedback del ${year}`"
+      description="Controlla la connessione e riprova."
+      :actions="[{ label: 'Riprova', color: 'error', variant: 'outline', onClick: () => refresh() }]"
+    />
+    <FeedbackVotes v-else-if="tab === 'voti'" :archive="archive" />
+    <FeedbackComments v-else-if="tab === 'commenti'" :archive="archive" />
+    <FeedbackStaff v-else :archive="archive" />
   </div>
 </template>

@@ -1,20 +1,17 @@
 <script setup lang="ts">
-import type { FeedbackYear } from '#shared/types/feedback'
-
 // Feedback (docs/spec.md 3.13): what the families said at the end of their session, year by year.
 const route = useRoute()
 const router = useRouter()
-const { data: years, status } = useApiFetch<FeedbackYear[]>('/api/admin/feedback')
+const { data: years, status, refresh } = useApiFetch<number[]>('/api/admin/feedback')
 
 const year = computed({
   get: () => {
     const asked = Number(route.query.anno)
-    return years.value?.some(y => y.year === asked) ? asked : years.value?.[0]?.year
+    return years.value?.includes(asked) ? asked : years.value?.[0]
   },
-  set: value =>
-    router.replace({ query: { ...route.query, anno: value === years.value?.[0]?.year ? undefined : value } }),
+  set: value => router.replace({ query: { ...route.query, anno: value === years.value?.[0] ? undefined : value } }),
 })
-const yearItems = computed(() => (years.value ?? []).map(y => ({ label: String(y.year), value: y.year })))
+const yearItems = computed(() => (years.value ?? []).map(y => ({ label: String(y), value: y })))
 </script>
 
 <template>
@@ -23,7 +20,16 @@ const yearItems = computed(() => (years.value ?? []).map(y => ({ label: String(y
       <USelect v-model="year" :items="yearItems" aria-label="Anno" class="w-28" />
     </template>
 
-    <p v-if="status === 'pending' && !years" class="text-muted">Carico…</p>
+    <USkeleton v-if="status === 'pending' && !years" class="h-40 w-full" />
+    <UAlert
+      v-else-if="!years"
+      color="error"
+      variant="subtle"
+      icon="i-lucide-circle-alert"
+      title="Non riesco a caricare il feedback"
+      description="Controlla la connessione e riprova."
+      :actions="[{ label: 'Riprova', color: 'error', variant: 'outline', onClick: () => refresh() }]"
+    />
     <UAlert
       v-else-if="!year"
       icon="i-lucide-message-square-heart"

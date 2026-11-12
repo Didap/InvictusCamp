@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import postgres from 'postgres'
-import { feedbackArchiveSchema } from '../shared/schemas/feedback.ts'
+import { feedbackArchiveSchema, feedbackYearParamsSchema } from '../shared/schemas/feedback.ts'
 import { parseFeedbackPages } from './lib/feedback-pages.ts'
 
 const fail = message => {
@@ -34,9 +34,9 @@ try {
 }
 const { values, positionals } = args
 const [folder] = positionals
-const year = Number(values.year)
+const year = feedbackYearParamsSchema.shape.year.safeParse(values.year).data
 if (!folder) fail('name the folder with the saved pages')
-if (!Number.isInteger(year)) fail('--year needs a year')
+if (year === undefined) fail('--year needs a year the page can open (2000-2100)')
 if (values.apply && !values.by) fail('--apply needs --by <email of an administrator>')
 
 let archive
@@ -45,7 +45,8 @@ try {
   const parsed = feedbackArchiveSchema.safeParse(
     parseFeedbackPages({ feedback: page('feedback'), comments: page('commenti'), staff: page('staff') }),
   )
-  if (!parsed.success) fail(`the pages do not have the expected shape: ${parsed.error.issues[0]?.message}`)
+  const issue = parsed.error?.issues[0]
+  if (issue) fail(`the pages do not have the expected shape at ${issue.path.join('.') || 'the top'}: ${issue.message}`)
   archive = parsed.data
 } catch (error) {
   fail(error.message)
@@ -68,8 +69,9 @@ if (!url) fail('DATABASE_URL is not set')
 const sql = postgres(url, { max: 1, onnotice: () => {} })
 try {
   const replaced = await sql.begin(async tx => {
-    const [admin] = await tx`select id from users where lower(email) = lower(${values.by}) and role = 'admin'`
-    if (!admin) throw new Error(`no administrator with the email ${values.by}`)
+    const [admin] =
+      await tx`select id from users where lower(email) = lower(${values.by}) and role = 'admin' and status = 'active'`
+    if (!admin) throw new Error(`no active administrator with the email ${values.by}`)
     const [before] = await tx`select 1 from feedback_archives where year = ${year}`
     await tx`
       insert into feedback_archives (year, data, source, imported_by, imported_at)

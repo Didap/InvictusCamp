@@ -19,16 +19,25 @@ const feedbackPage = json('fd', {
   ],
   temi: [{ tema: 'Più piscina', count: 2, sessioni: [1, 2], dettaglio: 'Più turni.' }],
 })
-const commentsPage = json('data', {
-  cats: ['Suggerimenti', 'Messaggi'],
-  items: [{ s: 2, f: 4, c: 1, t: ' Grazie! ' }],
-})
+const commentsPage =
+  `<script type="application/json" id="data-2025">{"cats":["Vecchie"],"items":[]}</script>` +
+  `<script type="application/json" data-id="data">{"cats":["Altre"],"items":[]}</script>` +
+  json('data', {
+    cats: ['Suggerimenti', 'Messaggi'],
+    items: [
+      { s: 2, f: 4, c: 1, t: ' Grazie! ' },
+      { s: 1, f: 2, c: 0, t: '   ' },
+    ],
+  })
 const dot = '<td class="c"><span class=dot></span></td>'
 const empty = '<td class="c"></td>'
 const staffPage = `<p>Non sono contati Nicola e Serena.</p>
 <table><tr><th>Nome</th><th>S1</th><th>S2</th><th>Totale</th></tr>
 <tr><td class="nm">Anna Rossi</td>${dot}${dot}<td class="n"><b>2</b></td></tr>
 <tr><td class="nm">Luca Neri</td>${empty}${dot}<td class="n"><b>1</b></td></tr></table>
+<details class="pc"><summary><span class="pn">Luca Neri</span></summary>
+<div class="dr"><div class="dl"><b>S2 &middot; Arte</b><span>1 voto</span></div><div class="sb"><i style="width:100.00%;background:var(--s4)"></i></div><div class="ctx">voto solo per questa attività · condotta in coppia con Anna Rossi</div></div>
+</details>
 <details class="pc"><summary><span class="pn">Anna Rossi</span></summary>
 <div class="dr"><div class="dl"><b>S1 · Tiro con l&#x27;arco</b><span>4 voti</span></div><div class="sb"><i style="width:75.00%;background:var(--s5)"></i><i style="width:25.00%;background:var(--s3)"></i></div><div class="ctx">voto solo per questa attività</div></div>
 <div class="dr"><div class="dl"><b>S2 · Arte</b><span>1 voto</span></div><div class="sb"><i style="width:100.00%;background:var(--s4)"></i></div><div class="ctx">voto unico per &quot;Arte e Arco&quot;, insieme a Arco (Luca)</div></div>
@@ -74,13 +83,26 @@ describe('reading the 2026 pages', () => {
           },
         ],
       },
-      { name: 'Luca Neri', sessions: [2], leads: [] },
+      {
+        name: 'Luca Neri',
+        sessions: [2],
+        leads: [
+          {
+            session: 2,
+            activity: 'Arte',
+            votes: { five: 0, four: 1, low: 0 },
+            note: 'condotta in coppia con Anna Rossi',
+          },
+        ],
+      },
     ])
     expect(feedbackArchiveSchema.safeParse(archive).success).toBe(true)
   })
 
   it('decodes HTML entities', () => {
-    expect(decodeEntities('l&#x27;arco &amp; &#232; &quot;x&quot; &unknown;')).toBe('l\'arco & è "x" &unknown;')
+    expect(decodeEntities('l&#x27;arco &amp; &#232; &quot;x&quot; &egrave; &middot; &unknown; &#x110000;')).toBe(
+      'l\'arco & è "x" è · &unknown; &#x110000;',
+    )
   })
 
   it('refuses a page without its JSON', () => {
@@ -103,10 +125,23 @@ describe('the sums of the page', () => {
     expect(voteShares({ five: 2, four: 1, low: 0 })).toEqual({ five: 67, four: 33, low: 0 })
   })
 
-  it('groups the led activities by activity, in the order of the questionnaire', () => {
-    expect(leadsByActivity(archive).map(a => [a.activity, a.rows.map(r => `S${r.session} ${r.name}`)])).toEqual([
-      ['Arte', ['S2 Anna Rossi']],
-      ["Tiro con l'arco", ['S1 Anna Rossi']],
+  it('groups the led activities by activity, a turn in pairs as one row', () => {
+    expect(leadsByActivity(archive)).toEqual([
+      {
+        activity: 'Arte',
+        turns: [
+          {
+            session: 2,
+            names: ['Anna Rossi', 'Luca Neri'],
+            votes: { five: 0, four: 1, low: 0 },
+            note: 'voto unico per "Arte e Arco", insieme a Arco (Luca)',
+          },
+        ],
+      },
+      {
+        activity: "Tiro con l'arco",
+        turns: [{ session: 1, names: ['Anna Rossi'], votes: { five: 3, four: 0, low: 1 }, note: null }],
+      },
     ])
     expect(personLeads(archive.staff.people[0]!)).toEqual({
       votes: { five: 3, four: 1, low: 1 },

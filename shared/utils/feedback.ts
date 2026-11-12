@@ -3,7 +3,6 @@
 import type { FeedbackArchive, FeedbackItemKind, VoteCounts } from '../types/feedback'
 
 type Person = FeedbackArchive['staff']['people'][number]
-type Lead = Person['leads'][number]
 
 export const emptyVotes = (): VoteCounts => ({ five: 0, four: 0, low: 0 })
 
@@ -49,31 +48,57 @@ export function respondents(archive: FeedbackArchive, session: number | null): n
   return archive.sessions.reduce((sum, s) => (session === null || s.number === session ? sum + s.respondents : sum), 0)
 }
 
-export interface ActivityLeads {
-  activity: string
-  rows: (Lead & { name: string })[]
+/** "Sessione 1", "Sessione 2"… after "Tutte le sessioni" (value 'all'), for the filters of the page. */
+export function sessionOptions(archive: FeedbackArchive): { label: string; value: string }[] {
+  return [
+    { label: 'Tutte le sessioni', value: 'all' },
+    ...archive.sessions.map(s => ({ label: `Sessione ${s.number}`, value: String(s.number) })),
+  ]
 }
 
+/** A turn of an activity in a session, with everyone who led it (a turn in pairs is one row). */
+export interface ActivityTurn {
+  session: number
+  names: string[]
+  votes: VoteCounts
+  note: string | null
+}
+
+export interface ActivityLeads {
+  activity: string
+  turns: ActivityTurn[]
+}
+
+/** The note of a lead that only says who the partner was: the names of the turn already say it. */
+const PAIR_NOTE = /^condotta in coppia con /
+
 /**
- * Each activity session by session with who led it: the comparison the camp finds most useful. Activities
- * in the order of the questionnaire, then any other.
+ * Each activity session by session with who led it: the comparison the camp finds most useful. The votes
+ * are per session and activity, so the leads of the same session are the same turn. Activities in the order
+ * of the questionnaire, then any other.
  */
 export function leadsByActivity(archive: FeedbackArchive): ActivityLeads[] {
   const order = archive.items.map(item => item.label)
-  const byActivity = new Map<string, ActivityLeads['rows']>()
+  const byActivity = new Map<string, Map<number, ActivityTurn>>()
   for (const person of archive.staff.people) {
     for (const lead of person.leads) {
-      const rows = byActivity.get(lead.activity) ?? []
-      rows.push({ ...lead, name: person.name })
-      byActivity.set(lead.activity, rows)
+      const turns = byActivity.get(lead.activity) ?? new Map<number, ActivityTurn>()
+      byActivity.set(lead.activity, turns)
+      const turn = turns.get(lead.session) ?? { session: lead.session, names: [], votes: lead.votes, note: null }
+      turns.set(lead.session, turn)
+      turn.names.push(person.name)
+      if (lead.note && !PAIR_NOTE.test(lead.note) && turn.note !== lead.note)
+        turn.note = turn.note ? `${turn.note} · ${lead.note}` : lead.note
     }
   }
   const rank = (activity: string) => (order.includes(activity) ? order.indexOf(activity) : order.length)
   return [...byActivity]
     .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b, 'it'))
-    .map(([activity, rows]) => ({
+    .map(([activity, turns]) => ({
       activity,
-      rows: rows.sort((a, b) => a.session - b.session || a.name.localeCompare(b.name, 'it')),
+      turns: [...turns.values()]
+        .sort((a, b) => a.session - b.session)
+        .map(turn => ({ ...turn, names: turn.names.sort((a, b) => a.localeCompare(b, 'it')) })),
     }))
 }
 

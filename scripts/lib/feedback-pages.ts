@@ -7,13 +7,49 @@ import type { FeedbackArchive, FeedbackItemKind } from '../../shared/types/feedb
 
 type Archive = FeedbackArchive
 
-const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
+/** The named entities an Italian page may use; an unknown one is left as it is. */
+const ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  middot: '·',
+  hellip: '…',
+  ndash: '–',
+  mdash: '—',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
+  laquo: '«',
+  raquo: '»',
+  deg: '°',
+  euro: '€',
+  agrave: 'à',
+  aacute: 'á',
+  egrave: 'è',
+  eacute: 'é',
+  igrave: 'ì',
+  iacute: 'í',
+  ograve: 'ò',
+  oacute: 'ó',
+  ugrave: 'ù',
+  uacute: 'ú',
+  Agrave: 'À',
+  Egrave: 'È',
+  Eacute: 'É',
+  Igrave: 'Ì',
+  Ograve: 'Ò',
+  Ugrave: 'Ù',
+}
 
 export function decodeEntities(value: string): string {
   return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code: string) => {
-    if (code[0] !== '#') return ENTITIES[code.toLowerCase()] ?? whole
+    if (code[0] !== '#') return ENTITIES[code] ?? ENTITIES[code.toLowerCase()] ?? whole
     const n = code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : Number(code.slice(1))
-    return String.fromCodePoint(n)
+    return n <= 0x10ffff ? String.fromCodePoint(n) : whole
   })
 }
 
@@ -25,7 +61,10 @@ const textOf = (html: string) =>
 /** The JSON of `<script type="application/json" id="…">`. */
 export function pageJson<T>(html: string, id: string): T {
   for (const [, attributes, body] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
-    if (attributes!.includes('application/json') && new RegExp(`\\bid=["']?${id}\\b`).test(attributes!))
+    if (
+      attributes!.includes('application/json') &&
+      new RegExp(`(?:^|\\s)id=(["']?)${id}\\1(?:\\s|$)`).test(attributes!)
+    )
       return JSON.parse(body!) as T
   }
   throw new Error(`no JSON block "${id}" in the page`)
@@ -69,12 +108,13 @@ export function parseCommentsPage(html: string): Archive['comments'] {
   const data = pageJson<CommentsJson>(html, 'data')
   return {
     questions: data.cats,
-    items: data.items.map(i => ({ session: i.s, family: i.f, question: i.c, text: i.t.trim() })),
+    // An empty answer is not a comment.
+    items: data.items.map(i => ({ session: i.s, family: i.f, question: i.c, text: i.t.trim() })).filter(i => i.text),
   }
 }
 
-/** "voto solo per questa attività" is the plain case: no note. */
-const PLAIN_LEAD = 'voto solo per questa attività'
+/** "voto solo per questa attività" is the plain case: no note, and not in front of one. */
+const PLAIN_LEAD = /^voto solo per questa attività(?: · )?/
 
 export function parseStaffPage(html: string): Archive['staff'] {
   const page = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, '')
@@ -115,7 +155,7 @@ export function parseStaffPage(html: string): Archive['staff'] {
         session: Number(session),
         activity,
         votes: { five, four, low: Math.max(0, total - five - four) },
-        note: !ctx || ctx === PLAIN_LEAD ? null : ctx,
+        note: ctx.replace(PLAIN_LEAD, '') || null,
       })
     }
   }

@@ -33,8 +33,9 @@ try {
       select title, status, start_date::text as "startDate", end_date::text as "endDate" from camp_sessions`
     const plan = calendarPlan(existing)
     if (!apply || !plan.create.length) return plan
-    const [admin] = await tx`select id from users where lower(email) = lower(${by}) and role = 'admin'`
-    if (!admin) throw new Error(`no administrator with the email ${by}`)
+    const [admin] =
+      await tx`select id from users where lower(email) = lower(${by}) and role = 'admin' and status = 'active'`
+    if (!admin) throw new Error(`no active administrator with the email ${by}`)
     const rows = await tx`insert into camp_sessions ${tx(
       plan.create.map(session => ({
         title: calendarTitle(session),

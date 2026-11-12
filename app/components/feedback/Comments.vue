@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FeedbackArchive } from '#shared/types/feedback'
+import { sessionOptions } from '#shared/utils/feedback'
 import { plural } from '#shared/utils/format'
 
 // The written answers of the questionnaire (docs/spec.md 3.13), question by question. Anonymous: a family is
@@ -9,10 +10,7 @@ const props = defineProps<{ archive: FeedbackArchive }>()
 const session = ref('all')
 const question = ref('all')
 const search = ref('')
-const sessionItems = computed(() => [
-  { label: 'Tutte le sessioni', value: 'all' },
-  ...props.archive.sessions.map(s => ({ label: `Sessione ${s.number}`, value: String(s.number) })),
-])
+const sessionItems = computed(() => sessionOptions(props.archive))
 const questionItems = computed(() => [
   { label: 'Tutte le domande', value: 'all' },
   ...props.archive.comments.questions.map((label, i) => ({ label, value: String(i) })),

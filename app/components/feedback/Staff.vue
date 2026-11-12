@@ -13,9 +13,14 @@ const people = computed(() =>
     (a, b) => b.sessions.length - a.sessions.length || a.name.localeCompare(b.name, 'it'),
   ),
 )
+// "Many sessions" is half of the year's (5 of 2026's 10), so the number keeps its meaning in any year.
+const many = computed(() => Math.max(2, Math.ceil(sessions.value.length / 2)))
 const stats = computed(() => [
   { label: 'Persone diverse nello staff', value: people.value.length },
-  { label: 'Presenti in 5 sessioni o più', value: people.value.filter(p => p.sessions.length >= 5).length },
+  {
+    label: `Presenti in ${many.value} sessioni o più`,
+    value: people.value.filter(p => p.sessions.length >= many.value).length,
+  },
   { label: 'Presenti in una sola sessione', value: people.value.filter(p => p.sessions.length === 1).length },
 ])
 
@@ -80,35 +85,46 @@ const activities = computed(() => leadsByActivity(props.archive))
       </div>
 
       <ul v-if="view === 'person'" class="divide-y divide-default rounded-lg border border-default bg-elevated">
-        <li v-for="person in leaders" :key="person.name">
-          <details class="group">
-            <summary class="flex cursor-pointer list-none items-start gap-3 p-5 hover:bg-accented/40">
-              <FeedbackVoteBar
-                class="flex-1"
-                :label="person.name"
-                :votes="person.votes"
-                :sub="`${person.activities.join(', ')} · ${plural(person.leads.length, 'turno votato', 'turni votati')}`"
-              />
-              <UIcon
-                name="i-lucide-chevron-down"
-                class="mt-1 size-5 shrink-0 text-muted transition-transform group-open:rotate-180"
-                aria-hidden="true"
-              />
-            </summary>
-            <ul class="space-y-5 border-t border-default bg-default px-5 py-4">
-              <li v-for="(lead, i) in person.leads" :key="i">
-                <FeedbackVoteBar :label="`S${lead.session} · ${lead.activity}`" :votes="lead.votes" :note="lead.note" />
-              </li>
-            </ul>
-          </details>
+        <li v-for="person in leaders" :key="person.name" class="p-5">
+          <FeedbackVoteBar
+            :label="person.name"
+            :votes="person.votes"
+            :sub="`${person.activities.join(', ')} · ${plural(person.leads.length, 'turno votato', 'turni votati')}`"
+          />
+          <UCollapsible>
+            <UButton
+              label="Sessione per sessione"
+              color="neutral"
+              variant="link"
+              trailing-icon="i-lucide-chevron-down"
+              class="mt-1 px-0"
+              :aria-label="`Sessione per sessione: ${person.name}`"
+              :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform' }"
+            />
+            <template #content>
+              <ul class="mt-3 space-y-5 border-l-2 border-default pl-4">
+                <li v-for="(lead, i) in person.leads" :key="i">
+                  <FeedbackVoteBar
+                    :label="`S${lead.session} · ${lead.activity}`"
+                    :votes="lead.votes"
+                    :note="lead.note"
+                  />
+                </li>
+              </ul>
+            </template>
+          </UCollapsible>
         </li>
       </ul>
 
       <div v-else class="space-y-8">
         <IcSection v-for="group in activities" :key="group.activity" :title="group.activity" :level="3">
           <ul class="grid gap-x-10 gap-y-6 md:grid-cols-2">
-            <li v-for="(row, i) in group.rows" :key="i">
-              <FeedbackVoteBar :label="`S${row.session} · ${row.name}`" :votes="row.votes" :note="row.note" />
+            <li v-for="turn in group.turns" :key="turn.session">
+              <FeedbackVoteBar
+                :label="`S${turn.session} · ${turn.names.join(' + ')}`"
+                :votes="turn.votes"
+                :note="turn.note"
+              />
             </li>
           </ul>
         </IcSection>
