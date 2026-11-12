@@ -151,6 +151,14 @@ availability or receive convocations. The administration can move a person to th
   audience (`Audience` in `shared/types/domain.ts`): all families, all approved staff, candidates to review,
   the families of a session (by kind and status), the staff of a session (by status), chosen people. The
   composer shows how many people receive it, previews the email, and confirms before sending.
+- **Templates** ("Modelli", a tab of Comunicazioni): saved messages (name, subject, body) the composer starts
+  from with "Parti da un modello"; the administration adds, edits and deletes them. Migration 0006 brings three
+  examples: Convocazione staff, Convocazione famiglie, Promemoria documenti. A template may hold parts in
+  square brackets ("[orario di arrivo]"): a message is not sent while one is left.
+- **Fields** filled for each recipient, in the subject and the body: `{nome}` (the first name of the account)
+  and, when the audience is the families or the staff of a session, `{sessione}` (its title) and `{date}`
+  (its days). Any other word in braces, or a session field without a session, stops the sending with a
+  message on the field. The preview fills them for the first recipient; the message keeps them as written.
 - Sending records a `communications` row and one `email_log` row per recipient (`deliver()`). Disabled
   accounts never receive emails.
 - The log lists every email the platform sent, automatic or written, with status (sent, failed,

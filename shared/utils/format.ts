@@ -121,6 +121,12 @@ export function initials(person: { firstName: string; lastName: string } | null 
 }
 
 /** "1 famiglia", "3 famiglie". */
+/** "a, b o c". */
+export function orList(items: string[]): string {
+  if (items.length <= 1) return items.join('')
+  return `${items.slice(0, -1).join(', ')} o ${items.at(-1)}`
+}
+
 export function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }

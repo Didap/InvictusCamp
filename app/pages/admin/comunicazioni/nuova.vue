@@ -2,6 +2,7 @@
 import {
   AUDIENCE_TYPES,
   audienceFromDraft,
+  audienceSessionId,
   communicationSchema,
   draftFromAudience,
   emptyAudienceDraft,
@@ -13,14 +14,17 @@ import type {
   CommunicationOptions,
   CommunicationSendResult,
   EmailPreview,
+  MessageTemplate,
 } from '#shared/types/communications'
 import type { AudienceType } from '#shared/types/domain'
 import { plural } from '#shared/utils/format'
+import { fillMessageFields, MESSAGE_FIELDS_HELP, messageFieldValues } from '#shared/utils/message-fields'
 
 // The composer (docs/spec.md, 3.7): audience, live count of the recipients, subject and plain text
 // body, the email previewed by the real template, confirmation with the number of emails, send.
 // Opened with ?audience=session_families&sessionId=…, ?audience=session_staff&sessionId=…,
-// ?userIds=id1,id2 (the "Scrivi" buttons of the other pages) or ?bozza=<id> (a saved draft).
+// ?userIds=id1,id2 (the "Scrivi" buttons of the other pages), ?bozza=<id> (a saved draft) or
+// ?modello=<id> (a saved template, from the Modelli tab).
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
@@ -46,7 +50,10 @@ const draftId = ref(UUID.test(queryText('bozza')) ? queryText('bozza') : null)
 const audienceDraft = ref<AudienceDraft>(prefilled())
 const state = reactive({ subject: '', body: '', audience: computed(() => audienceFromDraft(audienceDraft.value)) })
 
-const { data: options } = await useApiFetch<CommunicationOptions>('/api/admin/communications/options')
+const [{ data: options }, { data: templates }] = await Promise.all([
+  useApiFetch<CommunicationOptions>('/api/admin/communications/options'),
+  useApiFetch<MessageTemplate[]>('/api/admin/message-templates'),
+])
 
 if (draftId.value) {
   try {
@@ -62,6 +69,31 @@ if (draftId.value) {
     notifyError(error, 'Bozza non trovata')
     draftId.value = null
   }
+}
+
+// ─── Template ──────────────────────────────────────────────────────────────────────────────────────
+/** Writes the template's subject and body in, after asking when that replaces what is written. */
+async function applyTemplate(template: MessageTemplate) {
+  const written = state.subject.trim() || state.body.trim()
+  const same = state.subject === template.subject && state.body === template.body
+  if (written && !same) {
+    const ok = await confirm({
+      title: 'Sostituisci oggetto e testo?',
+      description: `Quello che hai scritto lascia il posto al modello «${template.name}». Nessuna email parte.`,
+      confirmLabel: 'Usa il modello',
+    })
+    if (!ok) return
+  }
+  state.subject = template.subject
+  state.body = template.body
+}
+const templateItems = computed(() =>
+  (templates.value ?? []).map(template => ({ label: template.name, onSelect: () => applyTemplate(template) })),
+)
+if (!draftId.value && UUID.test(queryText('modello'))) {
+  const template = templates.value?.find(t => t.id === queryText('modello'))
+  if (template) await applyTemplate(template)
+  else warn('Modello non trovato: forse è stato eliminato.')
 }
 
 // ─── Live count ────────────────────────────────────────────────────────────────────────────────────
@@ -105,10 +137,21 @@ async function refreshSummary(): Promise<AudienceSummary | null> {
 watchDebounced(() => JSON.stringify(state.audience), refreshSummary, { debounce: 300, immediate: true })
 
 // ─── Preview ───────────────────────────────────────────────────────────────────────────────────────
+const chosenSession = computed(
+  () => options.value?.sessions.find(session => session.id === audienceSessionId(state.audience)) ?? null,
+)
+/** Subject and body as one recipient receives them: {nome}, {sessione}, {date} written in. */
+function filledFor(firstName: string | undefined) {
+  const values = messageFieldValues(firstName, chosenSession.value)
+  return { subject: fillMessageFields(state.subject, values), body: fillMessageFields(state.body, values) }
+}
+
+const firstRecipient = computed(() => summary.value?.recipients[0])
+const previewText = computed(() => filledFor(firstRecipient.value?.firstName))
 const preview = ref<EmailPreview | null>(null)
 let previewRequest = 0
 watchDebounced(
-  () => [state.subject, state.body] as const,
+  [() => previewText.value.subject, () => previewText.value.body],
   async ([subject, body]) => {
     const request = ++previewRequest
     try {
@@ -150,7 +193,7 @@ async function send() {
     const who = names.length <= 3 ? names.join(', ') : fresh.label
     const ok = await confirm({
       title: `Invierai ${emails}`,
-      description: `Destinatari: ${who}. ${fresh.count === 1 ? 'Riceve' : 'Ognuno riceve'} «${message.subject.trim()}» al proprio indirizzo. Dopo l’invio il messaggio non si può ritirare.`,
+      description: `Destinatari: ${who}. ${fresh.count === 1 ? 'Riceve' : 'Ognuno riceve'} «${filledFor(fresh.recipients[0]?.firstName).subject.trim()}» al proprio indirizzo. Dopo l’invio il messaggio non si può ritirare.`,
       confirmLabel: `Invia ${emails}`,
     })
     if (!ok) return
@@ -283,10 +326,19 @@ const sendLabel = computed(() => (count.value ? `Invia a ${plural(count.value, '
           description="Testo semplice: una riga vuota separa i paragrafi. Non scrivere dettagli sulla salute delle persone."
         >
           <div class="space-y-5">
+            <UDropdownMenu v-if="templateItems.length" :items="templateItems" :content="{ align: 'start' }">
+              <UButton
+                label="Parti da un modello"
+                icon="i-lucide-file-text"
+                trailing-icon="i-lucide-chevron-down"
+                color="neutral"
+                variant="outline"
+              />
+            </UDropdownMenu>
             <UFormField label="Oggetto" name="subject" required>
               <UInput v-model="state.subject" maxlength="200" class="w-full" />
             </UFormField>
-            <UFormField label="Testo" name="body" required>
+            <UFormField label="Testo" name="body" required :help="MESSAGE_FIELDS_HELP">
               <UTextarea v-model="state.body" :rows="10" autoresize :maxrows="30" class="w-full" />
             </UFormField>
           </div>
@@ -297,7 +349,14 @@ const sendLabel = computed(() => (count.value ? `Invia a ${plural(count.value, '
         class="min-w-0 lg:sticky lg:top-0 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start"
         aria-label="Anteprima dell’email"
       >
-        <IcSection title="Anteprima" description="Così arriva nella casella di posta.">
+        <IcSection
+          title="Anteprima"
+          :description="
+            firstRecipient
+              ? `Così arriva nella casella di posta di ${firstRecipient.name}.`
+              : 'Così arriva nella casella di posta.'
+          "
+        >
           <CommunicationsEmailFrame v-if="preview" :html="preview.html" title="Anteprima dell’email" />
           <USkeleton v-else class="h-96 w-full" />
         </IcSection>

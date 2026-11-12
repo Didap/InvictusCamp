@@ -5,6 +5,8 @@ import type { Audience } from './domain'
 /** A person who would receive a message. */
 export interface AudienceRecipient {
   userId: string
+  /** What {nome} becomes in the message. */
+  firstName: string
   name: string
   email: string
   role: UserRole
@@ -103,4 +105,12 @@ export interface EmailLogItem {
 /** GET /api/admin/email-log/:id */
 export interface EmailLogDetail extends EmailLogItem {
   html: string | null
+}
+
+/** A row of GET /api/admin/message-templates: a saved message the composer starts from. */
+export interface MessageTemplate {
+  id: string
+  name: string
+  subject: string
+  body: string
 }
