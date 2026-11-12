@@ -29,7 +29,6 @@ function blank(): State {
     note: '',
     staffNote: '',
     lead: '',
-    isNew: false,
     toConfirm: false,
     groups: emptyTurns(),
   }
@@ -132,18 +131,11 @@ function onSubmit(event: FormSubmitEvent<z.output<typeof programmeBlockSchema>>)
         >
           <UTextarea v-model="state.staffNote" :rows="2" :maxlength="500" autoresize class="w-full" />
         </UFormField>
-        <div class="space-y-3">
-          <UCheckbox
-            v-model="state.toConfirm"
-            label="Da confermare"
-            description="Famiglie e staff lo vedono con l’etichetta «Da confermare»."
-          />
-          <UCheckbox
-            v-model="state.isNew"
-            label="Novità rispetto all’anno prima"
-            description="Lo vede solo l’amministrazione."
-          />
-        </div>
+        <UCheckbox
+          v-model="state.toConfirm"
+          label="Da confermare"
+          description="Famiglie e staff lo vedono con l’etichetta «Da confermare»."
+        />
       </UForm>
     </template>
     <template #footer>

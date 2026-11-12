@@ -119,6 +119,7 @@ function remove(day: ProgrammeDay, index: number) {
 
 function blockItems(day: ProgrammeDay, block: ProgrammeBlock, index: number): DropdownMenuItem[][] {
   return [
+    [{ label: 'Modifica', icon: 'i-lucide-pencil', onSelect: () => openBlock(day.id, block) }],
     [
       {
         label: 'Duplica',
@@ -187,72 +188,51 @@ function showBlock(blockId: string) {
       </div>
     </div>
 
-    <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
-      <ProgrammeWeek :content="draft" :dates="dates" sortable @move="moveBlock(draft, $event)">
-        <template #block-actions="{ day, block, index }">
-          <div class="flex shrink-0 gap-1">
-            <UButton
-              icon="i-lucide-pencil"
-              color="neutral"
-              variant="ghost"
-              :aria-label="`Modifica «${block.title}»`"
-              class="pointer-coarse:size-11 pointer-coarse:justify-center"
-              @click="openBlock(day.id, block)"
-            />
-            <UDropdownMenu :items="blockItems(day, block, index)" :content="{ align: 'end' }">
-              <UButton
-                icon="i-lucide-ellipsis-vertical"
-                color="neutral"
-                variant="ghost"
-                :aria-label="`Altre azioni per «${block.title}»`"
-                class="pointer-coarse:size-11 pointer-coarse:justify-center"
-              />
-            </UDropdownMenu>
-          </div>
-        </template>
-        <template #day-footer="{ day }">
+    <ProgrammeBoard :content="draft" :dates="dates" @move="moveBlock(draft, $event)" @open="openBlock">
+      <template #block-actions="{ day, block, index }">
+        <UDropdownMenu :items="blockItems(day, block, index)" :content="{ align: 'end' }">
           <UButton
-            icon="i-lucide-plus"
-            :label="`Aggiungi un blocco a ${day.name.toLowerCase()}`"
+            icon="i-lucide-ellipsis-vertical"
             color="neutral"
-            variant="outline"
-            class="mt-3 pointer-coarse:min-h-11"
-            @click="openBlock(day.id, null)"
+            variant="ghost"
+            size="sm"
+            :aria-label="`Azioni per «${block.title}»`"
+            class="pointer-coarse:size-11 pointer-coarse:justify-center"
           />
-        </template>
-      </ProgrammeWeek>
+        </UDropdownMenu>
+      </template>
+    </ProgrammeBoard>
 
-      <aside class="space-y-2">
-        <IcSection title="Da controllare">
-          <p v-if="!points.length" class="flex gap-1.5 text-sm text-success">
-            <UIcon name="i-lucide-circle-check" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            Niente da confermare e ogni gruppo ha la sua attività.
-          </p>
-          <ul v-else class="space-y-1 text-sm">
-            <li v-for="point in points" :key="`${point.blockId}-${point.text}`">
-              <ULink class="text-left underline-offset-2 hover:underline" @click="showBlock(point.blockId)">
-                {{ point.text }}
-              </ULink>
-            </li>
-          </ul>
-        </IcSection>
-        <IcSection title="Rotazione dei gruppi">
-          <ProgrammeRotation :content="draft" />
-        </IcSection>
-        <IcSection
-          title="Attività a rotazione"
-          description="Le attività che i gruppi fanno a turno: le scegli nei blocchi a gruppi."
-        >
-          <UInputTags
-            v-model="draft.activities"
-            :max="MAX_ACTIVITIES"
-            :max-length="80"
-            placeholder="Aggiungi un’attività"
-            aria-label="Attività a rotazione"
-            class="w-full"
-          />
-        </IcSection>
-      </aside>
+    <div class="mt-10 grid gap-x-10 gap-y-2 lg:grid-cols-3">
+      <IcSection title="Da controllare">
+        <p v-if="!points.length" class="flex gap-1.5 text-sm text-success">
+          <UIcon name="i-lucide-circle-check" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          Niente da confermare e ogni gruppo ha la sua attività.
+        </p>
+        <ul v-else class="space-y-1 text-sm">
+          <li v-for="point in points" :key="`${point.blockId}-${point.text}`">
+            <ULink class="text-left underline-offset-2 hover:underline" @click="showBlock(point.blockId)">
+              {{ point.text }}
+            </ULink>
+          </li>
+        </ul>
+      </IcSection>
+      <IcSection title="Rotazione dei gruppi">
+        <ProgrammeRotation :content="draft" />
+      </IcSection>
+      <IcSection
+        title="Attività a rotazione"
+        description="Le attività che i gruppi fanno a turno: le scegli nei blocchi a gruppi."
+      >
+        <UInputTags
+          v-model="draft.activities"
+          :max="MAX_ACTIVITIES"
+          :max-length="80"
+          placeholder="Aggiungi un’attività"
+          aria-label="Attività a rotazione"
+          class="w-full"
+        />
+      </IcSection>
     </div>
 
     <ProgrammeBlockModal

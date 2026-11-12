@@ -48,7 +48,6 @@ export const programmeBlockSchema = z
     note: zText(500),
     staffNote: zText(500),
     lead: zText(120),
-    isNew: z.boolean(),
     toConfirm: z.boolean(),
     groups: z.record(z.enum(PROGRAMME_GROUPS), groupTurnSchema).optional(),
   })

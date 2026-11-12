@@ -1,8 +1,7 @@
 import type { ProgrammeContent } from '../types/domain'
 
 // The model week a new year's programme can start from: the 2027 draft of Nicola Giulivo (staff), taken
-// from his page in November 2026. Sentences of his notes that compare with 2026 became internal notes
-// (staffNote): families do not see them.
+// from his page in November 2026, without his comparisons with the 2026 programme.
 
 const WEEKDAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì']
 
@@ -33,9 +32,8 @@ const TEMPLATE: ProgrammeContent = {
           title: 'Arrivo staff e pre-sessione',
           kind: 'staff',
           note: '',
-          staffNote: 'Nel 2026 la convocazione era alle 08:30.',
+          staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -45,9 +43,8 @@ const TEMPLATE: ProgrammeContent = {
           title: 'Ritrovo e arrivo famiglie',
           kind: 'welcome',
           note: '',
-          staffNote: 'Nel 2026 le famiglie arrivavano dalle 17:00.',
+          staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -59,7 +56,6 @@ const TEMPLATE: ProgrammeContent = {
           note: 'Ragazzi e altri familiari con lo staff.',
           staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -71,7 +67,6 @@ const TEMPLATE: ProgrammeContent = {
           note: 'Offerto dal camp.',
           staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -83,7 +78,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -95,7 +89,6 @@ const TEMPLATE: ProgrammeContent = {
           note: 'Primo turno della settimana.',
           staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
           groups: {
             yellow: {
@@ -121,7 +114,6 @@ const TEMPLATE: ProgrammeContent = {
           note: "Mezz'ora di saluto, poi spazio per la cena.",
           staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -133,7 +125,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
       ],
@@ -152,7 +143,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -164,7 +154,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
           groups: {
             yellow: {
@@ -190,7 +179,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -202,7 +190,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -214,7 +201,6 @@ const TEMPLATE: ProgrammeContent = {
           note: 'Dopo il blocco niente animazione.',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
           groups: {
             yellow: {
@@ -240,7 +226,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -252,7 +237,6 @@ const TEMPLATE: ProgrammeContent = {
           note: "Ragazzi con lo staff mentre i genitori sono all'aperitivo.",
           staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -264,7 +248,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
       ],
@@ -283,7 +266,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -295,7 +277,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
           groups: {
             yellow: {
@@ -321,7 +302,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -333,7 +313,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -345,7 +324,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
           groups: {
             yellow: {
@@ -369,9 +347,8 @@ const TEMPLATE: ProgrammeContent = {
           title: "Invictus's Got Talent",
           kind: 'everyone',
           note: 'Tutti insieme, nessuna prova.',
-          staffNote: 'Nel 2026 era giovedì pomeriggio.',
+          staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -383,7 +360,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
       ],
@@ -402,7 +378,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -414,7 +389,6 @@ const TEMPLATE: ProgrammeContent = {
           note: 'Secondo turno di spiaggia per i tre gruppi.',
           staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -426,7 +400,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -438,7 +411,6 @@ const TEMPLATE: ProgrammeContent = {
           note: '',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -448,9 +420,8 @@ const TEMPLATE: ProgrammeContent = {
           title: 'Attività a gruppi pomeriggio',
           kind: 'groups',
           note: '',
-          staffNote: "Nel 2026 qui c'era la grande sorpresa.",
+          staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
           groups: {
             yellow: {
@@ -474,9 +445,8 @@ const TEMPLATE: ProgrammeContent = {
           title: 'Cena, slide e saluti',
           kind: 'everyone',
           note: 'Unica cena offerta dal camp.',
-          staffNote: 'Nel 2026 slide e saluti erano venerdì.',
+          staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
       ],
@@ -495,7 +465,6 @@ const TEMPLATE: ProgrammeContent = {
           note: 'Non a carico del camp.',
           staffNote: '',
           lead: '',
-          isNew: false,
           toConfirm: false,
         },
         {
@@ -507,7 +476,6 @@ const TEMPLATE: ProgrammeContent = {
           note: 'Laboratorio di pasta da portare via, uscita in barca o giro in bici.',
           staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
         {
@@ -517,9 +485,8 @@ const TEMPLATE: ProgrammeContent = {
           title: 'Partenza famiglie',
           kind: 'departure',
           note: '',
-          staffNote: 'Nel 2026 il camp chiudeva alle 15:00.',
+          staffNote: '',
           lead: '',
-          isNew: true,
           toConfirm: false,
         },
       ],

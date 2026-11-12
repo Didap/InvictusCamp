@@ -32,8 +32,8 @@ async function save(body: ProgrammeSaveInput) {
     />
     <template v-else-if="data">
       <p class="mb-2 max-w-prose text-muted">
-        Lo usano le sessioni del {{ year }} che non hanno una copia propria. Famiglie e staff della sessione lo leggono
-        senza le note interne; i blocchi «Solo staff» le famiglie non li vedono.
+        Lo usano le sessioni del {{ year }} che non hanno una copia propria. Lo staff della sessione lo legge tutto; le
+        famiglie senza le note interne e senza i blocchi «Solo staff».
       </p>
       <ProgrammeEditor :programme="data" :save="save" />
     </template>

@@ -5,10 +5,11 @@ import { programmeForViewer } from '~~/server/domain/programmes'
 import { emptyWeek, programmeTemplate } from '~~/shared/content/programme-template'
 import { programmeBlockSchema, programmeContentSchema } from '~~/shared/schemas/programmes'
 import type { ProgrammeBlock, ProgrammeContent } from '~~/shared/types/domain'
+import { formatDay } from '~~/shared/utils/format'
 import {
   blockTime,
   canFamilyReadProgramme,
-  dayDates,
+  dayCaptions,
   groupRotation,
   moveBlock,
   newBlockId,
@@ -26,7 +27,6 @@ const block = (values: Partial<ProgrammeBlock>): ProgrammeBlock => ({
   note: '',
   staffNote: '',
   lead: '',
-  isNew: false,
   toConfirm: false,
   ...values,
 })
@@ -90,22 +90,22 @@ describe('programmeForViewer', () => {
         subtitle: '',
         blocks: [
           block({ title: 'Briefing', kind: 'staff', staffNote: 'Sala riunioni' }),
-          block({ title: 'Pranzo', kind: 'meal', isNew: true, toConfirm: true, staffNote: 'Nel 2026 alle 13:30' }),
+          block({ title: 'Pranzo', kind: 'meal', toConfirm: true, staffNote: 'Tavoli in veranda' }),
         ],
       },
     ],
   }
 
-  it('families get no staff blocks, no internal notes and no novità', () => {
+  it('families get no staff blocks and no internal notes', () => {
     const blocks = programmeForViewer(content, 'family').days[0]!.blocks
     expect(blocks.map(b => b.title)).toEqual(['Pranzo'])
-    expect(blocks[0]).toMatchObject({ staffNote: '', isNew: false, toConfirm: true })
+    expect(blocks[0]).toMatchObject({ staffNote: '', toConfirm: true })
   })
 
-  it('staff get every block and the internal notes, without novità', () => {
+  it('staff get every block and the internal notes', () => {
     const blocks = programmeForViewer(content, 'staff').days[0]!.blocks
     expect(blocks.map(b => b.title)).toEqual(['Briefing', 'Pranzo'])
-    expect(blocks[1]).toMatchObject({ staffNote: 'Nel 2026 alle 13:30', isNew: false })
+    expect(blocks[1]).toMatchObject({ staffNote: 'Tavoli in veranda' })
   })
 })
 
@@ -178,12 +178,16 @@ describe('editor helpers', () => {
     expect(canFamilyReadProgramme('declined', 'confirmed')).toBe(false)
   })
 
-  it('dates the days only for a session that starts on Monday and is long enough', () => {
+  it('captions the days with the dates only for a session that starts on Monday and is long enough', () => {
     const week = emptyWeek()
+    week.days[0]!.subtitle = 'Arrivo'
     const seven = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25', '2027-06-26', '2027-06-27']
-    expect(dayDates(week, seven)).toEqual(seven.slice(0, 5))
-    expect(dayDates(week, seven.slice(0, 3))).toEqual([null, null, null, null, null])
-    expect(dayDates(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual([null, null, null, null, null])
-    expect(dayDates(week, undefined)).toEqual([null, null, null, null, null])
+    const undated = ['Arrivo', '', '', '', '']
+    const dated = dayCaptions(week, seven)
+    expect(dated[0]).toBe(`${formatDay('2027-06-21', 'long')} · Arrivo`)
+    expect(dated.slice(1)).toEqual(seven.slice(1, 5).map(day => formatDay(day, 'long')))
+    expect(dayCaptions(week, seven.slice(0, 3))).toEqual(undated)
+    expect(dayCaptions(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual(undated)
+    expect(dayCaptions(week, undefined)).toEqual(undated)
   })
 })

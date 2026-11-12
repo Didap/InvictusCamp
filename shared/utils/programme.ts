@@ -8,6 +8,7 @@ import {
   type SessionStatus,
 } from './constants'
 import { weekdayIndex } from './dates'
+import { formatDay } from './format'
 
 /** A family reads the programme of a session it is invited to or confirmed in, unless cancelled. */
 export function canFamilyReadProgramme(participation: ParticipationStatus, session: SessionStatus): boolean {
@@ -132,11 +133,14 @@ export function openPoints(content: ProgrammeContent): OpenPoint[] {
 }
 
 /**
- * The date of each programme day: day one is the first day of the session, and so on. The days of a
- * programme start on Monday, so the dates appear only for a session that starts on a Monday and is at
- * least as long as the programme; otherwise they would not line up with the names of the days.
+ * What follows each day's name: "21 giugno 2027 · Arrivo", the date, then the subtitle. Day one is the
+ * first day of the session, and so on. The days of a programme start on Monday, so the dates appear only
+ * for a session that starts on a Monday and is at least as long as the programme; otherwise they would
+ * not line up with the names of the days.
  */
-export function dayDates(content: ProgrammeContent, dates: string[] | undefined): (string | null)[] {
-  const fits = !!dates?.length && weekdayIndex(dates[0]!) === 0 && dates.length >= content.days.length
-  return content.days.map((_, i) => (fits ? dates![i]! : null))
+export function dayCaptions(content: ProgrammeContent, dates: string[] | undefined): string[] {
+  const dated = !!dates?.length && weekdayIndex(dates[0]!) === 0 && dates.length >= content.days.length
+  return content.days.map((day, i) =>
+    [dated ? formatDay(dates![i]!, 'long') : '', day.subtitle].filter(Boolean).join(' · '),
+  )
 }
