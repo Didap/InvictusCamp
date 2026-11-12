@@ -381,22 +381,23 @@ const DEMO_ANSWERS: FormAnswers = {
 }
 
 /** An example layout of the camp: villette with a kitchen, rooms in the residence. */
-const DEMO_LODGINGS: (typeof t.lodgings.$inferInsert)[] = [
-  ...[1, 2, 3, 4, 5, 6].map(n => ({
+type NewLodging = typeof t.lodgings.$inferInsert
+const DEMO_LODGINGS: NewLodging[] = [
+  ...[1, 2, 3, 4, 5, 6].map((n): NewLodging => ({
     name: `Villetta ${n}`,
     area: 'Villette',
     beds: n <= 2 ? 4 : 5,
-    features: n <= 2 ? (['kitchen', 'accessible_bathroom', 'microwave'] as const) : (['kitchen', 'microwave'] as const),
+    features: n <= 2 ? ['kitchen', 'accessible_bathroom', 'microwave'] : ['kitchen', 'microwave'],
     description: n <= 2 ? '1 matrimoniale e 2 singoli, piano terra' : '1 matrimoniale, 1 a castello e 1 divano letto',
   })),
-  ...[1, 2, 3, 4].map(n => ({
+  ...[1, 2, 3, 4].map((n): NewLodging => ({
     name: `Camera ${n}`,
     area: 'Residence',
     beds: n === 1 ? 3 : 4,
-    features: n === 1 ? (['accessible_bathroom', 'microwave'] as const) : (['microwave'] as const),
+    features: n === 1 ? ['accessible_bathroom', 'microwave'] : ['microwave'],
     description: n === 1 ? '1 matrimoniale e 1 singolo, piano terra' : '1 matrimoniale e 2 singoli, primo piano',
   })),
-].map(row => ({ ...row, features: [...row.features] }))
+]
 
 /** Region and CAP of the main town of each province of the demo families. */
 const DEMO_PROVINCES: Record<string, { region: ItalianRegion; postalCode: string }> = {

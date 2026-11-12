@@ -54,9 +54,10 @@ import type {
   OwnFamilyMember,
   PersonalDocumentDto,
 } from '../../shared/types/families'
-import type { ItalianRegion, ParticipationStatus } from '../../shared/utils/constants'
+import type { ItalianRegion } from '../../shared/utils/constants'
 import { ageOn, todayIso } from '../../shared/utils/dates'
 import { plural } from '../../shared/utils/format'
+import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 import {
   campSessions,
   documents,
@@ -83,7 +84,6 @@ export interface Actor {
 }
 
 /** Participations that hold the family in a session. */
-const ACTIVE_PARTICIPATION: ParticipationStatus[] = ['selected', 'invited', 'confirmed']
 
 function notFound(message: string) {
   return createError({ statusCode: 404, message })
@@ -749,7 +749,8 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, char => `\\${char}`)
 }
 
-const memberCountSql = sql<number>`(select count(*)::int from ${familyMembers} where ${familyMembers.familyId} = ${families.id})`
+/** How many cards (family_members) a family has. */
+export const memberCountSql = sql<number>`(select count(*)::int from ${familyMembers} where ${familyMembers.familyId} = ${families.id})`
 
 /** The filters of the admin list (search, questionnaire, province, members with a disability). */
 function familyListWhere(query: AdminFamilyListQuery): SQL | undefined {
@@ -795,7 +796,7 @@ async function latestSessions(db: DbOrTx, familyIds: string[]): Promise<Map<stri
     .select({ familyId: sessionFamilies.familyId, ...sessionRefColumns })
     .from(sessionFamilies)
     .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
-    .where(and(inArray(sessionFamilies.familyId, familyIds), inArray(sessionFamilies.status, ACTIVE_PARTICIPATION)))
+    .where(and(inArray(sessionFamilies.familyId, familyIds), inArray(sessionFamilies.status, [...ACTIVE_STATUSES])))
     .orderBy(desc(campSessions.startDate))
   for (const { familyId, ...session } of rows) if (!latest.has(familyId)) latest.set(familyId, session)
   return latest
@@ -931,7 +932,7 @@ export async function adminFamilyDetail(db: DbOrTx, familyId: string): Promise<A
   const active = await db
     .select({ sessionId: sessionFamilies.sessionId })
     .from(sessionFamilies)
-    .where(and(eq(sessionFamilies.familyId, family.id), inArray(sessionFamilies.status, ACTIVE_PARTICIPATION)))
+    .where(and(eq(sessionFamilies.familyId, family.id), inArray(sessionFamilies.status, [...ACTIVE_STATUSES])))
   return {
     ...familyFields(family),
     privacyConsentAt: iso(family.privacyConsentAt),

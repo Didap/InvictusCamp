@@ -2,10 +2,10 @@
 // Explicit imports only, so the database tests can load this file.
 import { formatDay } from '../../shared/utils/format'
 
-export type CsvValue = string | number | null | undefined
+type CsvValue = string | number | null | undefined
 
 /** A CSV cell: quoted when needed, and never read as a formula by a spreadsheet. */
-export function csvCell(value: CsvValue): string {
+function csvCell(value: CsvValue): string {
   let text = value === null || value === undefined ? '' : String(value)
   if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`
   return /[";\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text

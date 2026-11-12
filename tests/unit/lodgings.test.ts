@@ -1,22 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { ACCOMMODATION_NEED_FEATURES, FAMILY_FORM_QUESTIONS } from '../../shared/content/family-form'
-import { LODGING_FEATURES } from '../../shared/utils/constants'
+import { FAMILY_FORM_QUESTIONS } from '../../shared/content/family-form'
 import { accommodationNeeds, groupByArea, lodgingWarnings, sortLodgings } from '../../shared/utils/lodgings'
 
 describe('accommodation needs', () => {
-  it('maps every option of the question to a lodging feature, and every feature has an option', () => {
-    const options = FAMILY_FORM_QUESTIONS.find(question => question.id === 'accommodationNeeds')?.options ?? []
-    expect(Object.keys(ACCOMMODATION_NEED_FEATURES).sort()).toEqual([...options].sort())
-    expect(new Set(Object.values(ACCOMMODATION_NEED_FEATURES))).toEqual(new Set(LODGING_FEATURES))
+  it('keeps the options the families answered with: answers are stored as labels', () => {
+    const question = FAMILY_FORM_QUESTIONS.find(item => item.id === 'accommodationNeeds')
+    expect(question?.options).toEqual(['Cucina', 'Bagno senza barriere architettoniche', 'Microonde'])
   })
 
-  it('reads the answers in the order of the features, ignoring what it does not know', () => {
-    expect(accommodationNeeds({ accommodationNeeds: ['Microonde', 'Altro', 'Cucina'] })).toEqual([
-      'kitchen',
-      'microwave',
-    ])
-    expect(accommodationNeeds({ accommodationNeeds: 'Cucina' })).toEqual([])
+  it('reads the answer in the order of the features, ignoring what it does not know', () => {
+    expect(accommodationNeeds(['Microonde', 'Altro', 'Cucina'])).toEqual(['kitchen', 'microwave'])
+    expect(accommodationNeeds('Cucina')).toEqual([])
     expect(accommodationNeeds(null)).toEqual([])
+    expect(accommodationNeeds(undefined)).toEqual([])
   })
 })
 

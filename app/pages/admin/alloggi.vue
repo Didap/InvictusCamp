@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { LodgingListItem } from '#shared/types/lodgings'
 import { plural } from '#shared/utils/format'
-import { featureLabels, groupByArea } from '#shared/utils/lodgings'
+import { bedsLabel, featureLabels, groupByArea } from '#shared/utils/lodgings'
 
 // Alloggi (docs/spec.md 3.11): the bed layout of the camp, entered once and used by every session,
 // where the Alloggi tab places each family in a lodging.
@@ -42,7 +42,7 @@ async function remove(lodging: LodgingListItem) {
 const totals = computed(() => {
   const list = data.value ?? []
   const beds = list.reduce((sum, lodging) => sum + lodging.beds, 0)
-  return `${plural(list.length, 'alloggio', 'alloggi')} · ${plural(beds, 'posto letto', 'posti letto')}`
+  return `${plural(list.length, 'alloggio', 'alloggi')} · ${bedsLabel(beds)}`
 })
 
 const groups = computed(() => groupByArea(data.value ?? []))
@@ -93,7 +93,7 @@ const groups = computed(() => groupByArea(data.value ?? []))
             <div class="min-w-0 flex-1">
               <p class="font-semibold text-highlighted">{{ lodging.name }}</p>
               <p class="mt-1 text-sm text-default">
-                {{ plural(lodging.beds, 'posto letto', 'posti letto')
+                {{ bedsLabel(lodging.beds)
                 }}<template v-if="lodging.description"> · {{ lodging.description }}</template>
               </p>
               <p v-if="lodging.features.length" class="mt-1 text-sm text-muted">

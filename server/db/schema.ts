@@ -39,6 +39,7 @@ import type {
   UserRole,
   UserStatus,
 } from '../../shared/utils/constants'
+import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 
 const tz = { withTimezone: true } as const
 const pk = () => uuid().primaryKey().defaultRandom()
@@ -300,7 +301,7 @@ export const sessionFamilies = pgTable(
     // Only a titolare holding a place sleeps in a lodging (shared/utils/slots.ts, holdsSlot).
     check(
       'session_families_lodging',
-      sql`${t.lodgingId} is null or (${t.kind} = 'slot' and ${t.status} in ('selected', 'invited', 'confirmed'))`,
+      sql`${t.lodgingId} is null or (${t.kind} = 'slot' and ${t.status} in (${sql.raw(ACTIVE_STATUSES.map(status => `'${status}'`).join(', '))}))`,
     ),
   ],
 )

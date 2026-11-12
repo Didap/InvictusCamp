@@ -27,7 +27,7 @@ import {
   type UserStatus,
 } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
-import { formatDateTime, formatDay, plural } from '../../shared/utils/format'
+import { formatDateTime, plural } from '../../shared/utils/format'
 import {
   SESSION_TRANSITIONS,
   SESSION_TRANSITION_ACTIONS,
@@ -37,6 +37,7 @@ import {
   isSessionOpen,
 } from '../../shared/utils/session-status'
 import {
+  ACTIVE_STATUSES,
   freeSlots,
   isWaitingReserve,
   nextReserve,
@@ -79,9 +80,6 @@ export interface Actor {
 }
 
 type SessionRow = typeof campSessions.$inferSelect
-
-/** A titolare or reserve still in the session (it holds a place or waits on the list). */
-const ACTIVE_STATUSES: readonly ParticipationStatus[] = ['selected', 'invited', 'confirmed']
 
 const STATUS_ORDER: Record<ParticipationStatus, number> = {
   confirmed: 0,
@@ -143,6 +141,13 @@ function participationsOf(db: DbOrTx, sessionId: string): Promise<ParticipationR
     .innerJoin(families, eq(families.id, sessionFamilies.familyId))
     .innerJoin(users, eq(users.id, families.userId))
     .where(eq(sessionFamilies.sessionId, sessionId))
+}
+
+/** The session row, or 404. */
+export async function findSession(db: DbOrTx, sessionId: string): Promise<SessionRow> {
+  const [session] = await db.select().from(campSessions).where(eq(campSessions.id, sessionId)).limit(1)
+  if (!session) throw new DomainError(404, 'Sessione non trovata')
+  return session
 }
 
 /** The session row, locked until the end of the transaction so that moves and places never race. */
@@ -342,8 +347,7 @@ function movesOf(session: SessionRow, rows: ParticipationRow[], staffNotices: nu
 
 /** GET /api/admin/sessions/:id */
 export async function getSessionDetail(db: DbOrTx, sessionId: string): Promise<SessionDetail> {
-  const [row] = await db.select().from(campSessions).where(eq(campSessions.id, sessionId)).limit(1)
-  if (!row) throw new DomainError(404, 'Sessione non trovata')
+  const row = await findSession(db, sessionId)
   const participations = await participationsOf(db, sessionId)
   const staff = (await staffCountsOf(db, [row])).get(row.id)!
   const [contract] = row.contractDocumentId
@@ -414,8 +418,7 @@ function toFamilyItem(row: ParticipationRow, deadline: string | null): SessionFa
 
 /** GET /api/admin/sessions/:id/families : titolari (by status) then reserves (in calling order). */
 export async function sessionFamiliesOf(db: DbOrTx, sessionId: string): Promise<SessionFamiliesDto> {
-  const [session] = await db.select().from(campSessions).where(eq(campSessions.id, sessionId)).limit(1)
-  if (!session) throw new DomainError(404, 'Sessione non trovata')
+  const session = await findSession(db, sessionId)
   const rows = await participationsOf(db, sessionId)
   const titolari = rows
     .filter(row => row.kind === 'slot')
@@ -1150,8 +1153,7 @@ export async function resendInvitation(
 
 /** The families of a session as CSV. No health details. */
 export async function participantsCsv(db: DbOrTx, sessionId: string): Promise<{ filename: string; csv: string }> {
-  const [session] = await db.select().from(campSessions).where(eq(campSessions.id, sessionId)).limit(1)
-  if (!session) throw new DomainError(404, 'Sessione non trovata')
+  const session = await findSession(db, sessionId)
   const dto = await sessionFamiliesOf(db, sessionId)
   const header = [
     'Famiglia',

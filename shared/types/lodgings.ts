@@ -31,7 +31,6 @@ export interface SessionLodgingFamily {
 
 /** GET /api/admin/sessions/:id/lodgings */
 export interface SessionLodgingsDto {
-  sessionId: string
   /** Assignments change while the session is not completed nor cancelled. */
   editable: boolean
   lodgings: Lodging[]

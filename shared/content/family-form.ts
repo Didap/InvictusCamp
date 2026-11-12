@@ -2,7 +2,7 @@
 // family, which have columns of their own (families, family_members). Answers are stored in
 // families.form_answers keyed by question id (shared/types/domain.ts, FormAnswers): keep the ids stable,
 // and remember that a choice is stored as its label, so renaming an option leaves old answers behind.
-import type { LodgingFeature } from '../utils/constants'
+import { LODGING_FEATURES, type LodgingFeature } from '../utils/constants'
 
 export type FormQuestionType = 'text' | 'textarea' | 'select' | 'multiselect' | 'boolean'
 
@@ -13,6 +13,16 @@ export interface FormQuestion {
   options?: string[]
   required?: boolean
   help?: string
+}
+
+/**
+ * The answers of `accommodationNeeds`, one per lodging feature: the Alloggi tab of a session flags a family
+ * placed in a lodging without what it asked for (shared/utils/lodgings.ts, accommodationNeeds).
+ */
+export const ACCOMMODATION_NEED_LABELS: Readonly<Record<LodgingFeature, string>> = {
+  kitchen: 'Cucina',
+  accessible_bathroom: 'Bagno senza barriere architettoniche',
+  microwave: 'Microonde',
 }
 
 export interface FormSection {
@@ -58,7 +68,7 @@ export const FAMILY_FORM_SECTIONS: FormSection[] = [
         id: 'accommodationNeeds',
         label: 'Esigenze per l’alloggio',
         type: 'multiselect',
-        options: ['Cucina', 'Bagno senza barriere architettoniche', 'Microonde'],
+        options: LODGING_FEATURES.map(feature => ACCOMMODATION_NEED_LABELS[feature]),
         help: 'Scegli solo quello che ti serve.',
       },
     ],
@@ -66,13 +76,3 @@ export const FAMILY_FORM_SECTIONS: FormSection[] = [
 ]
 
 export const FAMILY_FORM_QUESTIONS: FormQuestion[] = FAMILY_FORM_SECTIONS.flatMap(section => section.questions)
-
-/**
- * The lodging feature each answer of `accommodationNeeds` asks for: the Alloggi tab of a session flags a
- * family placed in a lodging without it. Every option of the question is here (tests/unit/lodgings.test.ts).
- */
-export const ACCOMMODATION_NEED_FEATURES: Readonly<Record<string, LodgingFeature>> = {
-  Cucina: 'kitchen',
-  'Bagno senza barriere architettoniche': 'accessible_bathroom',
-  Microonde: 'microwave',
-}

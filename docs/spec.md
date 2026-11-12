@@ -242,7 +242,9 @@ Where each family sleeps during a session.
   session. Each one has a name, an optional area that groups the layout ("Villette", "Residence"), its
   beds, what it offers (kitchen, bathroom without architectural barriers, microwave: the three needs the
   family data asks about) and how the beds are made. Editing a lodging leaves the families where they
-  are; deleting one says in how many sessions it hosts a family, and those families are left without one.
+  are and changes it everywhere, completed sessions included. Deleting one says in how many sessions it
+  hosts a family: in open sessions those families are left without one (audited); a lodging in the
+  layout of a completed session cannot be deleted.
 - **The Alloggi tab** of a session lists the families holding a place (titolari selected, invited or
   confirmed, by name) with how many people they are (their cards) and their needs ("Esigenze per
   l'alloggio"), never the health details. Each family gets one lodging, and a lodging hosts one family

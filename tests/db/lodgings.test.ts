@@ -24,7 +24,11 @@ const lodging = (values: Partial<LodgingInput> = {}) =>
 async function setup(status: SessionStatus = 'confirmed') {
   const admin = await makeAdmin(db)
   const session = await makeSession(db, { status })
-  return { session, actor: { userId: admin.id, ip: '127.0.0.1' } }
+  const actor = { userId: admin.id, ip: '127.0.0.1' }
+  /** Places a participation in a lodging, in its own session. */
+  const place = (participation: { id: string; sessionId: string }, lodgingId: string | null) =>
+    assignLodging(db, { sessionId: participation.sessionId, participationId: participation.id, lodgingId, actor })
+  return { session, actor, place }
 }
 
 /** A family in the session with `people` cards and the given accommodation needs. */
@@ -106,63 +110,39 @@ describe('a session', () => {
   })
 
   it('places a family, one family per lodging, and takes it out again', async () => {
-    const { session, actor } = await setup()
+    const { session, place } = await setup()
     const rossi = await join(session.id, 'Famiglia Rossi')
     const bianchi = await join(session.id, 'Famiglia Bianchi')
     const villetta = await lodging()
-    await assignLodging(db, {
-      sessionId: session.id,
-      participationId: rossi.participation.id,
-      lodgingId: villetta,
-      actor,
-    })
+    await place(rossi.participation, villetta)
     expect(await lodgingOf(rossi.participation.id)).toBe(villetta)
     expect((await listLodgings(db))[0]!.sessions).toBe(1)
 
-    await expect(
-      assignLodging(db, {
-        sessionId: session.id,
-        participationId: bianchi.participation.id,
-        lodgingId: villetta,
-        actor,
-      }),
-    ).rejects.toMatchObject({ statusCode: 409, message: '«Villetta 1» è già assegnato a Famiglia Rossi' })
-
-    await assignLodging(db, { sessionId: session.id, participationId: rossi.participation.id, lodgingId: null, actor })
-    await assignLodging(db, {
-      sessionId: session.id,
-      participationId: bianchi.participation.id,
-      lodgingId: villetta,
-      actor,
+    await expect(place(bianchi.participation, villetta)).rejects.toMatchObject({
+      statusCode: 409,
+      message: '«Villetta 1» è già assegnato a Famiglia Rossi',
     })
+
+    await place(rossi.participation, null)
+    await place(bianchi.participation, villetta)
     expect(await lodgingOf(bianchi.participation.id)).toBe(villetta)
     const audits = await db.select().from(t.auditLog).where(eq(t.auditLog.action, 'participation.lodging'))
     expect(audits).toHaveLength(3)
   })
 
   it('lets the same lodging host a different family in another session', async () => {
-    const { session, actor } = await setup()
+    const { session, place } = await setup()
     const other = await makeSession(db, { status: 'draft' })
     const villetta = await lodging()
     const rossi = await join(session.id, 'Famiglia Rossi')
     const bianchi = await join(other.id, 'Famiglia Bianchi', { status: 'selected' })
-    await assignLodging(db, {
-      sessionId: session.id,
-      participationId: rossi.participation.id,
-      lodgingId: villetta,
-      actor,
-    })
-    await assignLodging(db, {
-      sessionId: other.id,
-      participationId: bianchi.participation.id,
-      lodgingId: villetta,
-      actor,
-    })
+    await place(rossi.participation, villetta)
+    await place(bianchi.participation, villetta)
     expect((await listLodgings(db))[0]!.sessions).toBe(2)
   })
 
   it('refuses a reserve, a family of another session, a missing lodging and a closed session', async () => {
-    const { session, actor } = await setup()
+    const { session, actor, place } = await setup()
     const villetta = await lodging()
     const reserve = await join(session.id, 'Famiglia Neri', { kind: 'reserve', status: 'invited' })
     const other = await makeSession(db)
@@ -183,19 +163,17 @@ describe('a session', () => {
     ).rejects.toMatchObject({ statusCode: 404, message: 'Alloggio non trovato' })
 
     await db.update(t.campSessions).set({ status: 'completed' }).where(eq(t.campSessions.id, session.id))
-    await expect(
-      assignLodging(db, { sessionId: session.id, participationId: rossi.participation.id, lodgingId: villetta, actor }),
-    ).rejects.toMatchObject({ statusCode: 409 })
+    await expect(place(rossi.participation, villetta)).rejects.toMatchObject({ statusCode: 409 })
     expect((await sessionLodgingsOf(db, session.id)).editable).toBe(false)
   })
 
   it('frees the lodging of a family that declines or is removed', async () => {
-    const { session, actor } = await setup()
+    const { session, actor, place } = await setup()
     const rossi = await join(session.id, 'Famiglia Rossi', { status: 'invited' })
     const bianchi = await join(session.id, 'Famiglia Bianchi')
     const [one, two] = [await lodging(), await lodging({ name: 'Villetta 2' })]
-    await assignLodging(db, { sessionId: session.id, participationId: rossi.participation.id, lodgingId: one, actor })
-    await assignLodging(db, { sessionId: session.id, participationId: bianchi.participation.id, lodgingId: two, actor })
+    await place(rossi.participation, one)
+    await place(bianchi.participation, two)
 
     await answerInvitation(db, {
       participationId: rossi.participation.id,
@@ -210,12 +188,10 @@ describe('a session', () => {
   })
 
   it('deletes a lodging of an open session, audited, but not one in the layout of a completed session', async () => {
-    const { session, actor } = await setup()
+    const { session, actor, place } = await setup()
     const rossi = await join(session.id, 'Famiglia Rossi')
     const [villetta, camera] = [await lodging(), await lodging({ name: 'Camera 1' })]
-    const place = (lodgingId: string) =>
-      assignLodging(db, { sessionId: session.id, participationId: rossi.participation.id, lodgingId, actor })
-    await place(villetta)
+    await place(rossi.participation, villetta)
     await deleteLodging(db, villetta, actor)
     expect(await lodgingOf(rossi.participation.id)).toBeNull()
     const [entry] = await db.select().from(t.auditLog).where(eq(t.auditLog.action, 'lodging.delete'))
@@ -224,7 +200,7 @@ describe('a session', () => {
       freed: [{ participationId: rossi.participation.id, sessionId: session.id }],
     })
 
-    await place(camera)
+    await place(rossi.participation, camera)
     await db.update(t.campSessions).set({ status: 'completed' }).where(eq(t.campSessions.id, session.id))
     await expect(deleteLodging(db, camera, actor)).rejects.toMatchObject({
       statusCode: 409,
@@ -246,7 +222,7 @@ describe('a session', () => {
   })
 
   it('writes the layout as CSV: every lodging, what does not fit, then the families without one', async () => {
-    const { session, actor } = await setup()
+    const { session, place } = await setup()
     const rossi = await join(session.id, 'Famiglia Rossi', {
       people: 5,
       needs: ['Bagno senza barriere architettoniche'],
@@ -255,12 +231,7 @@ describe('a session', () => {
     await join(session.id, 'Famiglia Verdi')
     const villetta = await lodging({ area: 'Villette', features: ['kitchen'] })
     await lodging({ name: 'Camera 1', area: 'Residence', beds: 3 })
-    await assignLodging(db, {
-      sessionId: session.id,
-      participationId: rossi.participation.id,
-      lodgingId: villetta,
-      actor,
-    })
+    await place(rossi.participation, villetta)
 
     const { filename, csv } = await lodgingsCsv(db, session.id)
     expect(filename).toBe('alloggi-sessione-di-prova-21-06-2027.csv')

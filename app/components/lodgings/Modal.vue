@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { lodgingSchema, type LodgingInput } from '#shared/schemas/lodgings'
 import type { Lodging } from '#shared/types/lodgings'
-import { LODGING_FEATURES, enumMeta, type LodgingFeature } from '#shared/utils/constants'
 
 // A lodging of the layout (docs/spec.md 3.11): name, area, beds, what it offers. A new one when
 // `lodging` is null.
@@ -10,29 +9,20 @@ const props = defineProps<{ lodging: Lodging | null }>()
 const emit = defineEmits<{ saved: [] }>()
 
 const api = useApi()
-const state = reactive<{ name: string; area: string; beds: number; features: LodgingFeature[]; description: string }>({
-  name: '',
-  area: '',
-  beds: 4,
-  features: [],
-  description: '',
+/** The fields of a lodging, or of a new one. */
+const formState = (lodging: Lodging | null) => ({
+  name: lodging?.name ?? '',
+  area: lodging?.area ?? '',
+  beds: lodging?.beds ?? 4,
+  features: [...(lodging?.features ?? [])],
+  description: lodging?.description ?? '',
 })
+const state = reactive(formState(null))
 watch(open, value => {
-  if (!value) return
-  const lodging = props.lodging
-  Object.assign(state, {
-    name: lodging?.name ?? '',
-    area: lodging?.area ?? '',
-    beds: lodging?.beds ?? 4,
-    features: [...(lodging?.features ?? [])],
-    description: lodging?.description ?? '',
-  })
+  if (value) Object.assign(state, formState(props.lodging))
 })
 
-const featureItems = LODGING_FEATURES.map(feature => ({
-  value: feature,
-  label: enumMeta('lodgingFeature', feature).label,
-}))
+const featureItems = useEnums().options('lodgingFeature')
 
 const saving = ref(false)
 async function onSubmit() {

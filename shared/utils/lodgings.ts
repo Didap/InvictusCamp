@@ -1,23 +1,33 @@
 // The lodgings of the camp and the families placed in them (docs/spec.md 3.11). Pure functions, shared
 // by the Alloggi page, the Alloggi tab of a session and the CSV of its layout.
-import { ACCOMMODATION_NEED_FEATURES } from '../content/family-form'
+import { ACCOMMODATION_NEED_LABELS } from '../content/family-form'
 import type { FormAnswers } from '../types/domain'
 import { LODGING_FEATURES, enumLabel, type LodgingFeature } from './constants'
 import { plural } from './format'
 
 /** The heading of the lodgings without an area. */
-export const NO_AREA = 'Altri alloggi'
+const NO_AREA = 'Altri alloggi'
 
-/** The features a family asked for in "Esigenze per l'alloggio" (answers stored as labels). */
-export function accommodationNeeds(answers: FormAnswers | null | undefined): LodgingFeature[] {
-  const value = answers?.accommodationNeeds
-  const labels = Array.isArray(value) ? value : []
-  return LODGING_FEATURES.filter(feature => labels.some(label => ACCOMMODATION_NEED_FEATURES[label] === feature))
+/** Shown instead of the size of a family without cards: the beds cannot be checked. */
+export const NO_CARDS = 'Componenti non ancora indicati'
+
+const byArea = new Intl.Collator('it', { numeric: true })
+const byName = new Intl.Collator('it', { numeric: true, sensitivity: 'base' })
+
+/** The features asked for in the answer "Esigenze per l'alloggio" (stored as labels). */
+export function accommodationNeeds(answer: FormAnswers[string] | undefined): LodgingFeature[] {
+  const labels = Array.isArray(answer) ? answer : []
+  return LODGING_FEATURES.filter(feature => labels.includes(ACCOMMODATION_NEED_LABELS[feature]))
 }
 
 /** "Cucina, Microonde". */
 export function featureLabels(features: readonly LodgingFeature[]): string {
   return features.map(feature => enumLabel('lodgingFeature', feature)).join(', ')
+}
+
+/** "1 posto letto", "4 posti letto". */
+export function bedsLabel(beds: number): string {
+  return plural(beds, 'posto letto', 'posti letto')
 }
 
 /**
@@ -28,8 +38,8 @@ export function sortLodgings<T extends { name: string; area: string | null }>(lo
   return [...lodgings].sort(
     (a, b) =>
       (a.area === null ? 1 : 0) - (b.area === null ? 1 : 0) ||
-      (a.area ?? '').localeCompare(b.area ?? '', 'it', { numeric: true }) ||
-      a.name.localeCompare(b.name, 'it', { numeric: true, sensitivity: 'base' }),
+      byArea.compare(a.area ?? '', b.area ?? '') ||
+      byName.compare(a.name, b.name),
   )
 }
 
@@ -38,24 +48,36 @@ export function groupByArea<T extends { area: string | null }>(lodgings: T[]): {
   const groups = new Map<string, T[]>()
   for (const lodging of lodgings) {
     const area = lodging.area ?? NO_AREA
-    groups.set(area, [...(groups.get(area) ?? []), lodging])
+    const items = groups.get(area)
+    if (items) items.push(lodging)
+    else groups.set(area, [lodging])
   }
   return [...groups.entries()].map(([area, items]) => ({ area, items }))
 }
 
 /**
  * What does not fit when a family sleeps in a lodging: more people than beds, a need it lacks. A family
- * without cards cannot be checked against the beds: the interface says so where it shows its size.
+ * without cards cannot be checked against the beds: where its size is shown, NO_CARDS says so.
  */
 export function lodgingWarnings(
   family: { people: number; needs: readonly LodgingFeature[] },
   lodging: { beds: number; features: readonly LodgingFeature[] },
 ): string[] {
   const warnings: string[] = []
-  if (family.people > lodging.beds) {
-    warnings.push(`${family.people} persone e ${plural(lodging.beds, 'posto letto', 'posti letto')}`)
-  }
+  if (family.people > lodging.beds) warnings.push(`${family.people} persone e ${bedsLabel(lodging.beds)}`)
   const missing = family.needs.filter(need => !lodging.features.includes(need))
   if (missing.length) warnings.push(`Manca: ${featureLabels(missing)}`)
   return warnings
+}
+
+/** Each lodging of the layout with the family placed in it, if any, and what does not fit. */
+export function placeFamilies<
+  L extends { id: string; beds: number; features: readonly LodgingFeature[] },
+  F extends { lodgingId: string | null; people: number; needs: readonly LodgingFeature[] },
+>(lodgings: L[], families: F[]): (L & { family: F | undefined; warnings: string[] })[] {
+  const byLodging = new Map(families.flatMap(family => (family.lodgingId ? [[family.lodgingId, family] as const] : [])))
+  return lodgings.map(lodging => {
+    const family = byLodging.get(lodging.id)
+    return { ...lodging, family, warnings: family ? lodgingWarnings(family, lodging) : [] }
+  })
 }

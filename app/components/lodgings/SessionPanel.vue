@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { SelectMenuItem } from '@nuxt/ui'
-import type { SessionLodgingFamily, SessionLodgingsDto } from '#shared/types/lodgings'
+import type { Lodging, SessionLodgingFamily, SessionLodgingsDto } from '#shared/types/lodgings'
 import { plural } from '#shared/utils/format'
-import { featureLabels, groupByArea, lodgingWarnings } from '#shared/utils/lodgings'
+import { NO_CARDS, bedsLabel, featureLabels, groupByArea, placeFamilies } from '#shared/utils/lodgings'
 
 // The Alloggi tab of a session (docs/spec.md 3.11): each titolare holding a place gets a lodging of the
 // layout, chosen by its size and needs; below, the layout of the session lodging by lodging. Saving a
@@ -14,84 +14,68 @@ const { data, status, refresh } = useApiFetch<SessionLodgingsDto>(
   () => `/api/admin/sessions/${props.sessionId}/lodgings`,
 )
 
-const familyByLodging = computed(
-  () =>
-    new Map(data.value?.families.flatMap(family => (family.lodgingId ? [[family.lodgingId, family] as const] : []))),
+/** Each lodging with its family and what does not fit. */
+const placed = computed(() => (data.value ? placeFamilies(data.value.lodgings, data.value.families) : []))
+/** The layout of the session, by area. */
+const layout = computed(() => groupByArea(placed.value))
+const warningsOf = computed(
+  () => new Map(placed.value.flatMap(item => (item.family ? [[item.family.id, item.warnings] as const] : []))),
 )
 
 const summary = computed(() => {
-  const d = data.value
-  if (!d) return undefined
-  const families = d.families.length
-  const placed = familyByLodging.value.size
+  const families = data.value?.families.length ?? 0
+  const taken = placed.value.filter(item => item.family).length
   return [
-    families && `${placed} ${families === 1 ? 'famiglia' : 'famiglie'} su ${families} con un alloggio`,
-    plural(d.lodgings.length - placed, 'alloggio libero', 'alloggi liberi'),
+    families && `${taken} su ${plural(families, 'famiglia', 'famiglie')} con un alloggio`,
+    plural(placed.value.length - taken, 'alloggio libero', 'alloggi liberi'),
   ]
     .filter(Boolean)
     .join(' · ')
 })
 
-const beds = (n: number) => plural(n, 'posto letto', 'posti letto')
-/** How many people: without cards the beds cannot be checked, and the page says so. */
+/** "4 posti letto · Cucina, Microonde". */
+const lodgingLine = (lodging: Lodging) =>
+  [bedsLabel(lodging.beds), featureLabels(lodging.features)].filter(Boolean).join(' · ')
 const people = (family: SessionLodgingFamily) =>
-  family.people ? plural(family.people, 'persona', 'persone') : 'Componenti non ancora indicati'
-
-/** The layout of the session, by area: each lodging with its family and what does not fit. */
-const layout = computed(() =>
-  groupByArea(
-    (data.value?.lodgings ?? []).map(lodging => {
-      const family = familyByLodging.value.get(lodging.id)
-      return { ...lodging, family, warnings: family ? lodgingWarnings(family, lodging) : [] }
-    }),
-  ),
-)
+  family.people ? plural(family.people, 'persona', 'persone') : NO_CARDS
 
 /** The choices of each family: the lodgings by area, those of other families named and not selectable. */
 const choices = computed(() => {
-  const result = new Map<string, SelectMenuItem[][]>()
-  for (const family of data.value?.families ?? []) {
-    result.set(
+  const groups = layout.value.map(group => ({
+    area: group.area,
+    items: group.items.map(item => ({ item, line: lodgingLine(item) })),
+  }))
+  return new Map<string, SelectMenuItem[][]>(
+    (data.value?.families ?? []).map(family => [
       family.id,
-      layout.value.map(group => [
+      groups.map(group => [
         { type: 'label', label: group.area },
-        ...group.items.map(lodging => {
-          const taken = lodging.family && lodging.family.id !== family.id
+        ...group.items.map(({ item, line }) => {
+          const holder = item.family?.id === family.id ? undefined : item.family
           return {
-            label: lodging.name,
-            value: lodging.id,
-            description: taken
-              ? `Assegnato a ${lodging.family!.familyName}`
-              : [beds(lodging.beds), featureLabels(lodging.features)].filter(Boolean).join(' · '),
-            disabled: taken,
+            label: item.name,
+            value: item.id,
+            description: holder ? `Assegnato a ${holder.familyName}` : line,
+            disabled: !!holder,
           }
         }),
       ]),
-    )
-  }
-  return result
+    ]),
+  )
 })
 
-const warningsOf = computed(
-  () =>
-    new Map(
-      layout.value.flatMap(group =>
-        group.items.flatMap(item => (item.family ? [[item.family.id, item.warnings] as const] : [])),
-      ),
-    ),
-)
-
 const saving = ref<string | null>(null)
-async function assign(family: SessionLodgingFamily, lodgingId: string | null | undefined) {
-  if ((lodgingId ?? null) === family.lodgingId) return
+async function assign(family: SessionLodgingFamily, value: string | null | undefined) {
+  const lodgingId = value ?? null
+  if (lodgingId === family.lodgingId) return
   saving.value = family.id
   try {
     const url: string = `/api/admin/sessions/${props.sessionId}/lodgings/${family.id}`
-    await api(url, { method: 'PUT', body: { lodgingId: lodgingId ?? null } })
+    data.value = await api<SessionLodgingsDto>(url, { method: 'PUT', body: { lodgingId } })
   } catch (error) {
     notifyError(error, 'Alloggio non assegnato')
-  } finally {
     await refresh()
+  } finally {
     saving.value = null
   }
 }
@@ -224,10 +208,7 @@ async function assign(family: SessionLodgingFamily, lodgingId: string | null | u
               :class="item.family ? 'border-default bg-elevated' : 'border-dashed border-default'"
             >
               <p class="font-semibold text-highlighted">{{ item.name }}</p>
-              <p class="text-sm text-muted">
-                {{ beds(item.beds)
-                }}<template v-if="item.features.length"> · {{ featureLabels(item.features) }}</template>
-              </p>
+              <p class="text-sm text-muted">{{ lodgingLine(item) }}</p>
               <p v-if="item.description" class="text-sm text-muted">{{ item.description }}</p>
               <p v-if="item.family" class="mt-2 flex items-center gap-1.5 text-sm">
                 <UIcon name="i-lucide-heart-handshake" class="size-4 shrink-0 text-muted" aria-hidden="true" />
