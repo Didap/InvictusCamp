@@ -1,7 +1,7 @@
 // Demo data for development (POST /api/dev/seed, scripts/dev-seed.mjs) and for a test installation
 // (NUXT_DEMO_SEED, server/plugins/start.ts). Every person, family and
 // document is invented; health details are placeholders marked "(esempio)". Dates are fixed around the
-// 2026 and 2027 summer seasons.
+// 2026 summer and the 2027 calendar (shared/content/calendar-2027.ts).
 import { and, eq, sql } from 'drizzle-orm'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { DisabilityInfo, FormAnswers } from '../../shared/types/domain'
@@ -16,6 +16,7 @@ import type {
   StaffStatus,
   StaffTeam,
 } from '../../shared/utils/constants'
+import { CALENDAR_2027, calendarTitle } from '../../shared/content/calendar-2027'
 import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_LOCATION } from '../../shared/utils/constants'
 import * as t from '../db/schema'
@@ -655,11 +656,14 @@ export async function seedDemo(
     staffNeeded: 6,
     statusChangedAt: new Date('2026-08-10T08:00:00Z'),
   })
+  // The 2027 calendar: three sessions carry the demo (invitations, staff, lodgings), the others are drafts.
+  const calendar = (number: number) => {
+    const entry = CALENDAR_2027[number - 1]!
+    return { title: calendarTitle(entry), startDate: entry.startDate, endDate: entry.endDate }
+  }
   const june = await session({
-    title: 'Sessione 1 · Giugno 2027',
-    description: 'Prima sessione della stagione 2027.',
-    startDate: '2027-06-21',
-    endDate: '2027-06-27',
+    ...calendar(9),
+    description: 'Settimana estiva del calendario 2027.',
     status: 'inviting',
     familySlots: 6,
     staffNeeded: 8,
@@ -667,9 +671,7 @@ export async function seedDemo(
     statusChangedAt: new Date('2026-10-25T09:00:00Z'),
   })
   const july = await session({
-    title: 'Sessione 2 · Luglio 2027',
-    startDate: '2027-07-12',
-    endDate: '2027-07-18',
+    ...calendar(11),
     status: 'draft',
     familySlots: 8,
     staffNeeded: 10,
@@ -677,14 +679,17 @@ export async function seedDemo(
   })
   // The 2027 programme, from the model week: every 2027 session uses it.
   await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() }).onConflictDoNothing()
-  const september = await session({
-    title: 'Sessione 3 · Settembre 2027',
-    startDate: '2027-09-06',
-    endDate: '2027-09-12',
-    status: 'draft',
-    familySlots: 8,
-    staffNeeded: 10,
-  })
+  const september = await session({ ...calendar(18), status: 'draft', familySlots: 8, staffNeeded: 10 })
+  const demoNumbers = new Set([9, 11, 18])
+  await db.insert(t.campSessions).values(
+    CALENDAR_2027.filter(entry => !demoNumbers.has(entry.number)).map(entry => ({
+      ...calendar(entry.number),
+      location: DEFAULT_LOCATION,
+      createdBy: admin.id,
+      familySlots: 8,
+      staffNeeded: 10,
+    })),
+  )
 
   const participate = async (
     sessionId: string,
@@ -864,7 +869,7 @@ export async function seedDemo(
       .returning()
     return { ...row!, sha256: file.sha256 }
   }
-  const contract = await document('Contratto di collaborazione · Sessione 1 2027', 'contract', june.id)
+  const contract = await document(`Contratto di collaborazione · ${june.title}`, 'contract', june.id)
   await db
     .update(t.campSessions)
     .set({ contractDocumentId: contract.id })
@@ -992,7 +997,7 @@ export async function seedDemo(
       template: 'session.invite',
       toEmail: families[i]!.email,
       toUserId: families[i]!.userId,
-      subject: 'Invito: Sessione 1 · Giugno 2027',
+      subject: `Invito: ${june.title}`,
       status: 'simulated' as const,
       sessionId: june.id,
       createdAt: new Date('2026-10-25T09:00:00Z'),
@@ -1001,7 +1006,7 @@ export async function seedDemo(
       template: 'session.reserve',
       toEmail: families[i]!.email,
       toUserId: families[i]!.userId,
-      subject: 'Lista di riserva: Sessione 1 · Giugno 2027',
+      subject: `Lista di riserva: ${june.title}`,
       status: 'simulated' as const,
       sessionId: june.id,
       createdAt: new Date('2026-10-25T09:00:00Z'),
@@ -1030,7 +1035,7 @@ export async function seedDemo(
     users: 2 + families.length + staff.length,
     families: families.length,
     staff: staff.length,
-    sessions: 5,
+    sessions: 2 + CALENDAR_2027.length,
     documents: 4,
     accounts: DEMO_ACCOUNTS,
     password: DEMO_PASSWORD,

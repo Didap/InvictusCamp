@@ -71,7 +71,7 @@ function onSubmit(event: FormSubmitEvent<SessionInput>) {
       label="Titolo"
       name="title"
       required
-      help="Lo leggono famiglie e staff, per esempio «Sessione 1 · Giugno 2027»."
+      help="Lo leggono famiglie e staff, per esempio «Sessione 19 · Weekend d’autunno»."
     >
       <UInput v-model="state.title" class="w-full" />
     </UFormField>
