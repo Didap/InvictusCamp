@@ -217,7 +217,7 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
   return {
     today,
     nextSession: upcoming[0] ?? null,
-    upcoming,
+    following: upcoming.slice(1, 4),
     counts,
     todo,
   }

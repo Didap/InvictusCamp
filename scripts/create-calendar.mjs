@@ -6,6 +6,7 @@
 //   node --env-file-if-exists=.env scripts/create-calendar.mjs [--apply --by <email of an administrator>]
 //
 // Needs Node 22.18 or later (type stripping). Prints a few lines and exits 0 or 1.
+import { parseArgs } from 'node:util'
 import postgres from 'postgres'
 import { calendarPlan, calendarTitle } from '../shared/content/calendar-2027.ts'
 import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '../shared/utils/constants.ts'
@@ -16,9 +17,14 @@ const fail = message => {
 }
 const url = process.env.DATABASE_URL
 if (!url) fail('DATABASE_URL is not set')
-const apply = process.argv.includes('--apply')
-const by = process.argv[process.argv.indexOf('--by') + 1]
-if (apply && (!process.argv.includes('--by') || !by)) fail('--apply needs --by <email of an administrator>')
+let args
+try {
+  args = parseArgs({ options: { apply: { type: 'boolean' }, by: { type: 'string' } } }).values
+} catch (error) {
+  fail(error.message)
+}
+const { apply, by } = args
+if (apply && !by) fail('--apply needs --by <email of an administrator>')
 
 const sql = postgres(url, { max: 1, onnotice: () => {} })
 try {

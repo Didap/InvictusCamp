@@ -632,11 +632,13 @@ export async function seedDemo(
   }
 
   // Sessions
-  const session = async (values: Omit<typeof t.campSessions.$inferInsert, 'location' | 'createdBy'>) => {
-    const [row] = await db
-      .insert(t.campSessions)
-      .values({ location: DEFAULT_LOCATION, createdBy: admin.id, ...values })
-      .returning()
+  const sessionValues = (values: Omit<typeof t.campSessions.$inferInsert, 'location' | 'createdBy'>) => ({
+    location: DEFAULT_LOCATION,
+    createdBy: admin.id,
+    ...values,
+  })
+  const session = async (values: Parameters<typeof sessionValues>[0]) => {
+    const [row] = await db.insert(t.campSessions).values(sessionValues(values)).returning()
     return row!
   }
   const past = await session({
@@ -689,13 +691,13 @@ export async function seedDemo(
   })
   const demoNumbers = new Set(Object.values(DEMO_CALENDAR))
   await db.insert(t.campSessions).values(
-    CALENDAR_2027.filter(entry => !demoNumbers.has(entry.number)).map(entry => ({
-      ...calendar(entry.number),
-      location: DEFAULT_LOCATION,
-      createdBy: admin.id,
-      familySlots: DEFAULT_FAMILY_SLOTS,
-      staffNeeded: DEFAULT_STAFF_NEEDED,
-    })),
+    CALENDAR_2027.filter(entry => !demoNumbers.has(entry.number)).map(entry =>
+      sessionValues({
+        ...calendar(entry.number),
+        familySlots: DEFAULT_FAMILY_SLOTS,
+        staffNeeded: DEFAULT_STAFF_NEEDED,
+      }),
+    ),
   )
 
   const participate = async (
