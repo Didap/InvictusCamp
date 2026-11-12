@@ -8,6 +8,7 @@ import type { ProgrammeBlock, ProgrammeContent } from '~~/shared/types/domain'
 import {
   blockTime,
   canFamilyReadProgramme,
+  dayCaptions,
   dayDates,
   groupRotation,
   moveBlock,
@@ -26,7 +27,6 @@ const block = (values: Partial<ProgrammeBlock>): ProgrammeBlock => ({
   note: '',
   staffNote: '',
   lead: '',
-  isNew: false,
   toConfirm: false,
   ...values,
 })
@@ -90,22 +90,22 @@ describe('programmeForViewer', () => {
         subtitle: '',
         blocks: [
           block({ title: 'Briefing', kind: 'staff', staffNote: 'Sala riunioni' }),
-          block({ title: 'Pranzo', kind: 'meal', isNew: true, toConfirm: true, staffNote: 'Nel 2026 alle 13:30' }),
+          block({ title: 'Pranzo', kind: 'meal', toConfirm: true, staffNote: 'Tavoli in veranda' }),
         ],
       },
     ],
   }
 
-  it('families get no staff blocks, no internal notes and no novità', () => {
+  it('families get no staff blocks and no internal notes', () => {
     const blocks = programmeForViewer(content, 'family').days[0]!.blocks
     expect(blocks.map(b => b.title)).toEqual(['Pranzo'])
-    expect(blocks[0]).toMatchObject({ staffNote: '', isNew: false, toConfirm: true })
+    expect(blocks[0]).toMatchObject({ staffNote: '', toConfirm: true })
   })
 
-  it('staff get every block and the internal notes, without novità', () => {
+  it('staff get every block and the internal notes', () => {
     const blocks = programmeForViewer(content, 'staff').days[0]!.blocks
     expect(blocks.map(b => b.title)).toEqual(['Briefing', 'Pranzo'])
-    expect(blocks[1]).toMatchObject({ staffNote: 'Nel 2026 alle 13:30', isNew: false })
+    expect(blocks[1]).toMatchObject({ staffNote: 'Tavoli in veranda' })
   })
 })
 
@@ -185,5 +185,16 @@ describe('editor helpers', () => {
     expect(dayDates(week, seven.slice(0, 3))).toEqual([null, null, null, null, null])
     expect(dayDates(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual([null, null, null, null, null])
     expect(dayDates(week, undefined)).toEqual([null, null, null, null, null])
+  })
+
+  it('captions a day with its date and its subtitle, each only when there is one', () => {
+    const week = emptyWeek()
+    week.days[0]!.subtitle = 'Arrivo'
+    const five = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25']
+    const captions = dayCaptions(week, five)
+    expect(captions[0]).toMatch(/^\S.* · Arrivo$/)
+    expect(captions[1]).not.toContain('·')
+    expect(captions[1]).not.toBe('')
+    expect(dayCaptions(week, undefined)).toEqual(['Arrivo', '', '', '', ''])
   })
 })

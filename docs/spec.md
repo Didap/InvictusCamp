@@ -214,18 +214,21 @@ Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or 
 
 - **Days and blocks**: Monday to Friday; each block has a time (start, optional end, or none), a title,
   a kind (attività a gruppi, tutti insieme, solo adulti, a scelta, accoglienza, pasto, riposo, libero,
-  solo staff, partenza), who leads it, a note for everyone, an internal note, and two flags: "Da
-  confermare" and "Novità" (compared with the year before).
+  solo staff, partenza), who leads it, a note for everyone, an internal note, and the flag "Da
+  confermare".
 - **Groups**: Giallo, Rosso, Blu rotate through the year's list of activities; a `groups` block says what
-  each group does and who leads it. Beside the week the editor shows each group's rotation, flags an
+  each group does and who leads it. Under the week the editor shows each group's rotation, flags an
   activity done twice or never, and lists what is still open (blocks to confirm, groups without an
   activity).
+- **Editor**: the week as a board, one column per day side by side (one under the other on a phone).
+  A block opens with a click or a tap and moves by dragging it, within its day or to another one (on a
+  touch screen after a short press, so a swipe still scrolls), or from its menu (su, giù, a un altro
+  giorno). Families and staff read the week as a list, one day after the other.
 - **Saving**: the whole week at once with Salva; leaving with unsaved changes asks first. A save carries
   the revision it was loaded at: if someone saved in between, it is refused and nothing is overwritten.
 - **Who reads it**: families invited to or confirmed in the session (link on their session card) and
   staff who accepted the convocation (`/staff/sessioni`), read-only, once the session is not cancelled.
-  Families never see "solo staff" blocks, internal notes or the "Novità" flag; staff see everything but
-  "Novità". The days carry the session's dates when the session starts on a Monday and is at least as
+  Families never see "solo staff" blocks or internal notes; staff see everything. The days carry the session's dates when the session starts on a Monday and is at least as
   long as the programme.
 - **Closed sessions** keep the programme they had: completing or cancelling a session without a copy
   gives it one, and a closed session never falls back to the year's programme, so later changes to the

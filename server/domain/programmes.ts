@@ -25,8 +25,7 @@ function sessionYear(session: Pick<SessionRow, 'startDate'>): number {
 }
 
 /**
- * What a family or a staff member reads: no planning aids (internal note for families, "novità" for
- * both) and, for families, no staff-only blocks.
+ * What a family or a staff member reads: for families, no internal notes and no staff-only blocks.
  */
 export function programmeForViewer(content: ProgrammeContent, viewer: 'family' | 'staff'): ProgrammeContent {
   return {
@@ -35,7 +34,7 @@ export function programmeForViewer(content: ProgrammeContent, viewer: 'family' |
       ...day,
       blocks: day.blocks
         .filter(block => viewer === 'staff' || block.kind !== 'staff')
-        .map(block => ({ ...block, isNew: false, staffNote: viewer === 'staff' ? block.staffNote : '' })),
+        .map(block => (viewer === 'staff' ? block : { ...block, staffNote: '' })),
     })),
   }
 }

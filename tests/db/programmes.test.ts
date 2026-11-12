@@ -152,6 +152,10 @@ describe('programme of a session', () => {
 describe('who reads the programme of a session', () => {
   async function setup() {
     await withYear()
+    // An internal note to hide from families: the model week has none.
+    const { id, content } = await getYearProgramme(db, 2027)
+    content.days[0]!.blocks[0]!.staffNote = 'Chiavi della sala in segreteria'
+    await db.update(t.programmes).set({ content }).where(eq(t.programmes.id, id))
     const session = await makeSession(db, { status: 'inviting' })
     const family = await makeFamily(db)
     const other = await makeFamily(db)
@@ -169,7 +173,7 @@ describe('who reads the programme of a session', () => {
     const view = await familyProgramme(db, { familyId: family.family.id, sessionId: session.id })
     const blocks = view.content!.days.flatMap(day => day.blocks)
     expect(blocks.some(block => block.kind === 'staff')).toBe(false)
-    expect(blocks.every(block => block.staffNote === '' && !block.isNew)).toBe(true)
+    expect(blocks.every(block => block.staffNote === '')).toBe(true)
     expect(view.session.id).toBe(session.id)
 
     await db
