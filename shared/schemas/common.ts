@@ -38,6 +38,12 @@ export const zText = (max: number) =>
     .trim()
     .max(max, { error: `Al massimo ${max} caratteri` })
 
+/** Optional free text: empty becomes null. */
+export const zOptionalText = (max: number) =>
+  zText(max)
+    .nullish()
+    .transform(value => value || null)
+
 /** Required free text. */
 export const zRequiredText = (max: number) =>
   z

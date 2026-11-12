@@ -36,10 +36,10 @@ Public: `/accedi`, `/registrati` (family), `/candidati` (staff), `/password-dime
 `/reimposta-password?token`, `/invito?token`, `/verifica-email?token`, `/privacy`.
 
 Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova`, `/admin/sessioni/:id`
-(tabs Panoramica, Famiglie, Staff, Programma, Documenti, Comunicazioni), `/admin/famiglie`, `/admin/famiglie/:id`,
+(tabs Panoramica, Famiglie, Alloggi, Staff, Programma, Documenti, Comunicazioni), `/admin/famiglie`, `/admin/famiglie/:id`,
 `/admin/staff`, `/admin/staff/:userId`, `/admin/documenti`, `/admin/documenti/:id`,
 `/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/programma`,
-`/admin/programma/:year` (3.10), `/admin/utenti`.
+`/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/utenti`.
 
 Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
 `/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`. Staff: `/staff` (home), `/staff/candidatura`,
@@ -233,6 +233,28 @@ Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or 
 - **Closed sessions** keep the programme they had: completing or cancelling a session without a copy
   gives it one, and a closed session never falls back to the year's programme, so later changes to the
   year do not rewrite it. A completed or cancelled session's programme is no longer edited.
+
+### 3.11 Lodgings
+
+Where each family sleeps during a session.
+
+- **The layout** (`/admin/alloggi`, "Alloggi"): the lodgings of the camp, entered once and used by every
+  session. Each one has a name, an optional area that groups the layout ("Villette", "Residence"), its
+  beds, what it offers (kitchen, bathroom without architectural barriers, microwave: the three needs the
+  family data asks about) and how the beds are made. Editing a lodging leaves the families where they
+  are and changes it everywhere, completed sessions included. Deleting one says in how many sessions it
+  hosts a family: in open sessions those families are left without one (audited); a lodging in the
+  layout of a completed session cannot be deleted.
+- **The Alloggi tab** of a session lists the families holding a place (titolari selected, invited or
+  confirmed, by name) with how many people they are (their cards) and their needs ("Esigenze per
+  l'alloggio"), never the health details. Each family gets one lodging, and a lodging hosts one family
+  per session: a lodging of another family is shown with its name and cannot be chosen. The tab flags a
+  family with more people than beds, or placed where something it needs is missing; it does not refuse
+  the choice. A reserve gets a lodging once called. Saving a choice sends no email and is audited.
+- **The layout of the session**: under the families, lodging by lodging, who sleeps there; "Scarica lo
+  schema (CSV)" downloads it with the families still without a lodging at the end (audited).
+- A family that declines or is removed frees its lodging, and so does cancelling the session. A
+  completed session keeps its layout, read-only. Families and staff do not see the lodgings.
 
 ## 4. Emails
 

@@ -14,6 +14,7 @@ export const PAGES = {
     '/admin/sessioni/{session}',
     '/admin/programma',
     '/admin/programma/2027',
+    '/admin/alloggi',
     '/admin/famiglie',
     '/admin/famiglie/{family}',
     '/admin/staff',

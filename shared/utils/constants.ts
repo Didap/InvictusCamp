@@ -130,6 +130,13 @@ export const PROGRAMME_GROUP_LABELS: Record<ProgrammeGroup, string> = {
   blue: 'Blu',
 }
 
+/**
+ * What a lodging (alloggio) offers: the three needs the family data asks about
+ * (shared/content/family-form.ts, ACCOMMODATION_NEED_FEATURES).
+ */
+export const LODGING_FEATURES = ['kitchen', 'accessible_bathroom', 'microwave'] as const
+export type LodgingFeature = (typeof LODGING_FEATURES)[number]
+
 /** Uploads: 15 MB, PDF or images. Documents to sign are PDF only. */
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 export const UPLOAD_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'] as const
@@ -346,6 +353,12 @@ const programmeBlockKind: Record<ProgrammeBlockKind, EnumMeta> = {
   departure: { label: 'Partenza', icon: 'i-lucide-car-front', color: 'neutral' },
 }
 
+const lodgingFeature: Record<LodgingFeature, EnumMeta> = {
+  kitchen: { label: 'Cucina', icon: 'i-lucide-cooking-pot', color: 'neutral' },
+  accessible_bathroom: { label: 'Bagno senza barriere', icon: 'i-lucide-accessibility', color: 'neutral' },
+  microwave: { label: 'Microonde', icon: 'i-lucide-microwave', color: 'neutral' },
+}
+
 export const ENUM_META = {
   programmeBlockKind,
   userRole,
@@ -366,6 +379,7 @@ export const ENUM_META = {
   documentAudience,
   personalDocumentCategory,
   emailStatus,
+  lodgingFeature,
 } as const
 
 export type EnumName = keyof typeof ENUM_META

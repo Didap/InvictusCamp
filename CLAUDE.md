@@ -40,7 +40,7 @@ app/
   layouts/        default (dashboard shell), auth (public pages)
   components/ic/  shared building blocks <Ic...>: Page, Section, StatusBadge, StatCard, DataList,
                   CalendarMonth, FileUpload, FileLink, PdfViewer, PasswordInput, EmailSent, Logo, ConfirmModal
-  components/<area>/   sessions, staff, families, documents, communications, dashboard, users, programme
+  components/<area>/   sessions, staff, families, documents, communications, dashboard, users, programme, lodgings
   composables/    useApi, useApiFetch, useEnums, useConfirm, useNav
   utils/errors.ts notifyError, notifySuccess, apiErrorMessage
 server/

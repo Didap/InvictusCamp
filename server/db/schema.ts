@@ -24,6 +24,7 @@ import type {
   FamilyFormStatus,
   FilePurpose,
   ItalianRegion,
+  LodgingFeature,
   MemberKind,
   MemberRelationship,
   ParticipationKind,
@@ -38,6 +39,7 @@ import type {
   UserRole,
   UserStatus,
 } from '../../shared/utils/constants'
+import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 
 const tz = { withTimezone: true } as const
 const pk = () => uuid().primaryKey().defaultRandom()
@@ -245,6 +247,27 @@ export const campSessions = pgTable(
   ],
 )
 
+/**
+ * A lodging of the camp (alloggio, docs/spec.md 3.11): the bed layout the administration enters once and
+ * every session uses. A family in a session gets one (session_families.lodgingId).
+ */
+export const lodgings = pgTable(
+  'lodgings',
+  {
+    id: pk(),
+    name: text().notNull(),
+    /** Where it is, to group the layout: "Corte A", "Primo piano". */
+    area: text(),
+    beds: integer().notNull(),
+    features: jsonb().$type<LodgingFeature[]>().notNull().default([]),
+    /** How the beds are made, e.g. "1 matrimoniale e 2 singoli". */
+    description: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  t => [check('lodgings_beds', sql`${t.beds} > 0`)],
+)
+
 /** A family in a session: titolare (slot) or riserva (reserve, called in reserveRank order). */
 export const sessionFamilies = pgTable(
   'session_families',
@@ -263,6 +286,8 @@ export const sessionFamilies = pgTable(
     invitedAt: timestamp(tz),
     respondedAt: timestamp(tz),
     declineReason: text(),
+    /** Where the family sleeps; only while it holds a place (cleared when it declines or is removed). */
+    lodgingId: uuid().references(() => lodgings.id, { onDelete: 'set null' }),
     /** Internal notes. */
     notes: text(),
     createdAt: createdAt(),
@@ -271,6 +296,13 @@ export const sessionFamilies = pgTable(
   t => [
     uniqueIndex('session_families_session_family_key').on(t.sessionId, t.familyId),
     index('session_families_family_idx').on(t.familyId),
+    // One family per lodging in a session; lodging first, for the lookups by lodging.
+    uniqueIndex('session_families_lodging_session_key').on(t.lodgingId, t.sessionId),
+    // Only a titolare holding a place sleeps in a lodging (shared/utils/slots.ts, holdsSlot).
+    check(
+      'session_families_lodging',
+      sql`${t.lodgingId} is null or (${t.kind} = 'slot' and ${t.status} in (${sql.raw(ACTIVE_STATUSES.map(status => `'${status}'`).join(', '))}))`,
+    ),
   ],
 )
 
