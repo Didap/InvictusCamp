@@ -271,6 +271,10 @@ export const lodgings = pgTable(
 )
 
 /** A family in a session: titolare (slot) or riserva (reserve, called in reserveRank order). */
+/** A titolare holding a place (shared/utils/slots.ts, holdsSlot): only it has a lodging and a group. */
+const holdsPlace = (t: { kind: AnyPgColumn; status: AnyPgColumn }) =>
+  sql`(${t.kind} = 'slot' and ${t.status} in (${sql.raw(ACTIVE_STATUSES.map(status => `'${status}'`).join(', '))}))`
+
 export const sessionFamilies = pgTable(
   'session_families',
   {
@@ -302,15 +306,8 @@ export const sessionFamilies = pgTable(
     index('session_families_family_idx').on(t.familyId),
     // One family per lodging in a session; lodging first, for the lookups by lodging.
     uniqueIndex('session_families_lodging_session_key').on(t.lodgingId, t.sessionId),
-    // Only a titolare holding a place sleeps in a lodging (shared/utils/slots.ts, holdsSlot).
-    check(
-      'session_families_lodging',
-      sql`${t.lodgingId} is null or (${t.kind} = 'slot' and ${t.status} in (${sql.raw(ACTIVE_STATUSES.map(status => `'${status}'`).join(', '))}))`,
-    ),
-    check(
-      'session_families_activity_group',
-      sql`${t.activityGroup} is null or (${t.kind} = 'slot' and ${t.status} in (${sql.raw(ACTIVE_STATUSES.map(status => `'${status}'`).join(', '))}))`,
-    ),
+    check('session_families_lodging', sql`${t.lodgingId} is null or ${holdsPlace(t)}`),
+    check('session_families_activity_group', sql`${t.activityGroup} is null or ${holdsPlace(t)}`),
   ],
 )
 

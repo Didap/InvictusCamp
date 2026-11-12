@@ -58,6 +58,12 @@ describe('distributeFamilies', () => {
     expect(Object.fromEntries(placed)).toEqual({ b: 'red', c: 'blue' })
   })
 
+  it('counts a family without cards yet as large as the average family', () => {
+    // Average 4: the family without cards goes first, like a family of 4, before the family of 3.
+    const placed = distributeFamilies([family('a', 5, 'yellow'), family('b', 3, 'red'), family('c', 0), family('d', 3)])
+    expect(Object.fromEntries(placed)).toEqual({ c: 'blue', d: 'red' })
+  })
+
   it('places nobody when every family has a group', () => {
     expect(distributeFamilies([family('a', 3, 'red')]).size).toBe(0)
   })
@@ -68,6 +74,5 @@ describe('memberLabel', () => {
     expect(memberLabel({ name: 'Matteo', age: 6 })).toBe('Matteo, 6 anni')
     expect(memberLabel({ name: 'Ada', age: 1 })).toBe('Ada, 1 anno')
     expect(memberLabel({ name: 'Grazia', age: null })).toBe('Grazia')
-    expect(memberLabel({ name: null, age: null })).toBe('Nome da indicare')
   })
 })

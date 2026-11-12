@@ -1,9 +1,9 @@
 import type { ConvocationStatus, ParticipationStatus, ProgrammeGroup, StaffRole } from '../utils/constants'
 
-/** A person of a family, as the groups list it: the first name, the age only for the young. */
+/** A person of a family, as the groups list it: the first name ("Adulto 2" for a card still to fill in). */
 export interface GroupMember {
-  name: string | null
-  /** Years at the start of the session; null for adults and for cards without a birth date. */
+  name: string
+  /** Years at the start of the session, only for the young with a birth date. */
   age: number | null
 }
 

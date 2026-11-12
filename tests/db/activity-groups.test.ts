@@ -9,7 +9,7 @@ import {
   sessionGroupsOf,
   setGroupLeader,
 } from '../../server/domain/activity-groups'
-import { answerInvitation, cancelParticipation } from '../../server/domain/sessions'
+import { answerInvitation, cancelParticipation, transitionSession } from '../../server/domain/sessions'
 import { answerConvocation, cancelConvocation } from '../../server/domain/staff'
 import type {
   ConvocationStatus,
@@ -35,7 +35,7 @@ async function setup(status: SessionStatus = 'confirmed') {
   return { session, actor, assign, lead }
 }
 
-type Card = { firstName: string; kind?: 'adult' | 'young'; birthDate?: string; position?: number }
+type Card = { firstName: string | null; kind?: 'adult' | 'young'; birthDate?: string; position?: number }
 
 /** A family in the session with the given cards. */
 async function join(
@@ -102,6 +102,8 @@ describe('the families of a session', () => {
         { firstName: 'Grazia', position: 0 },
         { firstName: 'Matteo', kind: 'young', birthDate: '2021-06-22', position: 1 },
         { firstName: 'Riccardo', kind: 'young', birthDate: '2018-01-10', position: 2 },
+        { firstName: null, position: 3 },
+        { firstName: 'Ada', kind: 'young', birthDate: '2027-09-01', position: 4 },
       ],
     })
     await join(session.id, 'Famiglia Bianchi', { status: 'invited' })
@@ -114,11 +116,14 @@ describe('the families of a session', () => {
       ['Famiglia Bianchi', null],
       ['Famiglia Rossi', null],
     ])
-    // The session starts on 2027-06-21: Matteo turns 6 the day after.
+    // The session starts on 2027-06-21: Matteo turns 6 the day after, Ada is born after it. The empty card
+    // is named as in the family pages.
     expect(dto.families[1]!.members).toEqual([
       { name: 'Matteo', age: 5 },
       { name: 'Riccardo', age: 9 },
+      { name: 'Ada', age: null },
       { name: 'Grazia', age: null },
+      { name: 'Adulto 2', age: null },
     ])
   })
 
@@ -215,6 +220,12 @@ describe('the leaders', () => {
     expect(await leaders(session.id)).toEqual({ red: anna.id })
     await lead('red', null)
     expect(await leaders(session.id)).toEqual({})
+
+    const audits = await db
+      .select({ data: t.auditLog.data })
+      .from(t.auditLog)
+      .where(eq(t.auditLog.action, 'session.group_leader'))
+    expect(audits[2]!.data).toEqual({ group: 'red', from: bruno.id, to: anna.id, left: 'yellow' })
   })
 
   it('refuses who is not in the session staff any more, or is in another session', async () => {
@@ -224,6 +235,11 @@ describe('the leaders', () => {
     const other = await makeSession(db)
     const dario = await convoke(other.id, 'Dario')
     await expect(lead('blue', dario.id)).rejects.toMatchObject({ statusCode: 404 })
+
+    const elena = await convoke(session.id, 'Elena')
+    await db.update(t.users).set({ status: 'disabled' }).where(eq(t.users.id, elena.user.id))
+    await expect(lead('blue', elena.id)).rejects.toMatchObject({ statusCode: 404 })
+    expect((await sessionGroupsOf(db, session.id)).staff).toEqual([])
   })
 
   it('leaves the group without a leader when the leader declines or the convocation is withdrawn', async () => {
@@ -235,6 +251,20 @@ describe('the leaders', () => {
 
     await answerConvocation(db, ctx, { id: anna.id, userId: anna.user.id, answer: 'decline' })
     await cancelConvocation(db, ctx, { id: bruno.id, actor })
+    expect(await leaders(session.id)).toEqual({})
+  })
+})
+
+describe('cancelling the session', () => {
+  it('takes every family out of its group and leaves every group without a leader', async () => {
+    const { session, actor, assign, lead } = await setup()
+    const rossi = await join(session.id, 'Famiglia Rossi')
+    await assign(rossi.id, 'yellow')
+    await lead('yellow', (await convoke(session.id, 'Anna')).id)
+    await lead('red', (await convoke(session.id, 'Bruno', { status: 'draft' })).id)
+
+    await transitionSession(db, ctx, { sessionId: session.id, to: 'cancelled', actor })
+    expect(await groupOf(rossi.id)).toBeNull()
     expect(await leaders(session.id)).toEqual({})
   })
 })

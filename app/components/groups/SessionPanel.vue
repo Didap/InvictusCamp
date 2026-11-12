@@ -91,7 +91,11 @@ function distribute() {
     'distribute',
     async () => {
       const result = await api<SessionGroupsDto & { placed: number }>(url, { method: 'POST' })
-      notifySuccess(`${plural(result.placed, 'famiglia divisa', 'famiglie divise')} nei gruppi`)
+      notifySuccess(
+        result.placed
+          ? `${plural(result.placed, 'famiglia divisa', 'famiglie divise')} nei gruppi`
+          : 'Tutte le famiglie hanno già un gruppo',
+      )
       return result
     },
     'Famiglie non divise nei gruppi',
@@ -158,11 +162,13 @@ function distribute() {
 
       <template v-else>
         <section v-if="waiting.length" aria-labelledby="groups-waiting" class="mb-8">
-          <h3 id="groups-waiting" class="font-semibold text-highlighted">Senza gruppo</h3>
-          <p class="mb-3 text-sm text-muted">
-            Scegli il gruppo di ogni famiglia, oppure dividile tutte insieme: i gruppi restano pari per numero di
-            persone, e poi puoi spostare chi vuoi.
-          </p>
+          <div class="mb-3">
+            <h3 id="groups-waiting" class="font-semibold text-highlighted">Senza gruppo</h3>
+            <p v-if="data.editable" class="text-sm text-muted">
+              Scegli il gruppo di ogni famiglia, oppure dividile tutte insieme: i gruppi restano pari per numero di
+              persone, e poi puoi spostare chi vuoi.
+            </p>
+          </div>
           <ul class="divide-y divide-default rounded-lg border border-default bg-elevated">
             <GroupsFamilyItem
               v-for="family in waiting"

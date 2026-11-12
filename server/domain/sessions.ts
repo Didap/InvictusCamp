@@ -163,6 +163,9 @@ export function requireEditable(session: SessionRow, what: string) {
   }
 }
 
+/** What a family gives back when it leaves its place: its lodging and its activity group. */
+const LEAVE_PLACE = { lodgingId: null, activityGroup: null } as const
+
 /** The participations of the session that hold a place: titolari not declined nor removed. */
 export const holdingPlace = (sessionId: string) =>
   and(
@@ -719,7 +722,7 @@ export async function transitionSession(
     staffEmails = await cancelSessionConvocations(db, ctx, { sessionId: session.id, actor: input.actor })
     await db
       .update(sessionFamilies)
-      .set({ status: 'cancelled', lodgingId: null, activityGroup: null })
+      .set({ status: 'cancelled', ...LEAVE_PLACE })
       .where(and(eq(sessionFamilies.sessionId, session.id), inArray(sessionFamilies.status, ACTIVE_STATUSES)))
   }
   await db.update(campSessions).set({ status: to, statusChangedAt: now }).where(eq(campSessions.id, session.id))
@@ -1032,8 +1035,7 @@ export async function answerInvitation(
       status: input.answer,
       respondedAt: now,
       declineReason: input.answer === 'declined' ? input.reason?.trim() || null : null,
-      // A family that declines frees its lodging and leaves its activity group too.
-      ...(input.answer === 'declined' && { lodgingId: null, activityGroup: null }),
+      ...(input.answer === 'declined' && LEAVE_PLACE),
     })
     .where(eq(sessionFamilies.id, row.id))
   if (row.kind === 'reserve') await renumberReserves(db, row.sessionId)
@@ -1070,7 +1072,7 @@ export async function cancelParticipation(
   const wasInvited = target.status !== 'selected'
   await db
     .update(sessionFamilies)
-    .set({ status: 'cancelled', lodgingId: null, activityGroup: null })
+    .set({ status: 'cancelled', ...LEAVE_PLACE })
     .where(eq(sessionFamilies.id, target.id))
   if (target.kind === 'reserve') await renumberReserves(db, session.id)
   const emails = wasInvited && canReceive(target) ? [familyEmail(ctx, 'session.removed', target, session)] : []

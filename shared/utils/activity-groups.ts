@@ -5,17 +5,17 @@ import type { GroupMember } from '../types/activity-groups'
 import { PROGRAMME_GROUPS, type ProgrammeGroup } from './constants'
 import { formatAge, plural } from './format'
 
-/** Shown instead of the name of a card still to fill in. */
-export const NO_NAME = 'Nome da indicare'
-
 export interface GroupTally {
   families: number
   people: number
 }
 
-/** Families and people of each group. */
-export function tallyGroups(
-  families: readonly { group: ProgrammeGroup | null; members: readonly unknown[] }[],
+type Groupable = { group: ProgrammeGroup | null; members: readonly unknown[] }
+
+/** Families and people of each group; `size` says how many people a family counts as (its cards). */
+export function tallyGroups<T extends Groupable>(
+  families: readonly T[],
+  size: (family: T) => number = family => family.members.length,
 ): Record<ProgrammeGroup, GroupTally> {
   const tally = Object.fromEntries(PROGRAMME_GROUPS.map(group => [group, { families: 0, people: 0 }])) as Record<
     ProgrammeGroup,
@@ -24,7 +24,7 @@ export function tallyGroups(
   for (const family of families) {
     if (!family.group) continue
     tally[family.group].families += 1
-    tally[family.group].people += family.members.length
+    tally[family.group].people += size(family)
   }
   return tally
 }
@@ -37,16 +37,22 @@ export function tallyLabel(tally: GroupTally): string {
 /**
  * Puts the families without a group into the groups, keeping them as even as possible: the largest family
  * first goes to the group with the fewest people (then the fewest families, then Giallo, Rosso, Blu).
- * Families already in a group stay where they are. Returns the group of each family placed.
+ * A family without cards yet counts as large as the average family. Families already in a group stay
+ * where they are. Returns the group of each family placed.
  */
-export function distributeFamilies(
-  families: readonly { id: string; familyName: string; group: ProgrammeGroup | null; members: readonly unknown[] }[],
+export function distributeFamilies<T extends Groupable & { id: string; familyName: string }>(
+  families: readonly T[],
 ): Map<string, ProgrammeGroup> {
-  const tally = tallyGroups(families)
+  const known = families.filter(family => family.members.length)
+  const average = known.length
+    ? Math.round(known.reduce((sum, family) => sum + family.members.length, 0) / known.length)
+    : 1
+  const sizeOf = (family: T) => family.members.length || average
+  const tally = tallyGroups(families, sizeOf)
   const placed = new Map<string, ProgrammeGroup>()
   const waiting = families
     .filter(family => !family.group)
-    .sort((a, b) => b.members.length - a.members.length || a.familyName.localeCompare(b.familyName, 'it'))
+    .sort((a, b) => sizeOf(b) - sizeOf(a) || a.familyName.localeCompare(b.familyName, 'it'))
   for (const family of waiting) {
     const group = PROGRAMME_GROUPS.reduce((best, candidate) => {
       const a = tally[candidate]
@@ -54,7 +60,7 @@ export function distributeFamilies(
       return a.people < b.people || (a.people === b.people && a.families < b.families) ? candidate : best
     })
     tally[group].families += 1
-    tally[group].people += family.members.length
+    tally[group].people += sizeOf(family)
     placed.set(family.id, group)
   }
   return placed
@@ -62,6 +68,5 @@ export function distributeFamilies(
 
 /** "Marco, 9 anni" for the young, "Grazia" for adults. */
 export function memberLabel(member: GroupMember): string {
-  const name = member.name ?? NO_NAME
-  return member.age === null ? name : `${name}, ${formatAge(member.age)}`
+  return member.age === null ? member.name : `${member.name}, ${formatAge(member.age)}`
 }
