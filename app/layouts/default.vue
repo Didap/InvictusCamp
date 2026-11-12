@@ -4,10 +4,11 @@ import { enumLabel } from '#shared/utils/constants'
 import { fullName, initials } from '#shared/utils/format'
 
 // The dashboard shell of every signed-in page: sidebar with the role's sections, account menu. Families
-// and staff also find there how to reach the camp ("Serve aiuto?").
+// and staff also find there how to reach the camp, families at their own address.
 const { user, clear } = useUserSession()
 const nav = useNav()
 const showHelp = computed(() => user.value?.role === 'family' || user.value?.role === 'staff')
+const contact = useContact()
 
 async function logout() {
   await $fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
@@ -51,7 +52,7 @@ const accountItems = computed<DropdownMenuItem[][]>(() => [
           />
         </nav>
         <div v-if="showHelp && !collapsed" class="mt-auto rounded-lg bg-muted px-3 py-2.5 text-sm">
-          <p class="font-semibold text-highlighted">Serve aiuto?</p>
+          <p class="font-semibold text-highlighted">{{ contact.question }}</p>
           <IcContactLine class="mt-1 text-muted" />
         </div>
       </template>

@@ -696,7 +696,13 @@ export async function familyHome(
 ): Promise<FamilyHomeDto> {
   const family = await requireFamilyRow(db, input.familyId)
   const [members] = await db
-    .select({ total: count(), toComplete: count(sql`case when ${familyMembers.firstName} is null then 1 end`) })
+    .select({
+      total: count(),
+      // isCardToComplete: an empty card, or an adult without the birth date.
+      toComplete: count(
+        sql`case when ${familyMembers.firstName} is null or (${familyMembers.kind} = 'adult' and ${familyMembers.birthDate} is null) then 1 end`,
+      ),
+    })
     .from(familyMembers)
     .where(eq(familyMembers.familyId, family.id))
   const [signatures] = await db

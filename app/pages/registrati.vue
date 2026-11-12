@@ -21,7 +21,7 @@ async function onSubmit() {
   try {
     const result = await $fetch<{ email: string }>('/api/auth/register-family', {
       method: 'POST',
-      body: { ...state, phone: state.phone || undefined },
+      body: state,
     })
     sentTo.value = result.email
   } catch (error) {
@@ -30,6 +30,8 @@ async function onSubmit() {
     loading.value = false
   }
 }
+
+const contact = useContact(true)
 </script>
 
 <template>
@@ -56,7 +58,7 @@ async function onSubmit() {
       <UFormField label="Email" name="email" help="La useremo per gli inviti e le comunicazioni del camp." required>
         <UInput v-model="state.email" type="email" autocomplete="email" size="lg" class="w-full" />
       </UFormField>
-      <UFormField label="Telefono" name="phone" hint="Facoltativo">
+      <UFormField label="Telefono" name="phone" required>
         <UInput v-model="state.phone" type="tel" autocomplete="tel" size="lg" class="w-full" />
       </UFormField>
       <UFormField label="Password" name="password" help="Almeno 10 caratteri." required>
@@ -74,7 +76,8 @@ async function onSubmit() {
       <UButton type="submit" block size="lg" :loading="loading" label="Crea l’account" />
     </UForm>
 
-    <p class="mt-8 text-sm text-muted">
+    <p class="mt-8 text-sm text-muted">{{ contact.question }} <IcContactLine as="span" families /></p>
+    <p class="mt-2 text-sm text-muted">
       Hai già un account? <ULink to="/accedi" class="font-semibold text-primary">Accedi</ULink>
     </p>
   </div>

@@ -55,6 +55,8 @@ export default defineNuxtConfig({
       /** How families and staff reach the camp (<IcContactLine>): only the values that are set appear. */
       contact: {
         email: 'info@fondazionevannilongo.it',
+        /** Where families write (registration, sessions); staff use `email`. */
+        familiesEmail: 'famiglie@fondazionevannilongo.it',
         phone: '',
         hours: '',
       },

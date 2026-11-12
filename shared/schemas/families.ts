@@ -14,7 +14,8 @@ import {
   type PersonalDocumentCategory,
 } from '../utils/constants'
 import { isIsoDay, todayIso } from '../utils/dates'
-import { zListQuery, zPersonName, zPhone, zRequiredText, zText, zUuid } from './common'
+import { missingBirthDate } from '../utils/format'
+import { zListQuery, zPersonName, zPhone, zRequiredPhone, zRequiredText, zText, zUuid } from './common'
 
 /** An Italian province as its two-letter code ("TA"); empty is allowed. */
 const zProvince = z
@@ -105,10 +106,11 @@ export function countCards(cards: { kind: MemberKind; hasDisability: boolean }[]
 }
 
 /**
- * The fields of the family data form (/famiglia/profilo): residence required, the composition, and the
- * consent to health data, needed when the family declares a young person with a condition.
+ * The fields of the family data form (/famiglia/profilo): phone and residence required, the composition,
+ * and the consent to health data, needed when the family declares a young person with a condition.
  */
 export const familyDataFieldsSchema = familyProfileSchema.extend({
+  phone: zRequiredPhone,
   address: zRequiredText(200),
   city: zRequiredText(100),
   postalCode: zPostalCode.refine(value => value !== '', { error: 'Campo obbligatorio' }),
@@ -172,7 +174,10 @@ export function missingRequiredQuestions(answers: FormAnswers): FormQuestion[] {
 
 // ─── Members and health details ─────────────────────────────────────────────────────────────────────
 
-/** The fields of DisabilityInfo as the forms ask them (placeholder until sprint 2). */
+/**
+ * The fields of DisabilityInfo as the forms ask them (placeholder until sprint 2): all required for a
+ * person with a condition, so the camp knows how to look after them.
+ */
 export const DISABILITY_FIELDS = [
   {
     key: 'description',
@@ -207,10 +212,18 @@ export const disabilityInfoSchema = z.object({
   medicalNotes: zDetail,
 })
 
-export const memberHealthSchema = z.object({
-  hasDisability: z.boolean(),
-  disability: disabilityInfoSchema.nullable().optional(),
-})
+export const memberHealthSchema = z
+  .object({
+    hasDisability: z.boolean(),
+    disability: disabilityInfoSchema.nullable().optional(),
+  })
+  .superRefine((health, ctx) => {
+    if (!health.hasDisability) return
+    for (const { key } of DISABILITY_FIELDS) {
+      if (!health.disability?.[key])
+        ctx.addIssue({ code: 'custom', path: ['disability', key], message: 'Campo obbligatorio' })
+    }
+  })
 
 const zBirthDate = z
   .string()
@@ -218,8 +231,11 @@ const zBirthDate = z
   .refine(day => day >= '1900-01-01', { error: 'Data non valida' })
   .refine(day => day <= todayIso(), { error: 'La data di nascita non può essere nel futuro' })
 
-/** A member of the family. `health` is accepted only with the consent; when absent it stays as it is. */
-export const memberSchema = z.object({
+/**
+ * A member of the family; an adult's birth date is required. `health` is accepted only with the consent;
+ * when absent it stays as it is.
+ */
+const memberFields = z.object({
   firstName: zPersonName,
   lastName: zPersonName,
   birthDate: z.preprocess(value => (value === '' ? null : value), zBirthDate.nullable()).optional(),
@@ -227,6 +243,14 @@ export const memberSchema = z.object({
   kind: z.enum(MEMBER_KINDS, { error: 'Indica se è un adulto o un ragazzo o ragazza' }),
   isReferent: z.boolean().default(false),
   health: memberHealthSchema.optional(),
+})
+const birthDateFields = memberFields.pick({ kind: true, birthDate: true })
+
+export const memberSchema = memberFields.refine(member => !missingBirthDate(member), {
+  path: ['birthDate'],
+  error: 'Campo obbligatorio',
+  // Whenever kind and birth date are valid, also while another field is wrong: every missing field at once.
+  when: ({ value }) => birthDateFields.safeParse(value).success,
 })
 export type MemberInput = z.output<typeof memberSchema>
 

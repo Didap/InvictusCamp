@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { contactSentence, type ContactConfig } from '~/components/ic/ContactLine.vue'
 import type { FamilySessionItem } from '#shared/types/sessions'
 import { todayIso } from '#shared/utils/dates'
 import { formatDay, formatDayRange } from '#shared/utils/format'
@@ -12,7 +11,7 @@ const emit = defineEmits<{ answered: [] }>()
 
 const api = useApi()
 const confirm = useConfirm()
-const contact = useRuntimeConfig().public.contact as ContactConfig
+const contact = useContact()
 const titleId = useId()
 const saving = ref(false)
 const declineOpen = ref(false)
@@ -79,7 +78,7 @@ async function answer(value: { answer: 'confirmed' | 'declined'; reason: string 
 async function confirmPlace() {
   const ok = await confirm({
     title: 'Confermi la partecipazione?',
-    description: `La tua famiglia partecipa a «${props.item.title}», ${range.value}. ${contactSentence(contact, 'Se poi non potete più venire')}`,
+    description: `La tua famiglia partecipa a «${props.item.title}», ${range.value}. ${contactSentence(contact.value, 'Se poi non potete più venire')}`,
     confirmLabel: 'Conferma',
     cancelLabel: 'Torna indietro',
   })

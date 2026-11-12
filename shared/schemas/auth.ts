@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { zEmail, zPassword, zPersonName, zPhone, zRequiredText, zToken } from './common'
+import { zEmail, zPassword, zPersonName, zPhone, zRequiredPhone, zRequiredText, zToken } from './common'
 
 /** A checkbox that must be ticked (boolean in the form, true on the server). */
 export const zPrivacy = z
@@ -18,7 +18,7 @@ export const registerFamilySchema = z.object({
   firstName: zPersonName,
   lastName: zPersonName,
   email: zEmail,
-  phone: zPhone.optional(),
+  phone: zRequiredPhone,
   password: zPassword,
   privacy: zPrivacy,
 })

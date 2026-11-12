@@ -338,3 +338,9 @@ export function enumMeta<N extends EnumName>(name: N, value: string): EnumMeta {
 export function enumLabel<N extends EnumName>(name: N, value: string): string {
   return enumMeta(name, value).label
 }
+
+/** The answers of a yes or no question, for a radio group bound to a boolean. */
+export const YES_NO_ITEMS = [
+  { label: 'Sì', value: true },
+  { label: 'No', value: false },
+]

@@ -94,6 +94,16 @@ export function isEmptyCard(member: { firstName: string | null }): boolean {
   return member.firstName === null
 }
 
+/** An adult without the birth date the card requires (the member schema); a young person's is optional. */
+export function missingBirthDate(member: { kind: MemberKind; birthDate?: string | null }): boolean {
+  return member.kind === 'adult' && !member.birthDate
+}
+
+/** A card the family still has to fill in: empty, or an adult without the birth date. */
+export function isCardToComplete(member: { firstName: string | null; kind: MemberKind; birthDate: string | null }) {
+  return isEmptyCard(member) || missingBirthDate(member)
+}
+
 /**
  * A member's name or, while the family has not filled in the card, what the card is: "Adulto 2",
  * numbered among the cards of its kind in `members` (the whole family, in its order).
