@@ -2,9 +2,9 @@
 import type { TableColumn } from '@nuxt/ui'
 import type { SessionListItem } from '#shared/types/sessions'
 import type { StaffListItem } from '#shared/types/staff'
-import type { StaffRole } from '#shared/utils/constants'
+import type { StaffRole, StaffTeam } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
-import { formatDay, formatDayRange, fullName } from '#shared/utils/format'
+import { formatDay, formatDayRange, fullName, plural } from '#shared/utils/format'
 
 // Staff of the camp: applications to review, approved staff, everyone (spec 3.4). Tab in the query string.
 const route = useRoute()
@@ -12,9 +12,8 @@ const router = useRouter()
 const api = useApi()
 const confirm = useConfirm()
 const { label, options } = useEnums()
-// Coverage of a session (P1): with a session chosen, each person carries how their availability covers it.
+// Availability for a session (P1): with a session chosen, only the people who can come to it.
 const sessionId = ref('none')
-const coverage = ref<'some' | 'full'>('some')
 const [{ data, refresh }, { data: sessions }] = await Promise.all([
   useApiFetch<StaffListItem[]>('/api/admin/staff', {
     query: computed(() => (sessionId.value === 'none' ? {} : { sessionId: sessionId.value })),
@@ -29,10 +28,6 @@ const sessionItems = computed(() => [
     value: session.id,
   })),
 ])
-const coverageItems = [
-  { label: 'Almeno qualche giorno', value: 'some' },
-  { label: 'Tutte le date', value: 'full' },
-]
 // Applications to review have no availability yet: the filter applies to the other tabs.
 const bySession = computed(() => sessionId.value !== 'none' && tab.value !== 'review')
 
@@ -61,14 +56,22 @@ const tabItems = computed(() => [
 
 const q = ref('')
 const role = ref<StaffRole | 'all'>('all')
+const team = ref<StaffTeam | 'all'>('all')
+const teamItems = computed(() => [
+  { label: 'Staff e v-team', value: 'all' },
+  ...options('staffTeam').map(option => ({ label: option.label, value: option.value })),
+])
 const roleItems = computed(() => [
   { label: 'Tutti i ruoli', value: 'all' },
   ...options('staffRole').map(option => ({ label: option.label, value: option.value })),
 ])
-const filtered = computed(() => Boolean(q.value.trim()) || role.value !== 'all' || bySession.value)
+const filtered = computed(
+  () => Boolean(q.value.trim()) || role.value !== 'all' || team.value !== 'all' || bySession.value,
+)
 function resetFilters() {
   q.value = ''
   role.value = 'all'
+  team.value = 'all'
   sessionId.value = 'none'
 }
 
@@ -83,25 +86,20 @@ const rows = computed(() => {
     if (tab.value === 'review' && person.status !== 'applied') return false
     if (tab.value === 'approved' && person.status !== 'approved') return false
     if (role.value !== 'all' && !person.roles.includes(role.value)) return false
-    if (bySession.value && (coverage.value === 'full' ? person.coverage !== 'full' : person.coverage === 'none')) {
-      return false
-    }
+    if (team.value !== 'all' && person.team !== team.value) return false
+    if (bySession.value && !person.available) return false
     return !term || plain(`${person.firstName} ${person.lastName} ${person.email} ${person.city ?? ''}`).includes(term)
   })
-  // Applications wait in the order they arrived; with a session, full coverage comes first.
+  // Applications wait in the order they arrived.
   if (tab.value === 'review') return [...list].sort((a, b) => (a.appliedAt ?? '').localeCompare(b.appliedAt ?? ''))
-  return bySession.value
-    ? [...list].sort((a, b) => Number(b.coverage === 'full') - Number(a.coverage === 'full'))
-    : list
+  return list
 })
 
 const rolesOf = (person: StaffListItem) => person.roles.map(r => label('staffRole', r)).join(', ') || 'Non indicati'
 /** The day (in Italy) an application was sent. */
 const appliedOn = (person: StaffListItem) => (person.appliedAt ? formatDay(todayIso(new Date(person.appliedAt))) : '')
 const availabilityOf = (person: StaffListItem) =>
-  person.nextAvailability
-    ? formatDayRange(person.nextAvailability.startDate, person.nextAvailability.endDate)
-    : 'Nessun periodo'
+  person.availableSessions ? plural(person.availableSessions, 'sessione', 'sessioni') : 'Nessuna sessione'
 
 // Bulk approval (Da valutare): no email leaves, the outcome is communicated person by person.
 const selection = ref<Record<string, boolean>>({})
@@ -176,16 +174,12 @@ function sortable(title: string) {
 const columns = computed<TableColumn<StaffListItem>[]>(() => [
   ...(tab.value === 'review' && rows.value.length ? [{ id: 'select' }] : []),
   { id: 'name', accessorFn: row => `${row.lastName} ${row.firstName}`, header: sortable('Nome') },
+  { id: 'team', accessorKey: 'team', header: sortable('Squadra') },
   { id: 'roles', header: 'Ruoli' },
   { accessorKey: 'city', header: sortable('Città') },
   { id: 'status', header: 'Stato' },
   ...(bySession.value ? [] : [{ accessorKey: 'appliedAt', header: sortable('Candidatura') }]),
-  {
-    id: 'availability',
-    accessorFn: row => row.nextAvailability?.startDate ?? '9999-12-31',
-    header: sortable('Disponibilità'),
-  },
-  ...(bySession.value ? [{ id: 'coverage', header: 'Nella sessione' }] : []),
+  { id: 'availability', accessorKey: 'availableSessions', header: sortable('Disponibilità') },
 ])
 </script>
 
@@ -201,11 +195,11 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
         <UFormField label="Ruolo" class="w-full sm:w-60">
           <USelect v-model="role" :items="roleItems" class="w-full" />
         </UFormField>
+        <UFormField label="Squadra" class="w-full sm:w-44">
+          <USelect v-model="team" :items="teamItems" class="w-full" />
+        </UFormField>
         <UFormField v-if="tab !== 'review'" label="Disponibili per la sessione" class="w-full sm:w-80">
           <USelect v-model="sessionId" :items="sessionItems" class="w-full" />
-        </UFormField>
-        <UFormField v-if="bySession" label="Copertura delle date" class="w-full sm:w-56">
-          <USelect v-model="coverage" :items="coverageItems" class="w-full" />
         </UFormField>
         <UButton
           class="pointer-coarse:min-h-11"
@@ -267,6 +261,7 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
               {{ fullName(row.original) }}
             </ULink>
           </template>
+          <template #team-cell="{ row }">{{ label('staffTeam', row.original.team) }}</template>
           <template #roles-cell="{ row }">
             <span class="whitespace-normal">{{ rolesOf(row.original) }}</span>
           </template>
@@ -287,11 +282,8 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
             <span v-if="row.original.appliedAt" class="tabular-nums">{{ appliedOn(row.original) }}</span>
             <span v-else class="text-dimmed">Non inviata</span>
           </template>
-          <template #coverage-cell="{ row }">
-            <StaffCoverageBadge v-if="row.original.coverage" :coverage="row.original.coverage" />
-          </template>
           <template #availability-cell="{ row }">
-            <span :class="row.original.nextAvailability ? 'tabular-nums' : 'text-dimmed'">
+            <span :class="row.original.availableSessions ? 'tabular-nums' : 'text-dimmed'">
               {{ availabilityOf(row.original) }}
             </span>
           </template>
@@ -313,15 +305,15 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
                 </ULink>
                 <div class="flex flex-wrap gap-1.5">
                   <IcStatusBadge kind="staffStatus" :value="person.status" />
-                  <StaffCoverageBadge v-if="bySession && person.coverage" :coverage="person.coverage" />
                 </div>
               </div>
               <p class="text-sm">
-                {{ rolesOf(person) }}<span v-if="person.city" class="text-muted"> · {{ person.city }}</span>
+                {{ label('staffTeam', person.team) }} · {{ rolesOf(person)
+                }}<span v-if="person.city" class="text-muted"> · {{ person.city }}</span>
               </p>
               <p class="text-sm text-muted">
                 <template v-if="tab === 'review' && person.appliedAt">Inviata il {{ appliedOn(person) }}</template>
-                <template v-else>Prossima disponibilità: {{ availabilityOf(person) }}</template>
+                <template v-else>Disponibile per: {{ availabilityOf(person) }}</template>
               </p>
             </div>
           </li>

@@ -29,7 +29,8 @@ const state = reactive({
   startDate: props.initial?.startDate ?? '',
   endDate: props.initial?.endDate ?? '',
   familySlots: props.initial?.familySlots ?? 8,
-  staffNeeded: props.initial?.staffNeeded ?? 0,
+  // The base of a session: 10 people of the staff, plus the coordinators of the staff and of the v-team.
+  staffNeeded: props.initial?.staffNeeded ?? 10,
   responseDeadline: props.initial?.responseDeadline ?? '',
   contractDocumentId: (props.initial?.contractDocumentId ?? null) as string | null,
   notes: props.initial?.notes ?? '',
@@ -92,7 +93,12 @@ function onSubmit(event: FormSubmitEvent<SessionInput>) {
       <UFormField label="Posti per le famiglie" name="familySlots" required :help="slotsHelp">
         <UInputNumber v-model="state.familySlots" :min="minSlots" :max="500" class="w-full" />
       </UFormField>
-      <UFormField label="Persone di staff necessarie" name="staffNeeded" required>
+      <UFormField
+        label="Persone di staff necessarie"
+        name="staffNeeded"
+        help="Senza contare il coordinatore dello staff e quello del v-team."
+        required
+      >
         <UInputNumber v-model="state.staffNeeded" :min="0" :max="500" class="w-full" />
       </UFormField>
     </div>

@@ -7,9 +7,10 @@ import type {
   SessionStatus,
   StaffRole,
   StaffStatus,
+  StaffTeam,
   UserStatus,
 } from '../utils/constants'
-import type { Coverage, DayRange, IsoDay } from '../utils/dates'
+import type { IsoDay } from '../utils/dates'
 
 /** The outcome emails of a review, sent only by an explicit action of the administration. */
 export type StaffOutcomeTemplate = 'staff.approved' | 'staff.rejected'
@@ -20,12 +21,12 @@ export type StaffOutcomeTemplate = 'staff.approved' | 'staff.rejected'
  */
 export type ContractState = 'none' | 'missing' | 'pending' | 'signed'
 
-/** A period in which a staff member can come (inclusive days). */
-export interface AvailabilityDto {
+/** A session someone gave (or can give) availability for: the whole session, never part of it. */
+export interface AvailabilitySession {
   id: string
+  title: string
   startDate: IsoDay
   endDate: IsoDay
-  notes: string | null
 }
 
 /** A personal document of a staff account (titles, certificates, ID). */
@@ -47,13 +48,14 @@ export interface StaffListItem {
   email: string
   accountStatus: UserStatus
   status: StaffStatus
+  team: StaffTeam
   roles: StaffRole[]
   city: string | null
   appliedAt: string | null
-  /** The first period that has not ended yet. */
-  nextAvailability: DayRange | null
-  /** How the availability covers the session asked for (GET /api/admin/staff?sessionId=), else null. */
-  coverage: Coverage | null
+  /** Sessions not started yet the person said they can come to. */
+  availableSessions: number
+  /** Whether they can come to the session asked for (GET /api/admin/staff?sessionId=), else null. */
+  available: boolean | null
 }
 
 /** A convocation seen from the page of the person. */
@@ -92,6 +94,7 @@ export interface StaffDetail {
   accountStatus: UserStatus
   createdAt: string
   status: StaffStatus
+  team: StaffTeam
   birthDate: IsoDay | null
   city: string | null
   roles: StaffRole[]
@@ -104,7 +107,8 @@ export interface StaffDetail {
   reviewedByName: string | null
   /** Internal notes of the review: never shown to the person. */
   reviewNotes: string | null
-  availability: AvailabilityDto[]
+  /** Sessions the person said they can come to, by date. */
+  availability: AvailabilitySession[]
   convocations: StaffConvocationSummary[]
   documents: StaffDocumentDto[]
   outcome: StaffOutcome
@@ -130,6 +134,7 @@ export interface SessionConvocation {
   firstName: string
   lastName: string
   email: string
+  team: StaffTeam
   /** Roles of the person's application. */
   staffRoles: StaffRole[]
   /** Role in this session. */
@@ -139,7 +144,8 @@ export interface SessionConvocation {
   sentAt: string | null
   respondedAt: string | null
   declineReason: string | null
-  coverage: Coverage
+  /** The person said they can come to this session (they may have withdrawn it after being added). */
+  available: boolean
   contract: ContractState
   confirmed: boolean
   /**
@@ -149,16 +155,14 @@ export interface SessionConvocation {
   sendable: boolean
 }
 
-/** An approved staff member who can be added to the session. */
+/** An approved staff or v-team member, available for the session, who can be added to it. */
 export interface AvailableStaff {
   userId: string
   firstName: string
   lastName: string
+  team: StaffTeam
   roles: StaffRole[]
   city: string | null
-  coverage: Coverage
-  /** Periods that overlap the session. */
-  periods: DayRange[]
   /** A previous convocation to this session that was declined or cancelled. */
   previousStatus: Extract<ConvocationStatus, 'declined' | 'cancelled'> | null
 }
@@ -178,6 +182,7 @@ export interface StaffApplicationDto {
   status: StaffStatus
   /** The application can still be changed (until it is sent). */
   editable: boolean
+  team: StaffTeam
   birthDate: IsoDay | null
   city: string | null
   roles: StaffRole[]
@@ -231,14 +236,23 @@ export interface StaffHome {
   toAnswer: MyConvocation[]
   /** Accepted convocations of sessions that have not ended. */
   upcoming: MyConvocation[]
-  availability: { upcoming: number; next: AvailabilityDto | null }
+  /** Sessions not started yet: how many the person said they can come to, out of how many. */
+  availability: { available: number; total: number }
+}
+
+/** A session of /staff/disponibilita with the person's answer. */
+export interface MyAvailabilitySession extends AvailabilitySession {
+  available: boolean
+  /** The person has a convocation to it (sent or accepted): the availability stays, it no longer matters. */
+  convoked: boolean
 }
 
 /** GET /api/staff/availability */
 export interface MyAvailability {
-  /** Periods can be added and removed (approved staff only). */
+  /** Answers can be given and changed (approved staff only). */
   canEdit: boolean
-  periods: AvailabilityDto[]
+  /** The sessions not started yet, by date. */
+  sessions: MyAvailabilitySession[]
 }
 
 /** POST /api/staff/convocations/:id/accept */

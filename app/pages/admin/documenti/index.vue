@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import type { DocumentListItem } from '#shared/types/documents'
-import { enumLabel } from '#shared/utils/constants'
+import { enumLabel, type DocumentAudience } from '#shared/utils/constants'
 import { formatDay } from '#shared/utils/format'
 
 // Documents of the administration: what each one asks (to sign or to read), its session, how many
@@ -21,18 +21,22 @@ const tab = computed({
 const search = ref('')
 const category = ref('all')
 const kind = ref('all')
+const audience = ref<DocumentAudience | 'all'>('all')
 
 const all = computed(() => data.value ?? [])
 const active = computed(() => all.value.filter(d => !d.archivedAt))
 const archived = computed(() => all.value.filter(d => d.archivedAt))
-const filtering = computed(() => !!search.value.trim() || category.value !== 'all' || kind.value !== 'all')
+const filtering = computed(
+  () => !!search.value.trim() || category.value !== 'all' || kind.value !== 'all' || audience.value !== 'all',
+)
 const rows = computed(() => {
   const q = search.value.trim().toLowerCase()
   return (tab.value === 'archived' ? archived.value : active.value).filter(
     d =>
       (!q || d.title.toLowerCase().includes(q) || d.session?.title.toLowerCase().includes(q)) &&
       (category.value === 'all' || d.category === category.value) &&
-      (kind.value === 'all' || (kind.value === 'sign') === d.requiresSignature),
+      (kind.value === 'all' || (kind.value === 'sign') === d.requiresSignature) &&
+      (audience.value === 'all' || d.audiences.includes(audience.value)),
   )
 })
 
@@ -47,10 +51,15 @@ const kindItems = [
   { label: 'Da leggere', value: 'read' },
 ]
 
+// Point 7: who the document went to. A document not assigned yet shows only with "Tutti i destinatari".
+const audienceItems = computed(() => [{ label: 'Tutti i destinatari', value: 'all' }, ...options('documentAudience')])
+const audiencesOf = (d: DocumentListItem) => d.audiences.map(a => enumLabel('documentAudience', a)).join(', ')
+
 function clearFilters() {
   search.value = ''
   category.value = 'all'
   kind.value = 'all'
+  audience.value = 'all'
 }
 
 const uploadOpen = ref(false)
@@ -88,6 +97,7 @@ const columns: TableColumn<DocumentListItem>[] = [
   { accessorKey: 'category', header: 'Categoria' },
   { id: 'session', header: 'Sessione' },
   { id: 'kind', header: 'Richiede' },
+  { id: 'audiences', header: 'Destinatari' },
   { id: 'progress', header: 'Avanzamento' },
   { accessorKey: 'createdAt', header: sortableHeader('Caricato il') },
 ]
@@ -138,6 +148,7 @@ const columns: TableColumn<DocumentListItem>[] = [
         />
         <USelect v-model="category" :items="categoryItems" aria-label="Categoria" class="w-full sm:w-56" />
         <USelect v-model="kind" :items="kindItems" aria-label="Cosa chiede il documento" class="w-full sm:w-56" />
+        <USelect v-model="audience" :items="audienceItems" aria-label="Destinatari" class="w-full sm:w-52" />
         <UButton
           v-if="filtering"
           color="neutral"
@@ -192,6 +203,14 @@ const columns: TableColumn<DocumentListItem>[] = [
               {{ row.original.requiresSignature ? 'Firma' : 'Lettura' }}
             </span>
           </template>
+          <template #audiences-cell="{ row }">
+            <ul v-if="row.original.audiences.length">
+              <li v-for="audience in row.original.audiences" :key="audience" class="whitespace-nowrap">
+                {{ enumLabel('documentAudience', audience) }}
+              </li>
+            </ul>
+            <span v-else class="text-muted">Non ancora assegnato</span>
+          </template>
           <template #progress-cell="{ row }">
             <DocumentsSignatureProgress
               :signed="row.original.progress.signed"
@@ -216,6 +235,7 @@ const columns: TableColumn<DocumentListItem>[] = [
                   {{ enumLabel('documentCategory', doc.category) }} ·
                   {{ doc.requiresSignature ? 'Da firmare' : 'Da leggere' }}
                   <template v-if="doc.session"> · {{ doc.session.title }}</template>
+                  <template v-if="doc.audiences.length"> · {{ audiencesOf(doc) }}</template>
                 </p>
                 <DocumentsSignatureProgress
                   :signed="doc.progress.signed"

@@ -33,6 +33,7 @@ import type {
   SignatureStatus,
   StaffRole,
   StaffStatus,
+  StaffTeam,
   TokenPurpose,
   UserRole,
   UserStatus,
@@ -189,6 +190,8 @@ export const staffProfiles = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     status: text().$type<StaffStatus>().notNull().default('registered'),
+    /** Staff or v-team (volunteers): chosen in the application, changed by the administration. */
+    team: text().$type<StaffTeam>().notNull().default('staff'),
     birthDate: day(),
     city: text(),
     roles: jsonb().$type<StaffRole[]>().notNull().default([]),
@@ -205,25 +208,6 @@ export const staffProfiles = pgTable(
     updatedAt: updatedAt(),
   },
   t => [uniqueIndex('staff_profiles_user_key').on(t.userId), index('staff_profiles_status_idx').on(t.status)],
-)
-
-/** Periods in which a staff member is available (inclusive days). */
-export const staffAvailability = pgTable(
-  'staff_availability',
-  {
-    id: pk(),
-    userId: uuid()
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    startDate: day().notNull(),
-    endDate: day().notNull(),
-    notes: text(),
-    createdAt: createdAt(),
-  },
-  t => [
-    index('staff_availability_user_idx').on(t.userId),
-    check('staff_availability_range', sql`${t.endDate} >= ${t.startDate}`),
-  ],
 )
 
 // ─── Sessions ──────────────────────────────────────────────────────────────────────────────────────
@@ -287,6 +271,25 @@ export const sessionFamilies = pgTable(
   t => [
     uniqueIndex('session_families_session_family_key').on(t.sessionId, t.familyId),
     index('session_families_family_idx').on(t.familyId),
+  ],
+)
+
+/** A staff or v-team member who can come to the whole of a session (docs/spec.md 3.5). */
+export const sessionAvailability = pgTable(
+  'session_availability',
+  {
+    id: pk(),
+    sessionId: uuid()
+      .notNull()
+      .references(() => campSessions.id, { onDelete: 'cascade' }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  t => [
+    uniqueIndex('session_availability_session_user_key').on(t.sessionId, t.userId),
+    index('session_availability_user_idx').on(t.userId),
   ],
 )
 
@@ -501,7 +504,7 @@ export const auditLog = pgTable(
 export const usersRelations = relations(users, ({ one, many }) => ({
   family: one(families, { fields: [users.id], references: [families.userId] }),
   staffProfile: one(staffProfiles, { fields: [users.id], references: [staffProfiles.userId] }),
-  availability: many(staffAvailability),
+  availability: many(sessionAvailability),
   convocations: many(sessionStaff),
   signatureRequests: many(signatureRequests),
   personalDocuments: many(personalDocuments),
@@ -522,13 +525,10 @@ export const staffProfilesRelations = relations(staffProfiles, ({ one }) => ({
   cvFile: one(files, { fields: [staffProfiles.cvFileId], references: [files.id] }),
 }))
 
-export const staffAvailabilityRelations = relations(staffAvailability, ({ one }) => ({
-  user: one(users, { fields: [staffAvailability.userId], references: [users.id] }),
-}))
-
 export const campSessionsRelations = relations(campSessions, ({ one, many }) => ({
   families: many(sessionFamilies),
   staff: many(sessionStaff),
+  availability: many(sessionAvailability),
   documents: many(documents),
   contractDocument: one(documents, { fields: [campSessions.contractDocumentId], references: [documents.id] }),
 }))
@@ -541,6 +541,11 @@ export const sessionFamiliesRelations = relations(sessionFamilies, ({ one }) => 
 export const sessionStaffRelations = relations(sessionStaff, ({ one }) => ({
   session: one(campSessions, { fields: [sessionStaff.sessionId], references: [campSessions.id] }),
   user: one(users, { fields: [sessionStaff.userId], references: [users.id] }),
+}))
+
+export const sessionAvailabilityRelations = relations(sessionAvailability, ({ one }) => ({
+  session: one(campSessions, { fields: [sessionAvailability.sessionId], references: [campSessions.id] }),
+  user: one(users, { fields: [sessionAvailability.userId], references: [users.id] }),
 }))
 
 export const documentsRelations = relations(documents, ({ one, many }) => ({

@@ -3,7 +3,7 @@ import { staffList } from '../../../domain/staff'
 
 /**
  * Every staff account with its application; the page applies tabs, search and the role filter. With
- * ?sessionId= each person carries the coverage of that session's dates.
+ * ?sessionId= each person says whether they can come to that session.
  */
 export default defineEventHandler(async event => {
   await requireAdmin(event)

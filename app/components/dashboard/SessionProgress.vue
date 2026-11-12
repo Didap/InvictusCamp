@@ -37,7 +37,7 @@ const places = computed(() => {
 // "da trovare" for the people nobody has been convoked for yet.
 const staff = computed(() => {
   const s = props.session.staff
-  const waiting = s.accepted - s.confirmed + s.awaiting
+  const waiting = s.accepted - s.confirmed + s.waiting
   const missing = Math.max(0, s.needed - s.confirmed - waiting - s.toSend)
   return {
     summary: s.needed
@@ -46,7 +46,7 @@ const staff = computed(() => {
     confirmed: { value: s.confirmed, label: plural(s.confirmed, 'confermato', 'confermati') },
     pending: { value: waiting, label: `${waiting} in attesa di risposta o firma` },
     rest: missing ? `${missing} da trovare` : undefined,
-    toSend: s.toSend ? plural(s.toSend, 'convocazione da inviare', 'convocazioni da inviare') : null,
+    toSend: s.drafts ? plural(s.drafts, 'convocazione da inviare', 'convocazioni da inviare') : null,
   }
 })
 </script>

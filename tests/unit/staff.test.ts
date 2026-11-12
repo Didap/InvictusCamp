@@ -14,8 +14,9 @@ import {
   STAFF_DOCUMENT_CATEGORIES,
   STAFF_STATUS_MOVES,
   applicationMissing,
-  availabilitySchema,
+  availabilityAnswerSchema,
   canMoveStaff,
+  countsTowardNeeded,
   isReviewMove,
   staffApplicationSchema,
   staffDocumentSchema,
@@ -51,8 +52,9 @@ describe('application', () => {
     ).toEqual(['Città'])
   })
 
-  it('the full schema refuses a future birth date and an empty list of roles', () => {
+  it('the full schema refuses a future birth date, an empty list of roles and an unknown team', () => {
     const valid = {
+      team: 'volunteer',
       birthDate: '1995-04-10',
       city: 'Lecce',
       roles: ['group_lead'],
@@ -65,6 +67,9 @@ describe('application', () => {
     expect(staffApplicationSchema.safeParse({ ...valid, birthDate: '1995-02-30' }).success).toBe(false)
     expect(staffApplicationSchema.safeParse({ ...valid, roles: [] }).success).toBe(false)
     expect(staffApplicationSchema.safeParse({ ...valid, roles: ['chef'] }).success).toBe(false)
+    expect(staffApplicationSchema.safeParse({ ...valid, team: 'cucina' }).success).toBe(false)
+    const { team: _team, ...withoutTeam } = valid
+    expect(staffApplicationSchema.safeParse(withoutTeam).success).toBe(false)
   })
 })
 
@@ -102,14 +107,21 @@ describe('convocation', () => {
   })
 })
 
+describe('staffNeeded', () => {
+  it('counts the staff team, coordinators and v-team aside', () => {
+    expect(countsTowardNeeded({ team: 'staff', role: 'group_lead' })).toBe(true)
+    expect(countsTowardNeeded({ team: 'staff', role: null })).toBe(true)
+    expect(countsTowardNeeded({ team: 'staff', role: 'coordinator' })).toBe(false)
+    expect(countsTowardNeeded({ team: 'volunteer', role: 'other' })).toBe(false)
+  })
+})
+
 describe('availability schema', () => {
-  it('refuses a period that ends before it starts or is already over', () => {
-    const next = addDays(todayIso(), 30)
-    expect(availabilitySchema.safeParse({ startDate: next, endDate: addDays(next, 6) }).success).toBe(true)
-    const reversed = availabilitySchema.safeParse({ startDate: next, endDate: addDays(next, -1) })
-    expect(reversed.success).toBe(false)
-    expect(reversed.error?.issues[0]?.path).toEqual(['endDate'])
-    expect(availabilitySchema.safeParse({ startDate: '2020-01-01', endDate: '2020-01-05' }).success).toBe(false)
+  it('is a yes or a no for the whole session', () => {
+    expect(availabilityAnswerSchema.safeParse({ available: true }).success).toBe(true)
+    expect(availabilityAnswerSchema.safeParse({ available: false }).success).toBe(true)
+    expect(availabilityAnswerSchema.safeParse({ available: 'sì' }).success).toBe(false)
+    expect(availabilityAnswerSchema.safeParse({}).success).toBe(false)
   })
 })
 

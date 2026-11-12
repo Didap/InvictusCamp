@@ -1,5 +1,5 @@
 // DTOs of the documents area (A4): documents of the administration, signature requests, the signing page.
-import type { DocumentCategory, SessionStatus, SignatureStatus, UserRole } from '../utils/constants'
+import type { DocumentAudience, DocumentCategory, SessionStatus, SignatureStatus, UserRole } from '../utils/constants'
 import type { FileDto } from './api'
 
 /** A session as the documents area shows it (choices in the assign dialog, links). */
@@ -26,6 +26,8 @@ export interface DocumentListItem {
   requiresSignature: boolean
   session: { id: string; title: string } | null
   progress: SignatureProgress
+  /** Who the live requests went to, in the order of DOCUMENT_AUDIENCES. */
+  audiences: DocumentAudience[]
   createdAt: string
   archivedAt: string | null
 }
@@ -74,7 +76,7 @@ export interface SignatureRequestRow {
 }
 
 /** GET /api/admin/documents/:id */
-export interface DocumentDetail extends DocumentListItem {
+export interface DocumentDetail extends Omit<DocumentListItem, 'audiences'> {
   description: string | null
   file: FileDto & { sha256: string }
   createdBy: string | null

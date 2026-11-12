@@ -818,19 +818,30 @@ describe('the session itself', () => {
     const signer = await makeStaff(db)
     const unsigned = await makeStaff(db)
     const waiting = await makeStaff(db)
+    // A coordinator and the v-team do not count toward `needed`, only among the open convocations.
+    const coordinator = await makeStaff(db)
+    const volunteer = await makeStaff(db)
+    await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.userId, volunteer.user.id))
     await db.insert(t.sessionStaff).values([
       { sessionId: soon.id, userId: signer.user.id, status: 'accepted' },
       { sessionId: soon.id, userId: unsigned.user.id, status: 'accepted' },
       { sessionId: soon.id, userId: waiting.user.id, status: 'sent' },
+      { sessionId: soon.id, userId: coordinator.user.id, status: 'accepted', role: 'coordinator' },
+      { sessionId: soon.id, userId: volunteer.user.id, status: 'draft' },
     ])
-    await db
-      .insert(t.signatureRequests)
-      .values({ documentId: contract.id, userId: signer.user.id, status: 'signed', sessionId: soon.id })
+    await db.insert(t.signatureRequests).values(
+      [signer, coordinator].map(person => ({
+        documentId: contract.id,
+        userId: person.user.id,
+        status: 'signed' as const,
+        sessionId: soon.id,
+      })),
+    )
 
     const all = await listSessions(db, {}, '2026-11-06')
     expect(all.map(s => s.title)).toEqual(['Presto', 'Più avanti', 'Passata'])
     expect(all[0]!.slots).toEqual({ total: 4, held: 2, confirmed: 1, free: 2, reserves: 1 })
-    expect(all[0]!.staff).toEqual({ needed: 3, confirmed: 1, accepted: 2, waiting: 1, toSend: 0 })
+    expect(all[0]!.staff).toEqual({ needed: 3, confirmed: 1, accepted: 2, waiting: 1, toSend: 0, open: 5, drafts: 1 })
 
     const open = await listSessions(db, { statuses: ['draft', 'inviting', 'confirmed'] }, '2026-11-06')
     expect(open.map(s => s.id)).toEqual([soon.id, later.id, past.id])

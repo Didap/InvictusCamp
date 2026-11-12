@@ -83,7 +83,7 @@ function moveNotes(move: SessionMove, s: SessionDetail): string[] {
     )
   }
   if (move.to === 'cancelled') {
-    const convocations = s.staff.accepted + s.staff.waiting + s.staff.toSend
+    const convocations = s.staff.open
     if (convocations) {
       notes.push(
         convocations === 1
@@ -360,7 +360,7 @@ const staffHint = computed(() => {
   const missing = Math.max(0, staff.needed - staff.accepted - staff.waiting - staff.toSend)
   const parts = [
     pending && `${pending} in attesa di risposta o firma`,
-    staff.toSend && `${staff.toSend} da inviare`,
+    staff.drafts && `${staff.drafts} da inviare`,
     missing && `${missing} da trovare`,
   ].filter(Boolean)
   if (parts.length) return parts.join(' · ')

@@ -17,7 +17,13 @@ import type {
   SignaturePage,
   SignatureRequestRow,
 } from '../../shared/types/documents'
-import { LOCALE, TIME_ZONE, type DocumentCategory } from '../../shared/utils/constants'
+import {
+  DOCUMENT_AUDIENCES,
+  LOCALE,
+  TIME_ZONE,
+  type DocumentAudience,
+  type DocumentCategory,
+} from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
 import { fullName } from '../../shared/utils/format'
 import {
@@ -1072,10 +1078,16 @@ export async function listDocuments(db: DbOrTx, options: { sessionId?: string } 
       sessionTitle: campSessions.title,
       assigned: sql<number>`(count(${signatureRequests.id}) filter (where ${signatureRequests.status} <> 'cancelled'${inSession}))::int`,
       signed: sql<number>`(count(${signatureRequests.id}) filter (where ${signatureRequests.status} = 'signed'${inSession}))::int`,
+      // Who the live requests went to (point 7: filter families / staff / v-team).
+      audiences: sql<DocumentAudience[]>`coalesce(array_agg(distinct case
+        when ${users.role} = 'family' then 'family' when ${staffProfiles.team} = 'volunteer' then 'volunteer' else 'staff' end)
+        filter (where ${signatureRequests.status} <> 'cancelled' and ${users.role} <> 'admin'${inSession}), '{}')`,
     })
     .from(documents)
     .leftJoin(campSessions, eq(campSessions.id, documents.sessionId))
     .leftJoin(signatureRequests, eq(signatureRequests.documentId, documents.id))
+    .leftJoin(users, eq(users.id, signatureRequests.userId))
+    .leftJoin(staffProfiles, eq(staffProfiles.userId, users.id))
     .where(
       sessionId
         ? or(
@@ -1099,6 +1111,7 @@ export async function listDocuments(db: DbOrTx, options: { sessionId?: string } 
     requiresSignature: row.requiresSignature,
     session: row.sessionId && row.sessionTitle ? { id: row.sessionId, title: row.sessionTitle } : null,
     progress: { assigned: row.assigned, signed: row.signed },
+    audiences: DOCUMENT_AUDIENCES.filter(audience => row.audiences.includes(audience)),
     createdAt: row.createdAt.toISOString(),
     archivedAt: row.archivedAt?.toISOString() ?? null,
   }))
