@@ -153,8 +153,7 @@ function showBlock(blockId: string) {
 
 <template>
   <div>
-    <!-- Sticky inside the padded body of IcPage: the negative top (its p-4 sm:p-6 lg:p-8) keeps the bar against
-         the navbar, with no strip of the board scrolling above it. -->
+    <!-- Negative top = the body padding of IcPage (p-4 sm:p-6 lg:p-8): the bar sits flush under the navbar. -->
     <div
       class="sticky -top-4 z-10 mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-default bg-default py-3 sm:-top-6 lg:-top-8"
     >
