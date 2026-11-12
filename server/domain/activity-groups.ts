@@ -12,8 +12,7 @@ import {
   type ProgrammeGroup,
 } from '../../shared/utils/constants'
 import { ageOn } from '../../shared/utils/dates'
-import { fullName, memberName } from '../../shared/utils/format'
-import { NO_CARDS } from '../../shared/utils/lodgings'
+import { NO_CARDS, fullName, memberName } from '../../shared/utils/format'
 import { isSessionEditable } from '../../shared/utils/session-status'
 import { familyMembers, families, sessionFamilies, sessionStaff, users } from '../db/schema'
 import { writeAudit } from './audit'
@@ -116,13 +115,19 @@ export async function sessionGroupsOf(db: DbOrTx, sessionId: string): Promise<Se
   return { editable: isSessionEditable(session.status), ...rest }
 }
 
+/** The session, locked, while its groups can still change. */
+async function lockGroups(db: DbOrTx, sessionId: string) {
+  const session = await lockSession(db, sessionId)
+  requireEditable(session, 'i gruppi non si cambiano più')
+  return session
+}
+
 /** Puts a titolare of the session in a group, or takes it out (group null). */
 export async function assignGroup(
   db: DbOrTx,
   input: { sessionId: string; participationId: string; group: ProgrammeGroup | null; actor: Actor },
 ): Promise<void> {
-  const session = await lockSession(db, input.sessionId)
-  requireEditable(session, 'i gruppi non si cambiano più')
+  const session = await lockGroups(db, input.sessionId)
   const [row] = await db
     .select({ id: sessionFamilies.id, group: sessionFamilies.activityGroup })
     .from(sessionFamilies)
@@ -148,25 +153,23 @@ export async function setGroupLeader(
   db: DbOrTx,
   input: { sessionId: string; group: ProgrammeGroup; convocationId: string | null; actor: Actor },
 ): Promise<void> {
-  const session = await lockSession(db, input.sessionId)
-  requireEditable(session, 'i gruppi non si cambiano più')
+  const session = await lockGroups(db, input.sessionId)
   const [current] = await db
     .select({ id: sessionStaff.id })
     .from(sessionStaff)
     .where(and(eq(sessionStaff.sessionId, session.id), eq(sessionStaff.activityGroup, input.group)))
     .for('update')
   if ((current?.id ?? null) === input.convocationId) return
-  let leader: { id: string; group: ProgrammeGroup | null } | undefined
-  if (input.convocationId) {
-    // Locked, so that the person cannot decline or be withdrawn before they lead the group.
-    ;[leader] = await db
-      .select({ id: sessionStaff.id, group: sessionStaff.activityGroup })
-      .from(sessionStaff)
-      .innerJoin(users, eq(users.id, sessionStaff.userId))
-      .where(and(eq(sessionStaff.id, input.convocationId), canLead(session.id)))
-      .for('update', { of: sessionStaff })
-    if (!leader) throw new DomainError(404, 'Questa persona non è nello staff della sessione')
-  }
+  // Locked, so that the person cannot decline or be withdrawn before they lead the group.
+  const [leader] = input.convocationId
+    ? await db
+        .select({ id: sessionStaff.id, group: sessionStaff.activityGroup })
+        .from(sessionStaff)
+        .innerJoin(users, eq(users.id, sessionStaff.userId))
+        .where(and(eq(sessionStaff.id, input.convocationId), canLead(session.id)))
+        .for('update', { of: sessionStaff })
+    : []
+  if (input.convocationId && !leader) throw new DomainError(404, 'Questa persona non è nello staff della sessione')
   // The unique index allows one leader per group: the current one steps down first.
   if (current) await db.update(sessionStaff).set({ activityGroup: null }).where(eq(sessionStaff.id, current.id))
   if (leader) await db.update(sessionStaff).set({ activityGroup: input.group }).where(eq(sessionStaff.id, leader.id))
@@ -183,14 +186,19 @@ export async function setGroupLeader(
 
 /** Puts every family without a group into one, keeping the groups even (distributeFamilies). */
 export async function distributeGroups(db: DbOrTx, input: { sessionId: string; actor: Actor }): Promise<number> {
-  const session = await lockSession(db, input.sessionId)
-  requireEditable(session, 'i gruppi non si cambiano più')
+  const session = await lockGroups(db, input.sessionId)
   const placed = distributeFamilies(await groupFamilies(db, session))
   if (!placed.size) return 0
-  for (const group of PROGRAMME_GROUPS) {
-    const ids = [...placed].filter(([, to]) => to === group).map(([id]) => id)
-    if (ids.length)
-      await db.update(sessionFamilies).set({ activityGroup: group }).where(inArray(sessionFamilies.id, ids))
+  for (const [group, entries] of Map.groupBy(placed, ([, to]) => to)) {
+    await db
+      .update(sessionFamilies)
+      .set({ activityGroup: group })
+      .where(
+        inArray(
+          sessionFamilies.id,
+          entries.map(([id]) => id),
+        ),
+      )
   }
   await writeAudit(db, {
     actorUserId: input.actor.userId,
@@ -209,19 +217,21 @@ export async function distributeGroups(db: DbOrTx, input: { sessionId: string; a
  */
 export async function groupsCsv(db: DbOrTx, sessionId: string): Promise<{ filename: string; csv: string }> {
   const { session, families: grouped, staff } = await loadSession(db, sessionId)
-  const leaders = new Map(staff.flatMap(person => (person.group ? [[person.group, person.name] as const] : [])))
-  const rowsOf = (group: ProgrammeGroup | null) =>
-    grouped
+  const rowsOf = (group: ProgrammeGroup | null) => {
+    const label = group ? PROGRAMME_GROUP_LABELS[group] : 'Senza gruppo'
+    const leader = (group && staff.find(person => person.group === group)?.name) || null
+    return grouped
       .filter(family => family.group === group)
       .flatMap(family =>
         (family.members.length ? family.members : [null]).map(member => [
-          group ? PROGRAMME_GROUP_LABELS[group] : 'Senza gruppo',
-          group ? (leaders.get(group) ?? null) : null,
+          label,
+          leader,
           family.familyName,
           member?.name ?? NO_CARDS,
           member?.age ?? null,
         ]),
       )
+  }
   return sessionCsv(session, 'gruppi', [
     ['Gruppo', 'Responsabile', 'Famiglia', 'Componente', 'Età'],
     ...PROGRAMME_GROUPS.flatMap(rowsOf),

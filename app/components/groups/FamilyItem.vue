@@ -2,7 +2,7 @@
 import type { SessionGroupFamily } from '#shared/types/activity-groups'
 import { memberLabel } from '#shared/utils/activity-groups'
 import { PROGRAMME_GROUP_LABELS, PROGRAMME_GROUPS, type ProgrammeGroup } from '#shared/utils/constants'
-import { NO_CARDS } from '#shared/utils/lodgings'
+import { NO_CARDS } from '#shared/utils/format'
 
 // A family in the Gruppi tab: who it is, the young with their age, and the group it is in.
 const props = defineProps<{ family: SessionGroupFamily; disabled: boolean; loading: boolean }>()

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { SelectMenuItem } from '@nuxt/ui'
 import type { Lodging, SessionLodgingFamily, SessionLodgingsDto } from '#shared/types/lodgings'
-import { plural } from '#shared/utils/format'
-import { NO_CARDS, bedsLabel, featureLabels, groupByArea, placeFamilies } from '#shared/utils/lodgings'
+import { NO_CARDS, plural } from '#shared/utils/format'
+import { bedsLabel, featureLabels, groupByArea, placeFamilies } from '#shared/utils/lodgings'
 
 // The Alloggi tab of a session (docs/spec.md 3.11): each titolare holding a place gets a lodging of the
 // layout, chosen by its size and needs; below, the layout of the session lodging by lodging. Saving a

@@ -47,6 +47,7 @@ import {
 } from '../../shared/utils/slots'
 import {
   campSessions,
+  holdsPlace,
   documents,
   families,
   sessionFamilies,
@@ -168,11 +169,7 @@ const LEAVE_PLACE = { lodgingId: null, activityGroup: null } as const
 
 /** The participations of the session that hold a place: titolari not declined nor removed. */
 export const holdingPlace = (sessionId: string) =>
-  and(
-    eq(sessionFamilies.sessionId, sessionId),
-    eq(sessionFamilies.kind, 'slot'),
-    inArray(sessionFamilies.status, [...ACTIVE_STATUSES]),
-  )
+  and(eq(sessionFamilies.sessionId, sessionId), holdsPlace(sessionFamilies))
 
 function iso(value: Date | null): string | null {
   return value ? value.toISOString() : null

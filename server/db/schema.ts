@@ -270,11 +270,17 @@ export const lodgings = pgTable(
   t => [check('lodgings_beds', sql`${t.beds} > 0`)],
 )
 
-/** A family in a session: titolare (slot) or riserva (reserve, called in reserveRank order). */
-/** A titolare holding a place (shared/utils/slots.ts, holdsSlot): only it has a lodging and a group. */
-const holdsPlace = (t: { kind: AnyPgColumn; status: AnyPgColumn }) =>
-  sql`(${t.kind} = 'slot' and ${t.status} in (${sql.raw(ACTIVE_STATUSES.map(status => `'${status}'`).join(', '))}))`
+/** A list of constants for `in (…)`. */
+const sqlList = (values: readonly string[]) => sql.raw(values.map(value => `'${value}'`).join(', '))
 
+/**
+ * A titolare holding a place (shared/utils/slots.ts, holdsSlot): only it has a lodging and a group. Used by
+ * the checks below and by the queries (server/domain/sessions.ts, holdingPlace).
+ */
+export const holdsPlace = (t: { kind: AnyPgColumn; status: AnyPgColumn }) =>
+  sql`(${t.kind} = 'slot' and ${t.status} in (${sqlList(ACTIVE_STATUSES)}))`
+
+/** A family in a session: titolare (slot) or riserva (reserve, called in reserveRank order). */
 export const sessionFamilies = pgTable(
   'session_families',
   {
@@ -361,7 +367,7 @@ export const sessionStaff = pgTable(
     // A convocation declined or withdrawn leads no group.
     check(
       'session_staff_activity_group',
-      sql`${t.activityGroup} is null or ${t.status} in (${sql.raw(OPEN_CONVOCATIONS.map(status => `'${status}'`).join(', '))})`,
+      sql`${t.activityGroup} is null or ${t.status} in (${sqlList(OPEN_CONVOCATIONS)})`,
     ),
   ],
 )

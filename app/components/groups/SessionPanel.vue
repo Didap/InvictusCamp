@@ -16,25 +16,6 @@ const { data, status, refresh } = useApiFetch<SessionGroupsDto>(() => base.value
 const families = computed(() => data.value?.families ?? [])
 const waiting = computed(() => families.value.filter(family => !family.group))
 const tally = computed(() => tallyGroups(families.value))
-const groups = computed(() =>
-  PROGRAMME_GROUPS.map(group => ({
-    group,
-    label: PROGRAMME_GROUP_LABELS[group],
-    families: families.value.filter(family => family.group === group),
-    leader: data.value?.staff.find(person => person.group === group),
-  })),
-)
-
-const summary = computed(() =>
-  families.value.length
-    ? [
-        `${families.value.length - waiting.value.length} su ${plural(families.value.length, 'famiglia', 'famiglie')} in un gruppo`,
-        waiting.value.length && `${waiting.value.length} senza gruppo`,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : undefined,
-)
 
 /** "Convocazione: da inviare" while the person has not accepted yet. */
 const convocationNote = (person: SessionGroupStaff) =>
@@ -56,12 +37,42 @@ const leaderItems = (group: ProgrammeGroup): SelectMenuItem[] =>
       .join(' · '),
   }))
 
+const groups = computed(() =>
+  PROGRAMME_GROUPS.map(group => ({
+    group,
+    label: PROGRAMME_GROUP_LABELS[group],
+    families: families.value.filter(family => family.group === group),
+    leader: data.value?.staff.find(person => person.group === group),
+    leaders: leaderItems(group),
+  })),
+)
+
+const summary = computed(() =>
+  families.value.length
+    ? [
+        `${families.value.length - waiting.value.length} su ${plural(families.value.length, 'famiglia', 'famiglie')} in un gruppo`,
+        waiting.value.length && `${waiting.value.length} senza gruppo`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : undefined,
+)
+
 /** What is being saved: a participation id, `leader:<group>` or `distribute`. */
 const saving = ref<string | null>(null)
-async function save(key: string, request: () => Promise<SessionGroupsDto>, failure: string) {
+/** Sends a change to the tab's API and shows the tab as the server returns it; undefined on failure. */
+async function save<T extends SessionGroupsDto>(
+  key: string,
+  path: string,
+  options: { method: 'PUT' | 'POST'; body?: Record<string, unknown> },
+  failure: string,
+): Promise<T | undefined> {
   saving.value = key
   try {
-    data.value = await request()
+    const url: string = `${base.value}${path}`
+    const result = (await api<T>(url, options)) as T
+    data.value = result
+    return result
   } catch (error) {
     notifyError(error, failure)
     await refresh()
@@ -72,33 +83,26 @@ async function save(key: string, request: () => Promise<SessionGroupsDto>, failu
 
 function assign(family: SessionGroupFamily, group: ProgrammeGroup | null) {
   if (group === family.group) return
-  const url: string = `${base.value}/${family.id}`
-  return save(family.id, () => api<SessionGroupsDto>(url, { method: 'PUT', body: { group } }), 'Gruppo non salvato')
+  return save(family.id, `/${family.id}`, { method: 'PUT', body: { group } }, 'Gruppo non salvato')
 }
 
 function chooseLeader(group: ProgrammeGroup, convocationId: string | null) {
-  const url: string = `${base.value}/leader`
-  return save(
-    `leader:${group}`,
-    () => api<SessionGroupsDto>(url, { method: 'PUT', body: { group, convocationId } }),
-    'Responsabile non salvato',
-  )
+  const body = { group, convocationId }
+  return save(`leader:${group}`, '/leader', { method: 'PUT', body }, 'Responsabile non salvato')
 }
 
-function distribute() {
-  const url: string = `${base.value}/distribute`
-  return save(
+async function distribute() {
+  const result = await save<SessionGroupsDto & { placed: number }>(
     'distribute',
-    async () => {
-      const result = await api<SessionGroupsDto & { placed: number }>(url, { method: 'POST' })
-      notifySuccess(
-        result.placed
-          ? `${plural(result.placed, 'famiglia divisa', 'famiglie divise')} nei gruppi`
-          : 'Tutte le famiglie hanno già un gruppo',
-      )
-      return result
-    },
+    '/distribute',
+    { method: 'POST' },
     'Famiglie non divise nei gruppi',
+  )
+  if (!result) return
+  notifySuccess(
+    result.placed
+      ? `${plural(result.placed, 'famiglia divisa', 'famiglie divise')} nei gruppi`
+      : 'Tutte le famiglie hanno già un gruppo',
   )
 }
 </script>
@@ -149,7 +153,7 @@ function distribute() {
         variant="subtle"
         icon="i-lucide-lock"
         title="La sessione è conclusa o annullata"
-        description="I gruppi restano qui per lo storico e non si possono più cambiare."
+        description="I gruppi non si possono più cambiare: una sessione conclusa li tiene qui per lo storico."
         class="mb-6"
       />
 
@@ -206,7 +210,7 @@ function distribute() {
               >
                 <USelectMenu
                   :model-value="column.leader?.id"
-                  :items="leaderItems(column.group)"
+                  :items="column.leaders"
                   value-key="value"
                   placeholder="Nessun responsabile"
                   :search-input="data.staff.length > 8 ? { placeholder: 'Cerca nello staff' } : false"
