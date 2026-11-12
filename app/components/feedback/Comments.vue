@@ -21,12 +21,11 @@ const groups = computed(() => {
   const items = props.archive.comments.items.filter(
     c =>
       (session.value === 'all' || c.session === Number(session.value)) &&
-      (question.value === 'all' || c.question === Number(question.value)) &&
       (!needle || c.text.toLocaleLowerCase('it').includes(needle)),
   )
   return props.archive.comments.questions
     .map((title, i) => ({ title, items: items.filter(c => c.question === i) }))
-    .filter(group => group.items.length)
+    .filter((group, i) => group.items.length && (question.value === 'all' || i === Number(question.value)))
 })
 const shown = computed(() => groups.value.reduce((sum, g) => sum + g.items.length, 0))
 </script>

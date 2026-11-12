@@ -28,10 +28,17 @@ export interface FeedbackArchive {
   staff: {
     /** Who is left out of the counts, as the source says it. */
     note: string | null
-    people: {
-      name: string
-      sessions: number[]
-      leads: { session: number; activity: string; votes: VoteCounts; note: string | null }[]
-    }[]
+    /** Everyone of the staff and the sessions they were in. */
+    people: { name: string; sessions: number[] }[]
+    /** One activity in one session: who led it (two names for a turn in pairs) and how the families voted it. */
+    turns: FeedbackTurn[]
   }
+}
+
+export interface FeedbackTurn {
+  session: number
+  activity: string
+  names: string[]
+  votes: VoteCounts
+  note: string | null
 }

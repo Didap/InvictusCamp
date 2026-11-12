@@ -12,12 +12,11 @@ import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import postgres from 'postgres'
 import { feedbackArchiveSchema, feedbackYearParamsSchema } from '../shared/schemas/feedback.ts'
+import { respondents } from '../shared/utils/feedback.ts'
+import { activeAdmin, failer } from './lib/admin.mjs'
 import { parseFeedbackPages } from './lib/feedback-pages.ts'
 
-const fail = message => {
-  console.error(`import-feedback: ${message}`)
-  process.exit(1)
-}
+const fail = failer('import-feedback')
 let args
 try {
   args = parseArgs({
@@ -52,12 +51,11 @@ try {
   fail(error.message)
 }
 
-const families = archive.sessions.reduce((sum, s) => sum + s.respondents, 0)
-const people = archive.staff.people
+const { staff } = archive
 console.log(
-  `${year}: ${archive.sessions.length} sessions, ${families} families, ${archive.votes.length} votes on ` +
-    `${archive.items.length} items, ${archive.themes.length} themes, ${archive.comments.items.length} comments, ` +
-    `${people.length} staff (${people.filter(p => p.leads.length).length} with activities)`,
+  `${year}: ${archive.sessions.length} sessions, ${respondents(archive, null)} families, ` +
+    `${archive.votes.length} votes on ${archive.items.length} items, ${archive.themes.length} themes, ` +
+    `${archive.comments.items.length} comments, ${staff.people.length} staff, ${staff.turns.length} led turns`,
 )
 if (!values.apply) {
   console.log('run again with --apply --by <email of an administrator> to write it')
@@ -69,17 +67,15 @@ if (!url) fail('DATABASE_URL is not set')
 const sql = postgres(url, { max: 1, onnotice: () => {} })
 try {
   const replaced = await sql.begin(async tx => {
-    const [admin] =
-      await tx`select id from users where lower(email) = lower(${values.by}) and role = 'admin' and status = 'active'`
-    if (!admin) throw new Error(`no active administrator with the email ${values.by}`)
+    const adminId = await activeAdmin(tx, values.by)
     const [before] = await tx`select 1 from feedback_archives where year = ${year}`
     await tx`
       insert into feedback_archives (year, data, source, imported_by, imported_at)
-      values (${year}, ${tx.json(archive)}, ${values.source ?? null}, ${admin.id}, now())
+      values (${year}, ${tx.json(archive)}, ${values.source ?? null}, ${adminId}, now())
       on conflict (year) do update
       set data = excluded.data, source = excluded.source, imported_by = excluded.imported_by, imported_at = now()`
     await tx`insert into audit_log ${tx({
-      actor_user_id: admin.id,
+      actor_user_id: adminId,
       action: 'feedback.import',
       entity_type: 'feedback_archive',
       data: tx.json({ year, source: values.source ?? null, replaced: !!before }),

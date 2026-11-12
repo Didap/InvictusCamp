@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FeedbackArchive } from '#shared/types/feedback'
-import { leadsByActivity, personLeads, votesTotal } from '#shared/utils/feedback'
+import { personTurns, turnsByActivity, votesTotal } from '#shared/utils/feedback'
 import { plural } from '#shared/utils/format'
 
 // Who was there in each session and how the families voted the activities each person led (docs/spec.md
@@ -31,11 +31,16 @@ const viewItems = [
 ]
 const leaders = computed(() =>
   props.archive.staff.people
-    .filter(p => p.leads.length)
-    .map(p => ({ ...p, ...personLeads(p) }))
+    .map(p => ({ name: p.name, ...personTurns(props.archive, p.name) }))
+    .filter(p => p.turns.length)
     .sort((a, b) => votesTotal(b.votes) - votesTotal(a.votes) || a.name.localeCompare(b.name, 'it')),
 )
-const activities = computed(() => leadsByActivity(props.archive))
+const activities = computed(() => turnsByActivity(props.archive))
+/** "con Nicola Macchi" for a turn in pairs, seen from one of the two. */
+const partners = (names: string[], name: string) => {
+  const others = names.filter(other => other !== name)
+  return others.length ? `con ${others.join(', ')}` : undefined
+}
 </script>
 
 <template>
@@ -89,7 +94,7 @@ const activities = computed(() => leadsByActivity(props.archive))
           <FeedbackVoteBar
             :label="person.name"
             :votes="person.votes"
-            :sub="`${person.activities.join(', ')} · ${plural(person.leads.length, 'turno votato', 'turni votati')}`"
+            :sub="`${person.activities.join(', ')} · ${plural(person.turns.length, 'turno votato', 'turni votati')}`"
           />
           <UCollapsible>
             <UButton
@@ -103,11 +108,12 @@ const activities = computed(() => leadsByActivity(props.archive))
             />
             <template #content>
               <ul class="mt-3 space-y-5 border-l-2 border-default pl-4">
-                <li v-for="(lead, i) in person.leads" :key="i">
+                <li v-for="turn in person.turns" :key="`${turn.session}-${turn.activity}`">
                   <FeedbackVoteBar
-                    :label="`S${lead.session} · ${lead.activity}`"
-                    :votes="lead.votes"
-                    :note="lead.note"
+                    :label="`S${turn.session} · ${turn.activity}`"
+                    :votes="turn.votes"
+                    :sub="partners(turn.names, person.name)"
+                    :note="turn.note"
                   />
                 </li>
               </ul>

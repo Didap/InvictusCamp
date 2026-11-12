@@ -301,7 +301,9 @@ What the families said at the end of their session, year by year, administration
 2026 comes from the pages the camp published (Nicola): `scripts/import-feedback.mjs <folder> --apply --by
 <admin>` reads `feedback-2026.html`, `commenti-2026.html` and `staff-2026.html` and keeps the year whole in
 `feedback_archives` (one row per year, `data` as `shared/types/feedback.ts`), audited (`feedback.import`). The
-numbers of the staff part are Nicola's (a vote of a turn led in pairs counts for both activities). From 2027
+staff part is kept as turns (an activity in a session, who led it, its votes): a turn in pairs is one turn with
+two names, and the import stops if their votes differ. The numbers are Nicola's (a vote given to two
+activities done in one slot counts for both). From 2027
 the end-of-session questionnaire of the families will fill the same pages (next PR). The demo seed has an
 invented 2026.
 

@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { feedbackArchiveSchema } from '~~/shared/schemas/feedback'
 import type { FeedbackArchive } from '~~/shared/types/feedback'
-import { itemResults, leadsByActivity, personLeads, respondents, voteShares } from '~~/shared/utils/feedback'
+import { itemResults, personTurns, respondents, turnsByActivity, voteShares } from '~~/shared/utils/feedback'
 import { decodeEntities, parseFeedbackPages } from '~~/scripts/lib/feedback-pages'
 
 const json = (id: string, data: unknown) =>
@@ -67,36 +67,37 @@ describe('reading the 2026 pages', () => {
     })
   })
 
-  it('reads presences and led activities from the staff HTML, votes back from the bar widths', () => {
+  it('reads presences and turns from the staff HTML, votes back from the bar widths', () => {
     expect(archive.staff.note).toBe('Non sono contati Nicola e Serena.')
     expect(archive.staff.people).toEqual([
+      { name: 'Anna Rossi', sessions: [1, 2] },
+      { name: 'Luca Neri', sessions: [2] },
+    ])
+    // The turn in pairs is one, with both names; the note that only names the partner goes.
+    expect(archive.staff.turns).toEqual([
       {
-        name: 'Anna Rossi',
-        sessions: [1, 2],
-        leads: [
-          { session: 1, activity: "Tiro con l'arco", votes: { five: 3, four: 0, low: 1 }, note: null },
-          {
-            session: 2,
-            activity: 'Arte',
-            votes: { five: 0, four: 1, low: 0 },
-            note: 'voto unico per "Arte e Arco", insieme a Arco (Luca)',
-          },
-        ],
+        session: 2,
+        activity: 'Arte',
+        names: ['Luca Neri', 'Anna Rossi'],
+        votes: { five: 0, four: 1, low: 0 },
+        note: 'voto unico per "Arte e Arco", insieme a Arco (Luca)',
       },
       {
-        name: 'Luca Neri',
-        sessions: [2],
-        leads: [
-          {
-            session: 2,
-            activity: 'Arte',
-            votes: { five: 0, four: 1, low: 0 },
-            note: 'condotta in coppia con Anna Rossi',
-          },
-        ],
+        session: 1,
+        activity: "Tiro con l'arco",
+        names: ['Anna Rossi'],
+        votes: { five: 3, four: 0, low: 1 },
+        note: null,
       },
     ])
     expect(feedbackArchiveSchema.safeParse(archive).success).toBe(true)
+  })
+
+  it('refuses two leaders of a turn with different votes', () => {
+    const different = staffPage.replace('width:100.00%;background:var(--s4)', 'width:100.00%;background:var(--s5)')
+    expect(() => parseFeedbackPages({ feedback: feedbackPage, comments: commentsPage, staff: different })).toThrow(
+      'the leaders of S2 · Arte have different votes',
+    )
   })
 
   it('decodes HTML entities', () => {
@@ -125,28 +126,15 @@ describe('the sums of the page', () => {
     expect(voteShares({ five: 2, four: 1, low: 0 })).toEqual({ five: 67, four: 33, low: 0 })
   })
 
-  it('groups the led activities by activity, a turn in pairs as one row', () => {
-    expect(leadsByActivity(archive)).toEqual([
-      {
-        activity: 'Arte',
-        turns: [
-          {
-            session: 2,
-            names: ['Anna Rossi', 'Luca Neri'],
-            votes: { five: 0, four: 1, low: 0 },
-            note: 'voto unico per "Arte e Arco", insieme a Arco (Luca)',
-          },
-        ],
-      },
-      {
-        activity: "Tiro con l'arco",
-        turns: [{ session: 1, names: ['Anna Rossi'], votes: { five: 3, four: 0, low: 1 }, note: null }],
-      },
+  it('groups the turns by activity, in the order of the questionnaire, and sums those of a person', () => {
+    expect(turnsByActivity(archive).map(a => [a.activity, a.turns.map(t => `S${t.session}`)])).toEqual([
+      ['Arte', ['S2']],
+      ["Tiro con l'arco", ['S1']],
     ])
-    expect(personLeads(archive.staff.people[0]!)).toEqual({
-      votes: { five: 3, four: 1, low: 1 },
-      activities: ["Tiro con l'arco", 'Arte'],
-    })
+    const anna = personTurns(archive, 'Anna Rossi')
+    expect(anna.turns.map(t => t.session)).toEqual([1, 2])
+    expect(anna.votes).toEqual({ five: 3, four: 1, low: 1 })
+    expect(anna.activities).toEqual(["Tiro con l'arco", 'Arte'])
   })
 })
 
@@ -156,6 +144,8 @@ describe('feedbackArchiveSchema', () => {
     expect(feedbackArchiveSchema.safeParse(broken).success).toBe(false)
     const comment = { ...archive.comments, items: [{ session: 1, family: 1, question: 7, text: 'x' }] }
     expect(feedbackArchiveSchema.safeParse({ ...archive, comments: comment }).success).toBe(false)
+    const stranger = { ...archive.staff, turns: [{ ...archive.staff.turns[0]!, names: ['Nessuno'] }] }
+    expect(feedbackArchiveSchema.safeParse({ ...archive, staff: stranger }).success).toBe(false)
   })
 })
 

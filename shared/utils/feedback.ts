@@ -1,17 +1,18 @@
 // The sums behind the Feedback page (docs/spec.md 3.13): votes per question, filtered by session, and the
-// staff seen activity by activity. Pure functions over a FeedbackArchive.
-import type { FeedbackArchive, FeedbackItemKind, VoteCounts } from '../types/feedback'
+// turns of the staff by activity or by person. Pure functions over a FeedbackArchive.
+//
+// Type imports only: scripts/import-feedback.mjs loads this file with Node's type stripping.
+import type { FeedbackArchive, FeedbackItemKind, FeedbackTurn, VoteCounts } from '../types/feedback'
 
-type Person = FeedbackArchive['staff']['people'][number]
-
-export const emptyVotes = (): VoteCounts => ({ five: 0, four: 0, low: 0 })
-
-export function addVotes(into: VoteCounts, votes: VoteCounts): VoteCounts {
-  into.five += votes.five
-  into.four += votes.four
-  into.low += votes.low
-  return into
-}
+/**
+ * The three levels the page shows, in order: label and swatch (FeedbackVoteBar, FeedbackVoteLegend). 5 solid,
+ * 4 lighter, 1-3 in the warning colour so the low votes stand out.
+ */
+export const VOTE_LEVELS = [
+  { key: 'five', short: '5', label: 'Voto 5', swatch: 'bg-primary' },
+  { key: 'four', short: '4', label: 'Voto 4', swatch: 'bg-primary/45' },
+  { key: 'low', short: 'da 1 a 3', label: 'Da 1 a 3', swatch: 'bg-warning' },
+] as const satisfies readonly { key: keyof VoteCounts; short: string; label: string; swatch: string }[]
 
 export const votesTotal = (votes: VoteCounts) => votes.five + votes.four + votes.low
 
@@ -30,7 +31,7 @@ export interface ItemResult {
 
 /** Votes of every question in one session (or all, with null), the most liked first. */
 export function itemResults(archive: FeedbackArchive, session: number | null): ItemResult[] {
-  const results = archive.items.map(item => ({ ...item, votes: emptyVotes() }))
+  const results = archive.items.map(item => ({ ...item, votes: { five: 0, four: 0, low: 0 } }))
   for (const [s, item, vote] of archive.votes) {
     if (session !== null && s !== session) continue
     const votes = results[item]!.votes
@@ -38,7 +39,7 @@ export function itemResults(archive: FeedbackArchive, session: number | null): I
     else if (vote === 4) votes.four++
     else votes.low++
   }
-  const fiveShare = (r: ItemResult) => r.votes.five / (votesTotal(r.votes) || 1)
+  const fiveShare = (r: ItemResult) => r.votes.five / votesTotal(r.votes)
   return results
     .filter(r => votesTotal(r.votes) > 0)
     .sort((a, b) => fiveShare(b) - fiveShare(a) || votesTotal(b.votes) - votesTotal(a.votes))
@@ -56,56 +57,37 @@ export function sessionOptions(archive: FeedbackArchive): { label: string; value
   ]
 }
 
-/** A turn of an activity in a session, with everyone who led it (a turn in pairs is one row). */
-export interface ActivityTurn {
-  session: number
-  names: string[]
-  votes: VoteCounts
-  note: string | null
-}
-
-export interface ActivityLeads {
+export interface ActivityTurns {
   activity: string
-  turns: ActivityTurn[]
+  turns: FeedbackTurn[]
 }
-
-/** The note of a lead that only says who the partner was: the names of the turn already say it. */
-const PAIR_NOTE = /^condotta in coppia con /
 
 /**
- * Each activity session by session with who led it: the comparison the camp finds most useful. The votes
- * are per session and activity, so the leads of the same session are the same turn. Activities in the order
- * of the questionnaire, then any other.
+ * Each activity session by session with who led it: the comparison the camp finds most useful. Activities
+ * in the order of the questionnaire, then any other.
  */
-export function leadsByActivity(archive: FeedbackArchive): ActivityLeads[] {
+export function turnsByActivity(archive: FeedbackArchive): ActivityTurns[] {
   const order = archive.items.map(item => item.label)
-  const byActivity = new Map<string, Map<number, ActivityTurn>>()
-  for (const person of archive.staff.people) {
-    for (const lead of person.leads) {
-      const turns = byActivity.get(lead.activity) ?? new Map<number, ActivityTurn>()
-      byActivity.set(lead.activity, turns)
-      const turn = turns.get(lead.session) ?? { session: lead.session, names: [], votes: lead.votes, note: null }
-      turns.set(lead.session, turn)
-      turn.names.push(person.name)
-      if (lead.note && !PAIR_NOTE.test(lead.note) && turn.note !== lead.note)
-        turn.note = turn.note ? `${turn.note} · ${lead.note}` : lead.note
-    }
+  const rank = (activity: string) => {
+    const i = order.indexOf(activity)
+    return i < 0 ? order.length : i
   }
-  const rank = (activity: string) => (order.includes(activity) ? order.indexOf(activity) : order.length)
+  const byActivity = new Map<string, FeedbackTurn[]>()
+  for (const turn of archive.staff.turns)
+    byActivity.set(turn.activity, [...(byActivity.get(turn.activity) ?? []), turn])
   return [...byActivity]
     .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b, 'it'))
-    .map(([activity, turns]) => ({
-      activity,
-      turns: [...turns.values()]
-        .sort((a, b) => a.session - b.session)
-        .map(turn => ({ ...turn, names: turn.names.sort((a, b) => a.localeCompare(b, 'it')) })),
-    }))
+    .map(([activity, turns]) => ({ activity, turns: turns.sort((a, b) => a.session - b.session) }))
 }
 
-/** All the votes of the activities a person led, and the activities by name. */
-export function personLeads(person: Person): { votes: VoteCounts; activities: string[] } {
-  return {
-    votes: person.leads.reduce((sum, lead) => addVotes(sum, lead.votes), emptyVotes()),
-    activities: [...new Set(person.leads.map(lead => lead.activity))],
+/** The turns a person led, all their votes together and the activities by name. */
+export function personTurns(archive: FeedbackArchive, name: string) {
+  const turns = archive.staff.turns.filter(turn => turn.names.includes(name)).sort((a, b) => a.session - b.session)
+  const votes = { five: 0, four: 0, low: 0 }
+  for (const turn of turns) {
+    votes.five += turn.votes.five
+    votes.four += turn.votes.four
+    votes.low += turn.votes.low
   }
+  return { turns, votes, activities: [...new Set(turns.map(turn => turn.activity))] }
 }

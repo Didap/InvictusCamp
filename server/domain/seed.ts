@@ -282,18 +282,12 @@ function demoFeedback(): FeedbackArchive {
       ]),
     ).flat(),
   )
-  const lead = (
-    session: number,
-    activity: string,
-    five: number,
-    four: number,
-    low: number,
-    note: string | null = null,
-  ) => ({
+  const turn = (session: number, activity: string, names: string[], [five, four, low]: number[]) => ({
     session,
     activity,
-    votes: { five, four, low },
-    note,
+    names,
+    votes: { five: five!, four: four!, low: low! },
+    note: null,
   })
   return {
     sessions,
@@ -342,22 +336,17 @@ function demoFeedback(): FeedbackArchive {
     staff: {
       note: null,
       people: [
-        {
-          name: 'Chiara Bianchi',
-          sessions: [1, 2, 3],
-          leads: [lead(1, 'Piscina', 5, 1, 0), lead(2, 'Piscina', 3, 1, 1), lead(3, 'Piscina', 6, 1, 0)],
-        },
-        {
-          name: 'Lorenzo Fontana',
-          sessions: [1, 3],
-          leads: [lead(1, 'Arte', 4, 1, 1, 'condotta in coppia con Sara Galli'), lead(3, 'Parco avventura', 5, 2, 0)],
-        },
-        {
-          name: 'Sara Galli',
-          sessions: [1],
-          leads: [lead(1, 'Arte', 4, 1, 1, 'condotta in coppia con Lorenzo Fontana')],
-        },
-        { name: 'Martina Greco', sessions: [2], leads: [] },
+        { name: 'Chiara Bianchi', sessions: [1, 2, 3] },
+        { name: 'Lorenzo Fontana', sessions: [1, 3] },
+        { name: 'Sara Galli', sessions: [1] },
+        { name: 'Martina Greco', sessions: [2] },
+      ],
+      turns: [
+        turn(1, 'Piscina', ['Chiara Bianchi'], [5, 1, 0]),
+        turn(2, 'Piscina', ['Chiara Bianchi'], [3, 1, 1]),
+        turn(3, 'Piscina', ['Chiara Bianchi'], [6, 1, 0]),
+        turn(1, 'Arte', ['Lorenzo Fontana', 'Sara Galli'], [4, 1, 1]),
+        turn(3, 'Parco avventura', ['Lorenzo Fontana'], [5, 2, 0]),
       ],
     },
   }

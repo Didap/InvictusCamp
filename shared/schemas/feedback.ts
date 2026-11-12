@@ -22,18 +22,14 @@ export const feedbackArchiveSchema: z.ZodType<FeedbackArchive> = z
     }),
     staff: z.object({
       note: z.string().nullable(),
-      people: z.array(
+      people: z.array(z.object({ name: text, sessions: z.array(session) })),
+      turns: z.array(
         z.object({
-          name: text,
-          sessions: z.array(session),
-          leads: z.array(
-            z.object({
-              session,
-              activity: text,
-              votes: z.object({ five: count, four: count, low: count }),
-              note: z.string().nullable(),
-            }),
-          ),
+          session,
+          activity: text,
+          names: z.array(text).min(1),
+          votes: z.object({ five: count, four: count, low: count }),
+          note: z.string().nullable(),
         }),
       ),
     }),
@@ -45,6 +41,9 @@ export const feedbackArchiveSchema: z.ZodType<FeedbackArchive> = z
       ctx.addIssue({ code: 'custom', message: 'A vote names a session or an item that is not there' })
     if (archive.comments.items.some(c => !known(c.session) || c.question >= archive.comments.questions.length))
       ctx.addIssue({ code: 'custom', message: 'A comment names a session or a question that is not there' })
-    if (archive.staff.people.some(p => !p.sessions.every(known) || !p.leads.every(l => known(l.session))))
+    const names = new Set(archive.staff.people.map(p => p.name))
+    if (archive.staff.people.some(p => !p.sessions.every(known)))
       ctx.addIssue({ code: 'custom', message: 'A person of the staff names a session that is not there' })
+    if (archive.staff.turns.some(t => !known(t.session) || !t.names.every(name => names.has(name))))
+      ctx.addIssue({ code: 'custom', message: 'A turn names a session or a person that is not there' })
   })

@@ -3,46 +3,15 @@
 // HTML (a presence table and one <details> per person with the activities they led).
 //
 // Type imports only: scripts/import-feedback.mjs loads this file with Node's type stripping.
-import type { FeedbackArchive, FeedbackItemKind } from '../../shared/types/feedback'
-
-type Archive = FeedbackArchive
+import type { FeedbackArchive, FeedbackTurn } from '../../shared/types/feedback'
 
 /** The named entities an Italian page may use; an unknown one is left as it is. */
+// prettier-ignore
 const ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-  middot: '·',
-  hellip: '…',
-  ndash: '–',
-  mdash: '—',
-  lsquo: '‘',
-  rsquo: '’',
-  ldquo: '“',
-  rdquo: '”',
-  laquo: '«',
-  raquo: '»',
-  deg: '°',
-  euro: '€',
-  agrave: 'à',
-  aacute: 'á',
-  egrave: 'è',
-  eacute: 'é',
-  igrave: 'ì',
-  iacute: 'í',
-  ograve: 'ò',
-  oacute: 'ó',
-  ugrave: 'ù',
-  uacute: 'ú',
-  Agrave: 'À',
-  Egrave: 'È',
-  Eacute: 'É',
-  Igrave: 'Ì',
-  Ograve: 'Ò',
-  Ugrave: 'Ù',
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', middot: '·', hellip: '…', ndash: '–', mdash: '—',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', laquo: '«', raquo: '»', deg: '°', euro: '€',
+  agrave: 'à', aacute: 'á', egrave: 'è', eacute: 'é', igrave: 'ì', iacute: 'í', ograve: 'ò', oacute: 'ó',
+  ugrave: 'ù', uacute: 'ú', Agrave: 'À', Egrave: 'È', Eacute: 'É', Igrave: 'Ì', Ograve: 'Ò', Ugrave: 'Ù',
 }
 
 export function decodeEntities(value: string): string {
@@ -59,7 +28,7 @@ const textOf = (html: string) =>
     .trim()
 
 /** The JSON of `<script type="application/json" id="…">`. */
-export function pageJson<T>(html: string, id: string): T {
+function pageJson<T>(html: string, id: string): T {
   for (const [, attributes, body] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
     if (
       attributes!.includes('application/json') &&
@@ -78,14 +47,14 @@ interface FeedbackJson {
   temi: { tema: string; count: number; sessioni: number[]; dettaglio: string }[]
 }
 
-export function parseFeedbackPage(html: string): Pick<Archive, 'sessions' | 'items' | 'votes' | 'themes'> {
+function parseFeedbackPage(html: string): Pick<FeedbackArchive, 'sessions' | 'items' | 'votes' | 'themes'> {
   const data = pageJson<FeedbackJson>(html, 'fd')
-  const items: Archive['items'] = []
+  const items: FeedbackArchive['items'] = []
   const index = new Map<string, number>()
-  const votes = data.r.map(([session, group, label, vote]): Archive['votes'][number] => {
+  const votes = data.r.map(([session, group, label, vote]): FeedbackArchive['votes'][number] => {
     if (!index.has(label)) {
       index.set(label, items.length)
-      items.push({ label, kind: (group === 0 ? 'activity' : 'other') satisfies FeedbackItemKind })
+      items.push({ label, kind: group === 0 ? 'activity' : 'other' })
     }
     return [session, index.get(label)!, vote]
   })
@@ -104,7 +73,7 @@ interface CommentsJson {
   items: { s: number; f: number; c: number; t: string }[]
 }
 
-export function parseCommentsPage(html: string): Archive['comments'] {
+function parseCommentsPage(html: string): FeedbackArchive['comments'] {
   const data = pageJson<CommentsJson>(html, 'data')
   return {
     questions: data.cats,
@@ -115,8 +84,10 @@ export function parseCommentsPage(html: string): Archive['comments'] {
 
 /** "voto solo per questa attività" is the plain case: no note, and not in front of one. */
 const PLAIN_LEAD = /^voto solo per questa attività(?: · )?/
+/** Says who the partner of a turn in pairs was: the names of the turn already say it. */
+const PAIR_NOTE = /^condotta in coppia con .*$/
 
-export function parseStaffPage(html: string): Archive['staff'] {
+function parseStaffPage(html: string): FeedbackArchive['staff'] {
   const page = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, '')
   const note = textOf(page).match(/Non sono contati[^.]*\./)?.[0] ?? null
 
@@ -126,21 +97,24 @@ export function parseStaffPage(html: string): Archive['staff'] {
   const rows = table.match(/<tr[\s\S]*?<\/tr>/g) ?? []
   const columns = (rows[0]?.match(/<t[hd][^>]*>[\s\S]*?<\/t[hd]>/g) ?? []).map(textOf)
   const sessionOf = columns.map(c => Number(c.match(/^S(\d+)$/)?.[1] ?? NaN))
-  const people = new Map<string, Archive['staff']['people'][number]>()
+  const people = new Map<string, number[]>()
   for (const row of rows.slice(1)) {
     const cells = row.match(/<td[^>]*>[\s\S]*?<\/td>/g) ?? []
     const name = textOf(cells[0] ?? '')
-    if (!name) continue
-    const sessions = cells.flatMap((cell, i) => (/class=["']?dot/.test(cell) && sessionOf[i] ? [sessionOf[i]!] : []))
-    people.set(name, { name, sessions, leads: [] })
+    if (name)
+      people.set(
+        name,
+        cells.flatMap((cell, i) => (/class=["']?dot/.test(cell) && sessionOf[i] ? [sessionOf[i]!] : [])),
+      )
   }
 
-  // Led activities: one <details> per person, one row per session and activity with its votes.
+  // Led activities: one <details> per person, one row per session and activity with its votes. The votes are
+  // per session and activity, so the two leaders of a turn in pairs show the same ones: one turn, two names.
+  const turns = new Map<string, FeedbackTurn>()
   for (const details of page.match(/<details[\s\S]*?<\/details>/g) ?? []) {
     const name = textOf(details.match(/class=["']?pn["']?>([\s\S]*?)<\/span>/)?.[1] ?? '')
     if (!name) continue
-    const person = people.get(name) ?? { name, sessions: [], leads: [] }
-    people.set(name, person)
+    if (!people.has(name)) people.set(name, [])
     for (const row of details.split(/<div class=["']?dr["']?>/).slice(1)) {
       const label = textOf(row.match(/<b>([\s\S]*?)<\/b>/)?.[1] ?? '')
       const [, session, activity] = label.match(/^S(\d+) · (.+)$/) ?? []
@@ -150,19 +124,30 @@ export function parseStaffPage(html: string): Archive['staff'] {
         Number(row.match(new RegExp(`width:([\\d.]+)%;background:var\\(--s${level}\\)`))?.[1] ?? 0)
       const five = Math.round((width('5') * total) / 100)
       const four = Math.round((width('4') * total) / 100)
+      const votes = { five, four, low: Math.max(0, total - five - four) }
       const ctx = textOf(row.match(/class=["']?ctx["']?>([\s\S]*?)<\/div>/)?.[1] ?? '')
-      person.leads.push({
-        session: Number(session),
-        activity,
-        votes: { five, four, low: Math.max(0, total - five - four) },
-        note: ctx.replace(PLAIN_LEAD, '') || null,
-      })
+      const note = ctx.replace(PLAIN_LEAD, '').replace(PAIR_NOTE, '') || null
+
+      const key = `${session}|${activity}`
+      const turn = turns.get(key)
+      if (!turn) {
+        turns.set(key, { session: Number(session), activity, names: [name], votes, note })
+        continue
+      }
+      if (JSON.stringify(turn.votes) !== JSON.stringify(votes))
+        throw new Error(`the leaders of S${session} · ${activity} have different votes`)
+      turn.names.push(name)
+      if (note && note !== turn.note) turn.note = turn.note ? `${turn.note} · ${note}` : note
     }
   }
-  return { note, people: [...people.values()] }
+  return {
+    note,
+    people: [...people].map(([name, sessions]) => ({ name, sessions })),
+    turns: [...turns.values()],
+  }
 }
 
-export function parseFeedbackPages(pages: { feedback: string; comments: string; staff: string }): Archive {
+export function parseFeedbackPages(pages: { feedback: string; comments: string; staff: string }): FeedbackArchive {
   return {
     ...parseFeedbackPage(pages.feedback),
     comments: parseCommentsPage(pages.comments),
