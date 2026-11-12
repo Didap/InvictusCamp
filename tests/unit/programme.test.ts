@@ -178,21 +178,16 @@ describe('editor helpers', () => {
     expect(canFamilyReadProgramme('declined', 'confirmed')).toBe(false)
   })
 
-  it('dates the days only for a session that starts on Monday and is long enough', () => {
-    const week = emptyWeek()
-    const seven = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25', '2027-06-26', '2027-06-27']
-    const none = ['', '', '', '', '']
-    expect(dayCaptions(week, seven)).toEqual(seven.slice(0, 5).map(day => formatDay(day, 'long')))
-    expect(dayCaptions(week, seven.slice(0, 3))).toEqual(none)
-    expect(dayCaptions(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual(none)
-    expect(dayCaptions(week, undefined)).toEqual(none)
-  })
-
-  it('captions a day with its date, then its subtitle', () => {
+  it('captions the days with the dates only for a session that starts on Monday and is long enough', () => {
     const week = emptyWeek()
     week.days[0]!.subtitle = 'Arrivo'
-    const five = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25']
-    expect(dayCaptions(week, five)[0]).toBe(`${formatDay('2027-06-21', 'long')} · Arrivo`)
-    expect(dayCaptions(week, undefined)).toEqual(['Arrivo', '', '', '', ''])
+    const seven = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25', '2027-06-26', '2027-06-27']
+    const undated = ['Arrivo', '', '', '', '']
+    const dated = dayCaptions(week, seven)
+    expect(dated[0]).toBe(`${formatDay('2027-06-21', 'long')} · Arrivo`)
+    expect(dated.slice(1)).toEqual(seven.slice(1, 5).map(day => formatDay(day, 'long')))
+    expect(dayCaptions(week, seven.slice(0, 3))).toEqual(undated)
+    expect(dayCaptions(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual(undated)
+    expect(dayCaptions(week, undefined)).toEqual(undated)
   })
 })

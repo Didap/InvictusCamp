@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type Sortable from 'sortablejs'
 import type { ProgrammeBlock, ProgrammeContent, ProgrammeDay } from '#shared/types/domain'
-import { enumMeta, PROGRAMME_GROUP_LABELS, PROGRAMME_GROUPS, type Tone } from '#shared/utils/constants'
 import { blockTime, dayCaptions, type BlockMove } from '#shared/utils/programme'
 
 // The week of the editor as a board: one column per day, side by side once there is room for five
@@ -14,22 +13,10 @@ import { blockTime, dayCaptions, type BlockMove } from '#shared/utils/programme'
 const props = defineProps<{ content: ProgrammeContent; dates?: string[] }>()
 const emit = defineEmits<{ move: [value: BlockMove]; open: [dayId: string, block: ProgrammeBlock | null] }>()
 defineSlots<{
-  'block-actions'?: (props: { day: ProgrammeDay; block: ProgrammeBlock; index: number }) => unknown
+  'block-actions': (props: { day: ProgrammeDay; block: ProgrammeBlock; index: number }) => unknown
 }>()
 
 const captions = computed(() => dayCaptions(props.content, props.dates))
-
-// The kind of a block as icon and label in its colour: a badge is too heavy for a column this narrow.
-const KIND_TEXT: Record<Tone, string> = {
-  primary: 'text-primary',
-  secondary: 'text-secondary',
-  success: 'text-success',
-  info: 'text-info',
-  warning: 'text-warning',
-  error: 'text-error',
-  neutral: 'text-muted',
-}
-const kindOf = (block: ProgrammeBlock) => enumMeta('programmeBlockKind', block.kind)
 
 const lists = useTemplateRef<HTMLUListElement[]>('lists')
 let sortables: Sortable[] = []
@@ -103,31 +90,11 @@ onBeforeUnmount(() => {
           >
             <div class="flex items-start justify-between gap-1">
               <p class="pt-0.5 text-sm text-muted tabular-nums">{{ blockTime(block) }}</p>
-              <div v-if="$slots['block-actions']" class="programme-no-drag -me-1 -mt-1 shrink-0" @click.stop>
+              <div class="programme-no-drag -me-1 -mt-1 shrink-0" @click.stop>
                 <slot name="block-actions" :day="day" :block="block" :index="index" />
               </div>
             </div>
-            <p class="text-sm font-semibold text-highlighted [overflow-wrap:anywhere]">{{ block.title }}</p>
-            <p class="mt-1 flex items-start gap-1.5 text-sm" :class="KIND_TEXT[kindOf(block).color]">
-              <UIcon :name="kindOf(block).icon" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              {{ kindOf(block).label }}
-            </p>
-            <p v-if="block.toConfirm" class="mt-0.5 flex items-start gap-1.5 text-sm text-warning">
-              <UIcon name="i-lucide-circle-help" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              Da confermare
-            </p>
-            <p v-if="block.lead" class="mt-0.5 text-sm text-muted">Con {{ block.lead }}</p>
-            <ul v-if="block.groups" class="mt-1 space-y-0.5 text-sm" aria-label="Le attività dei gruppi">
-              <li v-for="group in PROGRAMME_GROUPS" :key="group" class="flex items-start gap-1.5">
-                <ProgrammeGroupDot :group="group" class="mt-1.5" />
-                <span class="min-w-0 [overflow-wrap:anywhere]">
-                  <span class="sr-only">{{ PROGRAMME_GROUP_LABELS[group] }}: </span>
-                  <span :class="!block.groups[group].activity && 'text-muted'">
-                    {{ block.groups[group].activity ?? 'da definire' }}
-                  </span>
-                </span>
-              </li>
-            </ul>
+            <ProgrammeBlockItem :block="block" compact />
           </li>
         </ul>
         <UButton
