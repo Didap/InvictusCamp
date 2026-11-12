@@ -137,7 +137,7 @@ export function openPoints(content: ProgrammeContent): OpenPoint[] {
  * programme start on Monday, so the dates appear only for a session that starts on a Monday and is at
  * least as long as the programme; otherwise they would not line up with the names of the days.
  */
-export function dayDates(content: ProgrammeContent, dates: string[] | undefined): (string | null)[] {
+function dayDates(content: ProgrammeContent, dates: string[] | undefined): (string | null)[] {
   const fits = !!dates?.length && weekdayIndex(dates[0]!) === 0 && dates.length >= content.days.length
   return content.days.map((_, i) => (fits ? dates![i]! : null))
 }

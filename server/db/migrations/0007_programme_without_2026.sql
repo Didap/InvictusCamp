@@ -1,7 +1,8 @@
 -- Point 4 of the preview corrections: the programme no longer compares with 2026. Every saved week,
 -- of a year or of a session, loses the "Novità" flag of its blocks and the internal notes the model
--- week had copied from Nicola's draft (only those exact sentences: notes written by hand stay).
-UPDATE "programmes" SET "content" = jsonb_set("content", '{days}', (
+-- week had copied from Nicola's draft (only those exact sentences: notes written by hand stay). The
+-- revision goes up, so an editor opened before the change cannot save the old week back.
+UPDATE "programmes" SET "revision" = "revision" + 1, "content" = jsonb_set("content", '{days}', (
 	SELECT coalesce(jsonb_agg(
 		jsonb_set(day, '{blocks}', (
 			SELECT coalesce(jsonb_agg(

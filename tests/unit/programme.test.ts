@@ -5,11 +5,11 @@ import { programmeForViewer } from '~~/server/domain/programmes'
 import { emptyWeek, programmeTemplate } from '~~/shared/content/programme-template'
 import { programmeBlockSchema, programmeContentSchema } from '~~/shared/schemas/programmes'
 import type { ProgrammeBlock, ProgrammeContent } from '~~/shared/types/domain'
+import { formatDay } from '~~/shared/utils/format'
 import {
   blockTime,
   canFamilyReadProgramme,
   dayCaptions,
-  dayDates,
   groupRotation,
   moveBlock,
   newBlockId,
@@ -181,20 +181,18 @@ describe('editor helpers', () => {
   it('dates the days only for a session that starts on Monday and is long enough', () => {
     const week = emptyWeek()
     const seven = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25', '2027-06-26', '2027-06-27']
-    expect(dayDates(week, seven)).toEqual(seven.slice(0, 5))
-    expect(dayDates(week, seven.slice(0, 3))).toEqual([null, null, null, null, null])
-    expect(dayDates(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual([null, null, null, null, null])
-    expect(dayDates(week, undefined)).toEqual([null, null, null, null, null])
+    const none = ['', '', '', '', '']
+    expect(dayCaptions(week, seven)).toEqual(seven.slice(0, 5).map(day => formatDay(day, 'long')))
+    expect(dayCaptions(week, seven.slice(0, 3))).toEqual(none)
+    expect(dayCaptions(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual(none)
+    expect(dayCaptions(week, undefined)).toEqual(none)
   })
 
-  it('captions a day with its date and its subtitle, each only when there is one', () => {
+  it('captions a day with its date, then its subtitle', () => {
     const week = emptyWeek()
     week.days[0]!.subtitle = 'Arrivo'
     const five = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25']
-    const captions = dayCaptions(week, five)
-    expect(captions[0]).toMatch(/^\S.* · Arrivo$/)
-    expect(captions[1]).not.toContain('·')
-    expect(captions[1]).not.toBe('')
+    expect(dayCaptions(week, five)[0]).toBe(`${formatDay('2027-06-21', 'long')} · Arrivo`)
     expect(dayCaptions(week, undefined)).toEqual(['Arrivo', '', '', '', ''])
   })
 })

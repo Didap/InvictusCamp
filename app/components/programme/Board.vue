@@ -9,7 +9,8 @@ import { blockTime, dayCaptions, type BlockMove } from '#shared/utils/programme'
 // tablet, one under the other on a phone. A block is a card: a click or a tap opens it (`open`), a drag
 // moves it within its day or to another one (SortableJS; on touch screens after a short press, so a
 // swipe still scrolls). The drop is emitted as `move` and the data moves it, Vue keeps the DOM.
-// Keyboards open a block from its title and move it from its menu (slot `block-actions`).
+// Keyboards and screen readers open and move a block from its menu (slot `block-actions`): the card
+// holds no other control, since Firefox does not start a drag on a button.
 const props = defineProps<{ content: ProgrammeContent; dates?: string[] }>()
 const emit = defineEmits<{ move: [value: BlockMove]; open: [dayId: string, block: ProgrammeBlock | null] }>()
 defineSlots<{
@@ -44,11 +45,12 @@ async function attach() {
   sortables = (lists.value ?? []).map(list =>
     Sortable.create(list, {
       group: 'programme-week',
-      draggable: 'li',
+      draggable: '.programme-card',
       filter: '.programme-no-drag',
       preventOnFilter: false,
       delay: 200,
       delayOnTouchOnly: true,
+      touchStartThreshold: 5,
       animation: 150,
       ghostClass: 'opacity-40',
       onEnd: ({ item, from, to, oldIndex, newIndex }) => {
@@ -96,7 +98,7 @@ onBeforeUnmount(() => {
             v-for="(block, index) in day.blocks"
             :id="`blocco-${block.id}`"
             :key="block.id"
-            class="min-w-0 scroll-mt-24 cursor-grab rounded-md border border-default bg-elevated p-2 hover:border-accented active:cursor-grabbing"
+            class="programme-card min-w-0 scroll-mt-24 cursor-grab select-none [-webkit-touch-callout:none] rounded-md border border-default bg-elevated p-2 hover:border-accented active:cursor-grabbing"
             @click="emit('open', day.id, block)"
           >
             <div class="flex items-start justify-between gap-1">
@@ -105,12 +107,7 @@ onBeforeUnmount(() => {
                 <slot name="block-actions" :day="day" :block="block" :index="index" />
               </div>
             </div>
-            <button
-              type="button"
-              class="text-left text-sm font-semibold text-highlighted [overflow-wrap:anywhere] hover:underline focus-visible:underline"
-            >
-              {{ block.title }}
-            </button>
+            <p class="text-sm font-semibold text-highlighted [overflow-wrap:anywhere]">{{ block.title }}</p>
             <p class="mt-1 flex items-start gap-1.5 text-sm" :class="KIND_TEXT[kindOf(block).color]">
               <UIcon :name="kindOf(block).icon" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               {{ kindOf(block).label }}

@@ -119,6 +119,7 @@ function remove(day: ProgrammeDay, index: number) {
 
 function blockItems(day: ProgrammeDay, block: ProgrammeBlock, index: number): DropdownMenuItem[][] {
   return [
+    [{ label: 'Modifica', icon: 'i-lucide-pencil', onSelect: () => openBlock(day.id, block) }],
     [
       {
         label: 'Duplica',
@@ -195,7 +196,7 @@ function showBlock(blockId: string) {
             color="neutral"
             variant="ghost"
             size="sm"
-            :aria-label="`Altre azioni per «${block.title}»`"
+            :aria-label="`Azioni per «${block.title}»`"
             class="pointer-coarse:size-11 pointer-coarse:justify-center"
           />
         </UDropdownMenu>
