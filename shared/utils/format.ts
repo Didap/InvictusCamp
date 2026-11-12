@@ -86,6 +86,9 @@ export function fullName(person: { firstName: string | null; lastName: string | 
 
 type MemberRef = { id: string; firstName: string | null; lastName: string | null; kind: MemberKind }
 
+/** Shown instead of the people of a family that has no cards yet (it has not confirmed its data). */
+export const NO_CARDS = 'Componenti non ancora indicati'
+
 /**
  * A card created from the family data and not filled in yet: name, surname and relationship are null
  * together until the family saves it (the member schema requires all three).

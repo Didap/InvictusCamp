@@ -8,9 +8,6 @@ import { plural } from './format'
 /** The heading of the lodgings without an area. */
 const NO_AREA = 'Altri alloggi'
 
-/** Shown instead of the size of a family without cards: the beds cannot be checked. */
-export const NO_CARDS = 'Componenti non ancora indicati'
-
 const byArea = new Intl.Collator('it', { numeric: true })
 const byName = new Intl.Collator('it', { numeric: true, sensitivity: 'base' })
 

@@ -47,6 +47,7 @@ import {
 } from '../../shared/utils/slots'
 import {
   campSessions,
+  holdsPlace,
   documents,
   families,
   sessionFamilies,
@@ -162,6 +163,13 @@ export function requireEditable(session: SessionRow, what: string) {
     throw new DomainError(409, `La sessione è «${enumLabel('sessionStatus', session.status)}»: ${what}`)
   }
 }
+
+/** What a family gives back when it leaves its place: its lodging and its activity group. */
+const LEAVE_PLACE = { lodgingId: null, activityGroup: null } as const
+
+/** The participations of the session that hold a place: titolari not declined nor removed. */
+export const holdingPlace = (sessionId: string) =>
+  and(eq(sessionFamilies.sessionId, sessionId), holdsPlace(sessionFamilies))
 
 function iso(value: Date | null): string | null {
   return value ? value.toISOString() : null
@@ -711,7 +719,7 @@ export async function transitionSession(
     staffEmails = await cancelSessionConvocations(db, ctx, { sessionId: session.id, actor: input.actor })
     await db
       .update(sessionFamilies)
-      .set({ status: 'cancelled', lodgingId: null })
+      .set({ status: 'cancelled', ...LEAVE_PLACE })
       .where(and(eq(sessionFamilies.sessionId, session.id), inArray(sessionFamilies.status, ACTIVE_STATUSES)))
   }
   await db.update(campSessions).set({ status: to, statusChangedAt: now }).where(eq(campSessions.id, session.id))
@@ -1024,8 +1032,7 @@ export async function answerInvitation(
       status: input.answer,
       respondedAt: now,
       declineReason: input.answer === 'declined' ? input.reason?.trim() || null : null,
-      // A family that declines frees its lodging too.
-      ...(input.answer === 'declined' && { lodgingId: null }),
+      ...(input.answer === 'declined' && LEAVE_PLACE),
     })
     .where(eq(sessionFamilies.id, row.id))
   if (row.kind === 'reserve') await renumberReserves(db, row.sessionId)
@@ -1062,7 +1069,7 @@ export async function cancelParticipation(
   const wasInvited = target.status !== 'selected'
   await db
     .update(sessionFamilies)
-    .set({ status: 'cancelled', lodgingId: null })
+    .set({ status: 'cancelled', ...LEAVE_PLACE })
     .where(eq(sessionFamilies.id, target.id))
   if (target.kind === 'reserve') await renumberReserves(db, session.id)
   const emails = wasInvited && canReceive(target) ? [familyEmail(ctx, 'session.removed', target, session)] : []

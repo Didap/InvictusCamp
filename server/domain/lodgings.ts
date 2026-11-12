@@ -2,20 +2,20 @@
 // (lodgings) is entered once and used by every session; a titolare holding a place gets one lodging, a
 // lodging hosts one family per session (session_families.lodgingId, with its unique index and check).
 // Explicit imports only, so the database tests can load this file (tests/db/lodgings.test.ts).
-import { and, count, eq, inArray, ne, sql } from 'drizzle-orm'
+import { and, count, eq, ne, sql } from 'drizzle-orm'
 import type { LodgingValues } from '../../shared/schemas/lodgings'
 import type { FormAnswers } from '../../shared/types/domain'
 import type { LodgingListItem, SessionLodgingFamily, SessionLodgingsDto } from '../../shared/types/lodgings'
-import { NO_CARDS, accommodationNeeds, featureLabels, placeFamilies, sortLodgings } from '../../shared/utils/lodgings'
+import { NO_CARDS } from '../../shared/utils/format'
+import { accommodationNeeds, featureLabels, placeFamilies, sortLodgings } from '../../shared/utils/lodgings'
 import { isSessionEditable } from '../../shared/utils/session-status'
-import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 import { campSessions, families, lodgings, sessionFamilies } from '../db/schema'
 import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
 import { memberCountSql } from './families'
-import { findSession, lockSession, requireEditable, type Actor } from './sessions'
+import { findSession, holdingPlace, lockSession, requireEditable, type Actor } from './sessions'
 
 const columns = {
   id: lodgings.id,
@@ -27,14 +27,6 @@ const columns = {
 }
 
 const notFound = () => new DomainError(404, 'Alloggio non trovato')
-
-/** The participations of the session that hold a place: titolari not declined nor removed. */
-const holdingPlace = (sessionId: string) =>
-  and(
-    eq(sessionFamilies.sessionId, sessionId),
-    eq(sessionFamilies.kind, 'slot'),
-    inArray(sessionFamilies.status, [...ACTIVE_STATUSES]),
-  )
 
 // ─── The layout ────────────────────────────────────────────────────────────────────────────────────
 

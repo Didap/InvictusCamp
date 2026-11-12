@@ -30,6 +30,7 @@ import type {
   ParticipationKind,
   ParticipationStatus,
   PersonalDocumentCategory,
+  ProgrammeGroup,
   SessionStatus,
   SignatureStatus,
   StaffRole,
@@ -39,6 +40,7 @@ import type {
   UserRole,
   UserStatus,
 } from '../../shared/utils/constants'
+import { OPEN_CONVOCATIONS } from '../../shared/utils/constants'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 
 const tz = { withTimezone: true } as const
@@ -268,6 +270,16 @@ export const lodgings = pgTable(
   t => [check('lodgings_beds', sql`${t.beds} > 0`)],
 )
 
+/** A list of constants for `in (…)`. */
+const sqlList = (values: readonly string[]) => sql.raw(values.map(value => `'${value}'`).join(', '))
+
+/**
+ * A titolare holding a place (shared/utils/slots.ts, holdsSlot): only it has a lodging and a group. Used by
+ * the checks below and by the queries (server/domain/sessions.ts, holdingPlace).
+ */
+export const holdsPlace = (t: { kind: AnyPgColumn; status: AnyPgColumn }) =>
+  sql`(${t.kind} = 'slot' and ${t.status} in (${sqlList(ACTIVE_STATUSES)}))`
+
 /** A family in a session: titolare (slot) or riserva (reserve, called in reserveRank order). */
 export const sessionFamilies = pgTable(
   'session_families',
@@ -288,6 +300,8 @@ export const sessionFamilies = pgTable(
     declineReason: text(),
     /** Where the family sleeps; only while it holds a place (cleared when it declines or is removed). */
     lodgingId: uuid().references(() => lodgings.id, { onDelete: 'set null' }),
+    /** The activity group of the family (docs/spec.md 3.12); like the lodging, only while it holds a place. */
+    activityGroup: text().$type<ProgrammeGroup>(),
     /** Internal notes. */
     notes: text(),
     createdAt: createdAt(),
@@ -298,11 +312,8 @@ export const sessionFamilies = pgTable(
     index('session_families_family_idx').on(t.familyId),
     // One family per lodging in a session; lodging first, for the lookups by lodging.
     uniqueIndex('session_families_lodging_session_key').on(t.lodgingId, t.sessionId),
-    // Only a titolare holding a place sleeps in a lodging (shared/utils/slots.ts, holdsSlot).
-    check(
-      'session_families_lodging',
-      sql`${t.lodgingId} is null or (${t.kind} = 'slot' and ${t.status} in (${sql.raw(ACTIVE_STATUSES.map(status => `'${status}'`).join(', '))}))`,
-    ),
+    check('session_families_lodging', sql`${t.lodgingId} is null or ${holdsPlace(t)}`),
+    check('session_families_activity_group', sql`${t.activityGroup} is null or ${holdsPlace(t)}`),
   ],
 )
 
@@ -344,12 +355,20 @@ export const sessionStaff = pgTable(
     sentAt: timestamp(tz),
     respondedAt: timestamp(tz),
     declineReason: text(),
+    /** The activity group this person is responsible for (docs/spec.md 3.12): one per group. */
+    activityGroup: text().$type<ProgrammeGroup>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   t => [
     uniqueIndex('session_staff_session_user_key').on(t.sessionId, t.userId),
     index('session_staff_user_idx').on(t.userId),
+    uniqueIndex('session_staff_activity_group_key').on(t.sessionId, t.activityGroup),
+    // A convocation declined or withdrawn leads no group.
+    check(
+      'session_staff_activity_group',
+      sql`${t.activityGroup} is null or ${t.status} in (${sqlList(OPEN_CONVOCATIONS)})`,
+    ),
   ],
 )
 
