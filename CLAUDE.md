@@ -74,7 +74,7 @@ tests/unit, tests/db   vitest projects `unit` and `db`
   `EmailMessage[]`; handlers run it in a transaction and call `deliver()` after the commit.
 - **Emails**: `deliver()` sends with Resend or records them as simulated; everything lands in `email_log`.
   Access links and codes are `sensitive` (not stored). No health details in emails.
-- **Health data** (`family_members.disability`): only after the family's explicit consent, only in the
+- **Health data** (`family_members.disability`, `family_members.useful_info`): only after the family's explicit consent, only in the
   family's pages and the admin family page, audited on change. The admin family list shows only the ages
   of the members with a condition (`hasDisability`), never the details; the CSV export shows neither.
 - **Files**: never public; upload with `readUpload` + `saveFile`, download through an authorised endpoint.

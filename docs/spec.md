@@ -195,9 +195,14 @@ availability or receive convocations. The administration can move a person to th
   Without it, the save is refused.
 - **Member cards** (`/famiglia/membri`, "Componenti"): name, birth date, relationship to the young person
   with a condition ("Legame di parentela rispetto a Matteo": genitore, fratello/sorella, nonno/nonna,
-  zio/zia, tutore, altro; that young person's own card has none), adult or young person, referent, and, with the consent, the question "ha una patologia o disabilità?" (Sì/No, No by
-  default: nothing more to write) and, on Sì, its details (`DisabilityInfo`, placeholder fields, all
-  required). An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling it in
+  zio/zia, tutore, altro; that young person's own card has none), adult or young person, referent. With
+  the consent: for a young person the question "ha una patologia o disabilità?" (Sì/No, No by default) and,
+  on Sì, its details as multiple choices (`DisabilityInfo`, shared/content/member-form.ts: tipologia,
+  supporto, mobilità, comunicazione, terapie, at least one each) with two optional texts, «Selettività
+  alimentare» and «Altro da sapere»; for everyone «Informazioni utili su …» (`UsefulInfo`,
+  `family_members.useful_info`): allergies and intolerances (the 14 EU allergens), one food preference,
+  other notes. Food allergies are health data: the same consent covers them, withdrawing it deletes them
+  too. An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling it in
   requires name, surname, relationship (but for the young person with a condition) and, for an adult, the
   birth date. Every filled card has «Carica il documento di identità», an upload of type `id_document` for
   that person, until one is there. Before the family data is confirmed the page shows only

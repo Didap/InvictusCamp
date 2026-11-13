@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { DISABILITY_FIELDS, memberSchema } from '#shared/schemas/families'
-import type { DisabilityInfo } from '#shared/types/domain'
+import {
+  ALLERGIES,
+  DIETS,
+  DISABILITY_CHOICES,
+  type Choice,
+  type DisabilityChoiceKey,
+} from '#shared/content/member-form'
+import { memberSchema } from '#shared/schemas/families'
 import type { OwnFamilyMember } from '#shared/types/families'
 import { YES_NO_ITEMS, type MemberKind, type MemberRelationship } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
@@ -17,8 +23,6 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ saved: [] }>()
 
-type DisabilityKey = keyof DisabilityInfo
-
 interface State {
   firstName: string
   lastName: string
@@ -26,11 +30,16 @@ interface State {
   relationship: MemberRelationship | undefined
   kind: MemberKind | undefined
   isReferent: boolean
-  health: { hasDisability: boolean; disability: Record<DisabilityKey, string> }
+  health: {
+    hasDisability: boolean
+    disability: Record<DisabilityChoiceKey, string[]> & { foodSelectivity: string; notes: string }
+    info: { allergies: string[]; diet: string; notes: string }
+  }
 }
 
 function initialState(member: OwnFamilyMember | null): State {
   const disability = member?.health?.disability ?? {}
+  const info = member?.health?.info ?? {}
   return {
     firstName: member?.firstName ?? '',
     lastName: member?.lastName ?? '',
@@ -40,9 +49,14 @@ function initialState(member: OwnFamilyMember | null): State {
     isReferent: member?.isReferent ?? false,
     health: {
       hasDisability: member?.health?.hasDisability ?? false,
-      disability: Object.fromEntries(
-        DISABILITY_FIELDS.map(field => [field.key, disability[field.key] ?? '']),
-      ) as Record<DisabilityKey, string>,
+      disability: {
+        ...(Object.fromEntries(
+          DISABILITY_CHOICES.map(field => [field.key, [...(disability[field.key] ?? [])]]),
+        ) as Record<DisabilityChoiceKey, string[]>),
+        foodSelectivity: disability.foodSelectivity ?? '',
+        notes: disability.notes ?? '',
+      },
+      info: { allergies: [...(info.allergies ?? [])], diet: info.diet ?? '', notes: info.notes ?? '' },
     },
   }
 }
@@ -76,6 +90,9 @@ const { options } = useEnums()
 const relationships = options('memberRelationship')
 const kinds = options('memberKind')
 const today = todayIso()
+const dietItems: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
+/** The options as plain strings: the form holds the keys before the schema checks them. */
+const choices = (options: readonly Choice[]): Choice[] => [...options]
 /** The young person with a condition is the one the others' relationship refers to: no relationship. */
 const isReference = computed(() =>
   isYoungWithCondition({ kind: state.kind ?? 'adult', hasDisability: state.health.hasDisability }),
@@ -108,6 +125,7 @@ async function save() {
           health: {
             hasDisability: state.health.hasDisability,
             disability: state.health.hasDisability ? state.health.disability : null,
+            info: state.health.info,
           },
         }
       : {}),
@@ -194,45 +212,88 @@ async function save() {
           />
         </UFormField>
 
-        <fieldset v-if="consent" class="space-y-5 rounded-lg border border-default p-4">
-          <legend class="flex items-center gap-2 px-1 font-semibold text-highlighted">
-            <UIcon name="i-lucide-lock" class="size-4 text-muted" aria-hidden="true" />
-            Patologie e disabilità
-          </legend>
-          <URadioGroup
-            v-model="state.health.hasDisability"
-            :items="YES_NO_ITEMS"
-            value-key="value"
-            orientation="horizontal"
-            legend="Ha una patologia grave o cronica, un disturbo del neurosviluppo o una disabilità, anche genetica?"
-            :ui="{ legend: 'font-normal text-default' }"
-          />
-          <p v-if="!state.health.hasDisability" class="text-sm text-muted">Se la risposta è no, non serve altro.</p>
-          <template v-else>
-            <p class="max-w-prose text-sm text-muted">
-              Compila tutti i campi: servono al camp per organizzare il soggiorno. Li vedete solo voi e
-              l’amministrazione, e non finiscono mai nelle email. Se in un campo non c’è nulla da segnalare, scrivi
-              «niente».
-            </p>
-            <UFormField
-              v-for="field in DISABILITY_FIELDS"
-              :key="field.key"
-              :label="field.label"
-              :help="field.help"
-              :name="`health.disability.${field.key}`"
-              required
-            >
-              <UTextarea v-model="state.health.disability[field.key]" autoresize :rows="4" class="w-full" />
+        <template v-if="consent">
+          <!-- Only a young person can be the one with a condition: adults and siblings get «Informazioni utili». -->
+          <fieldset v-if="state.kind === 'young'" class="space-y-5 rounded-lg border border-default p-4">
+            <legend class="flex items-center gap-2 px-1 font-semibold text-highlighted">
+              <UIcon name="i-lucide-lock" class="size-4 text-muted" aria-hidden="true" />
+              Patologie e disabilità
+            </legend>
+            <URadioGroup
+              v-model="state.health.hasDisability"
+              :items="YES_NO_ITEMS"
+              value-key="value"
+              orientation="horizontal"
+              legend="Ha una patologia grave o cronica, un disturbo del neurosviluppo o una disabilità, anche genetica?"
+              :ui="{ legend: 'font-normal text-default' }"
+            />
+            <template v-if="state.health.hasDisability">
+              <p class="max-w-prose text-sm text-muted">
+                Scegli tutte le risposte che valgono: servono al camp per organizzare il soggiorno. Le vedete solo voi e
+                l’amministrazione, e non finiscono mai nelle email.
+              </p>
+              <UFormField
+                v-for="field in DISABILITY_CHOICES"
+                :key="field.key"
+                :label="field.label"
+                :name="`health.disability.${field.key}`"
+                required
+              >
+                <UCheckboxGroup
+                  v-model="state.health.disability[field.key]"
+                  :items="choices(field.options)"
+                  :legend="field.label"
+                  :ui="{ legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }"
+                />
+              </UFormField>
+              <UFormField
+                label="Selettività alimentare"
+                name="health.disability.foodSelectivity"
+                help="Cosa mangia volentieri e cosa rifiuta, consistenze, temperature, abitudini a tavola."
+                hint="Facoltativo"
+              >
+                <UTextarea v-model="state.health.disability.foodSelectivity" autoresize :rows="3" class="w-full" />
+              </UFormField>
+              <UFormField label="Altro da sapere" name="health.disability.notes" hint="Facoltativo">
+                <UTextarea v-model="state.health.disability.notes" autoresize :rows="2" class="w-full" />
+              </UFormField>
+            </template>
+          </fieldset>
+
+          <fieldset class="space-y-5 rounded-lg border border-default p-4">
+            <legend class="flex items-center gap-2 px-1 font-semibold text-highlighted">
+              <UIcon name="i-lucide-utensils" class="size-4 text-muted" aria-hidden="true" />
+              Informazioni utili su {{ state.firstName.trim() || 'questa persona' }}
+            </legend>
+            <UFormField label="Allergie e intolleranze" name="health.info.allergies" hint="Facoltativo">
+              <UCheckboxGroup
+                v-model="state.health.info.allergies"
+                :items="choices(ALLERGIES)"
+                legend="Allergie e intolleranze"
+                :ui="{ legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }"
+              />
             </UFormField>
-          </template>
-        </fieldset>
+            <UFormField label="Preferenze alimentari" name="health.info.diet">
+              <URadioGroup
+                v-model="state.health.info.diet"
+                :items="dietItems"
+                legend="Preferenze alimentari"
+                orientation="horizontal"
+                :ui="{ legend: 'sr-only', fieldset: 'flex-wrap gap-x-4 gap-y-2' }"
+              />
+            </UFormField>
+            <UFormField label="Altre note da segnalare" name="health.info.notes" hint="Facoltativo">
+              <UTextarea v-model="state.health.info.notes" autoresize :rows="2" class="w-full" />
+            </UFormField>
+          </fieldset>
+        </template>
         <UAlert
           v-else
           color="neutral"
           variant="subtle"
           icon="i-lucide-lock"
           title="Dati sulla salute"
-          description="Per indicare la disabilità e i bisogni di supporto serve prima il tuo consenso: lo trovi in questa pagina, sotto l’elenco dei componenti."
+          description="Per indicare allergie, intolleranze e, per i ragazzi, patologie e disabilità serve prima il tuo consenso: lo trovi in questa pagina, sotto l’elenco dei componenti."
         />
 
         <div class="flex flex-wrap justify-end gap-2 pt-2">

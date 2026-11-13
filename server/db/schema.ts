@@ -16,7 +16,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
-import type { Audience, DisabilityInfo, FormAnswers, ProgrammeContent } from '../../shared/types/domain'
+import type { Audience, DisabilityInfo, UsefulInfo, FormAnswers, ProgrammeContent } from '../../shared/types/domain'
 import type { FeedbackArchive } from '../../shared/types/feedback'
 import type {
   ConvocationStatus,
@@ -176,6 +176,8 @@ export const familyMembers = pgTable(
     hasDisability: boolean().notNull().default(false),
     /** Special category data: family and administration only. */
     disability: jsonb().$type<DisabilityInfo>(),
+    /** Allergies, diet, notes («Informazioni utili»): behind the same consent, read by the canteen summary. */
+    usefulInfo: jsonb().$type<UsefulInfo>(),
     notes: text(),
     position: integer().notNull().default(0),
     createdAt: createdAt(),

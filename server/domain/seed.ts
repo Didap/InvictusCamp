@@ -4,7 +4,7 @@
 // 2026 summer and the 2027 calendar (shared/content/calendar-2027.ts).
 import { and, eq, sql } from 'drizzle-orm'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
-import type { DisabilityInfo, FormAnswers } from '../../shared/types/domain'
+import type { DisabilityInfo, FormAnswers, UsefulInfo } from '../../shared/types/domain'
 import type { FeedbackArchive } from '../../shared/types/feedback'
 import type {
   ConvocationStatus,
@@ -74,6 +74,7 @@ interface DemoMember {
   /** None for the young person with a condition (`disability`): the others' relationship is to them. */
   relationship?: MemberRelationship
   birthDate?: string
+  /** The young person's condition: a key of the «Tipologia» choices. */
   disability?: string
 }
 
@@ -98,7 +99,7 @@ const FAMILIES: {
       {
         firstName: 'Matteo',
         birthDate: '2015-04-12',
-        disability: 'Disturbo dello spettro autistico (esempio)',
+        disability: 'autism',
       },
       { firstName: 'Sofia', relationship: 'sibling', birthDate: '2018-09-30' },
     ],
@@ -113,7 +114,7 @@ const FAMILIES: {
       {
         firstName: 'Pietro',
         birthDate: '2014-02-03',
-        disability: 'Paralisi cerebrale infantile (esempio)',
+        disability: 'motor',
       },
     ],
   },
@@ -128,7 +129,7 @@ const FAMILIES: {
       {
         firstName: 'Alessia',
         birthDate: '2016-06-21',
-        disability: 'Sindrome di Down (esempio)',
+        disability: 'genetic',
       },
     ],
   },
@@ -143,7 +144,7 @@ const FAMILIES: {
       {
         firstName: 'Samuele',
         birthDate: '2013-11-08',
-        disability: 'Distrofia muscolare (esempio)',
+        disability: 'motor',
       },
       { firstName: 'Giorgia', relationship: 'sibling', birthDate: '2011-01-17' },
     ],
@@ -154,7 +155,7 @@ const FAMILIES: {
     city: 'Manduria',
     province: 'TA',
     submitted: true,
-    members: [{ firstName: 'Davide', birthDate: '2017-03-14', disability: 'Epilessia (esempio)' }],
+    members: [{ firstName: 'Davide', birthDate: '2017-03-14', disability: 'epilepsy' }],
   },
   {
     first: 'Salvatore',
@@ -164,7 +165,7 @@ const FAMILIES: {
     submitted: true,
     members: [
       { firstName: 'Carla', relationship: 'parent' },
-      { firstName: 'Emma', birthDate: '2015-08-02', disability: 'Fibrosi cistica (esempio)' },
+      { firstName: 'Emma', birthDate: '2015-08-02', disability: 'chronic' },
     ],
   },
   {
@@ -177,7 +178,7 @@ const FAMILIES: {
       {
         firstName: 'Tommaso',
         birthDate: '2012-05-27',
-        disability: 'Disabilità intellettiva (esempio)',
+        disability: 'intellectual',
       },
     ],
   },
@@ -192,7 +193,7 @@ const FAMILIES: {
       {
         firstName: 'Leonardo',
         birthDate: '2016-12-09',
-        disability: 'Sindrome di Rett (esempio)',
+        disability: 'genetic',
       },
     ],
   },
@@ -206,7 +207,7 @@ const FAMILIES: {
       {
         firstName: 'Beatrice',
         birthDate: '2014-07-19',
-        disability: 'Atrofia muscolare spinale (esempio)',
+        disability: 'motor',
       },
     ],
   },
@@ -221,7 +222,7 @@ const FAMILIES: {
       {
         firstName: 'Riccardo',
         birthDate: '2013-04-30',
-        disability: 'Diabete di tipo 1 (esempio)',
+        disability: 'chronic',
       },
     ],
   },
@@ -235,7 +236,7 @@ const FAMILIES: {
       {
         firstName: 'Gabriele',
         birthDate: '2018-02-11',
-        disability: 'Sindrome dell’X fragile (esempio)',
+        disability: 'genetic',
       },
     ],
   },
@@ -513,6 +514,19 @@ const STAFF: {
   { first: 'Noemi', last: 'Pellegrini', status: 'registered', roles: [], city: 'Taranto', sessions: [] },
 ]
 
+/** The «Informazioni utili» of the demo members, in turn: most have nothing to say. */
+const DEMO_USEFUL_INFO: (UsefulInfo | null)[] = [
+  null,
+  { allergies: ['milk'] },
+  null,
+  { diet: 'vegetarian' },
+  null,
+  { allergies: ['gluten'] },
+  null,
+  null,
+  { allergies: ['nuts'], notes: 'Porta con sé l’autoiniettore (esempio).' },
+]
+
 const DEMO_ANSWERS: FormAnswers = {
   howDidYouHear: 'Associazione o ente',
   association: 'Associazione Insieme (esempio)',
@@ -678,6 +692,8 @@ export async function seedDemo(
       lastName: f.last,
       phone,
     })
+    // Health data (disability, allergies) only with the consent, given by the families with a condition.
+    const consent = f.members.some(m => m.disability)
     const [family] = await db
       .insert(t.families)
       .values({
@@ -692,7 +708,7 @@ export async function seedDemo(
         formStatus: f.submitted ? 'submitted' : 'draft',
         formSubmittedAt: f.submitted ? new Date('2026-10-02T10:00:00Z') : null,
         privacyConsentAt: verified,
-        healthDataConsentAt: f.members.some(m => m.disability) ? verified : null,
+        healthDataConsentAt: consent ? verified : null,
       })
       .returning({ id: t.families.id })
     const members: DemoMember[] = [{ firstName: f.first, relationship: 'parent' }, ...f.members]
@@ -714,13 +730,15 @@ export async function seedDemo(
           hasDisability: Boolean(m.disability),
           disability: m.disability
             ? ({
-                description: m.disability,
-                supportNeeds: 'Supporto nelle autonomie quotidiane (esempio).',
-                mobility: 'Niente da segnalare (esempio).',
-                communication: 'Comunica a voce, con frasi brevi (esempio).',
-                medicalNotes: 'Nessuna terapia, nessuna allergia (esempio).',
+                conditions: [m.disability],
+                support: ['hygiene', 'emotions'],
+                mobility: [m.disability === 'motor' ? 'manual_wheelchair' : 'autonomous'],
+                communication: ['short_sentences'],
+                care: [m.disability === 'epilepsy' ? 'seizures' : 'none'],
               } satisfies DisabilityInfo)
             : null,
+          // Some allergies and diets for the canteen summary.
+          usefulInfo: consent ? (DEMO_USEFUL_INFO[(index + position) % DEMO_USEFUL_INFO.length] ?? null) : null,
           position,
         }
       }),

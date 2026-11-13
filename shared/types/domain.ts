@@ -12,20 +12,29 @@ import type {
 export type FormAnswers = Record<string, string | string[] | boolean | null>
 
 /**
- * Disability details of a family member (special category data, GDPR art. 9: visible to the family
- * and to the administration only). Placeholder fields until the sprint 2 form defines them.
+ * Health details of a young person with a condition (special category data: visible to the family itself
+ * and to the administration only). The choices are keys of shared/content/member-form.ts, DISABILITY_CHOICES.
  */
 export interface DisabilityInfo {
-  /** Diagnosi o descrizione della condizione. */
-  description?: string
-  /** Bisogni di supporto nella giornata. */
-  supportNeeds?: string
-  /** Mobilità e ausili. */
-  mobility?: string
-  /** Comunicazione. */
-  communication?: string
-  /** Terapie, allergie, note mediche. */
-  medicalNotes?: string
+  conditions?: string[]
+  support?: string[]
+  mobility?: string[]
+  communication?: string[]
+  care?: string[]
+  /** Selettività alimentare: the one text the camp asks. */
+  foodSelectivity?: string
+  /** Anything else; also where the free texts written before the choices were kept. */
+  notes?: string
+}
+
+/**
+ * «Informazioni utili» of any member, behind the same consent (food allergies are health data): what the
+ * canteen and the staff need. Keys of ALLERGIES and DIETS.
+ */
+export interface UsefulInfo {
+  allergies?: string[]
+  diet?: string
+  notes?: string
 }
 
 /** Who a communication from the dashboard goes to (resolved by server/domain/audiences.ts). */

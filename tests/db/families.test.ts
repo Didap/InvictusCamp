@@ -61,7 +61,10 @@ const familyData = (values: Partial<FamilyDataInput> = {}): FamilyDataInput => (
   ...values,
 })
 
-const withDisability = { hasDisability: true, disability: { description: 'Descrizione riservata', mobility: '' } }
+const withDisability = {
+  hasDisability: true,
+  disability: { conditions: ['autism'], notes: 'Descrizione riservata', mobility: [] },
+}
 
 /** A family with its account holder's card; its data already confirmed unless `formStatus` says otherwise. */
 async function familyWithReferent(values: Parameters<typeof makeFamily>[1] = {}) {
@@ -180,11 +183,15 @@ describe('health data consent', () => {
     const { family, actor } = await familyWithReferent()
     await setHealthConsent(db, { familyId: family.id, given: true, actor })
     const member = await addFamilyMember(db, { familyId: family.id, member: child({ health: withDisability }), actor })
-    expect(member.health).toEqual({ hasDisability: true, disability: { description: 'Descrizione riservata' } })
+    expect(member.health).toEqual({
+      hasDisability: true,
+      disability: { conditions: ['autism'], notes: 'Descrizione riservata' },
+      info: null,
+    })
 
     const [audit] = await auditRows('member.health_update')
     expect(audit!.entityId).toBe(member.id)
-    expect(audit!.data).toEqual({ familyId: family.id, fields: ['hasDisability', 'description'] })
+    expect(audit!.data).toEqual({ familyId: family.id, fields: ['hasDisability', 'conditions', 'notes'] })
     expect(JSON.stringify(audit!.data)).not.toContain('Descrizione riservata')
 
     // Without `health` the details stay as they are, and nothing is audited.
@@ -196,14 +203,14 @@ describe('health data consent', () => {
     })
     const [row] = await db.select().from(t.familyMembers).where(eq(t.familyMembers.id, member.id))
     expect(row!.hasDisability).toBe(true)
-    expect(row!.disability).toEqual({ description: 'Descrizione riservata' })
+    expect(row!.disability).toEqual({ conditions: ['autism'], notes: 'Descrizione riservata' })
     expect(await auditRows('member.health_update')).toHaveLength(1)
 
     // Turning the flag off drops the details too.
     await updateFamilyMember(db, {
       familyId: family.id,
       memberId: member.id,
-      member: child({ health: { hasDisability: false, disability: { description: 'resta?' } } }),
+      member: child({ health: { hasDisability: false, disability: { notes: 'resta?' } } }),
       actor,
     })
     const [cleared] = await db.select().from(t.familyMembers).where(eq(t.familyMembers.id, member.id))
@@ -218,12 +225,17 @@ describe('health data consent', () => {
     expect(again.cleared).toBe(0)
     expect(await auditRows('family.health_consent')).toHaveLength(1)
     await addFamilyMember(db, { familyId: family.id, member: child({ health: withDisability }), actor })
-    await addFamilyMember(db, { familyId: family.id, member: child({ firstName: 'Sofia' }), actor })
+    const sofia = await addFamilyMember(db, {
+      familyId: family.id,
+      member: child({ firstName: 'Sofia', health: { hasDisability: false, info: { allergies: ['milk'] } } }),
+      actor,
+    })
+    expect(sofia.health?.info).toEqual({ allergies: ['milk'] })
 
     const result = await setHealthConsent(db, { familyId: family.id, given: false, actor })
-    expect(result).toEqual({ healthDataConsentAt: null, cleared: 1, documentsRemoved: 0, storageKeys: [] })
+    expect(result).toEqual({ healthDataConsentAt: null, cleared: 2, documentsRemoved: 0, storageKeys: [] })
     const rows = await db.select().from(t.familyMembers).where(eq(t.familyMembers.familyId, family.id))
-    expect(rows.every(row => !row.hasDisability && row.disability === null)).toBe(true)
+    expect(rows.every(row => !row.hasDisability && row.disability === null && row.usefulInfo === null)).toBe(true)
     const own = await ownFamilyMembers(db, family.id)
     expect(own.healthDataConsentAt).toBeNull()
     expect(own.members.every(member => member.health === null)).toBe(true)

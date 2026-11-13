@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { registerFamilySchema } from '#shared/schemas/auth'
-import { DISABILITY_FIELDS, memberSchema } from '#shared/schemas/families'
+import { DISABILITY_CHOICES } from '#shared/content/member-form'
+import { memberSchema, normalizeHealth } from '#shared/schemas/families'
 import { familyNameOf, isCardToComplete, surnameOf } from '#shared/utils/format'
 
 /** The names of the fields a parse refuses, as the form shows them. */
@@ -29,7 +30,7 @@ describe('family registration', () => {
 describe('family member', () => {
   const adult = { firstName: 'Anna', lastName: 'Rossi', relationship: 'parent', kind: 'adult', birthDate: '1985-03-02' }
   const young = { ...adult, firstName: 'Luca', relationship: 'sibling', kind: 'young', birthDate: '' }
-  const details = Object.fromEntries(DISABILITY_FIELDS.map(field => [field.key, 'niente']))
+  const details = Object.fromEntries(DISABILITY_CHOICES.map(field => [field.key, [field.options[0].value]]))
 
   it('needs the birth date of an adult, not of a young person', () => {
     expect(memberSchema.safeParse(adult).success).toBe(true)
@@ -76,12 +77,26 @@ describe('family member', () => {
     expect(memberSchema.safeParse({ ...young, health: { hasDisability: true, disability: details } }).success).toBe(
       true,
     )
-    const partial = { ...details, mobility: ' ', medicalNotes: undefined }
+    const partial = { ...details, mobility: [], care: undefined }
     expect(refused(memberSchema.safeParse({ ...young, health: { hasDisability: true, disability: partial } }))).toEqual(
-      ['health.disability.mobility', 'health.disability.medicalNotes'],
+      ['health.disability.mobility', 'health.disability.care'],
     )
     expect(
       refused(memberSchema.safeParse({ ...young, health: { hasDisability: true, disability: null } })),
-    ).toHaveLength(DISABILITY_FIELDS.length)
+    ).toHaveLength(DISABILITY_CHOICES.length)
+    const unknown = { ...details, conditions: ['nessuna-di-queste'] }
+    expect(refused(memberSchema.safeParse({ ...young, health: { hasDisability: true, disability: unknown } }))).toEqual(
+      ['health.disability.conditions.0'],
+    )
+  })
+
+  it('stores the choices in the order of the options, and the useful info of anyone', () => {
+    const health = normalizeHealth({
+      hasDisability: false,
+      disability: { conditions: ['autism'] },
+      info: { allergies: ['nuts', 'gluten', 'nuts'], diet: '', notes: '  ' },
+    })
+    expect(health).toEqual({ hasDisability: false, disability: null, info: { allergies: ['gluten', 'nuts'] } })
+    expect(normalizeHealth({ hasDisability: true, disability: { care: ['none'] } }).info).toBeNull()
   })
 })

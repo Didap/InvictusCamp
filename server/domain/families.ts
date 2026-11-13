@@ -364,8 +364,8 @@ function toMember(row: MemberRow): FamilyMemberDto {
   }
 }
 
-function healthOf(row: Pick<MemberRow, 'hasDisability' | 'disability'>): MemberHealth {
-  return { hasDisability: row.hasDisability, disability: row.disability ?? null }
+function healthOf(row: Pick<MemberRow, 'hasDisability' | 'disability' | 'usefulInfo'>): MemberHealth {
+  return { hasDisability: row.hasDisability, disability: row.disability ?? null, info: row.usefulInfo ?? null }
 }
 
 function listMemberRows(db: DbOrTx, familyId: string): Promise<MemberRow[]> {
@@ -493,6 +493,7 @@ export async function addFamilyMember(
       isReferent: input.member.isReferent,
       hasDisability: health.hasDisability,
       disability: health.disability,
+      usefulInfo: health.info,
       position: nextPosition(rows),
     })
     .returning()
@@ -538,6 +539,7 @@ export async function updateFamilyMember(
       isReferent: input.member.isReferent,
       hasDisability: after.hasDisability,
       disability: after.disability,
+      usefulInfo: after.info,
     })
     .where(eq(familyMembers.id, row.id))
     .returning()
@@ -593,7 +595,7 @@ export async function setHealthConsent(
   if (withHealth.length) {
     await db
       .update(familyMembers)
-      .set({ hasDisability: false, disability: null })
+      .set({ hasDisability: false, disability: null, usefulInfo: null })
       .where(
         inArray(
           familyMembers.id,
