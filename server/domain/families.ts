@@ -368,6 +368,11 @@ function healthOf(row: Pick<MemberRow, 'hasDisability' | 'disability' | 'usefulI
   return { hasDisability: row.hasDisability, disability: row.disability ?? null, info: row.usefulInfo ?? null }
 }
 
+/** The columns of the health data, the other way round: what an insert, an update or a withdrawal writes. */
+function healthColumns(health: MemberHealth) {
+  return { hasDisability: health.hasDisability, disability: health.disability, usefulInfo: health.info }
+}
+
 function listMemberRows(db: DbOrTx, familyId: string): Promise<MemberRow[]> {
   return db
     .select()
@@ -491,9 +496,7 @@ export async function addFamilyMember(
       relationship: relationshipOf(input.member, health.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
-      hasDisability: health.hasDisability,
-      disability: health.disability,
-      usefulInfo: health.info,
+      ...healthColumns(health),
       position: nextPosition(rows),
     })
     .returning()
@@ -537,9 +540,7 @@ export async function updateFamilyMember(
       relationship: relationshipOf(input.member, after.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
-      hasDisability: after.hasDisability,
-      disability: after.disability,
-      usefulInfo: after.info,
+      ...healthColumns(after),
     })
     .where(eq(familyMembers.id, row.id))
     .returning()
@@ -595,7 +596,7 @@ export async function setHealthConsent(
   if (withHealth.length) {
     await db
       .update(familyMembers)
-      .set({ hasDisability: false, disability: null, usefulInfo: null })
+      .set(healthColumns(NO_HEALTH))
       .where(
         inArray(
           familyMembers.id,

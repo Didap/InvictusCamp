@@ -180,8 +180,6 @@ const zChoice = (options: readonly Choice[]) =>
   z.string().refine(value => options.some(option => option.value === value), { error: 'Scelta non valida' })
 const zChoices = (options: readonly Choice[]) => z.array(zChoice(options)).max(options.length)
 const zDetail = zText(2000).optional()
-/** The «Nessun supporto», «Nessuna terapia» of a list: alone or not at all. */
-const NONE = 'none'
 
 export const disabilityInfoSchema = z.object({
   ...(Object.fromEntries(DISABILITY_CHOICES.map(field => [field.key, zChoices(field.options).optional()])) as Record<
@@ -207,12 +205,13 @@ export const memberHealthSchema = z
   })
   .superRefine((health, ctx) => {
     if (!health.hasDisability) return
-    for (const { key } of DISABILITY_CHOICES) {
-      const chosen = health.disability?.[key] ?? []
+    for (const { key, options } of DISABILITY_CHOICES) {
+      const chosen: string[] = health.disability?.[key] ?? []
+      const alone = options.find(option => 'exclusive' in option && chosen.includes(option.value))
       if (!chosen.length) {
         ctx.addIssue({ code: 'custom', path: ['disability', key], message: 'Scegli almeno una risposta' })
-      } else if (chosen.length > 1 && chosen.includes(NONE)) {
-        ctx.addIssue({ code: 'custom', path: ['disability', key], message: '«Nessuno» non va con le altre risposte' })
+      } else if (alone && chosen.length > 1) {
+        ctx.addIssue({ code: 'custom', path: ['disability', key], message: `«${alone.label}» va scelto da solo` })
       }
     }
   })
@@ -273,7 +272,7 @@ function picked(options: readonly Choice[], chosen: readonly string[] | undefine
 
 /** Only what has a value; null when nothing has. */
 function compact<T extends object>(value: T): T | null {
-  const entries = Object.entries(value).filter(([, item]) => (Array.isArray(item) ? item.length : item))
+  const entries = Object.entries(value).filter(([, item]) => isAnswered(item))
   return entries.length ? (Object.fromEntries(entries) as T) : null
 }
 
@@ -303,16 +302,21 @@ export function hasHealthData(health: MemberHealth): boolean {
   return health.hasDisability || Boolean(health.disability) || Boolean(health.info)
 }
 
-const DISABILITY_KEYS = [...DISABILITY_CHOICES.map(field => field.key), 'foodSelectivity', 'notes'] as const
-const INFO_KEYS = ['allergies', 'diet', 'notes'] as const
+/** The keys whose values differ between two records, whatever their fields. */
+function changedKeys(before: object | null, after: object | null): string[] {
+  const a: Record<string, unknown> = { ...before }
+  const b: Record<string, unknown> = { ...after }
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(
+    key => JSON.stringify(a[key] ?? null) !== JSON.stringify(b[key] ?? null),
+  )
+}
 
 /** The names (never the values) of the health fields that differ: the data of `member.health_update`. */
 export function healthChangedFields(before: MemberHealth, after: MemberHealth): string[] {
-  const differs = (a: unknown, b: unknown) => JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)
   return [
     ...(before.hasDisability !== after.hasDisability ? ['hasDisability'] : []),
-    ...DISABILITY_KEYS.filter(key => differs(before.disability?.[key], after.disability?.[key])),
-    ...INFO_KEYS.filter(key => differs(before.info?.[key], after.info?.[key])).map(key => `info.${key}`),
+    ...changedKeys(before.disability, after.disability),
+    ...changedKeys(before.info, after.info).map(key => `info.${key}`),
   ]
 }
 

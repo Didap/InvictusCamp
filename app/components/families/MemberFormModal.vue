@@ -3,6 +3,7 @@ import {
   ALLERGIES,
   DIETS,
   DISABILITY_CHOICES,
+  HEALTH_LABELS,
   type Choice,
   type DisabilityChoiceKey,
 } from '#shared/content/member-form'
@@ -16,7 +17,8 @@ import { fullName, isEmptyCard, isYoungWithCondition } from '#shared/utils/forma
 // (docs/spec.md, 3.8); without it the request carries no health data at all.
 // The options as plain strings, once: the form holds the keys before the schema checks them.
 const DISABILITY_FIELDS = DISABILITY_CHOICES.map(field => ({ ...field, items: [...field.options] as Choice[] }))
-const ALLERGY_ITEMS: Choice[] = [...ALLERGIES]
+/** Lists of choices in two columns from the tablet up. */
+const CHOICES_UI = { legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }
 
 const props = defineProps<{
   member: OwnFamilyMember | null
@@ -102,7 +104,6 @@ const dietItems: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
 const withCondition = computed(() =>
   isYoungWithCondition({ kind: state.kind ?? 'adult', hasDisability: state.health.hasDisability }),
 )
-/** The young person with a condition is the one the others' relationship refers to: no relationship. */
 const relationshipLabel = computed(
   () =>
     `Legame di parentela rispetto ${props.reference ? `a ${props.reference}` : 'al ragazzo o alla ragazza con patologia o disabilità'}`,
@@ -249,18 +250,18 @@ async function save() {
                   v-model="state.health.disability[field.key]"
                   :items="field.items"
                   :legend="field.label"
-                  :ui="{ legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }"
+                  :ui="CHOICES_UI"
                 />
               </UFormField>
               <UFormField
-                label="Selettività alimentare"
+                :label="HEALTH_LABELS.foodSelectivity"
                 name="health.disability.foodSelectivity"
                 help="Cosa mangia volentieri e cosa rifiuta, consistenze, temperature, abitudini a tavola."
                 hint="Facoltativo"
               >
                 <UTextarea v-model="state.health.disability.foodSelectivity" autoresize :rows="3" class="w-full" />
               </UFormField>
-              <UFormField label="Altro da sapere" name="health.disability.notes" hint="Facoltativo">
+              <UFormField :label="HEALTH_LABELS.notes" name="health.disability.notes" hint="Facoltativo">
                 <UTextarea v-model="state.health.disability.notes" autoresize :rows="2" class="w-full" />
               </UFormField>
             </template>
@@ -271,24 +272,24 @@ async function save() {
               <UIcon name="i-lucide-utensils" class="size-4 text-muted" aria-hidden="true" />
               Informazioni utili su {{ state.firstName.trim() || 'questa persona' }}
             </legend>
-            <UFormField label="Allergie e intolleranze" name="health.info.allergies" hint="Facoltativo">
+            <UFormField :label="HEALTH_LABELS.allergies" name="health.info.allergies" hint="Facoltativo">
               <UCheckboxGroup
                 v-model="state.health.info.allergies"
-                :items="ALLERGY_ITEMS"
-                legend="Allergie e intolleranze"
-                :ui="{ legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }"
+                :items="ALLERGIES"
+                :legend="HEALTH_LABELS.allergies"
+                :ui="CHOICES_UI"
               />
             </UFormField>
-            <UFormField label="Preferenze alimentari" name="health.info.diet">
+            <UFormField :label="HEALTH_LABELS.diet" name="health.info.diet">
               <URadioGroup
                 v-model="state.health.info.diet"
                 :items="dietItems"
-                legend="Preferenze alimentari"
+                :legend="HEALTH_LABELS.diet"
                 orientation="horizontal"
                 :ui="{ legend: 'sr-only', fieldset: 'flex-wrap gap-x-4 gap-y-2' }"
               />
             </UFormField>
-            <UFormField label="Altre note da segnalare" name="health.info.notes" hint="Facoltativo">
+            <UFormField :label="HEALTH_LABELS.infoNotes" name="health.info.notes" hint="Facoltativo">
               <UTextarea v-model="state.health.info.notes" autoresize :rows="2" class="w-full" />
             </UFormField>
           </fieldset>

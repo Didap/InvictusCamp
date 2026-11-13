@@ -6,10 +6,21 @@
 export interface Choice<K extends string = string> {
   value: K
   label: string
+  /** «Nessun supporto», «Nessuna terapia»: the only answer when chosen. */
+  exclusive?: boolean
 }
 
+/** The labels of the fields that are not lists of choices: the form and the views read them here. */
+export const HEALTH_LABELS = {
+  foodSelectivity: 'Selettività alimentare',
+  notes: 'Altro da sapere',
+  allergies: 'Allergie e intolleranze',
+  diet: 'Preferenze alimentari',
+  infoNotes: 'Altre note da segnalare',
+} as const
+
 /** The 14 allergens of EU Regulation 1169/2011, lactose with milk. `canteen` is how the canteen lists them. */
-export const ALLERGIES = [
+export const ALLERGIES: (Choice & { canteen: string })[] = [
   { value: 'gluten', label: 'Glutine (celiachia)', canteen: 'senza glutine' },
   { value: 'milk', label: 'Latte e lattosio', canteen: 'senza lattosio' },
   { value: 'eggs', label: 'Uova', canteen: 'senza uova' },
@@ -24,16 +35,14 @@ export const ALLERGIES = [
   { value: 'sesame', label: 'Sesamo', canteen: 'senza sesamo' },
   { value: 'sulphites', label: 'Solfiti', canteen: 'senza solfiti' },
   { value: 'lupin', label: 'Lupini', canteen: 'senza lupini' },
-] as const satisfies readonly (Choice & { canteen: string })[]
-export type Allergy = (typeof ALLERGIES)[number]['value']
+]
 
 /** Food preferences: one at most, none means everything. */
-export const DIETS = [
+export const DIETS: (Choice & { canteen: string })[] = [
   { value: 'vegetarian', label: 'Vegetariana', canteen: 'vegetariana' },
   { value: 'vegan', label: 'Vegana', canteen: 'vegana' },
   { value: 'no_pork', label: 'Senza carne di maiale', canteen: 'senza maiale' },
-] as const satisfies readonly (Choice & { canteen: string })[]
-export type Diet = (typeof DIETS)[number]['value']
+]
 
 /** The details of a young person with a condition, each a list of choices (at least one). */
 export const DISABILITY_CHOICES = [
@@ -65,7 +74,7 @@ export const DISABILITY_CHOICES = [
       { value: 'moving', label: 'Spostarsi' },
       { value: 'emotions', label: 'Gestire emozioni e cambiamenti' },
       { value: 'supervision', label: 'Sorveglianza costante' },
-      { value: 'none', label: 'Nessun supporto particolare' },
+      { value: 'none', label: 'Nessun supporto particolare', exclusive: true },
     ],
   },
   {
@@ -102,7 +111,7 @@ export const DISABILITY_CHOICES = [
       { value: 'seizures', label: 'Rischio di crisi epilettiche' },
       { value: 'prescribed_diet', label: 'Dieta prescritta dal medico' },
       { value: 'devices', label: 'Dispositivi medici (per esempio PEG, sondino, ossigeno)' },
-      { value: 'none', label: 'Nessuna terapia' },
+      { value: 'none', label: 'Nessuna terapia', exclusive: true },
     ],
   },
 ] as const satisfies readonly { key: string; label: string; options: readonly Choice[] }[]
