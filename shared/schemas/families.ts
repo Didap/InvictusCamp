@@ -14,7 +14,7 @@ import {
   type PersonalDocumentCategory,
 } from '../utils/constants'
 import { isIsoDay, todayIso } from '../utils/dates'
-import { missingBirthDate } from '../utils/format'
+import { missingBirthDate, missingRelationship } from '../utils/format'
 import { zListQuery, zPersonName, zPhone, zRequiredPhone, zRequiredText, zText, zUuid } from './common'
 
 /** An Italian province as its two-letter code ("TA"); empty is allowed. */
@@ -247,20 +247,6 @@ const memberFields = z.object({
 })
 const birthDateFields = memberFields.pick({ kind: true, birthDate: true })
 const relationshipFields = memberFields.pick({ kind: true, relationship: true, health: true })
-
-/** The young person with a condition, the one the camp is for: the others' relationship is to them. */
-export function isYoungWithCondition(member: { kind: MemberKind; hasDisability: boolean }): boolean {
-  return member.kind === 'young' && member.hasDisability
-}
-
-/** True when the member needs a relationship and has none. */
-export function missingRelationship(member: {
-  kind: MemberKind
-  relationship?: string | null
-  hasDisability: boolean
-}): boolean {
-  return !member.relationship && !isYoungWithCondition(member)
-}
 
 // Whenever the fields a check reads are valid, also while another field is wrong: every missing field at once.
 export const memberSchema = memberFields

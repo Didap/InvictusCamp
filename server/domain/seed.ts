@@ -21,6 +21,7 @@ import { CALENDAR_2027, calendarTitle } from '../../shared/content/calendar-2027
 import { FEEDBACK_OTHER_ITEMS } from '../../shared/content/feedback-form'
 import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '../../shared/utils/constants'
+import { isYoungWithCondition } from '../../shared/utils/format'
 import * as t from '../db/schema'
 import type { Db, DbOrTx } from './db'
 import { storeFile } from './storage'
@@ -713,7 +714,7 @@ export async function seedDemo(
           firstName: m.firstName,
           lastName: f.last,
           // The young person with a condition has no relationship: the others' is to them.
-          relationship: m.disability ? null : m.relationship,
+          relationship: isYoungWithCondition({ kind, hasDisability: Boolean(m.disability) }) ? null : m.relationship,
           kind,
           // An adult's birth date is required by the form: one per demo adult, between 1972 and 1986.
           birthDate:

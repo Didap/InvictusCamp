@@ -92,7 +92,7 @@ export const NO_CARDS = 'Componenti non ancora indicati'
 /** The family as the lists show it, «Famiglia Rossi», from the surname the forms ask for. */
 export function familyNameOf(surname: string): string {
   const value = surname.trim()
-  return /^famiglia\s/i.test(value) ? value : `Famiglia ${value}`
+  return /^famiglia(\s|$)/i.test(value) ? value : `Famiglia ${value}`
 }
 
 /** The surname a form shows for the family: its name without «Famiglia». */
@@ -113,9 +113,29 @@ export function missingBirthDate(member: { kind: MemberKind; birthDate?: string 
   return member.kind === 'adult' && !member.birthDate
 }
 
-/** A card the family still has to fill in: empty, or an adult without the birth date. */
-export function isCardToComplete(member: { firstName: string | null; kind: MemberKind; birthDate: string | null }) {
-  return isEmptyCard(member) || missingBirthDate(member)
+/** The young person with a condition, the one the camp is for: the others' relationship is to them. */
+export function isYoungWithCondition(member: { kind: MemberKind; hasDisability: boolean }): boolean {
+  return member.kind === 'young' && member.hasDisability
+}
+
+/** True when the member needs a relationship and has none: everyone but the young person with a condition. */
+export function missingRelationship(member: {
+  kind: MemberKind
+  relationship?: string | null
+  hasDisability: boolean
+}): boolean {
+  return !member.relationship && !isYoungWithCondition(member)
+}
+
+/** A card the family still has to fill in: empty, an adult without the birth date, or without a relationship. */
+export function isCardToComplete(member: {
+  firstName: string | null
+  kind: MemberKind
+  birthDate: string | null
+  relationship: string | null
+  hasDisability: boolean
+}) {
+  return isEmptyCard(member) || missingBirthDate(member) || missingRelationship(member)
 }
 
 /**
@@ -163,7 +183,7 @@ export function memberLine(
     const age = formatAge(ageOn(member.birthDate))
     parts.push(withDay ? `${age} (${formatDay(member.birthDate)})` : age)
   } else if (missingBirthDate(member)) parts.push('manca la data di nascita')
-  return parts.join(' · ')
+  return parts.join(' · ') || enumLabel('memberKind', member.kind)
 }
 
 /** "9 e 14 anni", "1 anno", "12 anni, un’età da indicare": ages, youngest first; '' for none. */

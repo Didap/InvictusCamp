@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { DISABILITY_FIELDS, isYoungWithCondition, memberSchema } from '#shared/schemas/families'
+import { DISABILITY_FIELDS, memberSchema } from '#shared/schemas/families'
 import type { DisabilityInfo } from '#shared/types/domain'
 import type { OwnFamilyMember } from '#shared/types/families'
 import { YES_NO_ITEMS, type MemberKind, type MemberRelationship } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
-import { fullName, isEmptyCard } from '#shared/utils/format'
+import { fullName, isEmptyCard, isYoungWithCondition } from '#shared/utils/format'
 
 // Adds or edits a member of the signed-in family. The health fields appear only with the consent
 // (docs/spec.md, 3.8); without it the request carries no health data at all.

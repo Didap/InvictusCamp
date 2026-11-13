@@ -26,7 +26,6 @@ import {
   COMPOSITION_GROUPS,
   compositionGroupOf,
   countCards,
-  isYoungWithCondition,
   MAX_MEMBERS_OF_A_KIND,
   missingRequiredQuestions,
   NO_HEALTH,
@@ -57,7 +56,7 @@ import type {
 } from '../../shared/types/families'
 import type { ItalianRegion, MemberRelationship } from '../../shared/utils/constants'
 import { addDays, ageOn, todayIso } from '../../shared/utils/dates'
-import { familyNameOf, plural } from '../../shared/utils/format'
+import { familyNameOf, isYoungWithCondition, plural } from '../../shared/utils/format'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 import {
   campSessions,
@@ -754,9 +753,12 @@ export async function familyHome(
     db
       .select({
         total: count(),
-        // isCardToComplete: an empty card, or an adult without the birth date.
+        // isCardToComplete: an empty card, an adult without the birth date, a relationship missing.
         toComplete: count(
-          sql`case when ${familyMembers.firstName} is null or (${familyMembers.kind} = 'adult' and ${familyMembers.birthDate} is null) then 1 end`,
+          sql`case when ${familyMembers.firstName} is null
+            or (${familyMembers.kind} = 'adult' and ${familyMembers.birthDate} is null)
+            or (${familyMembers.relationship} is null and not (${familyMembers.kind} = 'young' and ${familyMembers.hasDisability}))
+            then 1 end`,
         ),
       })
       .from(familyMembers)

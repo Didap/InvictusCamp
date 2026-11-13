@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { registerFamilySchema } from '#shared/schemas/auth'
 import { DISABILITY_FIELDS, memberSchema } from '#shared/schemas/families'
+import { familyNameOf, isCardToComplete, surnameOf } from '#shared/utils/format'
 
 /** The names of the fields a parse refuses, as the form shows them. */
 function refused(result: { success: boolean; error?: { issues: { path: PropertyKey[] }[] } }): string[] {
@@ -42,6 +43,20 @@ describe('family member', () => {
     expect(refused(memberSchema.safeParse({ ...adult, relationship: null }))).toEqual(['relationship'])
     // Without `health` (no consent) the server knows whether the card is the young person's.
     expect(memberSchema.safeParse({ ...young, relationship: null }).success).toBe(true)
+  })
+
+  it('counts a card without the relationship it needs as still to complete', () => {
+    const card = { firstName: 'Luca', kind: 'young', birthDate: null, relationship: null } as const
+    expect(isCardToComplete({ ...card, hasDisability: true })).toBe(false)
+    // After the consent is withdrawn the young person is like the others: the relationship is missing.
+    expect(isCardToComplete({ ...card, hasDisability: false })).toBe(true)
+  })
+
+  it('writes the family as «Famiglia …» once', () => {
+    expect(familyNameOf(' Rossi ')).toBe('Famiglia Rossi')
+    expect(familyNameOf('Famiglia')).toBe('Famiglia')
+    expect(familyNameOf('famiglia Rossi')).toBe('famiglia Rossi')
+    expect(surnameOf('Famiglia De Luca')).toBe('De Luca')
   })
 
   it('refuses what is not a member, without throwing', () => {

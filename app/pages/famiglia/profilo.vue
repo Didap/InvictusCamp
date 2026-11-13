@@ -122,15 +122,16 @@ async function save() {
     profile.value = result.profile
     state.healthConsent = false
     const title = firstTime ? 'Dati confermati' : 'Dati salvati'
-    if (result.cardsRemoved && !result.cardsCreated) {
-      notifySuccess(title, `Abbiamo tolto ${plural(result.cardsRemoved, 'scheda vuota', 'schede vuote')}.`)
-    } else if (result.cardsCreated) {
+    const removed = result.cardsRemoved
+      ? `Abbiamo tolto ${plural(result.cardsRemoved, 'scheda vuota', 'schede vuote')}.`
+      : ''
+    if (result.cardsCreated) {
       notifySuccess(
         title,
-        `Abbiamo creato ${plural(result.cardsCreated, 'scheda', 'schede')}: completale con i dati di ogni persona.`,
+        `Abbiamo creato ${plural(result.cardsCreated, 'scheda', 'schede')}: completale con i dati di ogni persona. ${removed}`.trim(),
       )
       await navigateTo('/famiglia/membri')
-    } else notifySuccess(title, firstTime ? undefined : 'L’amministrazione vede già i dati nuovi.')
+    } else notifySuccess(title, removed || (firstTime ? undefined : 'L’amministrazione vede già i dati nuovi.'))
   } catch (error) {
     notifyError(error, 'Dati non salvati')
   } finally {

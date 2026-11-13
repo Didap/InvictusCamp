@@ -1,20 +1,32 @@
 <script setup lang="ts">
 import type { FamilyMembersResponse, OwnFamilyMember, PersonalDocumentDto } from '#shared/types/families'
-import { isCardToComplete, isEmptyCard, memberLine, memberName, plural } from '#shared/utils/format'
+import {
+  isCardToComplete,
+  isEmptyCard,
+  isYoungWithCondition,
+  memberLine,
+  memberName,
+  plural,
+} from '#shared/utils/format'
 
 // The members of the family. Health details (disability) only after the explicit consent, which the
 // family gives or withdraws at the bottom of the page (docs/spec.md, 3.8).
 const api = useApi()
 const confirm = useConfirm()
-const { data, refresh } = await useApiFetch<FamilyMembersResponse>('/api/family/members')
-const { data: documents, refresh: refreshDocuments } = await useApiFetch<PersonalDocumentDto[]>('/api/family/documents')
+const [{ data, refresh }, { data: documents, refresh: refreshDocuments }] = await Promise.all([
+  useApiFetch<FamilyMembersResponse>('/api/family/members'),
+  useApiFetch<PersonalDocumentDto[]>('/api/family/documents'),
+])
 
 const members = computed(() => data.value?.members ?? [])
 const consent = computed(() => Boolean(data.value?.healthDataConsentAt))
 const withHealth = computed(() => members.value.filter(member => member.health?.hasDisability).length)
 /** The cards come from the family data: until it is confirmed there is only the account holder's. */
 const confirmed = computed(() => data.value?.formStatus === 'submitted')
-const toComplete = computed(() => members.value.filter(isCardToComplete))
+/** Without the consent `health` is null: a young person's card then needs a relationship like the others. */
+const hasCondition = (member: OwnFamilyMember) => member.health?.hasDisability ?? false
+const incomplete = (member: OwnFamilyMember) => isCardToComplete({ ...member, hasDisability: hasCondition(member) })
+const toComplete = computed(() => members.value.filter(incomplete))
 /** The first card to fill in carries the one primary button of the page. */
 const nextCardId = computed(() => toComplete.value[0]?.id)
 
@@ -41,7 +53,9 @@ function openForm(member: OwnFamilyMember | null) {
 const reference = computed(() =>
   new Intl.ListFormat('it', { type: 'conjunction' }).format(
     members.value.flatMap(member =>
-      member.kind === 'young' && member.health?.hasDisability && member.firstName ? [member.firstName] : [],
+      isYoungWithCondition({ kind: member.kind, hasDisability: hasCondition(member) }) && member.firstName
+        ? [member.firstName]
+        : [],
     ),
   ),
 )
@@ -135,7 +149,7 @@ async function remove(member: OwnFamilyMember) {
                 label="Referente"
               />
               <UBadge
-                v-if="isCardToComplete(member)"
+                v-if="incomplete(member)"
                 color="warning"
                 variant="subtle"
                 icon="i-lucide-file-pen-line"
@@ -165,11 +179,11 @@ async function remove(member: OwnFamilyMember) {
             />
             <UButton
               icon="i-lucide-pencil"
-              :label="isCardToComplete(member) ? 'Compila' : 'Modifica'"
+              :label="incomplete(member) ? 'Compila' : 'Modifica'"
               :color="member.id === nextCardId ? 'primary' : 'neutral'"
               :variant="member.id === nextCardId ? 'solid' : 'outline'"
               class="pointer-coarse:min-h-11"
-              :aria-label="`${isCardToComplete(member) ? 'Compila la scheda' : 'Modifica'} ${title(member)}`"
+              :aria-label="`${incomplete(member) ? 'Compila la scheda' : 'Modifica'} ${title(member)}`"
               @click="openForm(member)"
             />
             <UButton
