@@ -21,8 +21,8 @@ const disability = computed(() => {
 const info = computed(() => {
   const value = props.health.info
   return [
-    { label: 'Allergie e intolleranze', value: labels(ALLERGIES, value?.allergies) ?? 'Nessuna' },
-    { label: 'Preferenze alimentari', value: value?.diet ? choiceLabel(DIETS, value.diet) : 'Nessuna' },
+    { label: 'Allergie e intolleranze', value: labels(ALLERGIES, value?.allergies) ?? 'Nessuna indicata' },
+    { label: 'Preferenze alimentari', value: value?.diet ? choiceLabel(DIETS, value.diet) : 'Nessuna indicata' },
     { label: 'Altre note', value: value?.notes ?? null },
   ]
 })

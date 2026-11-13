@@ -180,6 +180,8 @@ const zChoice = (options: readonly Choice[]) =>
   z.string().refine(value => options.some(option => option.value === value), { error: 'Scelta non valida' })
 const zChoices = (options: readonly Choice[]) => z.array(zChoice(options)).max(options.length)
 const zDetail = zText(2000).optional()
+/** The «Nessun supporto», «Nessuna terapia» of a list: alone or not at all. */
+const NONE = 'none'
 
 export const disabilityInfoSchema = z.object({
   ...(Object.fromEntries(DISABILITY_CHOICES.map(field => [field.key, zChoices(field.options).optional()])) as Record<
@@ -206,8 +208,12 @@ export const memberHealthSchema = z
   .superRefine((health, ctx) => {
     if (!health.hasDisability) return
     for (const { key } of DISABILITY_CHOICES) {
-      if (!health.disability?.[key]?.length)
+      const chosen = health.disability?.[key] ?? []
+      if (!chosen.length) {
         ctx.addIssue({ code: 'custom', path: ['disability', key], message: 'Scegli almeno una risposta' })
+      } else if (chosen.length > 1 && chosen.includes(NONE)) {
+        ctx.addIssue({ code: 'custom', path: ['disability', key], message: '«Nessuno» non va con le altre risposte' })
+      }
     }
   })
 
@@ -236,6 +242,11 @@ const relationshipFields = memberFields.pick({ kind: true, relationship: true, h
 
 // Whenever the fields a check reads are valid, also while another field is wrong: every missing field at once.
 export const memberSchema = memberFields
+  // Only a young person can be the one with a condition (the composition counts them so).
+  .refine(member => !member.health?.hasDisability || member.kind === 'young', {
+    path: ['kind'],
+    error: 'Solo un ragazzo o una ragazza può avere una patologia o disabilità indicata',
+  })
   .refine(member => !missingBirthDate(member), {
     path: ['birthDate'],
     error: 'Campo obbligatorio',

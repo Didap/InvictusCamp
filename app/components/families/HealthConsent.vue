@@ -81,8 +81,9 @@ async function withdraw() {
     <p class="flex max-w-prose items-start gap-2">
       <UIcon name="i-lucide-shield-check" class="mt-1 size-5 shrink-0 text-success" aria-hidden="true" />
       <span>
-        Hai dato il consenso il {{ formatDateTime(consentAt) }}. Puoi indicare la disabilità e i bisogni di supporto di
-        ogni componente con «Modifica» e caricare certificati medici e diagnosi tra i documenti.
+        Hai dato il consenso il {{ formatDateTime(consentAt) }}. Con «Modifica» puoi indicare allergie, intolleranze e
+        preferenze alimentari di ogni componente e la disabilità dei ragazzi, e caricare certificati medici e diagnosi
+        tra i documenti.
       </span>
     </p>
     <UButton
@@ -97,10 +98,11 @@ async function withdraw() {
 
   <UForm v-else :schema="schema" :state="state" class="max-w-prose space-y-4" @submit="give">
     <p>
-      Per organizzare il soggiorno ci servono alcune informazioni sulla disabilità e sui bisogni di supporto. Sono dati
-      particolari: li vedete solo voi e l’amministrazione del camp, non finiscono mai nelle email e ogni modifica viene
-      registrata. Il consenso serve anche per caricare certificati medici e diagnosi. Puoi ritirarlo quando vuoi: i dati
-      inseriti e i certificati e le diagnosi caricati verranno cancellati.
+      Per organizzare il soggiorno ci servono alcune informazioni sulla disabilità e sui bisogni di supporto dei
+      ragazzi, e su allergie, intolleranze e preferenze alimentari di tutti. Sono dati particolari: li vedete solo voi e
+      l’amministrazione del camp, non finiscono mai nelle email e ogni modifica viene registrata. Il consenso serve
+      anche per caricare certificati medici e diagnosi. Puoi ritirarlo quando vuoi: i dati inseriti e i certificati e le
+      diagnosi caricati verranno cancellati.
     </p>
     <UFormField name="accepted">
       <FamiliesHealthConsentCheckbox v-model="state.accepted" />

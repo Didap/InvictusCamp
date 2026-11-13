@@ -14,6 +14,10 @@ import { fullName, isEmptyCard, isYoungWithCondition } from '#shared/utils/forma
 
 // Adds or edits a member of the signed-in family. The health fields appear only with the consent
 // (docs/spec.md, 3.8); without it the request carries no health data at all.
+// The options as plain strings, once: the form holds the keys before the schema checks them.
+const DISABILITY_FIELDS = DISABILITY_CHOICES.map(field => ({ ...field, items: [...field.options] as Choice[] }))
+const ALLERGY_ITEMS: Choice[] = [...ALLERGIES]
+
 const props = defineProps<{
   member: OwnFamilyMember | null
   consent: boolean
@@ -91,12 +95,14 @@ const relationships = options('memberRelationship')
 const kinds = options('memberKind')
 const today = todayIso()
 const dietItems: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
-/** The options as plain strings: the form holds the keys before the schema checks them. */
-const choices = (options: readonly Choice[]): Choice[] => [...options]
-/** The young person with a condition is the one the others' relationship refers to: no relationship. */
-const isReference = computed(() =>
+/**
+ * Only a young person can be the one with a condition (an adult's card asks none of it), and that is the
+ * person the others' relationship refers to: no relationship of their own.
+ */
+const withCondition = computed(() =>
   isYoungWithCondition({ kind: state.kind ?? 'adult', hasDisability: state.health.hasDisability }),
 )
+/** The young person with a condition is the one the others' relationship refers to: no relationship. */
 const relationshipLabel = computed(
   () =>
     `Legame di parentela rispetto ${props.reference ? `a ${props.reference}` : 'al ragazzo o alla ragazza con patologia o disabilità'}`,
@@ -117,14 +123,14 @@ async function save() {
     firstName: state.firstName,
     lastName: state.lastName,
     birthDate: state.birthDate || null,
-    relationship: isReference.value ? null : state.relationship,
+    relationship: withCondition.value ? null : state.relationship,
     kind: state.kind,
     isReferent: state.isReferent,
     ...(props.consent
       ? {
           health: {
-            hasDisability: state.health.hasDisability,
-            disability: state.health.hasDisability ? state.health.disability : null,
+            hasDisability: withCondition.value,
+            disability: withCondition.value ? state.health.disability : null,
             info: state.health.info,
           },
         }
@@ -185,7 +191,7 @@ async function save() {
           >
             <UInput v-model="state.birthDate" type="date" :max="today" min="1900-01-01" class="w-full" />
           </UFormField>
-          <UFormField v-if="!isReference" :label="relationshipLabel" name="relationship" required>
+          <UFormField v-if="!withCondition" :label="relationshipLabel" name="relationship" required>
             <USelect
               v-model="state.relationship"
               :items="relationships"
@@ -227,13 +233,13 @@ async function save() {
               legend="Ha una patologia grave o cronica, un disturbo del neurosviluppo o una disabilità, anche genetica?"
               :ui="{ legend: 'font-normal text-default' }"
             />
-            <template v-if="state.health.hasDisability">
+            <template v-if="withCondition">
               <p class="max-w-prose text-sm text-muted">
                 Scegli tutte le risposte che valgono: servono al camp per organizzare il soggiorno. Le vedete solo voi e
                 l’amministrazione, e non finiscono mai nelle email.
               </p>
               <UFormField
-                v-for="field in DISABILITY_CHOICES"
+                v-for="field in DISABILITY_FIELDS"
                 :key="field.key"
                 :label="field.label"
                 :name="`health.disability.${field.key}`"
@@ -241,7 +247,7 @@ async function save() {
               >
                 <UCheckboxGroup
                   v-model="state.health.disability[field.key]"
-                  :items="choices(field.options)"
+                  :items="field.items"
                   :legend="field.label"
                   :ui="{ legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }"
                 />
@@ -268,7 +274,7 @@ async function save() {
             <UFormField label="Allergie e intolleranze" name="health.info.allergies" hint="Facoltativo">
               <UCheckboxGroup
                 v-model="state.health.info.allergies"
-                :items="choices(ALLERGIES)"
+                :items="ALLERGY_ITEMS"
                 legend="Allergie e intolleranze"
                 :ui="{ legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }"
               />

@@ -90,6 +90,16 @@ describe('family member', () => {
     )
   })
 
+  it('keeps «none» alone and the condition to young people', () => {
+    const withNone = { ...details, care: ['none', 'daily_meds'] }
+    expect(
+      refused(memberSchema.safeParse({ ...young, health: { hasDisability: true, disability: withNone } })),
+    ).toEqual(['health.disability.care'])
+    expect(refused(memberSchema.safeParse({ ...adult, health: { hasDisability: true, disability: details } }))).toEqual(
+      ['kind'],
+    )
+  })
+
   it('stores the choices in the order of the options, and the useful info of anyone', () => {
     const health = normalizeHealth({
       hasDisability: false,
