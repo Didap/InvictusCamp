@@ -68,6 +68,11 @@ const sql = postgres(url, { max: 1, onnotice: () => {} })
 try {
   const replaced = await sql.begin(async tx => {
     const adminId = await activeAdmin(tx, values.by)
+    // A year is read from its archive or from the questionnaire, never both (docs/spec.md 3.13).
+    const [answered] = await tx`
+      select 1 from feedback_responses r join camp_sessions s on s.id = r.session_id
+      where extract(year from s.start_date)::int = ${year} limit 1`
+    if (answered) throw new Error(`the families answered the questionnaire in ${year}: an archive would hide it`)
     const [before] = await tx`select 1 from feedback_archives where year = ${year}`
     await tx`
       insert into feedback_archives (year, data, source, imported_by, imported_at)

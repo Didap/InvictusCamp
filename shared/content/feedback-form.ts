@@ -13,7 +13,7 @@ export const FEEDBACK_OTHER_ITEMS: readonly string[] = [
   'V-Team (volontari)',
 ]
 
-export interface FeedbackQuestion {
+interface FeedbackQuestion {
   id: string
   /** How the administration reads it (the 2026 categories). */
   title: string

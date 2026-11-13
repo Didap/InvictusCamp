@@ -71,6 +71,12 @@ export function calendarTitle(session: CalendarSession): string {
   return `Sessione ${session.number} · ${session.label}`
 }
 
+/** The number calendarTitle put in a title («Sessione 7 · …»), or null. */
+export function calendarNumber(title: string): number | null {
+  const number = Number(/^Sessione (\d+)\b/.exec(title)?.[1])
+  return number || null
+}
+
 export interface ExistingSession extends DayRange {
   title: string
   status: SessionStatus

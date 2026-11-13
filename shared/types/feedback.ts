@@ -10,11 +10,17 @@ export interface VoteCounts {
 
 export type FeedbackItemKind = 'activity' | 'other'
 
+/** A question with a vote: an activity, or reception, spaces, staff. */
+export interface FeedbackItem {
+  label: string
+  kind: FeedbackItemKind
+}
+
 export interface FeedbackArchive {
   /** The sessions of the year by number (S1, S2…) and how many families answered. */
   sessions: { number: number; respondents: number }[]
   /** The questions with a vote: the activities, then reception, spaces and staff. */
-  items: { label: string; kind: FeedbackItemKind }[]
+  items: FeedbackItem[]
   /** One vote of a family: session number, index in `items`, vote from 1 to 5. */
   votes: [session: number, item: number, vote: number][]
   /** Suggestions that came back from several families, as the camp summed them up. */
@@ -50,7 +56,7 @@ export type FeedbackState = 'open' | 'sent' | null
 export interface FamilyFeedbackForm {
   session: { id: string; title: string; startDate: string; endDate: string }
   /** The votes: the activities of the session's programme, then reception, spaces and staff. */
-  items: { label: string; kind: FeedbackItemKind }[]
+  items: FeedbackItem[]
   /** The written questions, as the family reads them. */
   questions: { id: string; prompt: string }[]
   /** When the family sent it; null while it is still to fill in. */

@@ -309,8 +309,14 @@ export async function listSessions(
   return sortSessions(rows, today).map(row => toListItem(row, slots.get(row.id)!, staff.get(row.id)!))
 }
 
-/** Which families receive which email when the session moves to `to` (spec 3.2). */
-/** `questionnaire`: completing the session opens the questionnaire (its year was not imported, spec 3.13). */
+/** A titolare who confirmed: the session is confirmed to it and, once it is over, it gets the questionnaire. */
+const cameToSession = (row: Pick<ParticipationRow, 'kind' | 'status'>) =>
+  row.kind === 'slot' && row.status === 'confirmed'
+
+/**
+ * Which families receive which email when the session moves to `to` (spec 3.2). `questionnaire`: completing
+ * the session sends the questionnaire (opensQuestionnaire).
+ */
 function transitionRecipients(
   to: SessionStatus,
   rows: ParticipationRow[],
@@ -322,14 +328,9 @@ function transitionRecipients(
         .filter(row => row.status === 'selected')
         .map(row => ({ row, template: row.kind === 'slot' ? 'session.invite' : 'session.reserve' }))
     case 'confirmed':
-      return rows
-        .filter(row => row.kind === 'slot' && row.status === 'confirmed')
-        .map(row => ({ row, template: 'session.confirmed' }))
+      return rows.filter(cameToSession).map(row => ({ row, template: 'session.confirmed' }))
     case 'completed':
-      if (!questionnaire) return []
-      return rows
-        .filter(row => row.kind === 'slot' && row.status === 'confirmed')
-        .map(row => ({ row, template: 'session.feedback' }))
+      return questionnaire ? rows.filter(cameToSession).map(row => ({ row, template: 'session.feedback' })) : []
     case 'cancelled':
       // Only the families that had been told something: `selected` ones never heard of the session.
       return rows
@@ -338,6 +339,15 @@ function transitionRecipients(
     default:
       return []
   }
+}
+
+/** Completing the session sends the questionnaire: someone came, and the year was not imported (spec 3.13). */
+async function opensQuestionnaire(
+  db: DbOrTx,
+  session: Pick<SessionRow, 'startDate'>,
+  rows: ParticipationRow[],
+): Promise<boolean> {
+  return rows.some(cameToSession) && !(await isYearArchived(db, session.startDate))
 }
 
 /** Disabled accounts never receive emails (spec 3.7). */
@@ -398,7 +408,7 @@ export async function getSessionDetail(db: DbOrTx, sessionId: string): Promise<S
       row,
       participations,
       canTransition(row.status, 'cancelled') ? await sessionConvocationNotices(db, row.id) : 0,
-      canTransition(row.status, 'completed') && !(await isYearArchived(db, row.startDate)),
+      canTransition(row.status, 'completed') && (await opensQuestionnaire(db, row, participations)),
     ),
     deletable: row.status === 'draft' && participations.length === 0 && (convocations?.count ?? 0) === 0,
   }
@@ -728,11 +738,7 @@ export async function transitionSession(
     )
   }
   const rows = await participationsOf(db, session.id)
-  const recipients = transitionRecipients(
-    to,
-    rows,
-    to === 'completed' && !(await isYearArchived(db, session.startDate)),
-  )
+  const recipients = transitionRecipients(to, rows, to === 'completed' && (await opensQuestionnaire(db, session, rows)))
 
   let staffEmails: EmailMessage[] = []
   if (to === 'inviting') {

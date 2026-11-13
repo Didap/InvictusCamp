@@ -3,10 +3,11 @@
 // the archive of an imported year (2026) or every answer of the year summed up in the same shape, the
 // families as numbers. Explicit imports only, so the database tests can load this file.
 import { and, asc, eq, gte, inArray, lt, sql, type SQL } from 'drizzle-orm'
+import { calendarNumber } from '../../shared/content/calendar-2027'
 import { FEEDBACK_OTHER_ITEMS, FEEDBACK_QUESTIONS } from '../../shared/content/feedback-form'
 import type { FeedbackAnswerInput } from '../../shared/schemas/feedback'
 import type { ProgrammeContent } from '../../shared/types/domain'
-import type { FamilyFeedbackForm, FeedbackArchive, FeedbackItemKind, FeedbackTurn } from '../../shared/types/feedback'
+import type { FamilyFeedbackForm, FeedbackArchive, FeedbackItem, FeedbackTurn } from '../../shared/types/feedback'
 import { PROGRAMME_GROUPS, type ProgrammeGroup } from '../../shared/utils/constants'
 import { countVote } from '../../shared/utils/feedback'
 import { fullName } from '../../shared/utils/format'
@@ -25,6 +26,7 @@ import { DomainError } from './errors'
 import type { Actor } from './families'
 
 const NOT_AVAILABLE = 'Questionario non disponibile'
+const ALREADY_SENT = 'Hai già inviato il questionario di questa sessione'
 
 /** The home reminds a family of its questionnaire for this many days after the session is marked completed. */
 export const FEEDBACK_REMINDER_DAYS = 30
@@ -45,7 +47,7 @@ export function questionnaireOpen(): SQL {
   )!
 }
 
-/** Joins a participation (session_families) to the family's answer, if it sent one. */
+/** Joins a participation (session_families) and the family's answer to that session. */
 export function ownResponse(): SQL {
   return and(
     eq(feedbackResponses.sessionId, sessionFamilies.sessionId),
@@ -64,8 +66,8 @@ export async function isYearArchived(db: DbOrTx, startDate: string): Promise<boo
 }
 
 /** The votes of a session: the activities of its programme, then reception, spaces and staff. */
-export function feedbackItems(content: ProgrammeContent | null): { label: string; kind: FeedbackItemKind }[] {
-  const activities = [...new Set((content?.activities ?? []).map(label => label.trim()).filter(Boolean))]
+function feedbackItems(content: ProgrammeContent | null): FeedbackItem[] {
+  const activities = content?.activities ?? []
   return [
     ...activities.map(label => ({ label, kind: 'activity' as const })),
     ...FEEDBACK_OTHER_ITEMS.filter(label => !activities.includes(label)).map(label => ({
@@ -75,19 +77,10 @@ export function feedbackItems(content: ProgrammeContent | null): { label: string
   ]
 }
 
-/** The programmes of completed sessions: their copies, fixed when they closed (freezeSessionProgramme). */
-async function sessionProgrammes(db: DbOrTx, sessionIds: string[]): Promise<Map<string, ProgrammeContent>> {
-  if (!sessionIds.length) return new Map()
-  const rows = await db
-    .select({ sessionId: programmes.sessionId, content: programmes.content })
-    .from(programmes)
-    .where(inArray(programmes.sessionId, sessionIds))
-  return new Map(rows.map(row => [row.sessionId!, row.content]))
-}
-
 // ─── The family ────────────────────────────────────────────────────────────────────────────────────
 
 async function requireQuestionnaire(db: DbOrTx, input: { familyId: string; sessionId: string }) {
+  // The programme of a completed session is its copy, fixed when it closed (freezeSessionProgramme).
   const [row] = await db
     .select({
       id: campSessions.id,
@@ -95,10 +88,12 @@ async function requireQuestionnaire(db: DbOrTx, input: { familyId: string; sessi
       startDate: campSessions.startDate,
       endDate: campSessions.endDate,
       sentAt: feedbackResponses.createdAt,
+      content: programmes.content,
     })
     .from(sessionFamilies)
     .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
     .leftJoin(feedbackResponses, ownResponse())
+    .leftJoin(programmes, eq(programmes.sessionId, campSessions.id))
     .where(
       and(
         eq(sessionFamilies.familyId, input.familyId),
@@ -108,8 +103,8 @@ async function requireQuestionnaire(db: DbOrTx, input: { familyId: string; sessi
     )
     .limit(1)
   if (!row) throw new DomainError(404, NOT_AVAILABLE)
-  const content = (await sessionProgrammes(db, [row.id])).get(row.id) ?? null
-  return { ...row, items: feedbackItems(content) }
+  const { content, ...questionnaire } = row
+  return { ...questionnaire, items: feedbackItems(content) }
 }
 
 export async function familyFeedbackForm(
@@ -130,18 +125,18 @@ export async function submitFeedback(
   db: DbOrTx,
   input: { familyId: string; sessionId: string; values: FeedbackAnswerInput; actor: Actor },
 ): Promise<void> {
+  const { votes } = input.values
   const questionnaire = await requireQuestionnaire(db, input)
-  if (questionnaire.sentAt) throw new DomainError(409, 'Hai già inviato il questionario di questa sessione')
+  if (questionnaire.sentAt) throw new DomainError(409, ALREADY_SENT)
 
   const labels = new Set(questionnaire.items.map(item => item.label))
-  const unknownVote = Object.keys(input.values.votes).find(label => !labels.has(label))
+  const unknownVote = Object.keys(votes).find(label => !labels.has(label))
   if (unknownVote) throw new DomainError(400, `«${unknownVote}» non è tra i voti del questionario`)
   const ids = new Set(FEEDBACK_QUESTIONS.map(question => question.id))
   const answers = Object.fromEntries(Object.entries(input.values.answers).filter(([, text]) => text))
   if (Object.keys(answers).some(id => !ids.has(id))) {
     throw new DomainError(400, 'Una risposta non è tra le domande del questionario')
   }
-  const votes = input.values.votes
   if (!Object.keys(votes).length && !Object.keys(answers).length) {
     throw new DomainError(400, 'Dai almeno un voto o scrivi una risposta')
   }
@@ -151,7 +146,7 @@ export async function submitFeedback(
     .values({ sessionId: input.sessionId, familyId: input.familyId, votes, answers })
     .onConflictDoNothing()
     .returning({ id: feedbackResponses.id })
-  if (!inserted.length) throw new DomainError(409, 'Hai già inviato il questionario di questa sessione')
+  if (!inserted.length) throw new DomainError(409, ALREADY_SENT)
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'feedback.submit',
@@ -190,80 +185,78 @@ export async function feedbackYear(db: DbOrTx, year: number): Promise<FeedbackAr
 }
 
 async function questionnaireYear(db: DbOrTx, year: number): Promise<FeedbackArchive | null> {
-  const sessions = await db
-    .select({ id: campSessions.id, title: campSessions.title })
-    .from(campSessions)
-    .where(and(gte(campSessions.startDate, `${year}-01-01`), lt(campSessions.startDate, `${year + 1}-01-01`)))
-    .orderBy(asc(campSessions.startDate), asc(campSessions.createdAt))
-  if (!sessions.length) return null
-  const responses = await db
-    .select({
-      sessionId: feedbackResponses.sessionId,
-      group: sessionFamilies.activityGroup,
-      votes: feedbackResponses.votes,
-      answers: feedbackResponses.answers,
-    })
-    .from(feedbackResponses)
-    .leftJoin(
-      sessionFamilies,
-      and(
-        eq(sessionFamilies.sessionId, feedbackResponses.sessionId),
-        eq(sessionFamilies.familyId, feedbackResponses.familyId),
-      ),
-    )
-    .where(
-      inArray(
-        feedbackResponses.sessionId,
-        sessions.map(s => s.id),
-      ),
-    )
-    .orderBy(asc(feedbackResponses.createdAt), asc(feedbackResponses.id))
+  const ofYear = and(gte(campSessions.startDate, `${year}-01-01`), lt(campSessions.startDate, `${year + 1}-01-01`))
+  const [sessions, responses] = await Promise.all([
+    db
+      .select({ id: campSessions.id, title: campSessions.title })
+      .from(campSessions)
+      .where(ofYear)
+      .orderBy(asc(campSessions.startDate), asc(campSessions.createdAt)),
+    db
+      .select({
+        sessionId: feedbackResponses.sessionId,
+        group: sessionFamilies.activityGroup,
+        votes: feedbackResponses.votes,
+        answers: feedbackResponses.answers,
+      })
+      .from(feedbackResponses)
+      .innerJoin(campSessions, eq(campSessions.id, feedbackResponses.sessionId))
+      .leftJoin(sessionFamilies, ownResponse())
+      .where(ofYear)
+      .orderBy(asc(feedbackResponses.createdAt), asc(feedbackResponses.id)),
+  ])
   if (!responses.length) return null
 
-  const answered = [...new Set(responses.map(r => r.sessionId))]
+  const answered = new Set(responses.map(r => r.sessionId))
   const [contents, staff] = await Promise.all([
-    sessionProgrammes(db, answered),
+    db
+      .select({ sessionId: programmes.sessionId, content: programmes.content })
+      .from(programmes)
+      .where(inArray(programmes.sessionId, [...answered])),
     db
       .select({ sessionId: sessionStaff.sessionId, firstName: users.firstName, lastName: users.lastName })
       .from(sessionStaff)
       .innerJoin(users, eq(users.id, sessionStaff.userId))
-      .where(and(inArray(sessionStaff.sessionId, answered), eq(sessionStaff.status, 'accepted'))),
+      .where(and(inArray(sessionStaff.sessionId, [...answered]), eq(sessionStaff.status, 'accepted'))),
   ])
-  const staffOf = new Map<string, string[]>()
-  for (const row of staff) staffOf.set(row.sessionId, [...(staffOf.get(row.sessionId) ?? []), fullName(row)])
+  const contentOf = new Map(contents.map(row => [row.sessionId, row.content]))
+  const staffOf = Map.groupBy(staff, row => row.sessionId)
   const numbers = sessionNumbers(sessions)
   return summariseQuestionnaire({
     sessions: sessions
-      .filter(s => answered.includes(s.id))
+      .filter(s => answered.has(s.id))
       .map(s => ({
         id: s.id,
         number: numbers.get(s.id)!,
-        content: contents.get(s.id) ?? null,
-        staff: staffOf.get(s.id) ?? [],
+        content: contentOf.get(s.id) ?? null,
+        staff: staffOf.get(s.id)?.map(fullName) ?? [],
       })),
     responses,
   })
 }
 
 /**
- * S1, S2…: the number the calendar puts in the title («Sessione 7 · …»), so that it does not move when
- * sessions are added, copied or deleted. A session without one, or with a number taken by an earlier session,
- * comes after the others, in start date order (the order of `sessions`).
+ * S1, S2…: the number the calendar puts in the title (calendarNumber), so that it does not move when sessions
+ * are added, copied or deleted. A session without one, or with a number taken by an earlier session, comes
+ * after the others, in start date order (the order of `sessions`).
  */
 export function sessionNumbers(sessions: { id: string; title: string }[]): Map<string, number> {
   const numbers = new Map<string, number>()
+  const taken = new Set<number>()
   const rest: string[] = []
   for (const s of sessions) {
-    const number = Number(/^Sessione (\d+)\b/.exec(s.title)?.[1])
-    if (number && ![...numbers.values()].includes(number)) numbers.set(s.id, number)
-    else rest.push(s.id)
+    const number = calendarNumber(s.title)
+    if (number && !taken.has(number)) {
+      numbers.set(s.id, number)
+      taken.add(number)
+    } else rest.push(s.id)
   }
-  let next = Math.max(0, ...numbers.values())
+  let next = Math.max(0, ...taken)
   for (const id of rest) numbers.set(id, ++next)
   return numbers
 }
 
-export interface QuestionnaireSession {
+interface QuestionnaireSession {
   id: string
   number: number
   /** The programme of the session (its copy), for the activities and who led them. */
@@ -272,7 +265,7 @@ export interface QuestionnaireSession {
   staff: string[]
 }
 
-export interface QuestionnaireResponse {
+interface QuestionnaireResponse {
   sessionId: string
   /** The family's activity group in the session: whose turn its votes go to. */
   group: ProgrammeGroup | null
@@ -290,20 +283,15 @@ export function summariseQuestionnaire(input: {
   sessions: QuestionnaireSession[]
   responses: QuestionnaireResponse[]
 }): FeedbackArchive {
-  const bySession = new Map<string, QuestionnaireResponse[]>()
-  for (const response of input.responses) {
-    bySession.set(response.sessionId, [...(bySession.get(response.sessionId) ?? []), response])
-  }
+  const bySession = Map.groupBy(input.responses, response => response.sessionId)
 
   // The questions with at least one vote: activities in programme order, then the others.
   const voted = new Set(input.responses.flatMap(r => Object.keys(r.votes)))
-  const items: FeedbackArchive['items'] = []
-  const addItem = (label: string, kind: FeedbackItemKind) => {
+  const items: FeedbackItem[] = []
+  const addItem = (label: string, kind: FeedbackItem['kind']) => {
     if (voted.has(label) && !items.some(item => item.label === label)) items.push({ label, kind })
   }
-  for (const s of input.sessions) {
-    for (const item of feedbackItems(s.content)) if (item.kind === 'activity') addItem(item.label, 'activity')
-  }
+  for (const s of input.sessions) for (const label of s.content?.activities ?? []) addItem(label, 'activity')
   for (const label of [...FEEDBACK_OTHER_ITEMS, ...voted]) addItem(label, 'other')
 
   const votes: FeedbackArchive['votes'] = []
@@ -329,16 +317,14 @@ export function summariseQuestionnaire(input: {
     for (const name of s.staff) addPerson(name, s.number)
     for (const [activity, byGroup] of programmeLeads(s.content, s.staff)) {
       // One turn per set of people, with the groups they led through the activity.
-      const sets = new Map<string, { names: string[]; groups: ProgrammeGroup[] }>()
-      for (const [group, names] of byGroup) {
-        const key = names.join('\n')
-        sets.set(key, { names, groups: [...(sets.get(key)?.groups ?? []), group] })
-      }
-      for (const { names, groups } of sets.values()) {
+      const sets = [...Map.groupBy(byGroup, ([, names]) => names.join('\n')).values()]
+      for (const set of sets) {
+        const names = set[0]![1]
+        const groups = set.map(([group]) => group)
         const counts = { five: 0, four: 0, low: 0 }
         for (const response of responses) {
           const vote = response.votes[activity]
-          const theirs = response.group ? groups.includes(response.group) : sets.size === 1
+          const theirs = response.group ? groups.includes(response.group) : sets.length === 1
           if (vote && theirs) countVote(counts, vote)
         }
         for (const name of names) addPerson(name, s.number)
@@ -365,8 +351,8 @@ export function summariseQuestionnaire(input: {
 const LEAD_SEPARATOR = /\s*[,;/&+]\s*|\s+(?:e|ed)\s+/i
 
 /**
- * Who led each activity of a programme for each group, from the turns of its group blocks, in the order of
- * the programme's activities; names in alphabetical order. A name is matched to the session's staff by full
+ * Who led each activity of a programme for each group, from the turns of its group blocks, in the order the
+ * activities come in the week; names in alphabetical order. A name is matched to the session's staff by full
  * name or, when only one person has it, by first name; otherwise it stays as written. Activities and groups
  * nobody is named for are left out.
  */
@@ -374,6 +360,15 @@ export function programmeLeads(
   content: ProgrammeContent | null,
   staff: string[],
 ): Map<string, Map<ProgrammeGroup, string[]>> {
+  const known = staff.map(full => ({ full, lower: full.toLocaleLowerCase('it') }))
+  const staffName = (name: string) => {
+    const lower = name.toLocaleLowerCase('it')
+    const exact = known.find(person => person.lower === lower)
+    if (exact) return exact.full
+    const byFirst = known.filter(person => person.lower.split(' ')[0] === lower)
+    return byFirst.length === 1 ? byFirst[0]!.full : name
+  }
+
   const leads = new Map<string, Map<ProgrammeGroup, Set<string>>>()
   for (const day of content?.days ?? []) {
     for (const block of day.blocks) {
@@ -388,30 +383,15 @@ export function programmeLeads(
         if (!names.length) continue
         const byGroup = leads.get(activity) ?? new Map<ProgrammeGroup, Set<string>>()
         const set = byGroup.get(group) ?? new Set<string>()
-        for (const name of names) set.add(staffName(name, staff))
+        for (const name of names) set.add(staffName(name))
         leads.set(activity, byGroup.set(group, set))
       }
     }
   }
-  // jsonb keeps the groups in an order of its own: follow the programme's activities.
-  const order = (activity: string) => {
-    const index = content?.activities.indexOf(activity) ?? -1
-    return index < 0 ? Number.MAX_SAFE_INTEGER : index
-  }
   return new Map(
-    [...leads]
-      .sort(([a], [b]) => order(a) - order(b))
-      .map(([activity, byGroup]) => [
-        activity,
-        new Map([...byGroup].map(([group, names]) => [group, [...names].sort((a, b) => a.localeCompare(b, 'it'))])),
-      ]),
+    [...leads].map(([activity, byGroup]) => [
+      activity,
+      new Map([...byGroup].map(([group, names]) => [group, [...names].sort((a, b) => a.localeCompare(b, 'it'))])),
+    ]),
   )
-}
-
-function staffName(name: string, staff: string[]): string {
-  const lower = name.toLocaleLowerCase('it')
-  const exact = staff.find(full => full.toLocaleLowerCase('it') === lower)
-  if (exact) return exact
-  const byFirst = staff.filter(full => full.toLocaleLowerCase('it').split(' ')[0] === lower)
-  return byFirst.length === 1 ? byFirst[0]! : name
 }
