@@ -56,7 +56,7 @@ import type {
 } from '../../shared/types/families'
 import type { ItalianRegion, MemberRelationship } from '../../shared/utils/constants'
 import { addDays, ageOn, todayIso } from '../../shared/utils/dates'
-import { familyNameOf, isYoungWithCondition, plural } from '../../shared/utils/format'
+import { familyNameOf, isCardToComplete, isYoungWithCondition, plural } from '../../shared/utils/format'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 import {
   campSessions,
@@ -250,7 +250,6 @@ export async function saveFamilyData(
 
   const { composition } = input.data
   const rows = await cardRows(db, family.id)
-  const cards = countCards(rows)
   const filled = countCards(rows.filter(row => row.filled))
   for (const { key } of COMPOSITION_GROUPS) {
     if (composition[key] < filled[key]) {
@@ -284,6 +283,7 @@ export async function saveFamilyData(
     .returning()
 
   const removed = emptyCardsBeyond(rows, composition)
+  const kept = rows.filter(card => !removed.includes(card))
   if (removed.length) {
     await db.delete(familyMembers).where(
       inArray(
@@ -293,11 +293,10 @@ export async function saveFamilyData(
     )
   }
   for (const card of removed) {
-    if (card.hasDisability) {
-      await auditHealth(db, input.actor, { id: card.id, familyId: family.id }, ['hasDisability'], 'member_removed')
-    }
+    const fields = card.hasDisability ? ['hasDisability'] : []
+    await auditHealth(db, input.actor, { id: card.id, familyId: family.id }, fields, 'member_removed')
   }
-  const created = await createCards(db, family.id, composition, cards, nextPosition(rows))
+  const created = await createCards(db, family.id, composition, countCards(kept), nextPosition(rows))
   for (const card of created) {
     if (card.hasDisability) await auditHealth(db, input.actor, card, ['hasDisability'])
   }
@@ -311,10 +310,9 @@ export async function saveFamilyData(
       ip: input.actor.ip,
     })
   }
-  const kept = rows.filter(card => !removed.includes(card))
   return {
     family: row!,
-    cards: [...kept, ...created.map(card => ({ ...card, filled: false }))],
+    cards: await cardRows(db, family.id),
     cardsCreated: created.length,
     cardsRemoved: removed.length,
   }
@@ -342,7 +340,7 @@ async function createCards(
   position: number,
 ): Promise<MemberRow[]> {
   const values = COMPOSITION_GROUPS.flatMap(group =>
-    Array.from({ length: Math.max(0, composition[group.key] - cards[group.key]) }, () => ({
+    Array.from({ length: composition[group.key] - cards[group.key] }, () => ({
       familyId,
       kind: group.kind,
       hasDisability: group.hasDisability,
@@ -398,13 +396,24 @@ function healthDocumentsOf(userId: string): SQL | undefined {
 export async function ownFamilyMembers(db: DbOrTx, familyId: string): Promise<FamilyMembersResponse> {
   const family = await requireFamilyRow(db, familyId)
   const consent = Boolean(family.healthDataConsentAt)
-  const rows = await listMemberRows(db, familyId)
-  const [uploaded] = await db.select({ total: count() }).from(personalDocuments).where(healthDocumentsOf(family.userId))
+  const [rows, [uploaded], ids] = await Promise.all([
+    listMemberRows(db, familyId),
+    db.select({ total: count() }).from(personalDocuments).where(healthDocumentsOf(family.userId)),
+    db
+      .selectDistinct({ memberId: personalDocuments.familyMemberId })
+      .from(personalDocuments)
+      .where(and(eq(personalDocuments.userId, family.userId), eq(personalDocuments.category, 'id_document'))),
+  ])
+  const withId = new Set(ids.map(row => row.memberId))
   return {
     formStatus: family.formStatus,
     healthDataConsentAt: iso(family.healthDataConsentAt),
     healthDocuments: uploaded?.total ?? 0,
-    members: rows.map(row => ({ ...toMember(row), health: consent ? healthOf(row) : null })),
+    members: rows.map(row => ({
+      ...ownMember(row, consent),
+      toComplete: isCardToComplete(row),
+      hasIdDocument: withId.has(row.id),
+    })),
   }
 }
 
@@ -749,17 +758,14 @@ export async function familyHome(
 ): Promise<FamilyHomeDto> {
   const family = await requireFamilyRow(db, input.familyId)
   const today = input.today ?? todayIso()
-  const [[members], [signatures], [next], [feedback]] = await Promise.all([
+  const [cards, [signatures], [next], [feedback]] = await Promise.all([
     db
       .select({
-        total: count(),
-        // isCardToComplete: an empty card, an adult without the birth date, a relationship missing.
-        toComplete: count(
-          sql`case when ${familyMembers.firstName} is null
-            or (${familyMembers.kind} = 'adult' and ${familyMembers.birthDate} is null)
-            or (${familyMembers.relationship} is null and not (${familyMembers.kind} = 'young' and ${familyMembers.hasDisability}))
-            then 1 end`,
-        ),
+        firstName: familyMembers.firstName,
+        kind: familyMembers.kind,
+        birthDate: familyMembers.birthDate,
+        relationship: familyMembers.relationship,
+        hasDisability: familyMembers.hasDisability,
       })
       .from(familyMembers)
       .where(eq(familyMembers.familyId, family.id)),
@@ -810,8 +816,8 @@ export async function familyHome(
     firstName: input.firstName,
     familyName: family.name,
     formStatus: family.formStatus,
-    memberCount: members?.total ?? 0,
-    cardsToComplete: members?.toComplete ?? 0,
+    memberCount: cards.length,
+    cardsToComplete: cards.filter(isCardToComplete).length,
     healthConsent: Boolean(family.healthDataConsentAt),
     pendingSignatures: signatures?.total ?? 0,
     nextSession: next ?? null,

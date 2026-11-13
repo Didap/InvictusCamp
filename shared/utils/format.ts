@@ -161,6 +161,11 @@ export function orList(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} o ${items.at(-1)}`
 }
 
+/** "a, b e c". */
+export function andList(items: string[]): string {
+  return new Intl.ListFormat(LOCALE, { type: 'conjunction' }).format(items)
+}
+
 export function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }

@@ -1,32 +1,20 @@
 <script setup lang="ts">
-import type { FamilyMembersResponse, OwnFamilyMember, PersonalDocumentDto } from '#shared/types/families'
-import {
-  isCardToComplete,
-  isEmptyCard,
-  isYoungWithCondition,
-  memberLine,
-  memberName,
-  plural,
-} from '#shared/utils/format'
+import type { FamilyMemberCard, FamilyMembersResponse, OwnFamilyMember } from '#shared/types/families'
+import { enumMeta } from '#shared/utils/constants'
+import { andList, isEmptyCard, memberLine, memberName, plural } from '#shared/utils/format'
 
 // The members of the family. Health details (disability) only after the explicit consent, which the
 // family gives or withdraws at the bottom of the page (docs/spec.md, 3.8).
 const api = useApi()
 const confirm = useConfirm()
-const [{ data, refresh }, { data: documents, refresh: refreshDocuments }] = await Promise.all([
-  useApiFetch<FamilyMembersResponse>('/api/family/members'),
-  useApiFetch<PersonalDocumentDto[]>('/api/family/documents'),
-])
+const { data, refresh } = await useApiFetch<FamilyMembersResponse>('/api/family/members')
 
 const members = computed(() => data.value?.members ?? [])
 const consent = computed(() => Boolean(data.value?.healthDataConsentAt))
 const withHealth = computed(() => members.value.filter(member => member.health?.hasDisability).length)
 /** The cards come from the family data: until it is confirmed there is only the account holder's. */
 const confirmed = computed(() => data.value?.formStatus === 'submitted')
-/** Without the consent `health` is null: a young person's card then needs a relationship like the others. */
-const hasCondition = (member: OwnFamilyMember) => member.health?.hasDisability ?? false
-const incomplete = (member: OwnFamilyMember) => isCardToComplete({ ...member, hasDisability: hasCondition(member) })
-const toComplete = computed(() => members.value.filter(incomplete))
+const toComplete = computed(() => members.value.filter(member => member.toComplete))
 /** The first card to fill in carries the one primary button of the page. */
 const nextCardId = computed(() => toComplete.value[0]?.id)
 
@@ -51,33 +39,25 @@ function openForm(member: OwnFamilyMember | null) {
 
 /** Who the others' relationship refers to: the young people with a condition, by first name. */
 const reference = computed(() =>
-  new Intl.ListFormat('it', { type: 'conjunction' }).format(
+  andList(
     members.value.flatMap(member =>
-      isYoungWithCondition({ kind: member.kind, hasDisability: hasCondition(member) }) && member.firstName
-        ? [member.firstName]
-        : [],
+      member.kind === 'young' && member.health?.hasDisability && member.firstName ? [member.firstName] : [],
     ),
   ),
 )
 
-/** Members with an identity document uploaded. */
-const withIdDocument = computed(
-  () =>
-    new Set(
-      (documents.value ?? []).flatMap(doc => (doc.category === 'id_document' && doc.member ? [doc.member.id] : [])),
-    ),
-)
-const idMember = ref<OwnFamilyMember | null>(null)
-const idOpen = computed({
-  get: () => Boolean(idMember.value),
-  set: value => {
-    if (!value) idMember.value = null
-  },
-})
+const idDocument = enumMeta('personalDocumentCategory', 'id_document')
+const idOpen = ref(false)
+const idMember = ref<FamilyMemberCard | null>(null)
+
+function openIdUpload(member: FamilyMemberCard) {
+  idMember.value = member
+  idOpen.value = true
+}
 
 async function idUploaded() {
-  idMember.value = null
-  await refreshDocuments()
+  idOpen.value = false
+  await refresh()
 }
 
 /** The name, or "Adulto 2" while the card is empty. */
@@ -149,7 +129,7 @@ async function remove(member: OwnFamilyMember) {
                 label="Referente"
               />
               <UBadge
-                v-if="incomplete(member)"
+                v-if="member.toComplete"
                 color="warning"
                 variant="subtle"
                 icon="i-lucide-file-pen-line"
@@ -157,9 +137,9 @@ async function remove(member: OwnFamilyMember) {
               />
             </p>
             <p class="text-sm text-muted">{{ summary(member) }}</p>
-            <p v-if="withIdDocument.has(member.id)" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
-              <UIcon name="i-lucide-id-card" class="size-4 shrink-0" aria-hidden="true" />
-              Documento di identità caricato
+            <p v-if="member.hasIdDocument" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
+              <UIcon :name="idDocument.icon" class="size-4 shrink-0" aria-hidden="true" />
+              {{ idDocument.label }} caricato
             </p>
             <p v-if="member.health?.hasDisability" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
               <UIcon name="i-lucide-lock" class="size-4 shrink-0" aria-hidden="true" />
@@ -168,22 +148,22 @@ async function remove(member: OwnFamilyMember) {
           </div>
           <div class="flex flex-wrap gap-2">
             <UButton
-              v-if="!isEmptyCard(member) && !withIdDocument.has(member.id)"
-              icon="i-lucide-id-card"
-              label="Carica il documento di identità"
+              v-if="!isEmptyCard(member) && !member.hasIdDocument"
+              :icon="idDocument.icon"
+              :label="`Carica il ${idDocument.label.toLowerCase()}`"
               color="neutral"
               variant="outline"
               class="pointer-coarse:min-h-11"
-              :aria-label="`Carica il documento di identità di ${title(member)}`"
-              @click="idMember = member"
+              :aria-label="`Carica il ${idDocument.label.toLowerCase()} di ${title(member)}`"
+              @click="openIdUpload(member)"
             />
             <UButton
               icon="i-lucide-pencil"
-              :label="incomplete(member) ? 'Compila' : 'Modifica'"
+              :label="member.toComplete ? 'Compila' : 'Modifica'"
               :color="member.id === nextCardId ? 'primary' : 'neutral'"
               :variant="member.id === nextCardId ? 'solid' : 'outline'"
               class="pointer-coarse:min-h-11"
-              :aria-label="`${incomplete(member) ? 'Compila la scheda' : 'Modifica'} ${title(member)}`"
+              :aria-label="`${member.toComplete ? 'Compila la scheda' : 'Modifica'} ${title(member)}`"
               @click="openForm(member)"
             />
             <UButton
@@ -228,7 +208,7 @@ async function remove(member: OwnFamilyMember) {
     />
     <UModal
       v-model:open="idOpen"
-      :title="`Documento di identità di ${idMember ? title(idMember) : ''}`"
+      :title="`${idDocument.label} di ${idMember ? title(idMember) : ''}`"
       description="Lo vedete solo voi e l’amministrazione del camp. Lo ritrovi nella pagina Documenti."
     >
       <template #body>

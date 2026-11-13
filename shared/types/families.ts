@@ -82,6 +82,12 @@ export interface OwnFamilyMember extends FamilyMemberDto {
   health: MemberHealth | null
 }
 
+/** A member in the family's list: whether the card is still to complete, and whether its ID is uploaded. */
+export interface FamilyMemberCard extends OwnFamilyMember {
+  toComplete: boolean
+  hasIdDocument: boolean
+}
+
 /** GET /api/family/members */
 export interface FamilyMembersResponse {
   /** Until the family data is confirmed the cards do not exist yet: only the account holder's. */
@@ -89,7 +95,7 @@ export interface FamilyMembersResponse {
   healthDataConsentAt: string | null
   /** Certificates and diagnoses uploaded: withdrawing the consent deletes them. */
   healthDocuments: number
-  members: OwnFamilyMember[]
+  members: FamilyMemberCard[]
 }
 
 /** PUT /api/family/members/consent */
