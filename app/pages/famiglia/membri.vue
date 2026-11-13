@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { ageOn } from '#shared/utils/dates'
-import type { FamilyMembersResponse, OwnFamilyMember } from '#shared/types/families'
-import { enumLabel } from '#shared/utils/constants'
-import { formatAge, isCardToComplete, isEmptyCard, memberName, missingBirthDate, plural } from '#shared/utils/format'
+import type { FamilyMembersResponse, OwnFamilyMember, PersonalDocumentDto } from '#shared/types/families'
+import { isCardToComplete, isEmptyCard, memberLine, memberName, plural } from '#shared/utils/format'
 
 // The members of the family. Health details (disability) only after the explicit consent, which the
 // family gives or withdraws at the bottom of the page (docs/spec.md, 3.8).
 const api = useApi()
 const confirm = useConfirm()
 const { data, refresh } = await useApiFetch<FamilyMembersResponse>('/api/family/members')
+const { data: documents, refresh: refreshDocuments } = await useApiFetch<PersonalDocumentDto[]>('/api/family/documents')
 
 const members = computed(() => data.value?.members ?? [])
 const consent = computed(() => Boolean(data.value?.healthDataConsentAt))
@@ -38,15 +37,40 @@ function openForm(member: OwnFamilyMember | null) {
   formOpen.value = true
 }
 
+/** Who the others' relationship refers to: the young people with a condition, by first name. */
+const reference = computed(() =>
+  new Intl.ListFormat('it', { type: 'conjunction' }).format(
+    members.value.flatMap(member =>
+      member.kind === 'young' && member.health?.hasDisability && member.firstName ? [member.firstName] : [],
+    ),
+  ),
+)
+
+/** Members with an identity document uploaded. */
+const withIdDocument = computed(
+  () =>
+    new Set(
+      (documents.value ?? []).flatMap(doc => (doc.category === 'id_document' && doc.member ? [doc.member.id] : [])),
+    ),
+)
+const idMember = ref<OwnFamilyMember | null>(null)
+const idOpen = computed({
+  get: () => Boolean(idMember.value),
+  set: value => {
+    if (!value) idMember.value = null
+  },
+})
+
+async function idUploaded() {
+  idMember.value = null
+  await refreshDocuments()
+}
+
 /** The name, or "Adulto 2" while the card is empty. */
 const title = (member: OwnFamilyMember) => memberName(member, members.value)
 
 function summary(member: OwnFamilyMember): string {
-  if (isEmptyCard(member) || !member.relationship) return 'Scheda da compilare: nome, parentela, data di nascita'
-  const relationship = enumLabel('memberRelationship', member.relationship)
-  if (!member.birthDate) return missingBirthDate(member) ? `${relationship} · manca la data di nascita` : relationship
-  const age = ageOn(member.birthDate)
-  return `${relationship} · ${formatAge(age)}`
+  return isEmptyCard(member) ? 'Scheda da compilare: nome, parentela, data di nascita' : memberLine(member)
 }
 
 async function remove(member: OwnFamilyMember) {
@@ -119,12 +143,26 @@ async function remove(member: OwnFamilyMember) {
               />
             </p>
             <p class="text-sm text-muted">{{ summary(member) }}</p>
+            <p v-if="withIdDocument.has(member.id)" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
+              <UIcon name="i-lucide-id-card" class="size-4 shrink-0" aria-hidden="true" />
+              Documento di identità caricato
+            </p>
             <p v-if="member.health?.hasDisability" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
               <UIcon name="i-lucide-lock" class="size-4 shrink-0" aria-hidden="true" />
               Patologia o disabilità indicata, dati sulla salute riservati
             </p>
           </div>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              v-if="!isEmptyCard(member) && !withIdDocument.has(member.id)"
+              icon="i-lucide-id-card"
+              label="Carica il documento di identità"
+              color="neutral"
+              variant="outline"
+              class="pointer-coarse:min-h-11"
+              :aria-label="`Carica il documento di identità di ${title(member)}`"
+              @click="idMember = member"
+            />
             <UButton
               icon="i-lucide-pencil"
               :label="isCardToComplete(member) ? 'Compila' : 'Modifica'"
@@ -167,6 +205,27 @@ async function remove(member: OwnFamilyMember) {
       />
     </IcSection>
 
-    <FamiliesMemberFormModal v-model:open="formOpen" :member="editing" :consent="consent" @saved="refresh" />
+    <FamiliesMemberFormModal
+      v-model:open="formOpen"
+      :member="editing"
+      :consent="consent"
+      :reference="reference"
+      @saved="refresh"
+    />
+    <UModal
+      v-model:open="idOpen"
+      :title="`Documento di identità di ${idMember ? title(idMember) : ''}`"
+      description="Lo vedete solo voi e l’amministrazione del camp. Lo ritrovi nella pagina Documenti."
+    >
+      <template #body>
+        <FamiliesDocumentUploadForm
+          v-if="idMember"
+          :members="members"
+          :health-consent="consent"
+          :preset="{ category: 'id_document', member: idMember.id }"
+          @uploaded="idUploaded"
+        />
+      </template>
+    </UModal>
   </IcPage>
 </template>

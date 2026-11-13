@@ -95,11 +95,11 @@ const FAMILIES: {
       { firstName: 'Luca', relationship: 'parent' },
       {
         firstName: 'Matteo',
-        relationship: 'child',
+        relationship: 'sibling',
         birthDate: '2015-04-12',
         disability: 'Disturbo dello spettro autistico (esempio)',
       },
-      { firstName: 'Sofia', relationship: 'child', birthDate: '2018-09-30' },
+      { firstName: 'Sofia', relationship: 'sibling', birthDate: '2018-09-30' },
     ],
   },
   {
@@ -111,7 +111,7 @@ const FAMILIES: {
     members: [
       {
         firstName: 'Pietro',
-        relationship: 'child',
+        relationship: 'sibling',
         birthDate: '2014-02-03',
         disability: 'Paralisi cerebrale infantile (esempio)',
       },
@@ -127,7 +127,7 @@ const FAMILIES: {
       { firstName: 'Nicola', relationship: 'parent' },
       {
         firstName: 'Alessia',
-        relationship: 'child',
+        relationship: 'sibling',
         birthDate: '2016-06-21',
         disability: 'Sindrome di Down (esempio)',
       },
@@ -143,11 +143,11 @@ const FAMILIES: {
       { firstName: 'Marta', relationship: 'parent' },
       {
         firstName: 'Samuele',
-        relationship: 'child',
+        relationship: 'sibling',
         birthDate: '2013-11-08',
         disability: 'Distrofia muscolare (esempio)',
       },
-      { firstName: 'Giorgia', relationship: 'child', birthDate: '2011-01-17' },
+      { firstName: 'Giorgia', relationship: 'sibling', birthDate: '2011-01-17' },
     ],
   },
   {
@@ -157,7 +157,7 @@ const FAMILIES: {
     province: 'TA',
     submitted: true,
     members: [
-      { firstName: 'Davide', relationship: 'child', birthDate: '2017-03-14', disability: 'Epilessia (esempio)' },
+      { firstName: 'Davide', relationship: 'sibling', birthDate: '2017-03-14', disability: 'Epilessia (esempio)' },
     ],
   },
   {
@@ -168,7 +168,7 @@ const FAMILIES: {
     submitted: true,
     members: [
       { firstName: 'Carla', relationship: 'parent' },
-      { firstName: 'Emma', relationship: 'child', birthDate: '2015-08-02', disability: 'Fibrosi cistica (esempio)' },
+      { firstName: 'Emma', relationship: 'sibling', birthDate: '2015-08-02', disability: 'Fibrosi cistica (esempio)' },
     ],
   },
   {
@@ -180,7 +180,7 @@ const FAMILIES: {
     members: [
       {
         firstName: 'Tommaso',
-        relationship: 'child',
+        relationship: 'sibling',
         birthDate: '2012-05-27',
         disability: 'Disabilità intellettiva (esempio)',
       },
@@ -196,7 +196,7 @@ const FAMILIES: {
       { firstName: 'Irene', relationship: 'parent' },
       {
         firstName: 'Leonardo',
-        relationship: 'child',
+        relationship: 'sibling',
         birthDate: '2016-12-09',
         disability: 'Sindrome di Rett (esempio)',
       },
@@ -211,7 +211,7 @@ const FAMILIES: {
     members: [
       {
         firstName: 'Beatrice',
-        relationship: 'child',
+        relationship: 'sibling',
         birthDate: '2014-07-19',
         disability: 'Atrofia muscolare spinale (esempio)',
       },
@@ -227,7 +227,7 @@ const FAMILIES: {
       { firstName: 'Paola', relationship: 'parent' },
       {
         firstName: 'Riccardo',
-        relationship: 'child',
+        relationship: 'sibling',
         birthDate: '2013-04-30',
         disability: 'Diabete di tipo 1 (esempio)',
       },
@@ -242,7 +242,7 @@ const FAMILIES: {
     members: [
       {
         firstName: 'Gabriele',
-        relationship: 'child',
+        relationship: 'sibling',
         birthDate: '2018-02-11',
         disability: 'Sindrome dell’X fragile (esempio)',
       },
@@ -527,6 +527,7 @@ const DEMO_ANSWERS: FormAnswers = {
   association: 'Associazione Insieme (esempio)',
   sessionPreferences: ['Sessioni nel weekend (2 notti)', 'Sessioni settimanali estive (4 notti)'],
   accommodationNeeds: ['Bagno senza barriere architettoniche'],
+  dog: false,
 }
 
 /** An example layout of the camp: villette with a kitchen, rooms in the residence. */
@@ -706,13 +707,13 @@ export async function seedDemo(
     const members: DemoMember[] = [{ firstName: f.first, relationship: 'parent' }, ...f.members]
     await db.insert(t.familyMembers).values(
       members.map((m, position) => {
-        const kind =
-          m.relationship === 'child' || m.relationship === 'sibling' ? ('young' as const) : ('adult' as const)
+        const kind = m.relationship === 'sibling' ? ('young' as const) : ('adult' as const)
         return {
           familyId: family!.id,
           firstName: m.firstName,
           lastName: f.last,
-          relationship: m.relationship,
+          // The young person with a condition has no relationship: the others' is to them.
+          relationship: m.disability ? null : m.relationship,
           kind,
           // An adult's birth date is required by the form: one per demo adult, between 1972 and 1986.
           birthDate:

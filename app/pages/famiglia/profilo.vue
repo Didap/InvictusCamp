@@ -11,17 +11,18 @@ import {
 import type { FormAnswers } from '#shared/types/domain'
 import type { FamilyDataResult, FamilyProfileDto } from '#shared/types/families'
 import { YES_NO_ITEMS, type ItalianRegion } from '#shared/utils/constants'
-import { formatDateTime, plural } from '#shared/utils/format'
+import { formatDateTime, plural, surnameOf } from '#shared/utils/format'
 
 // The family data (docs/spec.md, 3.8): the first form of the family, editable afterwards. Confirming it
-// creates one card per person declared, filled in on /famiglia/membri. The composition never goes
-// below the cards already there (the inputs stop at them): a person leaves by removing their card.
+// creates one card per person declared, filled in on /famiglia/membri; the «-» removes an empty card. The
+// composition never goes below the cards filled in (the inputs stop at them): that person leaves by
+// removing their card.
 const api = useApi()
 const { data: profile } = await useApiFetch<FamilyProfileDto>('/api/family/profile')
 
 const submitted = computed(() => profile.value?.formStatus === 'submitted')
-const cards = computed<FamilyComposition>(
-  () => profile.value?.cards ?? { adults: 1, youngWithCondition: 0, youngWithoutCondition: 0 },
+const filledCards = computed<FamilyComposition>(
+  () => profile.value?.filledCards ?? { adults: 1, youngWithCondition: 0, youngWithoutCondition: 0 },
 )
 
 const state = reactive({
@@ -45,7 +46,7 @@ const yesNo = reactive<Record<string, boolean | undefined>>({})
 if (profile.value) {
   const value = profile.value
   Object.assign(state, {
-    name: value.name,
+    name: surnameOf(value.name),
     phone: value.phone ?? '',
     address: value.address ?? '',
     city: value.city ?? '',
@@ -72,6 +73,15 @@ function answers(): FormAnswers {
     } else result[question.id] = texts[question.id] ?? ''
   }
   return result
+}
+
+/** Under a number that cannot go lower: a person whose card is filled in leaves from the Componenti page. */
+function fieldHelp(field: (typeof COMPOSITION_GROUPS)[number]): string | undefined {
+  const help = 'help' in field ? field.help : undefined
+  const filled = filledCards.value[field.key]
+  if (!submitted.value || !filled) return help
+  const note = `${plural(filled, 'scheda compilata', 'schede compilate')}: per toglierle usa la pagina Componenti.`
+  return help ? `${help} ${note}` : note
 }
 
 /** Declaring a young person with a condition is health data: the consent comes with it, the first time. */
@@ -112,7 +122,9 @@ async function save() {
     profile.value = result.profile
     state.healthConsent = false
     const title = firstTime ? 'Dati confermati' : 'Dati salvati'
-    if (result.cardsCreated) {
+    if (result.cardsRemoved && !result.cardsCreated) {
+      notifySuccess(title, `Abbiamo tolto ${plural(result.cardsRemoved, 'scheda vuota', 'schede vuote')}.`)
+    } else if (result.cardsCreated) {
       notifySuccess(
         title,
         `Abbiamo creato ${plural(result.cardsCreated, 'scheda', 'schede')}: completale con i dati di ogni persona.`,
@@ -152,11 +164,11 @@ async function save() {
       <IcSection title="La famiglia">
         <div class="space-y-5">
           <UFormField
-            label="Nome della famiglia"
+            label="Cognome della famiglia"
             name="name"
             data-field="name"
             required
-            help="Come appare negli elenchi, per esempio «Famiglia Rossi»."
+            help="Per esempio «Rossi»: negli elenchi del camp appare come «Famiglia Rossi»."
           >
             <UInput v-model="state.name" class="w-full" />
           </UFormField>
@@ -172,25 +184,21 @@ async function save() {
 
       <IcSection
         title="Il nucleo familiare"
-        :description="
-          submitted
-            ? 'Per aggiungere una persona alza il suo numero: creiamo la sua scheda. Per toglierla, rimuovi la sua scheda nella pagina Componenti.'
-            : 'Quante persone ne fanno parte. Creiamo una scheda per ognuna.'
-        "
+        description="Per aggiungere una persona premi sul tasto «+». Per ogni persona del nucleo familiare è prevista una scheda personale. Per rimuovere una persona dal nucleo familiare premi sul tasto «-»."
       >
         <div class="space-y-5">
           <UFormField
             v-for="field in COMPOSITION_GROUPS"
             :key="field.key"
             :label="field.label"
-            :help="'help' in field ? field.help : undefined"
+            :help="fieldHelp(field)"
             :name="`composition.${field.key}`"
             :data-field="`composition.${field.key}`"
             required
           >
             <UInputNumber
               v-model="state.composition[field.key]"
-              :min="cards[field.key]"
+              :min="filledCards[field.key]"
               :max="MAX_MEMBERS_OF_A_KIND"
               class="w-40"
             />

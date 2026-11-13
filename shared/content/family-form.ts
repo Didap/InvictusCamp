@@ -71,6 +71,13 @@ export const FAMILY_FORM_SECTIONS: FormSection[] = [
         options: LODGING_FEATURES.map(feature => ACCOMMODATION_NEED_LABELS[feature]),
         help: 'Scegli solo quello che ti serve.',
       },
+      {
+        id: 'dog',
+        label: 'Avete un cane che viaggia con voi?',
+        type: 'boolean',
+        required: true,
+        help: 'I cani non possono stare negli appartamenti del camp. Se viene con voi, ti diamo i contatti delle pensioni per cani della zona: il costo è a carico della famiglia, non del camp.',
+      },
     ],
   },
 ]

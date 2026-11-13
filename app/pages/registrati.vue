@@ -44,7 +44,7 @@ const contact = useContact(true)
     </p>
 
     <UForm :schema="registerFamilySchema" :state="state" class="mt-8 space-y-5" @submit="onSubmit">
-      <UFormField label="Nome della famiglia" name="familyName" help="Per esempio: Famiglia Rossi" required>
+      <UFormField label="Cognome della famiglia" name="familyName" help="Per esempio: Rossi" required>
         <UInput v-model="state.familyName" size="lg" class="w-full" />
       </UFormField>
       <div class="grid gap-5 sm:grid-cols-2">

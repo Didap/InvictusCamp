@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { registerFamilySchema } from '#shared/schemas/auth'
+import { familyNameOf } from '#shared/utils/format'
 import { verifyEmailEmail } from '../../emails/auth'
 import { issueToken } from '../../domain/tokens'
 
@@ -31,7 +32,12 @@ export default defineEventHandler(async event => {
         .returning()
       const [family] = await tx
         .insert(tables.families)
-        .values({ userId: user!.id, name: input.familyName, phone: input.phone, privacyConsentAt: new Date() })
+        .values({
+          userId: user!.id,
+          name: familyNameOf(input.familyName),
+          phone: input.phone,
+          privacyConsentAt: new Date(),
+        })
         .returning({ id: tables.families.id })
       // The person who signs up is the first member and the referent of the family.
       await tx.insert(tables.familyMembers).values({

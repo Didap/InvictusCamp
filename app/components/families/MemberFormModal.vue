@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DISABILITY_FIELDS, memberSchema } from '#shared/schemas/families'
+import { DISABILITY_FIELDS, isYoungWithCondition, memberSchema } from '#shared/schemas/families'
 import type { DisabilityInfo } from '#shared/types/domain'
 import type { OwnFamilyMember } from '#shared/types/families'
 import { YES_NO_ITEMS, type MemberKind, type MemberRelationship } from '#shared/utils/constants'
@@ -8,7 +8,12 @@ import { fullName, isEmptyCard } from '#shared/utils/format'
 
 // Adds or edits a member of the signed-in family. The health fields appear only with the consent
 // (docs/spec.md, 3.8); without it the request carries no health data at all.
-const props = defineProps<{ member: OwnFamilyMember | null; consent: boolean }>()
+const props = defineProps<{
+  member: OwnFamilyMember | null
+  consent: boolean
+  /** The first names of the young people with a condition, «Luca e Sara»: the relationship is to them. */
+  reference: string
+}>()
 const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ saved: [] }>()
 
@@ -71,6 +76,14 @@ const { options } = useEnums()
 const relationships = options('memberRelationship')
 const kinds = options('memberKind')
 const today = todayIso()
+/** The young person with a condition is the one the others' relationship refers to: no relationship. */
+const isReference = computed(() =>
+  isYoungWithCondition({ kind: state.kind ?? 'adult', hasDisability: state.health.hasDisability }),
+)
+const relationshipLabel = computed(
+  () =>
+    `Legame di parentela rispetto ${props.reference ? `a ${props.reference}` : 'al ragazzo o alla ragazza con patologia o disabilità'}`,
+)
 const api = useApi()
 const saving = ref(false)
 
@@ -87,7 +100,7 @@ async function save() {
     firstName: state.firstName,
     lastName: state.lastName,
     birthDate: state.birthDate || null,
-    relationship: state.relationship,
+    relationship: isReference.value ? null : state.relationship,
     kind: state.kind,
     isReferent: state.isReferent,
     ...(props.consent
@@ -154,7 +167,7 @@ async function save() {
           >
             <UInput v-model="state.birthDate" type="date" :max="today" min="1900-01-01" class="w-full" />
           </UFormField>
-          <UFormField label="Parentela" name="relationship" required>
+          <UFormField v-if="!isReference" :label="relationshipLabel" name="relationship" required>
             <USelect
               v-model="state.relationship"
               :items="relationships"

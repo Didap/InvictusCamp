@@ -82,7 +82,7 @@ export const COMPOSITION_GROUPS = [
     key: 'youngWithoutCondition',
     kind: 'young',
     hasDisability: false,
-    label: 'Ragazzi e ragazze senza patologie o disabilità',
+    label: 'Ragazzi e ragazze senza patologie o disabilità (fratelli e sorelle)',
   },
 ] as const satisfies readonly {
   key: keyof FamilyComposition
@@ -239,19 +239,46 @@ const memberFields = z.object({
   firstName: zPersonName,
   lastName: zPersonName,
   birthDate: z.preprocess(value => (value === '' ? null : value), zBirthDate.nullable()).optional(),
-  relationship: z.enum(MEMBER_RELATIONSHIPS, { error: 'Scegli la parentela' }),
+  /** Null for the young person with a condition: everyone else's relationship is to them. */
+  relationship: z.enum(MEMBER_RELATIONSHIPS, { error: 'Scegli il legame di parentela' }).nullable().optional(),
   kind: z.enum(MEMBER_KINDS, { error: 'Indica se è un adulto o un ragazzo o ragazza' }),
   isReferent: z.boolean().default(false),
   health: memberHealthSchema.optional(),
 })
 const birthDateFields = memberFields.pick({ kind: true, birthDate: true })
+const relationshipFields = memberFields.pick({ kind: true, relationship: true, health: true })
 
-export const memberSchema = memberFields.refine(member => !missingBirthDate(member), {
-  path: ['birthDate'],
-  error: 'Campo obbligatorio',
-  // Whenever kind and birth date are valid, also while another field is wrong: every missing field at once.
-  when: ({ value }) => birthDateFields.safeParse(value).success,
-})
+/** The young person with a condition, the one the camp is for: the others' relationship is to them. */
+export function isYoungWithCondition(member: { kind: MemberKind; hasDisability: boolean }): boolean {
+  return member.kind === 'young' && member.hasDisability
+}
+
+/** True when the member needs a relationship and has none. */
+export function missingRelationship(member: {
+  kind: MemberKind
+  relationship?: string | null
+  hasDisability: boolean
+}): boolean {
+  return !member.relationship && !isYoungWithCondition(member)
+}
+
+// Whenever the fields a check reads are valid, also while another field is wrong: every missing field at once.
+export const memberSchema = memberFields
+  .refine(member => !missingBirthDate(member), {
+    path: ['birthDate'],
+    error: 'Campo obbligatorio',
+    when: ({ value }) => birthDateFields.safeParse(value).success,
+  })
+  .refine(
+    // Without `health` (no consent) the server knows whether a young person's card is the one with a condition.
+    member =>
+      !missingRelationship({ ...member, hasDisability: member.health?.hasDisability ?? member.kind === 'young' }),
+    {
+      path: ['relationship'],
+      error: 'Scegli il legame di parentela',
+      when: ({ value }) => relationshipFields.safeParse(value).success,
+    },
+  )
 export type MemberInput = z.output<typeof memberSchema>
 
 export const NO_HEALTH: MemberHealth = { hasDisability: false, disability: null }

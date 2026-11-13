@@ -26,6 +26,7 @@ import {
   COMPOSITION_GROUPS,
   compositionGroupOf,
   countCards,
+  isYoungWithCondition,
   MAX_MEMBERS_OF_A_KIND,
   missingRequiredQuestions,
   NO_HEALTH,
@@ -54,9 +55,9 @@ import type {
   OwnFamilyMember,
   PersonalDocumentDto,
 } from '../../shared/types/families'
-import type { ItalianRegion } from '../../shared/utils/constants'
+import type { ItalianRegion, MemberRelationship } from '../../shared/utils/constants'
 import { addDays, ageOn, todayIso } from '../../shared/utils/dates'
-import { plural } from '../../shared/utils/format'
+import { familyNameOf, plural } from '../../shared/utils/format'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 import {
   campSessions,
@@ -120,8 +121,11 @@ export function familyFields(family: FamilyRow) {
   }
 }
 
-/** A card as the composition counts it (young people with a condition only with the consent), with its place. */
-type CardRow = Pick<MemberRow, 'id' | 'kind' | 'hasDisability' | 'position'>
+/**
+ * A card as the composition counts it (young people with a condition only with the consent), with its place
+ * and whether the family has filled it in.
+ */
+type CardRow = Pick<MemberRow, 'id' | 'kind' | 'hasDisability' | 'position'> & { filled: boolean }
 
 /** The family's cards: only what counting them and placing a new one needs, no names, no health details. */
 function cardRows(db: DbOrTx, familyId: string): Promise<CardRow[]> {
@@ -131,6 +135,7 @@ function cardRows(db: DbOrTx, familyId: string): Promise<CardRow[]> {
       kind: familyMembers.kind,
       hasDisability: familyMembers.hasDisability,
       position: familyMembers.position,
+      filled: sql<boolean>`${familyMembers.firstName} is not null`,
     })
     .from(familyMembers)
     .where(eq(familyMembers.familyId, familyId))
@@ -161,19 +166,24 @@ function assertRoomFor(others: CardRow[], card: Pick<CardRow, 'kind' | 'hasDisab
   }
 }
 
-export function toFamilyProfile(family: FamilyRow, cards: FamilyComposition): FamilyProfileDto {
-  return { ...familyFields(family), cards, healthDataConsentAt: iso(family.healthDataConsentAt) }
+export function toFamilyProfile(family: FamilyRow, rows: CardRow[]): FamilyProfileDto {
+  return {
+    ...familyFields(family),
+    cards: countCards(rows),
+    filledCards: countCards(rows.filter(row => row.filled)),
+    healthDataConsentAt: iso(family.healthDataConsentAt),
+  }
 }
 
 /** GET /api/family/profile */
 export async function familyProfile(db: DbOrTx, family: FamilyRow): Promise<FamilyProfileDto> {
-  return toFamilyProfile(family, countCards(await cardRows(db, family.id)))
+  return toFamilyProfile(family, await cardRows(db, family.id))
 }
 
 /** Name, residence and phone as stored: empty values become null. */
 function familyDataColumns(input: FamilyProfileInput) {
   return {
-    name: input.name,
+    name: familyNameOf(input.name),
     address: input.address || null,
     city: input.city || null,
     postalCode: input.postalCode || null,
@@ -214,15 +224,16 @@ export async function updateFamilyDataByAdmin(
  * Confirms the family data (docs/spec.md, 3.8): residence, composition, answers. Every save needs the
  * whole form; the first one marks the data confirmed. Then the family gets one card per person
  * declared: cards already there count (the account holder is the first adult), missing ones are
- * created empty, and a composition below the cards there is refused, since removing a person is
- * removing their card. Declaring a young person with a condition is health data: it needs the consent,
- * which the form gives (`healthConsent`) when the family has not given it yet. Afterwards the cards are
- * exactly the composition, returned as `cards`.
+ * created empty, and empty ones beyond the composition are removed (the «-» of the form). A composition
+ * below the cards filled in is refused: a person with data leaves by removing their card. Declaring a
+ * young person with a condition is health data: it needs the consent, which the form gives
+ * (`healthConsent`) when the family has not given it yet. Afterwards the cards are exactly the
+ * composition, returned as `cards`.
  */
 export async function saveFamilyData(
   db: DbOrTx,
   input: { familyId: string; data: FamilyDataInput; actor: Actor },
-): Promise<{ family: FamilyRow; cards: FamilyComposition; cardsCreated: number }> {
+): Promise<{ family: FamilyRow; cards: CardRow[]; cardsCreated: number; cardsRemoved: number }> {
   // Locked: two saves at once (two tabs, a retry) would both count the same cards and both add the missing ones.
   const family = await requireFamilyRow(db, input.familyId, true)
   const { answers, invalid } = normalizeFormAnswers(input.data.answers)
@@ -241,11 +252,12 @@ export async function saveFamilyData(
   const { composition } = input.data
   const rows = await cardRows(db, family.id)
   const cards = countCards(rows)
+  const filled = countCards(rows.filter(row => row.filled))
   for (const { key } of COMPOSITION_GROUPS) {
-    if (composition[key] < cards[key]) {
+    if (composition[key] < filled[key]) {
       throw createError({
         statusCode: 409,
-        message: `Hai già ${plural(cards[key], 'scheda', 'schede')} di ${groupName(key)}: per indicarne di meno, cambia o rimuovi una scheda nella pagina Componenti`,
+        message: `Hai già ${plural(filled[key], 'scheda compilata', 'schede compilate')} di ${groupName(key)}: per indicarne di meno, rimuovi una scheda nella pagina Componenti`,
       })
     }
   }
@@ -272,6 +284,20 @@ export async function saveFamilyData(
     .where(eq(families.id, family.id))
     .returning()
 
+  const removed = emptyCardsBeyond(rows, composition)
+  if (removed.length) {
+    await db.delete(familyMembers).where(
+      inArray(
+        familyMembers.id,
+        removed.map(card => card.id),
+      ),
+    )
+  }
+  for (const card of removed) {
+    if (card.hasDisability) {
+      await auditHealth(db, input.actor, { id: card.id, familyId: family.id }, ['hasDisability'], 'member_removed')
+    }
+  }
   const created = await createCards(db, family.id, composition, cards, nextPosition(rows))
   for (const card of created) {
     if (card.hasDisability) await auditHealth(db, input.actor, card, ['hasDisability'])
@@ -286,10 +312,29 @@ export async function saveFamilyData(
       ip: input.actor.ip,
     })
   }
-  return { family: row!, cards: composition, cardsCreated: created.length }
+  const kept = rows.filter(card => !removed.includes(card))
+  return {
+    family: row!,
+    cards: [...kept, ...created.map(card => ({ ...card, filled: false }))],
+    cardsCreated: created.length,
+    cardsRemoved: removed.length,
+  }
 }
 
-/** The empty cards that bring the family from `cards` to `composition`, from `position` on. */
+/** The empty cards to remove so that no group has more cards than the composition: the last ones first. */
+function emptyCardsBeyond(rows: CardRow[], composition: FamilyComposition): CardRow[] {
+  return COMPOSITION_GROUPS.flatMap(group => {
+    const ofGroup = rows.filter(row => compositionGroupOf(row) === group.key)
+    const excess = ofGroup.length - composition[group.key]
+    if (excess <= 0) return []
+    return ofGroup
+      .filter(row => !row.filled)
+      .sort((a, b) => b.position - a.position)
+      .slice(0, excess)
+  })
+}
+
+/** The empty cards that bring the family from `cards` up to `composition`, from `position` on. */
 async function createCards(
   db: DbOrTx,
   familyId: string,
@@ -298,7 +343,7 @@ async function createCards(
   position: number,
 ): Promise<MemberRow[]> {
   const values = COMPOSITION_GROUPS.flatMap(group =>
-    Array.from({ length: composition[group.key] - cards[group.key] }, () => ({
+    Array.from({ length: Math.max(0, composition[group.key] - cards[group.key]) }, () => ({
       familyId,
       kind: group.kind,
       hasDisability: group.hasDisability,
@@ -401,6 +446,13 @@ async function requireAnotherReferent(db: DbOrTx, familyId: string, memberId: st
   if (!other) throw createError({ statusCode: 409, message })
 }
 
+/** The relationship stored: none for the young person with a condition, required for everyone else. */
+function relationshipOf(member: MemberInput, hasDisability: boolean): MemberRelationship | null {
+  if (isYoungWithCondition({ kind: member.kind, hasDisability })) return null
+  if (!member.relationship) throw createError({ statusCode: 400, message: 'Scegli il legame di parentela' })
+  return member.relationship
+}
+
 function ownMember(row: MemberRow, consent: boolean): OwnFamilyMember {
   return { ...toMember(row), health: consent ? healthOf(row) : null }
 }
@@ -428,7 +480,7 @@ export async function addFamilyMember(
       firstName: input.member.firstName,
       lastName: input.member.lastName,
       birthDate: input.member.birthDate ?? null,
-      relationship: input.member.relationship,
+      relationship: relationshipOf(input.member, health.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
       hasDisability: health.hasDisability,
@@ -473,7 +525,7 @@ export async function updateFamilyMember(
       firstName: input.member.firstName,
       lastName: input.member.lastName,
       birthDate: input.member.birthDate ?? null,
-      relationship: input.member.relationship,
+      relationship: relationshipOf(input.member, after.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
       hasDisability: after.hasDisability,

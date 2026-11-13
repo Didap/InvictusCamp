@@ -2,6 +2,7 @@
 import { familyProfileSchema } from '#shared/schemas/families'
 import type { FamilyProfileDto } from '#shared/types/families'
 import type { ItalianRegion } from '#shared/utils/constants'
+import { surnameOf } from '#shared/utils/format'
 
 // The family's name, residence and phone, changed by the administration on the family's behalf
 // (PATCH /api/admin/families/:id). The family itself changes them with the rest of its data on
@@ -24,7 +25,7 @@ watch(
   () => props.family,
   family => {
     Object.assign(state, {
-      name: family.name,
+      name: surnameOf(family.name),
       address: family.address ?? '',
       city: family.city ?? '',
       postalCode: family.postalCode ?? '',
@@ -57,10 +58,10 @@ async function save() {
 <template>
   <UForm :schema="familyProfileSchema" :state="state" class="space-y-5" @submit="save">
     <UFormField
-      label="Nome della famiglia"
+      label="Cognome della famiglia"
       name="name"
       required
-      help="Come appare negli elenchi, per esempio «Famiglia Rossi»."
+      help="Per esempio «Rossi»: negli elenchi del camp appare come «Famiglia Rossi»."
     >
       <UInput v-model="state.name" class="w-full" />
     </UFormField>

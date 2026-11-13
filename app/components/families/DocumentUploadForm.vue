@@ -13,7 +13,12 @@ import { fullName, isEmptyCard } from '#shared/utils/format'
 // Upload of a personal document of the family: type, title, who it refers to, the file (PDF, JPG or
 // PNG up to 15 MB). Certificates and diagnoses are offered only with the consent to health data. The
 // server checks type, size, consent and the member again.
-const props = defineProps<{ members: FamilyMemberDto[]; healthConsent: boolean }>()
+const props = defineProps<{
+  members: FamilyMemberDto[]
+  healthConsent: boolean
+  /** Type and person already chosen, as the «Carica il documento di identità» of a member. */
+  preset?: { category: PersonalDocumentCategory; member: string }
+}>()
 const emit = defineEmits<{ uploaded: [] }>()
 
 const WHOLE_FAMILY = 'family'
@@ -24,12 +29,18 @@ const schema = personalDocumentSchema.omit({ familyMemberId: true }).extend({
     .refine(file => file.size <= MAX_UPLOAD_BYTES, { error: 'Il file supera 15 MB' }),
 })
 
+const blank = () => ({
+  category: props.preset?.category,
+  title: '',
+  member: props.preset?.member ?? WHOLE_FAMILY,
+  file: null,
+})
 const state = reactive<{
   category: PersonalDocumentCategory | undefined
   title: string
   member: string
   file: File | null
-}>({ category: undefined, title: '', member: WHOLE_FAMILY, file: null })
+}>(blank())
 
 const { options } = useEnums()
 const categories = computed(() =>
@@ -58,6 +69,7 @@ watch(
     suggested = `${enumLabel('personalDocumentCategory', category)}${member ? ` di ${member.firstName}` : ''}`
     state.title = suggested
   },
+  { immediate: true },
 )
 
 const api = useApi()
@@ -74,8 +86,8 @@ async function upload() {
   try {
     await api('/api/family/documents', { method: 'POST', body: form })
     notifySuccess('Documento caricato', state.title)
-    Object.assign(state, { category: undefined, title: '', member: WHOLE_FAMILY, file: null })
     suggested = ''
+    Object.assign(state, blank())
     emit('uploaded')
   } catch (error) {
     notifyError(error, 'Caricamento non riuscito')

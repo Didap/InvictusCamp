@@ -1,18 +1,7 @@
 <script setup lang="ts">
 import { adminNotesSchema } from '#shared/schemas/families'
-import { ageOn } from '#shared/utils/dates'
 import type { AdminFamilyDetail, FamilyMemberDto } from '#shared/types/families'
-import { enumLabel } from '#shared/utils/constants'
-import {
-  formatAge,
-  formatDay,
-  formatDateTime,
-  fullName,
-  isEmptyCard,
-  memberName,
-  missingBirthDate,
-  plural,
-} from '#shared/utils/format'
+import { formatDateTime, fullName, isEmptyCard, memberLine, memberName, plural } from '#shared/utils/format'
 
 // The record of one family for the administration: data and contacts, members (health details only
 // in the reserved section, loaded on demand), sessions (A1), questionnaire, personal documents,
@@ -50,11 +39,7 @@ const contacts = computed(() => {
 })
 
 function memberSummary(member: FamilyMemberDto): string {
-  if (isEmptyCard(member) || !member.relationship) return 'Scheda non ancora compilata dalla famiglia'
-  const relationship = enumLabel('memberRelationship', member.relationship)
-  if (!member.birthDate) return missingBirthDate(member) ? `${relationship} · manca la data di nascita` : relationship
-  const age = ageOn(member.birthDate)
-  return `${relationship} · ${formatAge(age)} (${formatDay(member.birthDate)})`
+  return isEmptyCard(member) ? 'Scheda non ancora compilata dalla famiglia' : memberLine(member, true)
 }
 
 const writeTo = computed(() =>

@@ -738,7 +738,7 @@ describe('families in a session (spec 3.3)', () => {
       familyId: anna.family.id,
       firstName: 'Marco',
       lastName: 'Rossi',
-      relationship: 'child',
+      relationship: 'sibling',
       hasDisability: true,
       disability: { description: 'DETTAGLIO-RISERVATO' },
     })
@@ -923,7 +923,7 @@ describe('the session itself', () => {
       familyId: anna.family.id,
       firstName: 'Marco',
       lastName: 'Rossi',
-      relationship: 'child',
+      relationship: 'sibling',
       disability: { description: 'DETTAGLIO-RISERVATO' },
     })
     const { csv, filename } = await participantsCsv(db, session.id)

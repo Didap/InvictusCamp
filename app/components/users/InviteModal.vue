@@ -98,10 +98,10 @@ async function onSubmit() {
         </UFormField>
         <UFormField
           v-if="state.role === 'family'"
-          label="Nome della famiglia"
+          label="Cognome della famiglia"
           name="familyName"
           hint="Facoltativo"
-          :help="`Se lo lasci vuoto: Famiglia ${state.lastName.trim() || 'e il cognome'}.`"
+          :help="`Se lo lasci vuoto: ${state.lastName.trim() || 'il cognome della persona'}.`"
         >
           <UInput v-model="state.familyName" autocomplete="off" class="w-full" />
         </UFormField>

@@ -27,13 +27,21 @@ describe('family registration', () => {
 
 describe('family member', () => {
   const adult = { firstName: 'Anna', lastName: 'Rossi', relationship: 'parent', kind: 'adult', birthDate: '1985-03-02' }
-  const young = { ...adult, firstName: 'Luca', relationship: 'child', kind: 'young', birthDate: '' }
+  const young = { ...adult, firstName: 'Luca', relationship: 'sibling', kind: 'young', birthDate: '' }
   const details = Object.fromEntries(DISABILITY_FIELDS.map(field => [field.key, 'niente']))
 
   it('needs the birth date of an adult, not of a young person', () => {
     expect(memberSchema.safeParse(adult).success).toBe(true)
     expect(refused(memberSchema.safeParse({ ...adult, birthDate: '' }))).toEqual(['birthDate'])
     expect(memberSchema.safeParse(young).success).toBe(true)
+  })
+
+  it('asks the relationship of everyone but the young person with a condition', () => {
+    const health = { hasDisability: true, disability: details }
+    expect(memberSchema.safeParse({ ...young, relationship: null, health }).success).toBe(true)
+    expect(refused(memberSchema.safeParse({ ...adult, relationship: null }))).toEqual(['relationship'])
+    // Without `health` (no consent) the server knows whether the card is the young person's.
+    expect(memberSchema.safeParse({ ...young, relationship: null }).success).toBe(true)
   })
 
   it('refuses what is not a member, without throwing', () => {
@@ -43,8 +51,8 @@ describe('family member', () => {
 
   it('shows the missing birth date with the other missing fields', () => {
     expect(refused(memberSchema.safeParse({ ...adult, birthDate: null, relationship: undefined }))).toEqual([
-      'relationship',
       'birthDate',
+      'relationship',
     ])
   })
 

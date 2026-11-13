@@ -124,8 +124,10 @@ export interface FamilyProfileDto {
   formAnswers: FormAnswers
   formStatus: FamilyFormStatus
   formSubmittedAt: string | null
-  /** The cards the family has, by kind: the composition can grow, never go below them. */
+  /** The cards the family has, by kind. */
   cards: FamilyComposition
+  /** The cards filled in: the composition never goes below them (an empty card goes with the «-»). */
+  filledCards: FamilyComposition
   healthDataConsentAt: string | null
 }
 
@@ -134,6 +136,8 @@ export interface FamilyDataResult {
   profile: FamilyProfileDto
   /** Cards created by this save, one per person declared beyond those already there. */
   cardsCreated: number
+  /** Empty cards removed by this save, beyond the people declared. */
+  cardsRemoved: number
 }
 
 /** GET /api/family/home: the greeting, what is left to do, the next session. */
