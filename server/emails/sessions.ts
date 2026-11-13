@@ -194,7 +194,7 @@ export function sessionFeedbackEmail(
     preheader: `Raccontaci com’è andata «${session.title}»: bastano pochi minuti.`,
     title: 'Com’è andata al camp?',
     paragraphs: [
-      `grazie per aver passato con noi la settimana di «${session.title}».`,
+      `grazie per aver partecipato a «${session.title}».`,
       'Ci aiuti a preparare le prossime sessioni? Dai un voto alle attività e, se vuoi, scrivici cosa ti è piaciuto e cosa cambieresti. Bastano pochi minuti e le risposte arrivano all’amministrazione senza il nome della tua famiglia.',
     ],
     details: facts(session),

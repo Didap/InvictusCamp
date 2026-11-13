@@ -95,8 +95,7 @@ function moveNotes(move: SessionMove, s: SessionDetail): string[] {
       )
     }
   }
-  // "Segna come conclusa" already says it sends nothing.
-  if (move.emails || move.to !== 'completed') notes.push(emailsSentence(move))
+  notes.push(emailsSentence(move))
   if (move.to === 'inviting' && !s.responseDeadline) {
     notes.push('Non hai indicato entro quando rispondere: puoi aggiungerlo prima, con «Modifica».')
   }

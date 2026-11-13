@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   sessionCancelledEmail,
   sessionConfirmedEmail,
+  sessionFeedbackEmail,
   sessionInviteEmail,
   sessionRemovedEmail,
   sessionReserveEmail,
@@ -28,6 +29,7 @@ const all = [
   sessionCancelledEmail(ctx, to, session),
   sessionRemovedEmail(ctx, to, session, 'slot'),
   sessionRemovedEmail(ctx, to, session, 'reserve'),
+  sessionFeedbackEmail(ctx, to, session),
 ]
 
 describe('session emails', () => {
@@ -41,6 +43,7 @@ describe('session emails', () => {
       ['session.cancelled', `Sessione annullata: ${session.title}`],
       ['session.removed', `Partecipazione annullata: ${session.title}`],
       ['session.removed', `Partecipazione annullata: ${session.title}`],
+      ['session.feedback', `Com’è andata? ${session.title}`],
     ])
     for (const email of all) {
       expect(email).toMatchObject({ to: to.to, toUserId: to.toUserId, sessionId: session.id })

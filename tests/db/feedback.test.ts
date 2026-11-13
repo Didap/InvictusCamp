@@ -2,19 +2,22 @@
 // year of answers reads in the shape of an imported one.
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
+import { familyHome } from '../../server/domain/families'
 import {
   familyFeedbackForm,
   feedbackYear,
   feedbackYears,
   programmeLeads,
+  sessionNumbers,
   submitFeedback,
+  summariseQuestionnaire,
 } from '../../server/domain/feedback'
 import { familySessions, transitionSession } from '../../server/domain/sessions'
 import type { EmailContext } from '../../server/emails/types'
 import { FEEDBACK_OTHER_ITEMS, FEEDBACK_QUESTIONS } from '../../shared/content/feedback-form'
 import type { ProgrammeContent } from '../../shared/types/domain'
 import type { FeedbackArchive } from '../../shared/types/feedback'
-import type { ParticipationKind, ParticipationStatus } from '../../shared/utils/constants'
+import type { ParticipationKind, ParticipationStatus, ProgrammeGroup } from '../../shared/utils/constants'
 import { makeAdmin, makeFamily, makeSession, makeUser, t, useTestDb } from './helpers'
 
 const db = useTestDb()
@@ -47,6 +50,15 @@ const WEEK: ProgrammeContent = {
       ],
     },
   ],
+}
+
+const ARCHIVE: FeedbackArchive = {
+  sessions: [{ number: 1, respondents: 1 }],
+  items: [{ label: 'Arte', kind: 'activity' }],
+  votes: [[1, 0, 5]],
+  themes: [],
+  comments: { questions: [], items: [] },
+  staff: { note: null, people: [], turns: [] },
 }
 
 /** A confirmed 2027 session with the year programme, a titolare who came and the other kinds of family. */
@@ -94,6 +106,33 @@ describe('opening the questionnaire', () => {
     await expect(familyFeedbackForm(db, { familyId: declined.family.id, sessionId: session.id })).rejects.toMatchObject(
       { statusCode: 404 },
     )
+  })
+
+  it('does not open in a year that was imported: its archive is what the administration reads', async () => {
+    await db.insert(t.feedbackArchives).values({ year: 2027, data: ARCHIVE })
+    const { result, session, came } = await completed()
+    expect(result.emails).toEqual([])
+    await expect(familyFeedbackForm(db, { familyId: came.family.id, sessionId: session.id })).rejects.toMatchObject({
+      statusCode: 404,
+    })
+    expect((await familySessions(db, came.family.id))[0]!.feedback).toBeNull()
+  })
+
+  it('is on the family home for a while after the session closed, until it is sent', async () => {
+    const { session, came, actor } = await completed()
+    const home = async () =>
+      (await familyHome(db, { userId: came.user.id, firstName: 'Anna', familyId: came.family.id })).openFeedback
+    const closedAt = (days: number) =>
+      db
+        .update(t.campSessions)
+        .set({ statusChangedAt: new Date(Date.now() - days * 86_400_000) })
+        .where(eq(t.campSessions.id, session.id))
+    expect(await home()).toEqual({ sessionId: session.id, title: session.title })
+    await closedAt(31)
+    expect(await home()).toBeNull()
+    await closedAt(1)
+    await submitFeedback(db, { familyId: came.family.id, sessionId: session.id, actor, values: answer({ Staff: 5 }) })
+    expect(await home()).toBeNull()
   })
 
   it('asks for the activities of the session programme, then the other votes and the questions', async () => {
@@ -197,30 +236,64 @@ describe('reading a year', () => {
   })
 
   it('reads an imported year as it is, and says when a year has nothing', async () => {
-    const archive: FeedbackArchive = {
-      sessions: [{ number: 1, respondents: 1 }],
-      items: [{ label: 'Arte', kind: 'activity' }],
-      votes: [[1, 0, 5]],
-      themes: [],
-      comments: { questions: [], items: [] },
-      staff: { note: null, people: [], turns: [] },
-    }
-    await db.insert(t.feedbackArchives).values({ year: 2026, data: archive })
-    expect(await feedbackYear(db, 2026)).toEqual(archive)
+    await db.insert(t.feedbackArchives).values({ year: 2026, data: ARCHIVE })
+    expect(await feedbackYear(db, 2026)).toEqual(ARCHIVE)
     expect(await feedbackYears(db)).toEqual([2026])
     await expect(feedbackYear(db, 2027)).rejects.toMatchObject({ statusCode: 404 })
   })
 })
 
 describe('who led an activity', () => {
-  it('splits the names and matches them to the staff by full or first name', () => {
+  it('splits the names and matches them to the staff by full or first name, group by group', () => {
     const staff = ['Chiara Rossi', 'Luca Verdi', 'Luca Neri']
     const week: ProgrammeContent = structuredClone(WEEK)
-    week.days[0]!.blocks[0]!.groups!.yellow.lead = 'chiara rossi, Luca'
-    week.days[0]!.blocks[0]!.groups!.red.lead = 'Daniele / Chiara'
-    expect(Object.fromEntries(programmeLeads(week, staff))).toEqual({
-      Spiaggia: ['Chiara Rossi', 'Luca'],
-      'Piscina / Spa': ['Daniele', 'Chiara Rossi'],
+    week.days[0]!.blocks[0]!.groups = {
+      yellow: { activity: 'Spiaggia', lead: 'chiara rossi, Luca' },
+      red: { activity: 'Piscina / Spa', lead: 'Daniele / Chiara ed Elisa' },
+      blue: { activity: 'Spiaggia', lead: 'Renée Bianchi' },
+    }
+    const leads = programmeLeads(week, staff)
+    expect([...leads.keys()]).toEqual(['Spiaggia', 'Piscina / Spa'])
+    expect(Object.fromEntries(leads.get('Spiaggia')!)).toEqual({
+      yellow: ['Chiara Rossi', 'Luca'],
+      blue: ['Renée Bianchi'],
     })
+    expect(Object.fromEntries(leads.get('Piscina / Spa')!)).toEqual({ red: ['Chiara Rossi', 'Daniele', 'Elisa'] })
+  })
+
+  it('gives each person the votes of the groups they led', () => {
+    const week: ProgrammeContent = structuredClone(WEEK)
+    week.days[0]!.blocks[0]!.groups = {
+      yellow: { activity: 'Spiaggia', lead: 'Chiara' },
+      red: { activity: 'Spiaggia', lead: 'Marco' },
+      blue: { activity: 'Spiaggia', lead: 'Chiara' },
+    }
+    const response = (group: ProgrammeGroup | null, vote: number) => ({
+      sessionId: 's',
+      group,
+      votes: { Spiaggia: vote },
+      answers: {},
+    })
+    const year = summariseQuestionnaire({
+      sessions: [{ id: 's', number: 4, content: week, staff: ['Chiara Rossi', 'Marco Bianchi'] }],
+      // A family without a group: the activity had two sets of people, it is in neither.
+      responses: [response('yellow', 5), response('red', 2), response('blue', 4), response(null, 5)],
+    })
+    expect(year.staff.turns.map(turn => [turn.names, turn.votes])).toEqual([
+      [['Chiara Rossi'], { five: 1, four: 1, low: 0 }],
+      [['Marco Bianchi'], { five: 0, four: 0, low: 1 }],
+    ])
+  })
+})
+
+describe('session numbers', () => {
+  it('come from the calendar title, the others after them in date order', () => {
+    const numbers = sessionNumbers([
+      { id: 'a', title: 'Sessione 3 · Weekend di primavera' },
+      { id: 'b', title: 'Sessione 3 · Weekend di primavera (copia)' },
+      { id: 'c', title: 'Sessione estiva' },
+      { id: 'd', title: 'Sessione 5 · Luglio' },
+    ])
+    expect(Object.fromEntries(numbers)).toEqual({ a: 3, d: 5, b: 6, c: 7 })
   })
 })

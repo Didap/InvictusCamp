@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FEEDBACK_ANSWER_MAX } from '#shared/schemas/feedback'
+import { FEEDBACK_ANSWER_MAX, feedbackAnswerSchema } from '#shared/schemas/feedback'
 import type { FamilyFeedbackForm } from '#shared/types/feedback'
 import { formatDateTime, formatDayRange } from '#shared/utils/format'
 
@@ -13,21 +13,37 @@ const { data, error, refresh } = await useApiFetch<FamilyFeedbackForm>(`/api/fam
 const api = useApi()
 const confirm = useConfirm()
 
-const NOT_DONE = 'none'
-const VOTE_ITEMS = [
-  { label: 'Non fatta', value: NOT_DONE },
+// No vote: an activity the family did not do, or something it cannot judge.
+const NO_VOTE = 'none'
+const voteItems = (none: string) => [
+  { label: none, value: NO_VOTE },
   ...[1, 2, 3, 4, 5].map(vote => ({ label: String(vote), value: String(vote) })),
 ]
+const SCALE = 'Un voto da 1 (per niente) a 5 (moltissimo).'
 const votes = reactive<Record<string, string | undefined>>({})
 const answers = reactive<Record<string, string>>({})
 
-const activities = computed(() => data.value?.items.filter(item => item.kind === 'activity') ?? [])
-const others = computed(() => data.value?.items.filter(item => item.kind === 'other') ?? [])
+const groups = computed(() =>
+  [
+    {
+      title: 'Le attività',
+      description: `${SCALE} Se la tua famiglia non l’ha fatta, scegli «Non fatta».`,
+      options: voteItems('Non fatta'),
+      items: data.value?.items.filter(item => item.kind === 'activity') ?? [],
+    },
+    {
+      title: 'Il resto del camp',
+      description: `${SCALE} Se non sai cosa rispondere, scegli «Non so».`,
+      options: voteItems('Non so'),
+      items: data.value?.items.filter(item => item.kind === 'other') ?? [],
+    },
+  ].filter(group => group.items.length),
+)
 
 const payload = computed(() => ({
   votes: Object.fromEntries(
     Object.entries(votes)
-      .filter(([, vote]) => vote && vote !== NOT_DONE)
+      .filter(([, vote]) => vote && vote !== NO_VOTE)
       .map(([label, vote]) => [label, Number(vote)]),
   ),
   answers: Object.fromEntries(
@@ -42,6 +58,8 @@ const filled = computed(
 
 const sending = ref(false)
 async function send() {
+  const parsed = feedbackAnswerSchema.safeParse(payload.value)
+  if (!parsed.success) return notifyError(parsed.error, 'Risposte non inviate')
   const ok = await confirm({
     title: 'Inviare le risposte?',
     description: 'Dopo l’invio non potrai più cambiarle.',
@@ -51,11 +69,13 @@ async function send() {
   sending.value = true
   try {
     const url: string = `/api/family/feedback/${sessionId}`
-    await api(url, { method: 'POST', body: payload.value })
+    await api(url, { method: 'POST', body: parsed.data })
     notifySuccess('Risposte inviate', 'Grazie per il tempo che ci hai dedicato.')
     await refresh()
   } catch (error) {
     notifyError(error, 'Risposte non inviate')
+    // Sent meanwhile from another device: the page turns to the thanks.
+    await refresh()
   } finally {
     sending.value = false
   }
@@ -95,21 +115,13 @@ async function send() {
           all’amministrazione del camp senza il nome della tua famiglia e, una volta inviate, non si possono cambiare.
         </p>
 
-        <IcSection
-          v-for="group in [
-            { title: 'Le attività', items: activities },
-            { title: 'Il resto del camp', items: others },
-          ].filter(g => g.items.length)"
-          :key="group.title"
-          :title="group.title"
-          description="Un voto da 1 (per niente) a 5 (moltissimo). Se la tua famiglia non l’ha fatta, scegli «Non fatta»."
-        >
+        <IcSection v-for="group in groups" :key="group.title" :title="group.title" :description="group.description">
           <ul class="divide-y divide-default rounded-lg border border-default bg-elevated">
             <li v-for="item in group.items" :key="item.label" class="p-4">
               <URadioGroup
                 v-model="votes[item.label]"
                 :legend="item.label"
-                :items="VOTE_ITEMS"
+                :items="group.options"
                 orientation="horizontal"
                 :ui="{ legend: 'mb-2 font-medium text-highlighted', fieldset: 'flex-wrap gap-y-2' }"
               />

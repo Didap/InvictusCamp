@@ -309,21 +309,26 @@ From 2027 the **end-of-session questionnaire** fills the same pages (`shared/con
 questions of 2026 so that the years compare):
 
 - It opens when the administration marks the session completed: the titolari who came (`confirmed`) receive
-  `session.feedback` and find it in their home and in `/famiglia/sessioni`, at `/famiglia/questionario/:sessionId`.
-  Families that declined, reserves and the other sessions' families cannot open it.
-- A vote from 1 to 5 (or "Non fatta") for each activity of the session's programme (its copy, fixed when the
-  session closes) and for information, reception, sensory room, staff and V-Team; then six written questions.
-  All optional, but at least one vote or answer; sent once, never changed (`feedback.submit` in the audit,
-  with how many votes and answers, not their content). The page tells the family the answers reach the
-  administration without its name.
-- A year with no archive is read from the answers (`feedback_responses`, one row per family and session): the
-  sessions are numbered by start date among all the sessions of the year (S1, S2… as the calendar names
-  them), a family is a number within its session in the order it answered, and the suggestions summed up by
-  the camp are empty. Staff: the people with an accepted convocation, and one turn per activity and session
-  with the names the programme gives in its group blocks ("Chiara e Marco" are two; a first name is matched to
-  the session's staff when only one person has it) and every vote of that activity in that session.
-- An imported year wins over the answers of the same year. The demo seed has an invented 2025 (imported) and
-  the answers of four families to the completed 2026 session; famiglia@ has not answered yet.
+  `session.feedback` and find it in `/famiglia/sessioni` and at `/famiglia/questionario/:sessionId`; their home
+  reminds them for 30 days. Families that declined, reserves and the other sessions' families cannot open it.
+  It never opens in a year that was imported: the administration reads that year's archive, and answers there
+  would never be seen.
+- A vote from 1 to 5 for each activity of the session's programme (its copy, fixed when the session closes,
+  with "Non fatta") and for information, reception, sensory room, staff and V-Team (with "Non so"); then six
+  written questions. All optional, but at least one vote or answer; sent once, never changed
+  (`feedback.submit` in the audit, with how many votes and answers, not their content). The page tells the
+  family the answers reach the administration without its name.
+- A year with no archive is read from the answers (`feedback_responses`, one row per family and session). A
+  session's number is the one the calendar puts in its title ("Sessione 7 · …"), so it does not move when
+  sessions are added, copied or deleted; the others follow by start date. A family is a number within its
+  session in the order it answered; the suggestions summed up by the camp are not there.
+- Staff: the people with an accepted convocation and the people the programme names in its group blocks
+  ("Chiara e Marco", "Chiara ed Elisa" are two; a first name is matched to the session's staff when only one
+  person has it, otherwise it stays as written). A turn is an activity in a session with the people who led it
+  for some groups, and the votes of the families of those groups; a family without a group counts only when
+  the whole activity had the same people.
+- The demo seed has an invented 2025 (imported) and the answers of four families to the completed 2026
+  session; famiglia@ has not answered yet.
 
 ## 4. Emails
 

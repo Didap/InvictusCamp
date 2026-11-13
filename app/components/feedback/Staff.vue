@@ -108,7 +108,7 @@ const partners = (names: string[], name: string) => {
             />
             <template #content>
               <ul class="mt-3 space-y-5 border-l-2 border-default pl-4">
-                <li v-for="turn in person.turns" :key="`${turn.session}-${turn.activity}`">
+                <li v-for="turn in person.turns" :key="`${turn.session}-${turn.activity}-${turn.names.join('+')}`">
                   <FeedbackVoteBar
                     :label="`S${turn.session} · ${turn.activity}`"
                     :votes="turn.votes"
@@ -125,7 +125,7 @@ const partners = (names: string[], name: string) => {
       <div v-else class="space-y-8">
         <IcSection v-for="group in activities" :key="group.activity" :title="group.activity" :level="3">
           <ul class="grid gap-x-10 gap-y-6 md:grid-cols-2">
-            <li v-for="turn in group.turns" :key="turn.session">
+            <li v-for="turn in group.turns" :key="`${turn.session}-${turn.names.join('+')}`">
               <FeedbackVoteBar
                 :label="`S${turn.session} · ${turn.names.join(' + ')}`"
                 :votes="turn.votes"

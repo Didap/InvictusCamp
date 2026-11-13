@@ -16,6 +16,13 @@ export const VOTE_LEVELS = [
 
 export const votesTotal = (votes: VoteCounts) => votes.five + votes.four + votes.low
 
+/** Adds a vote from 1 to 5 to its share: 5, 4, or 1-3. */
+export function countVote(votes: VoteCounts, vote: number): void {
+  if (vote === 5) votes.five++
+  else if (vote === 4) votes.four++
+  else votes.low++
+}
+
 /** Whole percentages of 5, 4 and 1-3 (0 without votes). */
 export function voteShares(votes: VoteCounts): VoteCounts {
   const total = votesTotal(votes)
@@ -34,10 +41,7 @@ export function itemResults(archive: FeedbackArchive, session: number | null): I
   const results = archive.items.map(item => ({ ...item, votes: { five: 0, four: 0, low: 0 } }))
   for (const [s, item, vote] of archive.votes) {
     if (session !== null && s !== session) continue
-    const votes = results[item]!.votes
-    if (vote === 5) votes.five++
-    else if (vote === 4) votes.four++
-    else votes.low++
+    countVote(results[item]!.votes, vote)
   }
   const fiveShare = (r: ItemResult) => r.votes.five / votesTotal(r.votes)
   return results

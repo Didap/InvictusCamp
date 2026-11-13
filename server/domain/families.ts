@@ -72,6 +72,7 @@ import {
 } from '../db/schema'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
+import { FEEDBACK_REMINDER_DAYS, ownResponse, questionnaireOpen } from './feedback'
 import { deleteStoredFile } from './storage'
 import { createError } from './errors'
 
@@ -732,25 +733,18 @@ export async function familyHome(
     )
     .orderBy(asc(campSessions.startDate))
     .limit(1)
-  // The end-of-session questionnaire still to answer (feedbackState), the latest session first.
+  // The end-of-session questionnaire still to answer, for a while after the session closed (spec 3.13).
   const [feedback] = await db
     .select({ sessionId: campSessions.id, title: campSessions.title })
     .from(sessionFamilies)
     .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
-    .leftJoin(
-      feedbackResponses,
-      and(
-        eq(feedbackResponses.sessionId, sessionFamilies.sessionId),
-        eq(feedbackResponses.familyId, sessionFamilies.familyId),
-      ),
-    )
+    .leftJoin(feedbackResponses, ownResponse())
     .where(
       and(
         eq(sessionFamilies.familyId, family.id),
-        eq(sessionFamilies.kind, 'slot'),
-        eq(sessionFamilies.status, 'confirmed'),
-        eq(campSessions.status, 'completed'),
+        questionnaireOpen(),
         isNull(feedbackResponses.id),
+        gte(campSessions.statusChangedAt, new Date(Date.now() - FEEDBACK_REMINDER_DAYS * 86_400_000)),
       ),
     )
     .orderBy(desc(campSessions.startDate))

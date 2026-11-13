@@ -73,7 +73,7 @@ import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
-import { feedbackState } from './feedback'
+import { isYearArchived, ownResponse, questionnaireOpen } from './feedback'
 import { freezeSessionProgramme } from './programmes'
 import { cancelSessionConvocations, sessionConvocationNotices } from './staff'
 
@@ -310,9 +310,11 @@ export async function listSessions(
 }
 
 /** Which families receive which email when the session moves to `to` (spec 3.2). */
+/** `questionnaire`: completing the session opens the questionnaire (its year was not imported, spec 3.13). */
 function transitionRecipients(
   to: SessionStatus,
   rows: ParticipationRow[],
+  questionnaire: boolean,
 ): { row: ParticipationRow; template: SessionEmailTemplate }[] {
   switch (to) {
     case 'inviting':
@@ -324,6 +326,7 @@ function transitionRecipients(
         .filter(row => row.kind === 'slot' && row.status === 'confirmed')
         .map(row => ({ row, template: 'session.confirmed' }))
     case 'completed':
+      if (!questionnaire) return []
       return rows
         .filter(row => row.kind === 'slot' && row.status === 'confirmed')
         .map(row => ({ row, template: 'session.feedback' }))
@@ -343,9 +346,14 @@ function canReceive(row: Pick<ParticipationRow, 'userStatus'>): boolean {
 }
 
 /** `staffNotices`: the staff emails of a cancellation (sessionConvocationNotices). */
-function movesOf(session: SessionRow, rows: ParticipationRow[], staffNotices: number): SessionMove[] {
+function movesOf(
+  session: SessionRow,
+  rows: ParticipationRow[],
+  staffNotices: number,
+  questionnaire: boolean,
+): SessionMove[] {
   return SESSION_TRANSITIONS[session.status].map(to => {
-    const recipients = transitionRecipients(to, rows).filter(r => canReceive(r.row))
+    const recipients = transitionRecipients(to, rows, questionnaire).filter(r => canReceive(r.row))
     const emailsByTemplate: Record<string, number> = {}
     for (const { template } of recipients) emailsByTemplate[template] = (emailsByTemplate[template] ?? 0) + 1
     const staffEmails = to === 'cancelled' ? staffNotices : 0
@@ -390,6 +398,7 @@ export async function getSessionDetail(db: DbOrTx, sessionId: string): Promise<S
       row,
       participations,
       canTransition(row.status, 'cancelled') ? await sessionConvocationNotices(db, row.id) : 0,
+      canTransition(row.status, 'completed') && !(await isYearArchived(db, row.startDate)),
     ),
     deletable: row.status === 'draft' && participations.length === 0 && (convocations?.count ?? 0) === 0,
   }
@@ -545,17 +554,12 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       invitedAt: sessionFamilies.invitedAt,
       respondedAt: sessionFamilies.respondedAt,
       declineReason: sessionFamilies.declineReason,
+      feedbackOpen: sql<boolean>`${questionnaireOpen()}`,
       feedbackId: feedbackResponses.id,
     })
     .from(sessionFamilies)
     .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
-    .leftJoin(
-      feedbackResponses,
-      and(
-        eq(feedbackResponses.sessionId, sessionFamilies.sessionId),
-        eq(feedbackResponses.familyId, sessionFamilies.familyId),
-      ),
-    )
+    .leftJoin(feedbackResponses, ownResponse())
     .where(
       and(
         eq(sessionFamilies.familyId, familyId),
@@ -564,11 +568,11 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       ),
     )
     .orderBy(asc(campSessions.startDate))
-  return rows.map(({ feedbackId, ...row }) => {
+  return rows.map(({ feedbackOpen, feedbackId, ...row }) => {
     const answerable = isSessionOpen(row.sessionStatus) && row.status === 'invited'
     return {
       ...row,
-      feedback: feedbackState(row.sessionStatus, row, feedbackId !== null),
+      feedback: feedbackOpen ? (feedbackId ? 'sent' : 'open') : null,
       invitedAt: iso(row.invitedAt),
       respondedAt: iso(row.respondedAt),
       canConfirm: answerable && row.kind === 'slot',
@@ -724,7 +728,11 @@ export async function transitionSession(
     )
   }
   const rows = await participationsOf(db, session.id)
-  const recipients = transitionRecipients(to, rows)
+  const recipients = transitionRecipients(
+    to,
+    rows,
+    to === 'completed' && !(await isYearArchived(db, session.startDate)),
+  )
 
   let staffEmails: EmailMessage[] = []
   if (to === 'inviting') {
