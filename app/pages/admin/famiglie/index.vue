@@ -1,16 +1,24 @@
 <script setup lang="ts">
 import type { TableColumn, TableRow } from '@nuxt/ui'
-import { FAMILY_LIST_SORTS, type FamilyListSort } from '#shared/schemas/families'
+import { DISABILITY_CHOICES } from '#shared/content/member-form'
+import {
+  DISABILITY_COUNT_FILTERS,
+  FAMILY_LIST_SORTS,
+  GUEST_AGE_FILTERS,
+  MEMBERS_FILTER_MAX,
+  type FamilyListSort,
+} from '#shared/schemas/families'
 import type { FamilyListItem, FamilyListResponse } from '#shared/types/families'
 import { formatAges, formatDayRange, fullName, plural } from '#shared/utils/format'
 
-// The families of the camp for the administration: search, filters (questionnaire, province, region,
-// members with a disability), sortable columns. The only health detail shown is the ages of the members
-// with a condition, never the condition itself (docs/spec.md, 5).
+// The families of the camp for the administration: search, filters (questionnaire, region and province,
+// members, young people with a condition: how many, of which type, how old), sortable columns. The only
+// health detail shown is the ages of the members with a condition, never the condition itself
+// (docs/spec.md, 5): the type is a filter only, audited by the server.
 // Filters live in the query string, so the back button returns to the same list.
 const PAGE_SIZE = 25
 const ALL = 'all'
-const FILTER_KEYS = ['q', 'formStatus', 'province', 'region', 'disability'] as const
+const FILTER_KEYS = ['q', 'formStatus', 'region', 'province', 'members', 'disability', 'condition', 'ageRange'] as const
 
 const route = useRoute()
 const router = useRouter()
@@ -66,6 +74,11 @@ const formStatusFilter = filterModel('formStatus')
 const provinceFilter = filterModel('province')
 const regionFilter = filterModel('region')
 const disabilityFilter = filterModel('disability')
+const conditionFilter = filterModel('condition')
+const ageFilter = filterModel('ageRange')
+const membersFilter = filterModel('members')
+// A region narrows the provinces: one chosen elsewhere would match nothing.
+watch(regionFilter, () => setQuery({ province: undefined }))
 
 const formStatusItems = [
   { value: ALL, label: 'Tutti' },
@@ -78,11 +91,21 @@ const allOf = (values: string[] = []) => [
 ]
 const provinceItems = computed(() => allOf(data.value?.provinces))
 const regionItems = computed(() => allOf(data.value?.regions))
-const disabilityItems = [
-  { value: ALL, label: 'Tutte le famiglie' },
-  { value: 'yes', label: 'Con almeno un componente con disabilità' },
-  { value: 'no', label: 'Senza componenti con disabilità' },
+const disabilityItems = [{ value: ALL, label: 'Tutte' }, ...DISABILITY_COUNT_FILTERS]
+const conditionItems = [
+  { value: ALL, label: 'Tutte' },
+  ...DISABILITY_CHOICES.find(field => field.key === 'conditions')!.options,
 ]
+const ageItems = [{ value: ALL, label: 'Tutte' }, ...GUEST_AGE_FILTERS]
+const membersItems = [
+  { value: ALL, label: 'Tutti' },
+  ...Array.from({ length: MEMBERS_FILTER_MAX }, (_, i) => ({
+    value: String(i + 1),
+    label: i + 1 === MEMBERS_FILTER_MAX ? `${i + 1} o più` : String(i + 1),
+  })),
+]
+/** The menu as wide as its longest choice, not as the field: every choice reads whole. */
+const SELECT_UI = { content: 'min-w-fit' }
 
 const exportUrl = computed(() => {
   const params = new URLSearchParams()
@@ -148,7 +171,7 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
       </UButton>
     </template>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <UFormField label="Cerca" class="sm:col-span-2">
         <UInput
           v-model="search"
@@ -159,16 +182,25 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
         />
       </UFormField>
       <UFormField label="Dati della famiglia">
-        <USelect v-model="formStatusFilter" :items="formStatusItems" value-key="value" class="w-full" />
+        <USelect v-model="formStatusFilter" :items="formStatusItems" value-key="value" :ui="SELECT_UI" class="w-full" />
       </UFormField>
-      <UFormField label="Provincia">
-        <USelect v-model="provinceFilter" :items="provinceItems" value-key="value" class="w-full" />
+      <UFormField label="Componenti">
+        <USelect v-model="membersFilter" :items="membersItems" value-key="value" :ui="SELECT_UI" class="w-full" />
       </UFormField>
       <UFormField label="Regione">
-        <USelect v-model="regionFilter" :items="regionItems" value-key="value" class="w-full" />
+        <USelect v-model="regionFilter" :items="regionItems" value-key="value" :ui="SELECT_UI" class="w-full" />
       </UFormField>
-      <UFormField label="Disabilità">
-        <USelect v-model="disabilityFilter" :items="disabilityItems" value-key="value" class="w-full" />
+      <UFormField label="Provincia">
+        <USelect v-model="provinceFilter" :items="provinceItems" value-key="value" :ui="SELECT_UI" class="w-full" />
+      </UFormField>
+      <UFormField label="Ragazzi con disabilità">
+        <USelect v-model="disabilityFilter" :items="disabilityItems" value-key="value" :ui="SELECT_UI" class="w-full" />
+      </UFormField>
+      <UFormField label="Tipologia di disabilità">
+        <USelect v-model="conditionFilter" :items="conditionItems" value-key="value" :ui="SELECT_UI" class="w-full" />
+      </UFormField>
+      <UFormField label="Età dei ragazzi con disabilità" class="sm:col-span-2">
+        <USelect v-model="ageFilter" :items="ageItems" value-key="value" :ui="SELECT_UI" class="w-full" />
       </UFormField>
     </div>
 

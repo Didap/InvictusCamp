@@ -203,8 +203,12 @@ availability or receive convocations. The administration can move a person to th
   `family_members.useful_info`): allergies and intolerances (the 14 EU allergens), one food preference,
   other notes. Food allergies are health data: the same consent covers them, withdrawing it deletes them
   too. An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling it in
-  requires name, surname, relationship (but for the young person with a condition) and, for an adult, the
-  birth date. Every filled card has «Carica il documento di identità», an upload of type `id_document` for
+  requires name, surname, relationship (but for the young person with a condition) and the birth date of an
+  adult and of the young person with a condition (a sibling's is optional).
+- **Ages**: the camp takes young people with a condition from 5 to 21 (`GUEST_AGE`), counted on the first
+  day of the next session not cancelled (today without one). One of them within the ages is enough. When
+  every card is complete and none is, the family gets one email (`family.age_notice`, never naming a
+  condition; `families.ageNoticeAt`) and its home shows the same notice; the administration decides. Every filled card has «Carica il documento di identità», an upload of type `id_document` for
   that person, until one is there. Before the family data is confirmed the page shows only
   the account holder's card and points to the family data, and adding a card is refused (409); afterwards
   cards can also be added by hand, at most 12 per number of the composition (the most the form takes).
@@ -368,7 +372,11 @@ Emails never contain health details. Without `NUXT_RESEND_API_KEY` every email i
 
 - Health details: only after consent; visible to the family and the administration; not in lists, emails,
   toasts or logs; changes audited (`member.health_update`). The one exception: the administration's family
-  list shows the ages of the members with a condition (no names, no details), not in the CSV export.
+  list shows the ages of the members with a condition (no names, no details), not in the CSV export; it
+  can be filtered by how many there are, their age (5-10, 11-14, 15-18, 19-21, outside 5-21) and the type of
+  condition («Tipologia»), which is never shown and whose use is audited (`family.health_filter`, and in
+  `family.export`). The other filters: questionnaire status, region then province (the provinces of the
+  region chosen), number of members.
 - Files are never public: downloads go through an authorised endpoint (`/api/files/:id` or an area endpoint).
 - Every list or detail endpoint checks the role and the ownership; ids from the client are never trusted.
 - Sensitive actions are recorded in `audit_log` (status changes, reviews, signatures, account changes).

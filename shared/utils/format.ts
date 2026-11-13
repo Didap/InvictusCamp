@@ -108,9 +108,16 @@ export function isEmptyCard(member: { firstName: string | null }): boolean {
   return member.firstName === null
 }
 
-/** An adult without the birth date the card requires (the member schema); a young person's is optional. */
-export function missingBirthDate(member: { kind: MemberKind; birthDate?: string | null }): boolean {
-  return member.kind === 'adult' && !member.birthDate
+/**
+ * A birth date the card requires and lacks: an adult's, and the young person with a condition's (the camp
+ * takes 5 to 21 year olds). A sibling's is optional.
+ */
+export function missingBirthDate(member: {
+  kind: MemberKind
+  birthDate?: string | null
+  hasDisability?: boolean
+}): boolean {
+  return !member.birthDate && (member.kind === 'adult' || Boolean(member.hasDisability))
 }
 
 /** The young person with a condition, the one the camp is for: the others' relationship is to them. */
@@ -180,7 +187,12 @@ export function formatAge(age: number): string {
  * person with a condition has no relationship: only the age. `withDay` adds the birth date.
  */
 export function memberLine(
-  member: { relationship: MemberRelationship | null; kind: MemberKind; birthDate: IsoDay | null },
+  member: {
+    relationship: MemberRelationship | null
+    kind: MemberKind
+    birthDate: IsoDay | null
+    hasDisability?: boolean
+  },
   withDay = false,
 ): string {
   const parts = member.relationship ? [enumLabel('memberRelationship', member.relationship)] : []

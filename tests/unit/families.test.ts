@@ -29,13 +29,16 @@ describe('family registration', () => {
 
 describe('family member', () => {
   const adult = { firstName: 'Anna', lastName: 'Rossi', relationship: 'parent', kind: 'adult', birthDate: '1985-03-02' }
-  const young = { ...adult, firstName: 'Luca', relationship: 'sibling', kind: 'young', birthDate: '' }
+  const young = { ...adult, firstName: 'Luca', relationship: 'sibling', kind: 'young', birthDate: '2015-04-12' }
   const details = Object.fromEntries(DISABILITY_CHOICES.map(field => [field.key, [field.options[0].value]]))
 
   it('needs the birth date of an adult, not of a young person', () => {
     expect(memberSchema.safeParse(adult).success).toBe(true)
     expect(refused(memberSchema.safeParse({ ...adult, birthDate: '' }))).toEqual(['birthDate'])
-    expect(memberSchema.safeParse(young).success).toBe(true)
+    expect(memberSchema.safeParse({ ...young, birthDate: '' }).success).toBe(true)
+    // The young person with a condition needs it: the camp takes 5 to 21 year olds.
+    const health = { hasDisability: true, disability: details }
+    expect(refused(memberSchema.safeParse({ ...young, birthDate: '', health }))).toEqual(['birthDate'])
   })
 
   it('asks the relationship of everyone but the young person with a condition', () => {
@@ -47,7 +50,7 @@ describe('family member', () => {
   })
 
   it('counts a card without the relationship it needs as still to complete', () => {
-    const card = { firstName: 'Luca', kind: 'young', birthDate: null, relationship: null } as const
+    const card = { firstName: 'Luca', kind: 'young', birthDate: '2015-04-12', relationship: null } as const
     expect(isCardToComplete({ ...card, hasDisability: true })).toBe(false)
     // After the consent is withdrawn the young person is like the others: the relationship is missing.
     expect(isCardToComplete({ ...card, hasDisability: false })).toBe(true)
