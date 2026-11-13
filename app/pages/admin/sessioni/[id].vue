@@ -56,6 +56,7 @@ const EMAIL_KINDS: Record<string, (count: number) => string> = {
   'session.confirmed': n => (n === 1 ? '1 conferma' : `${n} conferme`),
   'session.cancelled': n =>
     n === 1 ? '1 avviso di annullamento a una famiglia' : `${n} avvisi di annullamento alle famiglie`,
+  'session.feedback': n => (n === 1 ? '1 questionario a una famiglia' : `${n} questionari alle famiglie`),
   'staff.convocation_cancelled': n => (n === 1 ? '1 avviso a una persona dello staff' : `${n} avvisi allo staff`),
 }
 

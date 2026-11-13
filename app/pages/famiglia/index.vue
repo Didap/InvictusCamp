@@ -67,6 +67,19 @@ const steps = computed<Step[]>(() => {
       to: '/famiglia/documenti',
       action: 'Firma',
     },
+    // Only while there is one to answer: the questionnaire of a session that just ended.
+    ...(h.openFeedback
+      ? [
+          {
+            id: 'feedback',
+            done: false,
+            title: 'Rispondi al questionario di fine sessione',
+            description: `Com’è andata «${h.openFeedback.title}»? Bastano pochi minuti.`,
+            to: `/famiglia/questionario/${h.openFeedback.sessionId}`,
+            action: 'Rispondi',
+          },
+        ]
+      : []),
   ]
 })
 

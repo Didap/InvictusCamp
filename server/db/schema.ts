@@ -410,6 +410,32 @@ export const feedbackArchives = pgTable('feedback_archives', {
   importedAt: timestamp(tz).notNull().defaultNow(),
 })
 
+/**
+ * The end-of-session questionnaire of a family (docs/spec.md 3.13), one per family and session, sent once.
+ * The administration reads it only summed up with the others of the year, the family as a number.
+ */
+export const feedbackResponses = pgTable(
+  'feedback_responses',
+  {
+    id: pk(),
+    sessionId: uuid()
+      .notNull()
+      .references(() => campSessions.id, { onDelete: 'cascade' }),
+    familyId: uuid()
+      .notNull()
+      .references(() => families.id, { onDelete: 'cascade' }),
+    /** Votes from 1 to 5 by label: the activities of the session's programme, then FEEDBACK_OTHER_ITEMS. */
+    votes: jsonb().$type<Record<string, number>>().notNull(),
+    /** Written answers by question id (FEEDBACK_QUESTIONS), only the ones filled in. */
+    answers: jsonb().$type<Record<string, string>>().notNull(),
+    createdAt: createdAt(),
+  },
+  t => [
+    uniqueIndex('feedback_responses_session_family_key').on(t.sessionId, t.familyId),
+    index('feedback_responses_family_idx').on(t.familyId),
+  ],
+)
+
 // ─── Documents and signatures ──────────────────────────────────────────────────────────────────────
 
 /** A document uploaded by the administration (PDF), to read or to sign. */

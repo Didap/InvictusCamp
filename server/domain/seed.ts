@@ -18,6 +18,7 @@ import type {
   StaffTeam,
 } from '../../shared/utils/constants'
 import { CALENDAR_2027, calendarTitle } from '../../shared/content/calendar-2027'
+import { FEEDBACK_OTHER_ITEMS } from '../../shared/content/feedback-form'
 import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '../../shared/utils/constants'
 import * as t from '../db/schema'
@@ -39,6 +40,7 @@ const TABLES = [
   'audit_log',
   'email_log',
   'feedback_archives',
+  'feedback_responses',
   'communications',
   'personal_documents',
   'signature_requests',
@@ -257,7 +259,53 @@ const FAMILIES: {
   },
 ]
 
-/** A small invented year of feedback (docs/spec.md 3.13): three sessions, a few questions, comments, staff. */
+/** Who led the activities of the completed session, as the programme names them. */
+const DEMO_ACTIVITY_LEADS: Record<string, string> = {
+  'Piscina / Spa': 'Chiara',
+  'Parco avventura / Radio': 'Lorenzo',
+  Spiaggia: 'Martina',
+  'Teatro / Circo': 'Chiara e Lorenzo',
+  'Musica / Scultura': 'Martina',
+}
+
+/** Four families' answers to the questionnaire of the completed session, invented. 0: not done. */
+function demoAnswers(activities: string[]): { votes: Record<string, number>; answers: Record<string, string> }[] {
+  const activityVotes = [
+    [5, 5, 4, 5, 3, 5],
+    [5, 4, 5, 4, 5, 4],
+    [4, 5, 5, 3, 4, 5],
+    [5, 5, 4, 5, 5, 0],
+  ]
+  const otherVotes = [
+    [4, 5, 5, 5, 5],
+    [3, 5, 4, 5, 5],
+    [5, 5, 5, 4, 4],
+    [4, 4, 0, 5, 5],
+  ]
+  const answers: Record<string, string>[] = [
+    {
+      suggestions: 'Più tempo libero in spiaggia nel pomeriggio.',
+      meaning: 'Una settimana in cui nostro figlio è stato semplicemente un ragazzo come gli altri.',
+    },
+    {
+      information: 'Avremmo voluto sapere prima gli orari della piscina.',
+      message: 'Grazie a tutti i volontari, siete stati fantastici.',
+    },
+    { extraActivities: 'Un laboratorio di cucina per i ragazzi.', final: 'Torneremo sicuramente.' },
+    { suggestions: 'Una serata in più tutti insieme.', meaning: 'Una famiglia più grande.' },
+  ]
+  const votesOf = (labels: readonly string[], values: number[]) =>
+    labels.flatMap((label, index) => (values[index] ? [[label, values[index]] as const] : []))
+  return answers.map((written, index) => ({
+    votes: Object.fromEntries([
+      ...votesOf(activities, activityVotes[index]!),
+      ...votesOf(FEEDBACK_OTHER_ITEMS, otherVotes[index]!),
+    ]),
+    answers: written,
+  }))
+}
+
+/** A small invented imported year (docs/spec.md 3.13): three sessions, a few questions, comments, staff. */
 function demoFeedback(): FeedbackArchive {
   const sessions = [
     { number: 1, respondents: 6 },
@@ -780,10 +828,11 @@ export async function seedDemo(
   })
   // The 2027 programme, from the model week: every 2027 session uses it.
   await db.insert(t.programmes).values({ year: 2027, content: programmeTemplate() }).onConflictDoNothing()
-  // Feedback of 2026, invented (the real one comes from scripts/import-feedback.mjs).
+  // An imported year of feedback, invented (the real 2026 comes from scripts/import-feedback.mjs): 2025, so
+  // that 2026 shows the questionnaire of the completed session.
   await db
     .insert(t.feedbackArchives)
-    .values({ year: 2026, data: demoFeedback(), source: 'Dati di esempio', importedBy: admin.id })
+    .values({ year: 2025, data: demoFeedback(), source: 'Dati di esempio', importedBy: admin.id })
     .onConflictDoNothing()
   const september = await session({
     ...calendar(DEMO_CALENDAR.september),
@@ -966,6 +1015,26 @@ export async function seedDemo(
   await lead(past.id, 'Lorenzo', 'blue')
   await lead(june.id, 'Martina', 'yellow')
   await lead(june.id, 'Chiara', 'red')
+
+  // The questionnaire of the completed session (spec 3.13): its programme as it was when it closed, with who
+  // led each activity, and the answers of four families; famiglia@ has not answered yet.
+  const pastWeek = programmeTemplate()
+  for (const day of pastWeek.days) {
+    for (const block of day.blocks) {
+      for (const turn of Object.values(block.groups ?? {})) {
+        if (turn.activity) turn.lead = DEMO_ACTIVITY_LEADS[turn.activity] ?? ''
+      }
+    }
+  }
+  await db.insert(t.programmes).values({ sessionId: past.id, content: pastWeek })
+  await db.insert(t.feedbackResponses).values(
+    demoAnswers(pastWeek.activities).map((answer, index) => ({
+      sessionId: past.id,
+      familyId: families[index + 1]!.familyId,
+      ...answer,
+      createdAt: new Date(`2026-07-2${index + 1}T18:00:00Z`),
+    })),
+  )
 
   // Documents to read and sign
   const document = async (

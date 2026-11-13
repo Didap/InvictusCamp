@@ -35,6 +35,7 @@ export const PAGES = {
     '/famiglia',
     '/famiglia/sessioni',
     '/famiglia/programma/{session}',
+    '/famiglia/questionario/{sessionPast}',
     '/famiglia/profilo',
     '/famiglia/membri',
     '/famiglia/documenti',

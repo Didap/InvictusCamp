@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { feedbackYear } from '#server/domain/feedback'
 import { feedbackYearParamsSchema } from '#shared/schemas/feedback'
 import type { FeedbackArchive } from '#shared/types/feedback'
 
@@ -6,11 +6,5 @@ import type { FeedbackArchive } from '#shared/types/feedback'
 export default defineEventHandler(async (event): Promise<FeedbackArchive> => {
   await requireAdmin(event)
   const { year } = parseParams(event, feedbackYearParamsSchema)
-  const { feedbackArchives } = tables
-  const [row] = await useDb()
-    .select({ data: feedbackArchives.data })
-    .from(feedbackArchives)
-    .where(eq(feedbackArchives.year, year))
-  if (!row) throw createError({ statusCode: 404, message: `Nessun feedback per il ${year}` })
-  return row.data
+  return feedbackYear(useDb(), year)
 })

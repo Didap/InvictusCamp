@@ -178,11 +178,14 @@ describe('life of a session (spec 3.2)', () => {
     expect((await participationRow(waiting.participation.id)).status).toBe('invited')
   })
 
-  it('confirmed → completed sends nothing', async () => {
+  it('confirmed → completed sends the questionnaire to the titolari who came (spec 3.13)', async () => {
     const { session, actor } = await setup({ status: 'confirmed' })
-    await join(session.id, 'slot', 'confirmed')
+    const came = await join(session.id, 'slot', 'confirmed')
+    await join(session.id, 'slot', 'declined')
+    await join(session.id, 'reserve', 'invited')
+    await join(session.id, 'slot', 'confirmed', { disabled: true })
     const result = await transitionSession(db, ctx, { sessionId: session.id, to: 'completed', actor })
-    expect(result.emails).toEqual([])
+    expect(result.emails.map(email => [email.template, email.toUserId])).toEqual([['session.feedback', came.user.id]])
     expect((await sessionRow(session.id)).status).toBe('completed')
   })
 

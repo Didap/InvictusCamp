@@ -1,5 +1,6 @@
 // Emails of the sessions area (docs/spec.md, 4): the invitation of a titolare, the notice to a reserve,
-// a place offered to a reserve, the session confirmed or cancelled, a family removed. They speak to
+// a place offered to a reserve, the session confirmed or cancelled, a family removed, the end-of-session
+// questionnaire. They speak to
 // the family's account ("tu"), carry the session's facts and never any health detail.
 import type { ParticipationKind } from '../../shared/utils/constants'
 import { formatDay, formatDayRange } from '../../shared/utils/format'
@@ -30,6 +31,7 @@ export type SessionEmailTemplate =
   | 'session.confirmed'
   | 'session.cancelled'
   | 'session.removed'
+  | 'session.feedback'
 
 const FAMILY_SESSIONS_PATH = '/famiglia/sessioni'
 
@@ -179,5 +181,23 @@ export function sessionRemovedEmail(
       'Se pensi che sia un errore o vuoi saperne di più, contatta l’amministrazione del camp.',
     ],
     details: facts(session),
+  })
+}
+
+/** session.feedback: the session is over, the families who took part answer the questionnaire. */
+export function sessionFeedbackEmail(
+  ctx: EmailContext,
+  recipient: FamilyRecipient,
+  session: SessionEmailFacts,
+): EmailMessage {
+  return message(ctx, recipient, session, 'session.feedback', `Com’è andata? ${session.title}`, {
+    preheader: `Raccontaci com’è andata «${session.title}»: bastano pochi minuti.`,
+    title: 'Com’è andata al camp?',
+    paragraphs: [
+      `grazie per aver passato con noi la settimana di «${session.title}».`,
+      'Ci aiuti a preparare le prossime sessioni? Dai un voto alle attività e, se vuoi, scrivici cosa ti è piaciuto e cosa cambieresti. Bastano pochi minuti e le risposte arrivano all’amministrazione senza il nome della tua famiglia.',
+    ],
+    details: facts(session),
+    action: { label: 'Rispondi al questionario', url: appLink(ctx, `/famiglia/questionario/${session.id}`) },
   })
 }

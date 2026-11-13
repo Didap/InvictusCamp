@@ -63,6 +63,7 @@ import {
   documents,
   families,
   familyMembers,
+  feedbackResponses,
   files,
   personalDocuments,
   sessionFamilies,
@@ -731,6 +732,29 @@ export async function familyHome(
     )
     .orderBy(asc(campSessions.startDate))
     .limit(1)
+  // The end-of-session questionnaire still to answer (feedbackState), the latest session first.
+  const [feedback] = await db
+    .select({ sessionId: campSessions.id, title: campSessions.title })
+    .from(sessionFamilies)
+    .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
+    .leftJoin(
+      feedbackResponses,
+      and(
+        eq(feedbackResponses.sessionId, sessionFamilies.sessionId),
+        eq(feedbackResponses.familyId, sessionFamilies.familyId),
+      ),
+    )
+    .where(
+      and(
+        eq(sessionFamilies.familyId, family.id),
+        eq(sessionFamilies.kind, 'slot'),
+        eq(sessionFamilies.status, 'confirmed'),
+        eq(campSessions.status, 'completed'),
+        isNull(feedbackResponses.id),
+      ),
+    )
+    .orderBy(desc(campSessions.startDate))
+    .limit(1)
   return {
     firstName: input.firstName,
     familyName: family.name,
@@ -740,6 +764,7 @@ export async function familyHome(
     healthConsent: Boolean(family.healthDataConsentAt),
     pendingSignatures: signatures?.total ?? 0,
     nextSession: next ?? null,
+    openFeedback: feedback ?? null,
   }
 }
 

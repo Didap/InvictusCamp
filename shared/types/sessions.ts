@@ -9,6 +9,7 @@ import type {
   UserStatus,
 } from '../utils/constants'
 import type { IsoDay } from '../utils/dates'
+import type { FeedbackState } from './feedback'
 
 /** Places of a session, as slotSummary() counts them (shared/utils/slots.ts). */
 export interface SlotCounts {
@@ -209,4 +210,6 @@ export interface FamilySessionItem {
   canConfirm: boolean
   /** "Rinuncia" can be pressed now (titolare or reserve invited, the session open). */
   canDecline: boolean
+  /** The end-of-session questionnaire (docs/spec.md 3.13): open to answer, sent, or none. */
+  feedback: FeedbackState
 }

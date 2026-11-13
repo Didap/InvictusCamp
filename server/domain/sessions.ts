@@ -50,6 +50,7 @@ import {
   holdsPlace,
   documents,
   families,
+  feedbackResponses,
   sessionFamilies,
   sessionStaff,
   signatureRequests,
@@ -59,6 +60,7 @@ import {
 import {
   sessionCancelledEmail,
   sessionConfirmedEmail,
+  sessionFeedbackEmail,
   sessionInviteEmail,
   sessionRemovedEmail,
   sessionReserveEmail,
@@ -71,6 +73,7 @@ import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
+import { feedbackState } from './feedback'
 import { freezeSessionProgramme } from './programmes'
 import { cancelSessionConvocations, sessionConvocationNotices } from './staff'
 
@@ -320,6 +323,10 @@ function transitionRecipients(
       return rows
         .filter(row => row.kind === 'slot' && row.status === 'confirmed')
         .map(row => ({ row, template: 'session.confirmed' }))
+    case 'completed':
+      return rows
+        .filter(row => row.kind === 'slot' && row.status === 'confirmed')
+        .map(row => ({ row, template: 'session.feedback' }))
     case 'cancelled':
       // Only the families that had been told something: `selected` ones never heard of the session.
       return rows
@@ -538,9 +545,17 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       invitedAt: sessionFamilies.invitedAt,
       respondedAt: sessionFamilies.respondedAt,
       declineReason: sessionFamilies.declineReason,
+      feedbackId: feedbackResponses.id,
     })
     .from(sessionFamilies)
     .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
+    .leftJoin(
+      feedbackResponses,
+      and(
+        eq(feedbackResponses.sessionId, sessionFamilies.sessionId),
+        eq(feedbackResponses.familyId, sessionFamilies.familyId),
+      ),
+    )
     .where(
       and(
         eq(sessionFamilies.familyId, familyId),
@@ -549,10 +564,11 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       ),
     )
     .orderBy(asc(campSessions.startDate))
-  return rows.map(row => {
+  return rows.map(({ feedbackId, ...row }) => {
     const answerable = isSessionOpen(row.sessionStatus) && row.status === 'invited'
     return {
       ...row,
+      feedback: feedbackState(row.sessionStatus, row, feedbackId !== null),
       invitedAt: iso(row.invitedAt),
       respondedAt: iso(row.respondedAt),
       canConfirm: answerable && row.kind === 'slot',
@@ -596,6 +612,8 @@ function familyEmail(
       return sessionCancelledEmail(ctx, recipient, facts)
     case 'session.removed':
       return sessionRemovedEmail(ctx, recipient, facts, row.kind)
+    case 'session.feedback':
+      return sessionFeedbackEmail(ctx, recipient, facts)
   }
 }
 

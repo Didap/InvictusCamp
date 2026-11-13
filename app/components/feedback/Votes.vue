@@ -55,7 +55,9 @@ const themes = computed(() =>
       <p v-else class="text-muted">Nessun voto su queste voci{{ inSession }}.</p>
     </IcSection>
 
+    <!-- Summed up by the camp for an imported year; the questionnaire has none (docs/spec.md 3.13). -->
     <IcSection
+      v-if="archive.themes.length"
       title="Suggerimenti ricorrenti"
       description="Quello che hanno chiesto più famiglie. Tutte le risposte scritte sono nella scheda Commenti."
     >

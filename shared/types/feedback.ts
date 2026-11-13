@@ -42,3 +42,17 @@ export interface FeedbackTurn {
   votes: VoteCounts
   note: string | null
 }
+
+/** Where a family is with the questionnaire of a session: none (not open to it), open, or sent. */
+export type FeedbackState = 'open' | 'sent' | null
+
+/** GET /api/family/feedback/:sessionId: the questionnaire of a completed session, to fill in or sent. */
+export interface FamilyFeedbackForm {
+  session: { id: string; title: string; startDate: string; endDate: string }
+  /** The votes: the activities of the session's programme, then reception, spaces and staff. */
+  items: { label: string; kind: FeedbackItemKind }[]
+  /** The written questions, as the family reads them. */
+  questions: { id: string; prompt: string }[]
+  /** When the family sent it; null while it is still to fill in. */
+  sentAt: string | null
+}
