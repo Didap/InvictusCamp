@@ -4,6 +4,7 @@ import type { FamilySessionItem } from '#shared/types/sessions'
 import { PROGRAMME_GROUP_LABELS, enumLabel } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDayRange } from '#shared/utils/format'
+import { isSessionOver } from '#shared/utils/session-status'
 
 // The family's sessions (docs/spec.md 3.3): the invitations to answer, the calendar, the next sessions
 // and the history. A session appears only once the family has been invited. Calendar events carry no
@@ -16,10 +17,9 @@ const today = todayIso()
 const items = computed(() => data.value ?? [])
 const isUpcoming = (item: FamilySessionItem) =>
   !item.canConfirm &&
-  item.endDate >= today &&
   (item.status === 'confirmed' || item.status === 'invited') &&
   item.sessionStatus !== 'cancelled' &&
-  item.sessionStatus !== 'completed'
+  !isSessionOver({ status: item.sessionStatus, endDate: item.endDate }, today)
 const upcoming = computed(() => items.value.filter(isUpcoming))
 const history = computed(() =>
   items.value

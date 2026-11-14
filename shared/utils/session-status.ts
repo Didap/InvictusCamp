@@ -44,6 +44,11 @@ export function isSessionOpen(status: SessionStatus): boolean {
   return SESSION_OPEN_STATUSES.includes(status)
 }
 
+/** A session that is over: completed, or past its last day and not cancelled. */
+export function isSessionOver(session: { status: SessionStatus; endDate: string }, today: string): boolean {
+  return session.status === 'completed' || (session.status !== 'cancelled' && session.endDate < today)
+}
+
 export function isSessionEditable(status: SessionStatus): boolean {
   return SESSION_EDITABLE_STATUSES.includes(status)
 }

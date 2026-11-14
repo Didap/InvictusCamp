@@ -1,7 +1,7 @@
 // The week programme (docs/spec.md 3.10): one per year, and the copy a session may have of it. The
 // administration edits both; families and staff of the session read the one the session uses, without
 // the planning aids. Explicit imports only, so the database tests can load this file.
-import { and, eq, ne, or, sql } from 'drizzle-orm'
+import { and, eq, ne, or, sql, type SQL } from 'drizzle-orm'
 import { emptyWeek, programmeTemplate } from '../../shared/content/programme-template'
 import type { ProgrammeCreateInput, ProgrammeSaveValues } from '../../shared/schemas/programmes'
 import type { ProgrammeContent } from '../../shared/types/domain'
@@ -10,7 +10,7 @@ import type { SessionStatus } from '../../shared/utils/constants'
 import { rangeDays } from '../../shared/utils/dates'
 import { fullName } from '../../shared/utils/format'
 import { canFamilyReadProgramme, canStaffReadProgramme } from '../../shared/utils/programme'
-import { isSessionEditable } from '../../shared/utils/session-status'
+import { SESSION_EDITABLE_STATUSES, isSessionEditable } from '../../shared/utils/session-status'
 import { campSessions, programmes, sessionFamilies, sessionStaff, users } from '../db/schema'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
@@ -40,6 +40,19 @@ export function programmeForViewer(content: ProgrammeContent, viewer: 'family' |
 }
 
 // ─── Reading ───────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * SQL, for a query on camp_sessions: the session has a programme to read, by the rule of findProgramme (its
+ * copy, or the programme of its year while it can still change).
+ */
+export function sessionHasProgramme(): SQL {
+  const editable = sql.join(
+    SESSION_EDITABLE_STATUSES.map(status => sql`${status}`),
+    sql`, `,
+  )
+  return sql`exists (select 1 from ${programmes} where ${programmes.sessionId} = ${campSessions.id}
+    or (${campSessions.status} in (${editable}) and ${programmes.year} = extract(year from ${campSessions.startDate})::int))`
+}
 
 /**
  * The programme of a year, or the one a session uses: its copy, else, while the session can still

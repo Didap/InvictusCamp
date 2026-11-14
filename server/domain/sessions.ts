@@ -36,6 +36,7 @@ import {
   canTransition,
   isSessionEditable,
   isSessionOpen,
+  isSessionOver,
 } from '../../shared/utils/session-status'
 import {
   ACTIVE_STATUSES,
@@ -76,7 +77,7 @@ import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
 import { isYearArchived, ownResponse, questionnaireOpen } from './feedback'
-import { freezeSessionProgramme } from './programmes'
+import { freezeSessionProgramme, sessionHasProgramme } from './programmes'
 import { cancelSessionConvocations, sessionConvocationNotices } from './staff'
 
 /** Who acts: the signed-in user and the client address, for the audit. */
@@ -568,13 +569,14 @@ export async function familyHistory(db: DbOrTx, familyId: string): Promise<Famil
   return rows.map(row => ({ ...row, invitedAt: iso(row.invitedAt), respondedAt: iso(row.respondedAt) }))
 }
 
+/** Who led a group of a session (familySessions). */
+const leadStaff = alias(sessionStaff, 'lead_staff')
+const leadUser = alias(users, 'lead_user')
+
 /**
  * GET /api/family/sessions : the family's sessions, only once invited. A participation never invited
  * (`selected`, or cancelled before the invitations left) stays invisible to the family (spec 3.3).
  */
-const leadStaff = alias(sessionStaff, 'lead_staff')
-const leadUser = alias(users, 'lead_user')
-
 export async function familySessions(db: DbOrTx, familyId: string): Promise<FamilySessionItem[]> {
   const rows = await db
     .select({
@@ -599,9 +601,7 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       leadLastName: leadUser.lastName,
       lodging: lodgings.name,
       lodgingArea: lodgings.area,
-      // The programme of the session, or of its year (programmes.ts): names written out.
-      hasProgramme: sql<boolean>`exists (select 1 from programmes p
-        where p.session_id = camp_sessions.id or p.year = extract(year from camp_sessions.start_date)::int)`,
+      hasProgramme: sql<boolean>`${sessionHasProgramme()}`,
     })
     .from(sessionFamilies)
     .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
@@ -629,10 +629,8 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
   return rows.map(
     ({ feedbackOpen, feedbackId, group, leadFirstName, leadLastName, lodging, lodgingArea, hasProgramme, ...row }) => {
       const answerable = isSessionOpen(row.sessionStatus) && row.status === 'invited'
-      // Lived: confirmed in a session that is over, completed or just past its last day.
       const lived =
-        row.status === 'confirmed' &&
-        (row.sessionStatus === 'completed' || (row.sessionStatus === 'confirmed' && row.endDate < today))
+        row.status === 'confirmed' && isSessionOver({ status: row.sessionStatus, endDate: row.endDate }, today)
       return {
         ...row,
         lived: lived
