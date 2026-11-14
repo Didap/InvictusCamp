@@ -373,7 +373,8 @@ Emails never contain health details. Without `NUXT_RESEND_API_KEY` every email i
 - Health details: only after consent; visible to the family and the administration; not in lists, emails,
   toasts or logs; changes audited (`member.health_update`). The one exception: the administration's family
   list shows the ages of the members with a condition (no names, no details), not in the CSV export; it
-  can be filtered by how many there are, their age (5-10, 11-14, 15-18, 19-21, outside 5-21) and the type of
+  can be filtered by how many there are, their age (5-10, 11-14, 15-18, 19-21, or none within 5-21, the
+  rule of the age notice) and the type of
   condition («Tipologia»), which is never shown and whose use is audited (`family.health_filter`, and in
   `family.export`). The other filters: questionnaire status, region then province (the provinces of the
   region chosen), number of members.

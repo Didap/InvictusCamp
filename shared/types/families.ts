@@ -164,7 +164,7 @@ export interface FamilyHomeDto {
   nextSession: FamilySessionRef | null
   /** A completed session whose questionnaire the family has not answered yet (docs/spec.md 3.13). */
   openFeedback: { sessionId: string; title: string } | null
-  /** `out`: no young person with a condition is 5 to 21 years old at the next session. */
+  /** `out`: no young person with a condition is 5 to 21 years old today (GUEST_AGE). */
   guestAge: GuestAgeStatus
 }
 

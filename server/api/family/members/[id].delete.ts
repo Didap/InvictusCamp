@@ -6,7 +6,7 @@ export default defineEventHandler(async event => {
   const memberId = requireUuidParam(event, 'id')
   const emails = await useDb().transaction(async tx => {
     await removeFamilyMember(tx, { familyId: family.id, memberId, actor: { userId: user.id, ip: clientIp(event) } })
-    return guestAgeNotice(tx, { familyId: family.id, ctx: emailContext() })
+    return family.ageNoticeAt ? [] : guestAgeNotice(tx, { familyId: family.id, ctx: emailContext() })
   })
   await deliver(emails)
   return { ok: true }

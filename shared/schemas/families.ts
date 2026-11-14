@@ -7,6 +7,7 @@ import type { MemberHealth } from '../types/families'
 import type { DisabilityInfo, FormAnswers, UsefulInfo } from '../types/domain'
 import {
   FAMILY_FORM_STATUSES,
+  GUEST_AGE,
   ITALIAN_REGIONS,
   MEMBER_KINDS,
   MEMBER_RELATIONSHIPS,
@@ -246,7 +247,7 @@ export const memberSchema = memberFields
     path: ['kind'],
     error: 'Solo un ragazzo o una ragazza può avere una patologia o disabilità indicata',
   })
-  .refine(member => !missingBirthDate({ ...member, hasDisability: member.health?.hasDisability ?? false }), {
+  .refine(member => !missingBirthDate({ ...member, hasDisability: member.health?.hasDisability }), {
     path: ['birthDate'],
     error: 'Campo obbligatorio',
     when: ({ value }) => birthDateFields.safeParse(value).success,
@@ -354,17 +355,18 @@ export const DISABILITY_COUNT_FILTERS = [
 
 /** The families filter by the age of the young people with a condition; `out` is outside GUEST_AGE. */
 export const GUEST_AGE_FILTERS = [
-  { value: '5-10', label: 'Da 5 a 10 anni', min: 5, max: 10 },
-  { value: '11-14', label: 'Da 11 a 14 anni', min: 11, max: 14 },
-  { value: '15-18', label: 'Da 15 a 18 anni', min: 15, max: 18 },
-  { value: '19-21', label: 'Da 19 a 21 anni', min: 19, max: 21 },
-  { value: 'out', label: 'Fuori fascia (meno di 5 o più di 21)' },
+  { value: 'children', label: `Da ${GUEST_AGE.min} a 10 anni`, min: GUEST_AGE.min, max: 10 },
+  { value: 'preteens', label: 'Da 11 a 14 anni', min: 11, max: 14 },
+  { value: 'teens', label: 'Da 15 a 18 anni', min: 15, max: 18 },
+  { value: 'adults', label: `Da 19 a ${GUEST_AGE.max} anni`, min: 19, max: GUEST_AGE.max },
+  { value: 'out', label: `Nessuno nella fascia (meno di ${GUEST_AGE.min} o più di ${GUEST_AGE.max})` },
 ] as const
 
 /** The members filter stops here: the last choice is «6 o più». */
 export const MEMBERS_FILTER_MAX = 6
 
-const CONDITIONS = DISABILITY_CHOICES.find(field => field.key === 'conditions')!.options
+/** The «Tipologia» choices: the filter by type of condition. */
+export const CONDITIONS = DISABILITY_CHOICES.find(field => field.key === 'conditions')!.options
 
 /** GET /api/admin/families (and its CSV export). */
 export const adminFamilyListQuerySchema = zListQuery.extend({

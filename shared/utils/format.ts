@@ -123,9 +123,9 @@ export function isEmptyCard(member: { firstName: string | null }): boolean {
 export function missingBirthDate(member: {
   kind: MemberKind
   birthDate?: string | null
-  hasDisability: boolean
+  hasDisability?: boolean
 }): boolean {
-  return !member.birthDate && (member.kind === 'adult' || member.hasDisability)
+  return !member.birthDate && (member.kind === 'adult' || Boolean(member.hasDisability))
 }
 
 /** The young person with a condition, the one the camp is for: the others' relationship is to them. */
@@ -225,9 +225,7 @@ export function memberLine(
   if (member.birthDate) {
     const age = formatAge(ageOn(member.birthDate))
     parts.push(withDay ? `${age} (${formatDay(member.birthDate)})` : age)
-  } else if (missingBirthDate({ ...member, hasDisability: member.hasDisability ?? false })) {
-    parts.push('manca la data di nascita')
-  }
+  } else if (missingBirthDate(member)) parts.push('manca la data di nascita')
   return parts.join(' · ') || enumLabel('memberKind', member.kind)
 }
 

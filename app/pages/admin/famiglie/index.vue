@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TableColumn, TableRow } from '@nuxt/ui'
-import { DISABILITY_CHOICES } from '#shared/content/member-form'
 import {
+  CONDITIONS,
   DISABILITY_COUNT_FILTERS,
   FAMILY_LIST_SORTS,
   GUEST_AGE_FILTERS,
@@ -72,44 +72,38 @@ function filterModel(key: string) {
 }
 const formStatusFilter = filterModel('formStatus')
 const provinceFilter = filterModel('province')
-const regionFilter = filterModel('region')
+// A new region drops the province: one of another region would match nothing.
+const regionFilter = computed({
+  get: () => queryValue('region') ?? ALL,
+  set: (value: string) => setQuery({ region: value === ALL ? undefined : value, province: undefined }),
+})
 const disabilityFilter = filterModel('disability')
 const conditionFilter = filterModel('condition')
 const ageFilter = filterModel('ageRange')
 const membersFilter = filterModel('members')
-// A region narrows the provinces: a province outside it would match nothing, so it goes.
-watch(
-  () => data.value?.provinces,
-  provinces => {
-    const province = queryValue('province')
-    if (province && provinces && !provinces.includes(province)) setQuery({ province: undefined })
-  },
-)
 
 const formStatusItems = [
   { value: ALL, label: 'Tutti' },
   ...options('familyFormStatus').map(option => ({ value: option.value, label: option.label })),
 ]
-/** A select over the values in use, "Tutte" first. */
-const allOf = (values: string[] = []) => [
-  { value: ALL, label: 'Tutte' },
-  ...values.map(value => ({ value, label: value })),
+/** The choices of a filter, «Tutte» (or `all`) first. */
+const allOf = (items: readonly { value: string; label: string }[], all = 'Tutte') => [
+  { value: ALL, label: all },
+  ...items,
 ]
-const provinceItems = computed(() => allOf(data.value?.provinces))
-const regionItems = computed(() => allOf(data.value?.regions))
-const disabilityItems = [{ value: ALL, label: 'Tutte' }, ...DISABILITY_COUNT_FILTERS]
-const conditionItems = [
-  { value: ALL, label: 'Tutte' },
-  ...DISABILITY_CHOICES.find(field => field.key === 'conditions')!.options,
-]
-const ageItems = [{ value: ALL, label: 'Tutte' }, ...GUEST_AGE_FILTERS]
-const membersItems = [
-  { value: ALL, label: 'Tutti' },
-  ...Array.from({ length: MEMBERS_FILTER_MAX }, (_, i) => ({
+const asItems = (values: string[] = []) => values.map(value => ({ value, label: value }))
+const provinceItems = computed(() => allOf(asItems(data.value?.provinces)))
+const regionItems = computed(() => allOf(asItems(data.value?.regions)))
+const disabilityItems = allOf(DISABILITY_COUNT_FILTERS)
+const conditionItems = allOf(CONDITIONS)
+const ageItems = allOf(GUEST_AGE_FILTERS)
+const membersItems = allOf(
+  Array.from({ length: MEMBERS_FILTER_MAX }, (_, i) => ({
     value: String(i + 1),
     label: i + 1 === MEMBERS_FILTER_MAX ? `${i + 1} o più` : String(i + 1),
   })),
-]
+  'Tutti',
+)
 /** The menu as wide as its longest choice, not as the field: every choice reads whole. */
 const SELECT_UI = { content: 'min-w-fit' }
 

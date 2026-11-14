@@ -776,15 +776,9 @@ const sessionRefColumns = {
   status: sessionFamilies.status,
 }
 
-/**
- * After a card is saved or removed: the email about the camp's ages, once, when every card is complete and
- * no young person with a condition fits them (guestAgeStatus). The handler delivers it after the commit.
- */
-export async function guestAgeNotice(
-  db: DbOrTx,
-  input: { familyId: string; ctx: EmailContext; today?: IsoDay },
-): Promise<EmailMessage[]> {
-  const cards = await db
+/** What the card rules read (isCardToComplete, guestAgeStatus): no names, no health details. */
+function cardChecks(db: DbOrTx, familyId: string) {
+  return db
     .select({
       firstName: familyMembers.firstName,
       kind: familyMembers.kind,
@@ -793,7 +787,18 @@ export async function guestAgeNotice(
       hasDisability: familyMembers.hasDisability,
     })
     .from(familyMembers)
-    .where(eq(familyMembers.familyId, input.familyId))
+    .where(eq(familyMembers.familyId, familyId))
+}
+
+/**
+ * After a card is saved or removed: the email about the camp's ages, once, when every card is complete and
+ * no young person with a condition fits them (guestAgeStatus). The handler delivers it after the commit.
+ */
+export async function guestAgeNotice(
+  db: DbOrTx,
+  input: { familyId: string; ctx: EmailContext; today?: IsoDay },
+): Promise<EmailMessage[]> {
+  const cards = await cardChecks(db, input.familyId)
   if (cards.some(isCardToComplete) || guestAgeStatus(cards, input.today) !== 'out') return []
   // Marked only if not yet: two saves at once send one email.
   const [marked] = await db
@@ -817,16 +822,7 @@ export async function familyHome(
   const family = await requireFamilyRow(db, input.familyId)
   const today = input.today ?? todayIso()
   const [cards, [signatures], [next], [feedback]] = await Promise.all([
-    db
-      .select({
-        firstName: familyMembers.firstName,
-        kind: familyMembers.kind,
-        birthDate: familyMembers.birthDate,
-        relationship: familyMembers.relationship,
-        hasDisability: familyMembers.hasDisability,
-      })
-      .from(familyMembers)
-      .where(eq(familyMembers.familyId, family.id)),
+    cardChecks(db, family.id),
     db
       .select({ total: count() })
       .from(signatureRequests)
@@ -912,24 +908,29 @@ function familyListWhere(query: AdminFamilyListQuery): SQL | undefined {
   if (query.province) conditions.push(eq(families.province, query.province))
   if (query.region) conditions.push(eq(families.region, query.region))
   // The young people with a condition of the family, for the filters below.
-  const guests = (where: SQL = sql`true`) =>
-    sql`(select count(*) from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability} and ${where})`
-  if (query.disability === 'yes') conditions.push(sql`${guests()} > 0`)
-  if (query.disability === 'many') conditions.push(sql`${guests()} > 1`)
-  if (query.disability === 'no') conditions.push(sql`${guests()} = 0`)
+  const guest = (where: SQL = sql`true`) =>
+    sql`exists (select 1 from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability} and ${where})`
+  if (query.disability === 'yes') conditions.push(guest())
+  if (query.disability === 'no') conditions.push(not(guest()))
+  if (query.disability === 'many') {
+    conditions.push(
+      sql`(select count(*) from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability}) > 1`,
+    )
+  }
   if (query.condition) {
     conditions.push(
-      sql`${guests(sql`${familyMembers.disability} @> ${JSON.stringify({ conditions: [query.condition] })}::jsonb`)} > 0`,
+      guest(sql`${familyMembers.disability} @> ${JSON.stringify({ conditions: [query.condition] })}::jsonb`),
     )
   }
   if (query.ageRange) {
     const age = sql`date_part('year', age(${todayIso()}::date, ${familyMembers.birthDate}))`
     const range = GUEST_AGE_FILTERS.find(filter => filter.value === query.ageRange)!
-    const within =
+    // `out` is the rule of the age notice (guestAgeStatus): young people with a condition, none within the ages.
+    conditions.push(
       'min' in range
-        ? sql`${age} between ${range.min} and ${range.max}`
-        : sql`(${age} < ${GUEST_AGE.min} or ${age} > ${GUEST_AGE.max})`
-    conditions.push(sql`${guests(within)} > 0`)
+        ? guest(sql`${age} between ${range.min} and ${range.max}`)
+        : and(guest(), not(guest(sql`${age} between ${GUEST_AGE.min} and ${GUEST_AGE.max}`)))!,
+    )
   }
   if (query.members) {
     conditions.push(
@@ -966,7 +967,6 @@ async function latestSessions(db: DbOrTx, familyIds: string[]): Promise<Map<stri
   return latest
 }
 
-/** The values in use in a column, sorted, in one aggregate (null when there is none). */
 /** The values of a column in use, sorted, once each; `where` narrows the rows they come from. */
 function distinctValues<T>(column: AnyColumn, where: SQL = sql`true`) {
   return sql<

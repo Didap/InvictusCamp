@@ -534,7 +534,7 @@ describe('administration', () => {
     const ids = async (values: Record<string, string>) => (await listFamilies(db, query(values))).items.map(i => i.id)
     expect(await ids({ condition: 'autism' })).toEqual([rossi.family.id])
     expect(await ids({ condition: 'epilepsy' })).toEqual([])
-    expect(await ids({ ageRange: '11-14' })).toEqual([rossi.family.id])
+    expect(await ids({ ageRange: 'preteens' })).toEqual([rossi.family.id])
     expect(await ids({ ageRange: 'out' })).toEqual([])
     expect(await ids({ members: '2' })).toEqual([rossi.family.id])
     expect(await ids({ members: '1' })).toEqual([bianchi.family.id])
