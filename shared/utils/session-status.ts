@@ -30,7 +30,7 @@ export const SESSION_TRANSITION_EFFECTS: Record<SessionStatus, string> = {
   inviting:
     'Le famiglie titolari ricevono l’invito e possono confermare o rinunciare. Le riserve ricevono l’avviso di essere in lista.',
   confirmed: 'Le famiglie che hanno confermato ricevono la conferma definitiva della sessione.',
-  completed: 'Nessuna email: la sessione passa nello storico.',
+  completed: 'La sessione passa nello storico.',
   cancelled: 'Le famiglie invitate o confermate ricevono l’avviso di annullamento.',
 }
 

@@ -55,7 +55,7 @@ import type {
   PersonalDocumentDto,
 } from '../../shared/types/families'
 import type { ItalianRegion } from '../../shared/utils/constants'
-import { ageOn, todayIso } from '../../shared/utils/dates'
+import { addDays, ageOn, todayIso } from '../../shared/utils/dates'
 import { plural } from '../../shared/utils/format'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 import {
@@ -63,6 +63,7 @@ import {
   documents,
   families,
   familyMembers,
+  feedbackResponses,
   files,
   personalDocuments,
   sessionFamilies,
@@ -71,6 +72,7 @@ import {
 } from '../db/schema'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
+import { FEEDBACK_REMINDER_DAYS, ownResponse, questionnaireOpen } from './feedback'
 import { deleteStoredFile } from './storage'
 import { createError } from './errors'
 
@@ -695,42 +697,61 @@ export async function familyHome(
   input: { userId: string; firstName: string; familyId: string; today?: string },
 ): Promise<FamilyHomeDto> {
   const family = await requireFamilyRow(db, input.familyId)
-  const [members] = await db
-    .select({
-      total: count(),
-      // isCardToComplete: an empty card, or an adult without the birth date.
-      toComplete: count(
-        sql`case when ${familyMembers.firstName} is null or (${familyMembers.kind} = 'adult' and ${familyMembers.birthDate} is null) then 1 end`,
+  const today = input.today ?? todayIso()
+  const [[members], [signatures], [next], [feedback]] = await Promise.all([
+    db
+      .select({
+        total: count(),
+        // isCardToComplete: an empty card, or an adult without the birth date.
+        toComplete: count(
+          sql`case when ${familyMembers.firstName} is null or (${familyMembers.kind} = 'adult' and ${familyMembers.birthDate} is null) then 1 end`,
+        ),
+      })
+      .from(familyMembers)
+      .where(eq(familyMembers.familyId, family.id)),
+    db
+      .select({ total: count() })
+      .from(signatureRequests)
+      .innerJoin(documents, eq(documents.id, signatureRequests.documentId))
+      .where(
+        and(
+          eq(signatureRequests.userId, input.userId),
+          eq(signatureRequests.status, 'pending'),
+          isNull(documents.archivedAt),
+        ),
       ),
-    })
-    .from(familyMembers)
-    .where(eq(familyMembers.familyId, family.id))
-  const [signatures] = await db
-    .select({ total: count() })
-    .from(signatureRequests)
-    .innerJoin(documents, eq(documents.id, signatureRequests.documentId))
-    .where(
-      and(
-        eq(signatureRequests.userId, input.userId),
-        eq(signatureRequests.status, 'pending'),
-        isNull(documents.archivedAt),
-      ),
-    )
-  // Families never see participations still `selected` (spec 3.3): only confirmed places here.
-  const [next] = await db
-    .select(sessionRefColumns)
-    .from(sessionFamilies)
-    .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
-    .where(
-      and(
-        eq(sessionFamilies.familyId, family.id),
-        eq(sessionFamilies.status, 'confirmed'),
-        inArray(campSessions.status, ['inviting', 'confirmed']),
-        gte(campSessions.endDate, input.today ?? todayIso()),
-      ),
-    )
-    .orderBy(asc(campSessions.startDate))
-    .limit(1)
+    // Families never see participations still `selected` (spec 3.3): only confirmed places here.
+    db
+      .select(sessionRefColumns)
+      .from(sessionFamilies)
+      .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
+      .where(
+        and(
+          eq(sessionFamilies.familyId, family.id),
+          eq(sessionFamilies.status, 'confirmed'),
+          inArray(campSessions.status, ['inviting', 'confirmed']),
+          gte(campSessions.endDate, today),
+        ),
+      )
+      .orderBy(asc(campSessions.startDate))
+      .limit(1),
+    // The end-of-session questionnaire still to answer, for a while after the session closed (spec 3.13).
+    db
+      .select({ sessionId: campSessions.id, title: campSessions.title })
+      .from(sessionFamilies)
+      .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
+      .leftJoin(feedbackResponses, ownResponse())
+      .where(
+        and(
+          eq(sessionFamilies.familyId, family.id),
+          questionnaireOpen(),
+          isNull(feedbackResponses.id),
+          gte(campSessions.statusChangedAt, new Date(addDays(today, -FEEDBACK_REMINDER_DAYS))),
+        ),
+      )
+      .orderBy(desc(campSessions.startDate))
+      .limit(1),
+  ])
   return {
     firstName: input.firstName,
     familyName: family.name,
@@ -740,6 +761,7 @@ export async function familyHome(
     healthConsent: Boolean(family.healthDataConsentAt),
     pendingSignatures: signatures?.total ?? 0,
     nextSession: next ?? null,
+    openFeedback: feedback ?? null,
   }
 }
 

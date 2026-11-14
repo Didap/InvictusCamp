@@ -149,6 +149,8 @@ export interface FamilyHomeDto {
   pendingSignatures: number
   /** The next session with a confirmed place. */
   nextSession: FamilySessionRef | null
+  /** A completed session whose questionnaire the family has not answered yet (docs/spec.md 3.13). */
+  openFeedback: { sessionId: string; title: string } | null
 }
 
 /** GET /api/admin/families/:id: the record, without health details (those are in /health). */

@@ -6,6 +6,19 @@ import type { FeedbackArchive } from '../types/feedback'
 /** GET /api/admin/feedback/[year]. */
 export const feedbackYearParamsSchema = z.object({ year: z.coerce.number().int().min(2000).max(2100) })
 
+/** The longest written answer of the questionnaire. */
+export const FEEDBACK_ANSWER_MAX = 2000
+
+/**
+ * POST /api/family/feedback/:sessionId: votes by label, written answers by question id. Which labels and
+ * ids the session has, and that something is filled in, the domain checks (server/domain/feedback.ts).
+ */
+export const feedbackAnswerSchema = z.object({
+  votes: z.record(z.string().trim().min(1).max(200), z.number().int().min(1).max(5)),
+  answers: z.record(z.string(), z.string().trim().max(FEEDBACK_ANSWER_MAX, 'Risposta troppo lunga')),
+})
+export type FeedbackAnswerInput = z.infer<typeof feedbackAnswerSchema>
+
 const count = z.number().int().min(0)
 const session = z.number().int().min(1)
 const text = z.string().trim().min(1)

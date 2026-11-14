@@ -42,7 +42,7 @@ Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova
 `/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/feedback` (3.13), `/admin/utenti`.
 
 Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
-`/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`. Staff: `/staff` (home), `/staff/candidatura`,
+`/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`, `/famiglia/questionario/:sessionId` (3.13). Staff: `/staff` (home), `/staff/candidatura`,
 `/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`,
 `/staff/programma/:sessionId`.
 Everyone: `/account`, `/firma/:requestId`.
@@ -82,7 +82,7 @@ Every move is a button of the administration that first shows what it sends and 
 |---|---|---|
 | draft → inviting | titolari `selected` → `invited`; reserves `selected` → `invited` | `session.invite` to titolari (with the answer deadline), `session.reserve` to reserves |
 | inviting → confirmed | none | `session.confirmed` to titolari `confirmed` |
-| confirmed → completed | none | none |
+| confirmed → completed | none (the questionnaire opens, 3.13) | `session.feedback` to titolari `confirmed` |
 | any → cancelled | `selected`/`invited`/`confirmed` → `cancelled`; staff convocations `sent`/`accepted` → `cancelled` (drafts deleted) and their pending contract requests cancelled, unless another accepted convocation of the person, in an open session, has the same contract | `session.cancelled` to those who had been invited (not to `selected`); `staff.convocation_cancelled` to staff whose convocation had been sent |
 
 Moves to `completed` and `cancelled` are final: the confirmation says so ("Non si può tornare indietro").
@@ -292,7 +292,7 @@ What the families said at the end of their session, year by year, administration
 - **Voti**: the questions with a vote from 1 to 5, for the year or one session. Each shows how its votes
   split into 5, 4 and 1-3 (a thin bar: 5 solid, 4 lighter, 1-3 in the warning colour; the percentages are in
   the text). Activities first, then reception, spaces and staff; the most liked first. Then the suggestions
-  that came back from several families.
+  that came back from several families, when the year has them (an imported one).
 - **Commenti**: the written answers question by question, with search and filters by session and question.
   Anonymous: a family is a number within its session.
 - **Staff**: presences per session and the votes of the activities each person led, per person (open a
@@ -303,9 +303,32 @@ What the families said at the end of their session, year by year, administration
 `feedback_archives` (one row per year, `data` as `shared/types/feedback.ts`), audited (`feedback.import`). The
 staff part is kept as turns (an activity in a session, who led it, its votes): a turn in pairs is one turn with
 two names, and the import stops if their votes differ. The numbers are Nicola's (a vote given to two
-activities done in one slot counts for both). From 2027
-the end-of-session questionnaire of the families will fill the same pages (next PR). The demo seed has an
-invented 2026.
+activities done in one slot counts for both).
+
+From 2027 the **end-of-session questionnaire** fills the same pages (`shared/content/feedback-form.ts`, the
+questions of 2026 so that the years compare):
+
+- It opens when the administration marks the session completed: the titolari who came (`confirmed`) receive
+  `session.feedback` and find it in `/famiglia/sessioni` and at `/famiglia/questionario/:sessionId`; their home
+  reminds them for 30 days. Families that declined, reserves and the other sessions' families cannot open it.
+  It never opens in a year that was imported: the administration reads that year's archive, and answers there
+  would never be seen.
+- A vote from 1 to 5 for each activity of the session's programme (its copy, fixed when the session closes,
+  with "Non fatta") and for information, reception, sensory room, staff and V-Team (with "Non so"); then six
+  written questions. All optional, but at least one vote or answer; sent once, never changed
+  (`feedback.submit` in the audit, with how many votes and answers, not their content). The page tells the
+  family the answers reach the administration without its name.
+- A year with no archive is read from the answers (`feedback_responses`, one row per family and session). A
+  session's number is the one the calendar puts in its title ("Sessione 7 · …"), so it does not move when
+  sessions are added, copied or deleted; the others follow by start date. A family is a number within its
+  session in the order it answered; the suggestions summed up by the camp are not there.
+- Staff: the people with an accepted convocation and the people the programme names in its group blocks
+  ("Chiara e Marco", "Chiara ed Elisa" are two; a first name is matched to the session's staff when only one
+  person has it, otherwise it stays as written). A turn is an activity in a session with the people who led it
+  for some groups, and the votes of the families of those groups; a family without a group counts only when
+  the whole activity had the same people.
+- The demo seed has an invented 2025 (imported) and the answers of four families to the completed 2026
+  session; famiglia@ has not answered yet.
 
 ## 4. Emails
 
@@ -320,6 +343,7 @@ invented 2026.
 | `session.confirmed` | session to `confirmed` | titolari confirmed |
 | `session.cancelled` | session cancelled | families invited or confirmed |
 | `session.removed` | family removed after being invited | that family |
+| `session.feedback` | session to `completed` (the end-of-session questionnaire, 3.13) | titolari confirmed |
 | `staff.convocation` | convocation sent | staff member |
 | `staff.convocation_cancelled` | sent convocation cancelled, or its session cancelled | staff member |
 | `staff.approved` / `staff.rejected` | sent by the administration from the review | candidate |

@@ -97,6 +97,15 @@ const showCalendar = computed(() => events.value.filter(event => event.endDate >
               <p v-if="item.status === 'declined' && item.declineReason" class="mt-1 text-sm text-muted">
                 Motivo: {{ item.declineReason }}
               </p>
+              <p v-if="item.feedback === 'sent'" class="mt-1 text-sm text-muted">Questionario inviato, grazie.</p>
+              <UButton
+                v-else-if="item.feedback === 'open'"
+                class="mt-3"
+                variant="soft"
+                icon="i-lucide-message-square-heart"
+                label="Rispondi al questionario"
+                :to="`/famiglia/questionario/${item.sessionId}`"
+              />
             </div>
             <IcStatusBadge
               v-if="item.status === 'confirmed' && item.sessionStatus === 'completed'"

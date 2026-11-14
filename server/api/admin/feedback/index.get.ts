@@ -1,12 +1,7 @@
-import { desc } from 'drizzle-orm'
+import { feedbackYears } from '#server/domain/feedback'
 
-/** The years with feedback (docs/spec.md 3.13), newest first. */
+/** The years with feedback (docs/spec.md 3.13), newest first: imported or from the questionnaire. */
 export default defineEventHandler(async (event): Promise<number[]> => {
   await requireAdmin(event)
-  const { feedbackArchives } = tables
-  const rows = await useDb()
-    .select({ year: feedbackArchives.year })
-    .from(feedbackArchives)
-    .orderBy(desc(feedbackArchives.year))
-  return rows.map(row => row.year)
+  return feedbackYears(useDb())
 })
