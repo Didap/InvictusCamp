@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { registerFamilySchema } from '#shared/schemas/auth'
 import { DISABILITY_CHOICES } from '#shared/content/member-form'
 import { memberSchema, normalizeHealth } from '#shared/schemas/families'
-import { familyNameOf, isCardToComplete, surnameOf } from '#shared/utils/format'
+import { familyNameOf, guestAgeStatus, isCardToComplete, surnameOf } from '#shared/utils/format'
 
 /** The names of the fields a parse refuses, as the form shows them. */
 function refused(result: { success: boolean; error?: { issues: { path: PropertyKey[] }[] } }): string[] {
@@ -54,6 +54,17 @@ describe('family member', () => {
     expect(isCardToComplete({ ...card, hasDisability: true })).toBe(false)
     // After the consent is withdrawn the young person is like the others: the relationship is missing.
     expect(isCardToComplete({ ...card, hasDisability: false })).toBe(true)
+  })
+
+  it('fits the camp when one young person with a condition is 5 to 21', () => {
+    const card = (birthDate: string | null, hasDisability = true) =>
+      ({ kind: 'young', birthDate, hasDisability }) as const
+    const today = '2026-11-13'
+    expect(guestAgeStatus([card('2000-01-01')], today)).toBe('out')
+    expect(guestAgeStatus([card('2000-01-01'), card('2016-03-01')], today)).toBe('in')
+    expect(guestAgeStatus([card('2000-01-01'), card('2016-03-01', false)], today)).toBe('out')
+    expect(guestAgeStatus([card(null)], today)).toBe('unknown')
+    expect(guestAgeStatus([], today)).toBe('unknown')
   })
 
   it('writes the family as «Famiglia …» once', () => {

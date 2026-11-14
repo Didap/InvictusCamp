@@ -65,6 +65,7 @@ import {
 import { addDays, ageOn, todayIso, type IsoDay } from '../../shared/utils/dates'
 import {
   familyNameOf,
+  guestAgeStatus,
   isCardToComplete,
   isYoungWithCondition,
   missingBirthDate,
@@ -775,48 +776,14 @@ const sessionRefColumns = {
   status: sessionFamilies.status,
 }
 
-/** The day the ages are counted on: the first day of the next session not cancelled, today without one. */
-async function guestAgeDay(db: DbOrTx, today: IsoDay): Promise<IsoDay> {
-  const [next] = await db
-    .select({ day: campSessions.startDate })
-    .from(campSessions)
-    .where(and(gte(campSessions.startDate, today), ne(campSessions.status, 'cancelled')))
-    .orderBy(asc(campSessions.startDate))
-    .limit(1)
-  return next?.day ?? today
-}
-
 /**
- * Whether the family's young people with a condition fit the camp's ages (GUEST_AGE, docs/spec.md 3.8):
- * `in` when one of them does (a brother or sister outside the ages does not matter), `out` when none does,
- * `unknown` while there is none or a birth date is missing.
- */
-export async function guestAgeStatus(db: DbOrTx, familyId: string, today = todayIso()): Promise<GuestAgeStatus> {
-  const rows = await db
-    .select({ birthDate: familyMembers.birthDate })
-    .from(familyMembers)
-    .where(
-      and(eq(familyMembers.familyId, familyId), eq(familyMembers.kind, 'young'), eq(familyMembers.hasDisability, true)),
-    )
-  if (!rows.length || rows.some(row => !row.birthDate)) return 'unknown'
-  const day = await guestAgeDay(db, today)
-  const fits = rows.some(row => {
-    const age = ageOn(row.birthDate!, day)
-    return age >= GUEST_AGE.min && age <= GUEST_AGE.max
-  })
-  return fits ? 'in' : 'out'
-}
-
-/**
- * After a card is saved: the email about the camp's ages, once, when every card is complete and no young
- * person with a condition fits them. The handler delivers it after the commit.
+ * After a card is saved or removed: the email about the camp's ages, once, when every card is complete and
+ * no young person with a condition fits them (guestAgeStatus). The handler delivers it after the commit.
  */
 export async function guestAgeNotice(
   db: DbOrTx,
   input: { familyId: string; ctx: EmailContext; today?: IsoDay },
 ): Promise<EmailMessage[]> {
-  const family = await requireFamilyRow(db, input.familyId)
-  if (family.ageNoticeAt) return []
   const cards = await db
     .select({
       firstName: familyMembers.firstName,
@@ -826,14 +793,19 @@ export async function guestAgeNotice(
       hasDisability: familyMembers.hasDisability,
     })
     .from(familyMembers)
-    .where(eq(familyMembers.familyId, family.id))
-  if (cards.some(isCardToComplete)) return []
-  if ((await guestAgeStatus(db, family.id, input.today)) !== 'out') return []
+    .where(eq(familyMembers.familyId, input.familyId))
+  if (cards.some(isCardToComplete) || guestAgeStatus(cards, input.today) !== 'out') return []
+  // Marked only if not yet: two saves at once send one email.
+  const [marked] = await db
+    .update(families)
+    .set({ ageNoticeAt: new Date() })
+    .where(and(eq(families.id, input.familyId), isNull(families.ageNoticeAt)))
+    .returning({ userId: families.userId })
+  if (!marked) return []
   const [account] = await db
     .select({ id: users.id, email: users.email, firstName: users.firstName })
     .from(users)
-    .where(eq(users.id, family.userId))
-  await db.update(families).set({ ageNoticeAt: new Date() }).where(eq(families.id, family.id))
+    .where(eq(users.id, marked.userId))
   return [guestAgeEmail(input.ctx, { to: account!.email, toUserId: account!.id, firstName: account!.firstName })]
 }
 
@@ -908,7 +880,7 @@ export async function familyHome(
     pendingSignatures: signatures?.total ?? 0,
     nextSession: next ?? null,
     openFeedback: feedback ?? null,
-    guestAge: await guestAgeStatus(db, family.id, today),
+    guestAge: guestAgeStatus(cards, today),
   }
 }
 
@@ -995,8 +967,11 @@ async function latestSessions(db: DbOrTx, familyIds: string[]): Promise<Map<stri
 }
 
 /** The values in use in a column, sorted, in one aggregate (null when there is none). */
-function distinctValues<T>(column: AnyColumn | SQL) {
-  return sql<T[] | null>`array_agg(distinct ${column} order by ${column}) filter (where ${column} is not null)`
+/** The values of a column in use, sorted, once each; `where` narrows the rows they come from. */
+function distinctValues<T>(column: AnyColumn, where: SQL = sql`true`) {
+  return sql<
+    T[] | null
+  >`array_agg(distinct ${column} order by ${column}) filter (where ${column} is not null and ${where})`
 }
 
 /** GET /api/admin/families: one page of families, without any health detail. */
@@ -1033,9 +1008,8 @@ export async function listFamilies(db: DbOrTx, query: AdminFamilyListQuery): Pro
     db
       .select({
         provinces: distinctValues<string>(
-          query.region
-            ? sql`case when ${families.region} = ${query.region} then ${families.province} end`
-            : families.province,
+          families.province,
+          query.region ? eq(families.region, query.region) : undefined,
         ),
         regions: distinctValues<ItalianRegion>(families.region),
       })

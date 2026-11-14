@@ -205,9 +205,9 @@ availability or receive convocations. The administration can move a person to th
   too. An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling it in
   requires name, surname, relationship (but for the young person with a condition) and the birth date of an
   adult and of the young person with a condition (a sibling's is optional).
-- **Ages**: the camp takes young people with a condition from 5 to 21 (`GUEST_AGE`), counted on the first
-  day of the next session not cancelled (today without one). One of them within the ages is enough. When
-  every card is complete and none is, the family gets one email (`family.age_notice`, never naming a
+- **Ages**: the camp takes young people with a condition from 5 to 21 (`GUEST_AGE`), counted today, as the
+  admin list shows and filters them. One of them within the ages is enough. When
+  every card is complete (after a save or a removal) and none is, the family gets one email (`family.age_notice`, never naming a
   condition; `families.ageNoticeAt`) and its home shows the same notice; the administration decides. Every filled card has «Carica il documento di identità», an upload of type `id_document` for
   that person, until one is there. Before the family data is confirmed the page shows only
   the account holder's card and points to the family data, and adding a card is refused (409); afterwards

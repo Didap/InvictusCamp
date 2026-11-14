@@ -1,7 +1,15 @@
 // Italian formatting shared by the interface (useFormat) and the email templates, so a date reads
 // the same on screen and in the inbox. Days are formatted as calendar days (no time zone shift);
 // instants are shown in Italian time.
-import { enumLabel, LOCALE, TIME_ZONE, type MemberKind, type MemberRelationship } from './constants'
+import {
+  enumLabel,
+  GUEST_AGE,
+  LOCALE,
+  TIME_ZONE,
+  type GuestAgeStatus,
+  type MemberKind,
+  type MemberRelationship,
+} from './constants'
 import { ageOn, daysBetween, todayIso, type IsoDay } from './dates'
 
 type DayStyle = 'long' | 'short' | 'numeric'
@@ -115,9 +123,9 @@ export function isEmptyCard(member: { firstName: string | null }): boolean {
 export function missingBirthDate(member: {
   kind: MemberKind
   birthDate?: string | null
-  hasDisability?: boolean
+  hasDisability: boolean
 }): boolean {
-  return !member.birthDate && (member.kind === 'adult' || Boolean(member.hasDisability))
+  return !member.birthDate && (member.kind === 'adult' || member.hasDisability)
 }
 
 /** The young person with a condition, the one the camp is for: the others' relationship is to them. */
@@ -132,6 +140,24 @@ export function missingRelationship(member: {
   hasDisability: boolean
 }): boolean {
   return !member.relationship && !isYoungWithCondition(member)
+}
+
+/**
+ * Whether the young people with a condition fit the camp's ages today (GUEST_AGE, docs/spec.md 3.8): `in`
+ * when one of them does (a brother or sister outside does not matter), `out` when none does, `unknown`
+ * while there is none or a birth date is missing.
+ */
+export function guestAgeStatus(
+  cards: { kind: MemberKind; birthDate: IsoDay | null; hasDisability: boolean }[],
+  today: IsoDay = todayIso(),
+): GuestAgeStatus {
+  const guests = cards.filter(isYoungWithCondition)
+  if (!guests.length || guests.some(card => !card.birthDate)) return 'unknown'
+  const fits = guests.some(card => {
+    const age = ageOn(card.birthDate!, today)
+    return age >= GUEST_AGE.min && age <= GUEST_AGE.max
+  })
+  return fits ? 'in' : 'out'
 }
 
 /** A card the family still has to fill in: empty, an adult without the birth date, or without a relationship. */
@@ -199,7 +225,9 @@ export function memberLine(
   if (member.birthDate) {
     const age = formatAge(ageOn(member.birthDate))
     parts.push(withDay ? `${age} (${formatDay(member.birthDate)})` : age)
-  } else if (missingBirthDate(member)) parts.push('manca la data di nascita')
+  } else if (missingBirthDate({ ...member, hasDisability: member.hasDisability ?? false })) {
+    parts.push('manca la data di nascita')
+  }
   return parts.join(' · ') || enumLabel('memberKind', member.kind)
 }
 

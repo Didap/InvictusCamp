@@ -246,7 +246,7 @@ export const memberSchema = memberFields
     path: ['kind'],
     error: 'Solo un ragazzo o una ragazza può avere una patologia o disabilità indicata',
   })
-  .refine(member => !missingBirthDate({ ...member, hasDisability: member.health?.hasDisability }), {
+  .refine(member => !missingBirthDate({ ...member, hasDisability: member.health?.hasDisability ?? false }), {
     path: ['birthDate'],
     error: 'Campo obbligatorio',
     when: ({ value }) => birthDateFields.safeParse(value).success,

@@ -9,7 +9,8 @@ import { listFamilies } from '../../../domain/families'
 export default defineEventHandler(async (event): Promise<FamilyListResponse> => {
   const admin = await requireAdmin(event)
   const query = parseQuery(event, adminFamilyListQuerySchema)
-  if (query.condition) {
+  // Once per look at the data, not per page.
+  if (query.condition && query.page === 1) {
     await audit(event, {
       actorUserId: admin.id,
       action: 'family.health_filter',

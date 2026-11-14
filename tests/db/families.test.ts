@@ -11,7 +11,6 @@ import {
   familyHome,
   familyProfile,
   guestAgeNotice,
-  guestAgeStatus,
   listFamilies,
   listPersonalDocuments,
   ownFamilyMembers,
@@ -540,6 +539,10 @@ describe('administration', () => {
     expect(await ids({ members: '2' })).toEqual([rossi.family.id])
     expect(await ids({ members: '1' })).toEqual([bianchi.family.id])
     expect(await ids({ members: '6' })).toEqual([])
+    // A region narrows the provinces offered.
+    await db.update(t.families).set({ region: 'Puglia' }).where(eq(t.families.id, bianchi.family.id))
+    await db.update(t.families).set({ region: 'Basilicata' }).where(eq(t.families.id, rossi.family.id))
+    expect((await listFamilies(db, query({ region: 'Puglia' }))).provinces).toEqual(['BA'])
     expect((await listFamilies(db, query({ formStatus: 'submitted' }))).items.map(i => i.id)).toEqual([
       bianchi.family.id,
     ])
@@ -564,19 +567,19 @@ describe('administration', () => {
       member: child({ birthDate: '2001-05-01', health: withDisability }),
       actor,
     })
-    expect(await guestAgeStatus(db, family.id, today)).toBe('out')
     const [notice] = await guestAgeNotice(db, { familyId: family.id, ctx, today })
     expect(notice).toMatchObject({ template: 'family.age_notice' })
     expect(notice!.text).not.toMatch(/autism|disabilit|patologi/i)
     expect(await guestAgeNotice(db, { familyId: family.id, ctx, today })).toEqual([])
 
-    // A brother or sister with a condition within the ages makes the family fit.
+    // A brother or sister with a condition within the ages makes the family fit: no notice.
+    await db.update(t.families).set({ ageNoticeAt: null }).where(eq(t.families.id, family.id))
     await addFamilyMember(db, {
       familyId: family.id,
       member: child({ firstName: 'Sara', birthDate: '2016-03-01', health: withDisability }),
       actor,
     })
-    expect(await guestAgeStatus(db, family.id, today)).toBe('in')
+    expect(await guestAgeNotice(db, { familyId: family.id, ctx, today })).toEqual([])
     // The birth date of the young person with a condition is required, also without `health`.
     await expect(
       addFamilyMember(db, { familyId: family.id, member: child({ birthDate: null, health: withDisability }), actor }),

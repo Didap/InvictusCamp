@@ -77,8 +77,14 @@ const disabilityFilter = filterModel('disability')
 const conditionFilter = filterModel('condition')
 const ageFilter = filterModel('ageRange')
 const membersFilter = filterModel('members')
-// A region narrows the provinces: one chosen elsewhere would match nothing.
-watch(regionFilter, () => setQuery({ province: undefined }))
+// A region narrows the provinces: a province outside it would match nothing, so it goes.
+watch(
+  () => data.value?.provinces,
+  provinces => {
+    const province = queryValue('province')
+    if (province && provinces && !provinces.includes(province)) setQuery({ province: undefined })
+  },
+)
 
 const formStatusItems = [
   { value: ALL, label: 'Tutti' },
