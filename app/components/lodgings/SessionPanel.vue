@@ -43,7 +43,7 @@ const people = (family: SessionLodgingFamily) =>
   family.people ? plural(family.people, 'persona', 'persone') : NO_CARDS
 
 type Placed = (typeof placed.value)[number]
-const staffLine = (item: Placed) => `${plural(item.staff.length, 'persona', 'persone')} dello staff`
+const staffLine = (item: Placed) => plural(item.staff.length, 'persona', 'persone')
 
 /** The lodgings by area as choices: `taken` says why one cannot be chosen, `line` what it is. */
 function menu(choice: (item: Placed) => { taken?: string; line?: string }): SelectMenuItem[][] {
@@ -64,9 +64,7 @@ const choices = computed(
         family.id,
         menu(item => {
           if (item.family && item.family.id !== family.id) return { taken: `Assegnato a ${item.family.familyName}` }
-          return item.staff.length
-            ? { taken: `Ci dorme lo staff (${plural(item.staff.length, 'persona', 'persone')})` }
-            : {}
+          return item.staff.length ? { taken: `Ci dorme lo staff: ${staffLine(item)}` } : {}
         }),
       ]),
     ),
@@ -78,7 +76,7 @@ const staffChoices = computed(() =>
     item.family
       ? { taken: `Assegnato a ${item.family.familyName}` }
       : item.staff.length
-        ? { line: `${staffLine(item)} · ${lodgingLine(item)}` }
+        ? { line: `${staffLine(item)} dello staff · ${lodgingLine(item)}` }
         : {},
   ),
 )

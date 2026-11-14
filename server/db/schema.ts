@@ -376,6 +376,9 @@ export const sessionStaff = pgTable(
       'session_staff_activity_group',
       sql`${t.activityGroup} is null or ${t.status} in (${sqlList(OPEN_CONVOCATIONS)})`,
     ),
+    // Nor does it sleep in a lodging.
+    check('session_staff_lodging', sql`${t.lodgingId} is null or ${t.status} in (${sqlList(OPEN_CONVOCATIONS)})`),
+    index('session_staff_lodging_idx').on(t.lodgingId),
   ],
 )
 

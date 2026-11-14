@@ -1,0 +1,2 @@
+CREATE INDEX "session_staff_lodging_idx" ON "session_staff" USING btree ("lodging_id");--> statement-breakpoint
+ALTER TABLE "session_staff" ADD CONSTRAINT "session_staff_lodging" CHECK ("session_staff"."lodging_id" is null or "session_staff"."status" in ('draft', 'sent', 'accepted'));

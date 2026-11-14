@@ -6,12 +6,12 @@ import type { InviteUserInput, UserListQuery } from '../../shared/schemas/users'
 import type { Paginated } from '../../shared/types/api'
 import type { UserListItem } from '../../shared/types/users'
 import { familyNameOf } from '../../shared/utils/format'
-import { SESSION_EDITABLE_STATUSES } from '../../shared/utils/session-status'
-import { authTokens, campSessions, familyMembers, families, sessionStaff, staffProfiles, users } from '../db/schema'
+import { authTokens, familyMembers, families, staffProfiles, users } from '../db/schema'
 import { inviteEmail, resetPasswordEmail } from '../emails/auth'
 import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
+import { leaveOpenSessions } from './staff'
 import { issueToken } from './tokens'
 import { DomainError } from './errors'
 
@@ -148,22 +148,8 @@ export async function setUserEnabled(db: DbOrTx, userId: string, enabled: boolea
       .update(authTokens)
       .set({ usedAt: now })
       .where(and(eq(authTokens.userId, user.id), isNull(authTokens.usedAt)))
-    // Out of the session staff (activeStaff): the lodgings of the open sessions go free, the closed keep theirs.
-    await db
-      .update(sessionStaff)
-      .set({ lodgingId: null })
-      .where(
-        and(
-          eq(sessionStaff.userId, user.id),
-          inArray(
-            sessionStaff.sessionId,
-            db
-              .select({ id: campSessions.id })
-              .from(campSessions)
-              .where(inArray(campSessions.status, [...SESSION_EDITABLE_STATUSES])),
-          ),
-        ),
-      )
+    // Out of the session staff: group and lodging of the open sessions go free, the closed keep theirs.
+    await leaveOpenSessions(db, user.id)
   }
   await writeAudit(db, {
     actorUserId: actor.userId,

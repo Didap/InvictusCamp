@@ -14,7 +14,15 @@ import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
-import { activeStaff, findSession, holdingPlace, lockSession, requireEditable, type Actor } from './sessions'
+import {
+  activeStaff,
+  findSession,
+  requireActiveConvocation,
+  holdingPlace,
+  lockSession,
+  requireEditable,
+  type Actor,
+} from './sessions'
 
 /**
  * The titolari holding a place, by name, each with its cards: the young first, with their age at the start
@@ -148,15 +156,7 @@ export async function setGroupLeader(
     .for('update')
   if ((current?.id ?? null) === input.convocationId) return
   // Locked, so that the person cannot decline or be withdrawn before they lead the group.
-  const [leader] = input.convocationId
-    ? await db
-        .select({ id: sessionStaff.id, group: sessionStaff.activityGroup })
-        .from(sessionStaff)
-        .innerJoin(users, eq(users.id, sessionStaff.userId))
-        .where(and(eq(sessionStaff.id, input.convocationId), activeStaff(session.id)))
-        .for('update', { of: sessionStaff })
-    : []
-  if (input.convocationId && !leader) throw new DomainError(404, 'Questa persona non è nello staff della sessione')
+  const leader = input.convocationId ? await requireActiveConvocation(db, session.id, input.convocationId) : undefined
   // The unique index allows one leader per group: the current one steps down first.
   if (current) await db.update(sessionStaff).set({ activityGroup: null }).where(eq(sessionStaff.id, current.id))
   if (leader) await db.update(sessionStaff).set({ activityGroup: input.group }).where(eq(sessionStaff.id, leader.id))

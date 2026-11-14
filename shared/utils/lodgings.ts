@@ -74,18 +74,21 @@ export function lodgingWarnings(
 export function placeGuests<
   L extends { id: string; beds: number; features: readonly LodgingFeature[] },
   F extends { lodgingId: string | null; people: number; needs: readonly LodgingFeature[] },
-  S extends { lodgingId: string | null } = never,
->(lodgings: L[], families: F[], staff: S[] = []): (L & { family: F | undefined; staff: S[]; warnings: string[] })[] {
+  S extends { lodgingId: string | null },
+>(lodgings: L[], families: F[], staff: S[]): (L & { family: F | undefined; staff: S[]; warnings: string[] })[] {
   const byLodging = new Map(families.flatMap(family => (family.lodgingId ? [[family.lodgingId, family] as const] : [])))
   const staffBy = new Map<string, S[]>()
   for (const person of staff) {
-    if (person.lodgingId) staffBy.set(person.lodgingId, [...(staffBy.get(person.lodgingId) ?? []), person])
+    if (!person.lodgingId) continue
+    const people = staffBy.get(person.lodgingId)
+    if (people) people.push(person)
+    else staffBy.set(person.lodgingId, [person])
   }
   return lodgings.map(lodging => {
     const family = byLodging.get(lodging.id)
     const guests = staffBy.get(lodging.id) ?? []
     const warnings = family ? lodgingWarnings(family, lodging) : []
-    if (guests.length > lodging.beds) warnings.push(`${guests.length} persone e ${bedsLabel(lodging.beds)}`)
+    if (guests.length) warnings.push(...lodgingWarnings({ people: guests.length, needs: [] }, lodging))
     return { ...lodging, family, staff: guests, warnings }
   })
 }
