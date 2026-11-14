@@ -34,7 +34,29 @@ describe('family history', () => {
       group: 'yellow',
       groupLead: `${lead.firstName} ${lead.lastName}`,
       lodging: 'Villetta 3',
+      hasProgramme: false,
     })
     expect(items.find(item => item.sessionId === next.id)!.lived).toBeNull()
+  })
+
+  it('names no leader who never accepted, and shows nothing for a family without group or lodging', async () => {
+    const { family } = await makeFamily(db)
+    const past = await makeSession(db, { status: 'completed', startDate: '2026-06-01', endDate: '2026-06-05' })
+    const { user: drafted } = await makeStaff(db)
+    await db
+      .insert(t.sessionStaff)
+      .values({ sessionId: past.id, userId: drafted.id, status: 'draft', activityGroup: 'red' })
+    await db
+      .insert(t.sessionFamilies)
+      .values({
+        sessionId: past.id,
+        familyId: family.id,
+        kind: 'slot',
+        status: 'confirmed',
+        invitedAt: new Date(),
+        activityGroup: 'red',
+      })
+    const [item] = await familySessions(db, family.id)
+    expect(item!.lived).toEqual({ group: 'red', groupLead: null, lodging: null, hasProgramme: false })
   })
 })

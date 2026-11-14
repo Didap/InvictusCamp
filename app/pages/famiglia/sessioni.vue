@@ -82,7 +82,7 @@ const showCalendar = computed(() => events.value.filter(event => event.endDate >
       <IcSection
         v-if="history.length"
         title="Storico"
-        description="Le sessioni passate, con il gruppo, l’alloggio e il programma che avete vissuto, quelle a cui hai rinunciato e quelle annullate."
+        description="Le sessioni passate, con il tuo gruppo, l’alloggio e il programma, quelle a cui hai rinunciato e quelle annullate."
       >
         <ul class="divide-y divide-default overflow-hidden rounded-lg border border-default bg-elevated">
           <li
@@ -109,6 +109,7 @@ const showCalendar = computed(() => events.value.filter(event => event.endDate >
                   {{ item.lived.lodging }}
                 </p>
                 <UButton
+                  v-if="item.lived.hasProgramme"
                   class="mt-2 pointer-coarse:min-h-11"
                   :to="`/famiglia/programma/${item.sessionId}`"
                   icon="i-lucide-calendar-clock"

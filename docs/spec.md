@@ -100,9 +100,9 @@ sessione avviene al cambio di stato": the status change is the moment invitation
   session is `inviting` or `confirmed`; after the answer deadline the button still works and the
   administration sees the date.
 - The administration can also record an answer received by phone (same effect, audit `participation.answer_by_admin`).
-- **Storico** on `/famiglia/sessioni`: the past sessions, the declined and the cancelled ones. For a completed
-  session the family was confirmed in, what it lived: its activity group (and who led it), its lodging and the
-  programme of the session.
+- **Storico** on `/famiglia/sessioni`: the past sessions, the declined and the cancelled ones. For a session
+  the family was confirmed in that is over (completed, or past its last day): its activity group and who led it
+  (an accepted convocation), its lodging with its area, and the programme when there is one.
 - When a place is free, **Chiama la riserva** promotes the first waiting reserve (or the chosen one) to
   titolare: `kind: slot`, `reserveRank: null`; in `inviting`/`confirmed` it becomes `invited` and receives
   `session.slot_offered` ("si è liberato un posto"); in `draft` it becomes `selected`. Promotion is never
@@ -312,7 +312,8 @@ rotate through the activities together.
   without a group (audited). Saving a group or a leader sends no email and is audited.
 - A family that declines or is removed leaves its group, and so does cancelling the session; a leader who
   declines or whose convocation is withdrawn leaves the group without one. A completed session keeps its
-  groups, read-only. For now families and staff do not see the groups.
+  groups, read-only. Families and staff do not see the groups of an open session; a family sees its own, with who led it, in
+  the history of the session (3.3).
 
 ### 3.13 Feedback of the families
 

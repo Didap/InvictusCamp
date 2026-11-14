@@ -3,6 +3,7 @@
 // the emails to send; handlers run it in useDb().transaction() and call deliver() after the commit.
 // Explicit imports only, so the database tests can load this file (tests/db/sessions.test.ts).
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 import type { SessionInput } from '../../shared/schemas/sessions'
 import { countsTowardNeeded } from '../../shared/schemas/staff'
 import type {
@@ -27,7 +28,7 @@ import {
   type UserStatus,
 } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
-import { formatDateTime, plural } from '../../shared/utils/format'
+import { formatDateTime, fullName, plural } from '../../shared/utils/format'
 import {
   SESSION_TRANSITIONS,
   SESSION_TRANSITION_ACTIONS,
@@ -571,6 +572,9 @@ export async function familyHistory(db: DbOrTx, familyId: string): Promise<Famil
  * GET /api/family/sessions : the family's sessions, only once invited. A participation never invited
  * (`selected`, or cancelled before the invitations left) stays invisible to the family (spec 3.3).
  */
+const leadStaff = alias(sessionStaff, 'lead_staff')
+const leadUser = alias(users, 'lead_user')
+
 export async function familySessions(db: DbOrTx, familyId: string): Promise<FamilySessionItem[]> {
   const rows = await db
     .select({
@@ -591,16 +595,27 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       feedbackOpen: sql<boolean>`${questionnaireOpen()}`,
       feedbackId: feedbackResponses.id,
       group: sessionFamilies.activityGroup,
-      // Who led the family's group: names written out, the outer query has its own users-free scope.
-      groupLead: sql<string | null>`(select u.first_name || ' ' || u.last_name from session_staff ss
-        join users u on u.id = ss.user_id
-        where ss.session_id = session_families.session_id and ss.activity_group = session_families.activity_group
-        limit 1)`,
+      leadFirstName: leadUser.firstName,
+      leadLastName: leadUser.lastName,
       lodging: lodgings.name,
+      lodgingArea: lodgings.area,
+      // The programme of the session, or of its year (programmes.ts): names written out.
+      hasProgramme: sql<boolean>`exists (select 1 from programmes p
+        where p.session_id = camp_sessions.id or p.year = extract(year from camp_sessions.start_date)::int)`,
     })
     .from(sessionFamilies)
     .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
     .leftJoin(lodgings, eq(lodgings.id, sessionFamilies.lodgingId))
+    // Who led the family's group: an accepted convocation (one leader per group, a unique index).
+    .leftJoin(
+      leadStaff,
+      and(
+        eq(leadStaff.sessionId, sessionFamilies.sessionId),
+        eq(leadStaff.activityGroup, sessionFamilies.activityGroup),
+        eq(leadStaff.status, 'accepted'),
+      ),
+    )
+    .leftJoin(leadUser, eq(leadUser.id, leadStaff.userId))
     .leftJoin(feedbackResponses, ownResponse())
     .where(
       and(
@@ -610,19 +625,32 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       ),
     )
     .orderBy(asc(campSessions.startDate))
-  return rows.map(({ feedbackOpen, feedbackId, group, groupLead, lodging, ...row }) => {
-    const answerable = isSessionOpen(row.sessionStatus) && row.status === 'invited'
-    const lived = row.status === 'confirmed' && row.sessionStatus === 'completed'
-    return {
-      ...row,
-      lived: lived ? { group, groupLead, lodging } : null,
-      feedback: feedbackOpen ? (feedbackId ? 'sent' : 'open') : null,
-      invitedAt: iso(row.invitedAt),
-      respondedAt: iso(row.respondedAt),
-      canConfirm: answerable && row.kind === 'slot',
-      canDecline: answerable,
-    }
-  })
+  const today = todayIso()
+  return rows.map(
+    ({ feedbackOpen, feedbackId, group, leadFirstName, leadLastName, lodging, lodgingArea, hasProgramme, ...row }) => {
+      const answerable = isSessionOpen(row.sessionStatus) && row.status === 'invited'
+      // Lived: confirmed in a session that is over, completed or just past its last day.
+      const lived =
+        row.status === 'confirmed' &&
+        (row.sessionStatus === 'completed' || (row.sessionStatus === 'confirmed' && row.endDate < today))
+      return {
+        ...row,
+        lived: lived
+          ? {
+              group,
+              groupLead: leadFirstName ? fullName({ firstName: leadFirstName, lastName: leadLastName }) : null,
+              lodging: lodging ? (lodgingArea ? `${lodging} (${lodgingArea})` : lodging) : null,
+              hasProgramme,
+            }
+          : null,
+        feedback: feedbackOpen ? (feedbackId ? 'sent' : 'open') : null,
+        invitedAt: iso(row.invitedAt),
+        respondedAt: iso(row.respondedAt),
+        canConfirm: answerable && row.kind === 'slot',
+        canDecline: answerable,
+      }
+    },
+  )
 }
 
 // ─── Emails ────────────────────────────────────────────────────────────────────────────────────────
