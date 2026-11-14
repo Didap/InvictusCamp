@@ -7,6 +7,7 @@ import type { MemberHealth } from '../types/families'
 import type { DisabilityInfo, FormAnswers, UsefulInfo } from '../types/domain'
 import {
   FAMILY_FORM_STATUSES,
+  GUEST_AGE,
   ITALIAN_REGIONS,
   MEMBER_KINDS,
   MEMBER_RELATIONSHIPS,
@@ -236,7 +237,7 @@ const memberFields = z.object({
   isReferent: z.boolean().default(false),
   health: memberHealthSchema.optional(),
 })
-const birthDateFields = memberFields.pick({ kind: true, birthDate: true })
+const birthDateFields = memberFields.pick({ kind: true, birthDate: true, health: true })
 const relationshipFields = memberFields.pick({ kind: true, relationship: true, health: true })
 
 // Whenever the fields a check reads are valid, also while another field is wrong: every missing field at once.
@@ -246,7 +247,7 @@ export const memberSchema = memberFields
     path: ['kind'],
     error: 'Solo un ragazzo o una ragazza può avere una patologia o disabilità indicata',
   })
-  .refine(member => !missingBirthDate(member), {
+  .refine(member => !missingBirthDate({ ...member, hasDisability: member.health?.hasDisability }), {
     path: ['birthDate'],
     error: 'Campo obbligatorio',
     when: ({ value }) => birthDateFields.safeParse(value).success,
@@ -345,13 +346,40 @@ export function isHealthDocument(category: PersonalDocumentCategory): boolean {
 export const FAMILY_LIST_SORTS = ['name', 'city', 'members', 'createdAt'] as const
 export type FamilyListSort = (typeof FAMILY_LIST_SORTS)[number]
 
+/** The families filter by the number of young people with a condition: at least one, more than one, none. */
+export const DISABILITY_COUNT_FILTERS = [
+  { value: 'yes', label: 'Almeno uno' },
+  { value: 'many', label: 'Più di uno' },
+  { value: 'no', label: 'Nessuno' },
+] as const
+
+/** The families filter by the age of the young people with a condition; `out` is outside GUEST_AGE. */
+export const GUEST_AGE_FILTERS = [
+  { value: 'children', label: `Da ${GUEST_AGE.min} a 10 anni`, min: GUEST_AGE.min, max: 10 },
+  { value: 'preteens', label: 'Da 11 a 14 anni', min: 11, max: 14 },
+  { value: 'teens', label: 'Da 15 a 18 anni', min: 15, max: 18 },
+  { value: 'adults', label: `Da 19 a ${GUEST_AGE.max} anni`, min: 19, max: GUEST_AGE.max },
+  { value: 'out', label: `Nessuno nella fascia (meno di ${GUEST_AGE.min} o più di ${GUEST_AGE.max})` },
+] as const
+
+/** The members filter stops here: the last choice is «6 o più». */
+export const MEMBERS_FILTER_MAX = 6
+
+/** The «Tipologia» choices: the filter by type of condition. */
+export const CONDITIONS = DISABILITY_CHOICES.find(field => field.key === 'conditions')!.options
+
 /** GET /api/admin/families (and its CSV export). */
 export const adminFamilyListQuerySchema = zListQuery.extend({
   formStatus: z.enum(FAMILY_FORM_STATUSES).optional(),
   province: z.string().trim().toUpperCase().max(40).optional(),
   region: zRegion.optional(),
-  /** Families with (yes) or without (no) a member with a disability (the list shows only their ages). */
-  disability: z.enum(['yes', 'no']).optional(),
+  /** How many young people with a condition (the list shows only their ages). */
+  disability: z.enum(DISABILITY_COUNT_FILTERS.map(filter => filter.value)).optional(),
+  /** A type of condition («Tipologia»): health data, so the filter is audited and the list never shows it. */
+  condition: zChoice(CONDITIONS).optional(),
+  ageRange: z.enum(GUEST_AGE_FILTERS.map(filter => filter.value)).optional(),
+  /** Members of the family; MEMBERS_FILTER_MAX means that many or more. */
+  members: z.coerce.number().int().min(1).max(MEMBERS_FILTER_MAX).optional(),
   sort: z.enum(FAMILY_LIST_SORTS).default('name'),
   order: z.enum(['asc', 'desc']).default('asc'),
 })

@@ -49,7 +49,7 @@ export default defineEventHandler(async event => {
     actorUserId: admin.id,
     action: 'family.export',
     entityType: 'family',
-    data: { count: rows.length },
+    data: { count: rows.length, ...(query.condition ? { condition: query.condition } : {}) },
   })
   return sendCsv(event, { filename: `famiglie-${todayIso()}.csv`, csv: toCsv([header, ...lines]) })
 })

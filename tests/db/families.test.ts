@@ -10,6 +10,7 @@ import {
   adminFamilyHealth,
   familyHome,
   familyProfile,
+  guestAgeNotice,
   listFamilies,
   listPersonalDocuments,
   ownFamilyMembers,
@@ -528,6 +529,20 @@ describe('administration', () => {
 
     expect((await listFamilies(db, query({ disability: 'yes' }))).items.map(i => i.id)).toEqual([rossi.family.id])
     expect((await listFamilies(db, query({ disability: 'no' }))).items.map(i => i.id)).toEqual([bianchi.family.id])
+    expect((await listFamilies(db, query({ disability: 'many' }))).total).toBe(0)
+    // Matteo: autism, born on 12/04/2015.
+    const ids = async (values: Record<string, string>) => (await listFamilies(db, query(values))).items.map(i => i.id)
+    expect(await ids({ condition: 'autism' })).toEqual([rossi.family.id])
+    expect(await ids({ condition: 'epilepsy' })).toEqual([])
+    expect(await ids({ ageRange: 'preteens' })).toEqual([rossi.family.id])
+    expect(await ids({ ageRange: 'out' })).toEqual([])
+    expect(await ids({ members: '2' })).toEqual([rossi.family.id])
+    expect(await ids({ members: '1' })).toEqual([bianchi.family.id])
+    expect(await ids({ members: '6' })).toEqual([])
+    // A region narrows the provinces offered.
+    await db.update(t.families).set({ region: 'Puglia' }).where(eq(t.families.id, bianchi.family.id))
+    await db.update(t.families).set({ region: 'Basilicata' }).where(eq(t.families.id, rossi.family.id))
+    expect((await listFamilies(db, query({ region: 'Puglia' }))).provinces).toEqual(['BA'])
     expect((await listFamilies(db, query({ formStatus: 'submitted' }))).items.map(i => i.id)).toEqual([
       bianchi.family.id,
     ])
@@ -539,6 +554,36 @@ describe('administration', () => {
     const paged = await listFamilies(db, query({ pageSize: '1', page: '2' }))
     expect(paged.items.map(i => i.name)).toEqual(['Famiglia Rossi'])
     expect(paged.total).toBe(2)
+  })
+
+  it('sends the age notice once, when every card is complete and no young person with a condition fits', async () => {
+    const { family, actor } = await familyWithReferent()
+    await db.update(t.familyMembers).set({ birthDate: '1980-01-01' }).where(eq(t.familyMembers.familyId, family.id))
+    await setHealthConsent(db, { familyId: family.id, given: true, actor })
+    const ctx = { appUrl: 'http://localhost' }
+    const today = '2026-11-13'
+    await addFamilyMember(db, {
+      familyId: family.id,
+      member: child({ birthDate: '2001-05-01', health: withDisability }),
+      actor,
+    })
+    const [notice] = await guestAgeNotice(db, { familyId: family.id, ctx, today })
+    expect(notice).toMatchObject({ template: 'family.age_notice' })
+    expect(notice!.text).not.toMatch(/autism|disabilit|patologi/i)
+    expect(await guestAgeNotice(db, { familyId: family.id, ctx, today })).toEqual([])
+
+    // A brother or sister with a condition within the ages makes the family fit: no notice.
+    await db.update(t.families).set({ ageNoticeAt: null }).where(eq(t.families.id, family.id))
+    await addFamilyMember(db, {
+      familyId: family.id,
+      member: child({ firstName: 'Sara', birthDate: '2016-03-01', health: withDisability }),
+      actor,
+    })
+    expect(await guestAgeNotice(db, { familyId: family.id, ctx, today })).toEqual([])
+    // The birth date of the young person with a condition is required, also without `health`.
+    await expect(
+      addFamilyMember(db, { familyId: family.id, member: child({ birthDate: null, health: withDisability }), actor }),
+    ).rejects.toMatchObject({ statusCode: 400 })
   })
 
   it('keeps health details out of the record and in the reserved endpoint only', async () => {

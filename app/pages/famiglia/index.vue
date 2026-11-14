@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FamilyHomeDto } from '#shared/types/families'
+import { GUEST_AGE } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDayRange, plural, relativeDay } from '#shared/utils/format'
 
@@ -100,6 +101,19 @@ const when = computed(() => {
     <p v-if="home" class="mb-8 max-w-prose text-muted">
       Qui trovi cosa resta da fare per la {{ home.familyName }} e la tua prossima sessione al camp.
     </p>
+
+    <UAlert
+      v-if="home?.guestAge === 'out'"
+      class="mb-8"
+      color="warning"
+      variant="subtle"
+      icon="i-lucide-info"
+      title="Sull’età dei ragazzi che accogliamo"
+      :description="`Il camp è pensato per ragazzi e ragazze tra i ${GUEST_AGE.min} e i ${GUEST_AGE.max} anni, e dalle date di nascita che hai inserito nessuno rientra in questa fascia. La tua richiesta resta registrata: l’amministrazione la valuta e ti scrive.`"
+      :actions="[
+        { label: 'Controlla le date di nascita', to: '/famiglia/membri', color: 'neutral', variant: 'outline' },
+      ]"
+    />
 
     <div class="mb-8 empty:hidden">
       <SessionsFamilyInvitations @answered="refresh" />

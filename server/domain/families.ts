@@ -26,7 +26,9 @@ import {
   COMPOSITION_GROUPS,
   compositionGroupOf,
   countCards,
+  GUEST_AGE_FILTERS,
   MAX_MEMBERS_OF_A_KIND,
+  MEMBERS_FILTER_MAX,
   missingRequiredQuestions,
   NO_HEALTH,
   normalizeFormAnswers,
@@ -54,9 +56,21 @@ import type {
   OwnFamilyMember,
   PersonalDocumentDto,
 } from '../../shared/types/families'
-import type { ItalianRegion, MemberRelationship } from '../../shared/utils/constants'
-import { addDays, ageOn, todayIso } from '../../shared/utils/dates'
-import { familyNameOf, isCardToComplete, isYoungWithCondition, plural } from '../../shared/utils/format'
+import {
+  GUEST_AGE,
+  type GuestAgeStatus,
+  type ItalianRegion,
+  type MemberRelationship,
+} from '../../shared/utils/constants'
+import { addDays, ageOn, todayIso, type IsoDay } from '../../shared/utils/dates'
+import {
+  familyNameOf,
+  guestAgeStatus,
+  isCardToComplete,
+  isYoungWithCondition,
+  missingBirthDate,
+  plural,
+} from '../../shared/utils/format'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 import {
   campSessions,
@@ -70,6 +84,8 @@ import {
   signatureRequests,
   users,
 } from '../db/schema'
+import { guestAgeEmail } from '../emails/families'
+import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { FEEDBACK_REMINDER_DAYS, ownResponse, questionnaireOpen } from './feedback'
@@ -459,8 +475,14 @@ async function requireAnotherReferent(db: DbOrTx, familyId: string, memberId: st
   if (!other) throw createError({ statusCode: 409, message })
 }
 
-/** The relationship stored: none for the young person with a condition, required for everyone else. */
+/**
+ * The relationship stored: none for the young person with a condition, required for everyone else. Checks
+ * the birth date too, which that young person needs: the flag is known here even without `health`.
+ */
 function relationshipOf(member: MemberInput, hasDisability: boolean): MemberRelationship | null {
+  if (missingBirthDate({ kind: member.kind, birthDate: member.birthDate, hasDisability })) {
+    throw createError({ statusCode: 400, message: 'Indica la data di nascita' })
+  }
   if (isYoungWithCondition({ kind: member.kind, hasDisability })) return null
   if (!member.relationship) throw createError({ statusCode: 400, message: 'Scegli il legame di parentela' })
   return member.relationship
@@ -754,6 +776,44 @@ const sessionRefColumns = {
   status: sessionFamilies.status,
 }
 
+/** What the card rules read (isCardToComplete, guestAgeStatus): no names, no health details. */
+function cardChecks(db: DbOrTx, familyId: string) {
+  return db
+    .select({
+      firstName: familyMembers.firstName,
+      kind: familyMembers.kind,
+      birthDate: familyMembers.birthDate,
+      relationship: familyMembers.relationship,
+      hasDisability: familyMembers.hasDisability,
+    })
+    .from(familyMembers)
+    .where(eq(familyMembers.familyId, familyId))
+}
+
+/**
+ * After a card is saved or removed: the email about the camp's ages, once, when every card is complete and
+ * no young person with a condition fits them (guestAgeStatus). The handler delivers it after the commit.
+ */
+export async function guestAgeNotice(
+  db: DbOrTx,
+  input: { familyId: string; ctx: EmailContext; today?: IsoDay },
+): Promise<EmailMessage[]> {
+  const cards = await cardChecks(db, input.familyId)
+  if (cards.some(isCardToComplete) || guestAgeStatus(cards, input.today) !== 'out') return []
+  // Marked only if not yet: two saves at once send one email.
+  const [marked] = await db
+    .update(families)
+    .set({ ageNoticeAt: new Date() })
+    .where(and(eq(families.id, input.familyId), isNull(families.ageNoticeAt)))
+    .returning({ userId: families.userId })
+  if (!marked) return []
+  const [account] = await db
+    .select({ id: users.id, email: users.email, firstName: users.firstName })
+    .from(users)
+    .where(eq(users.id, marked.userId))
+  return [guestAgeEmail(input.ctx, { to: account!.email, toUserId: account!.id, firstName: account!.firstName })]
+}
+
 /** What the family home needs: the greeting, the checklist, the next confirmed session. */
 export async function familyHome(
   db: DbOrTx,
@@ -762,16 +822,7 @@ export async function familyHome(
   const family = await requireFamilyRow(db, input.familyId)
   const today = input.today ?? todayIso()
   const [cards, [signatures], [next], [feedback]] = await Promise.all([
-    db
-      .select({
-        firstName: familyMembers.firstName,
-        kind: familyMembers.kind,
-        birthDate: familyMembers.birthDate,
-        relationship: familyMembers.relationship,
-        hasDisability: familyMembers.hasDisability,
-      })
-      .from(familyMembers)
-      .where(eq(familyMembers.familyId, family.id)),
+    cardChecks(db, family.id),
     db
       .select({ total: count() })
       .from(signatureRequests)
@@ -825,6 +876,7 @@ export async function familyHome(
     pendingSignatures: signatures?.total ?? 0,
     nextSession: next ?? null,
     openFeedback: feedback ?? null,
+    guestAge: guestAgeStatus(cards, today),
   }
 }
 
@@ -855,9 +907,37 @@ function familyListWhere(query: AdminFamilyListQuery): SQL | undefined {
   if (query.formStatus) conditions.push(eq(families.formStatus, query.formStatus))
   if (query.province) conditions.push(eq(families.province, query.province))
   if (query.region) conditions.push(eq(families.region, query.region))
-  if (query.disability) {
-    const withDisability = sql`exists (select 1 from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability})`
-    conditions.push(query.disability === 'yes' ? withDisability : not(withDisability))
+  // The young people with a condition of the family, for the filters below.
+  const guest = (where: SQL = sql`true`) =>
+    sql`exists (select 1 from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability} and ${where})`
+  if (query.disability === 'yes') conditions.push(guest())
+  if (query.disability === 'no') conditions.push(not(guest()))
+  if (query.disability === 'many') {
+    conditions.push(
+      sql`(select count(*) from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability}) > 1`,
+    )
+  }
+  if (query.condition) {
+    conditions.push(
+      guest(sql`${familyMembers.disability} @> ${JSON.stringify({ conditions: [query.condition] })}::jsonb`),
+    )
+  }
+  if (query.ageRange) {
+    const age = sql`date_part('year', age(${todayIso()}::date, ${familyMembers.birthDate}))`
+    const range = GUEST_AGE_FILTERS.find(filter => filter.value === query.ageRange)!
+    // `out` is the rule of the age notice (guestAgeStatus): young people with a condition, none within the ages.
+    conditions.push(
+      'min' in range
+        ? guest(sql`${age} between ${range.min} and ${range.max}`)
+        : and(guest(), not(guest(sql`${age} between ${GUEST_AGE.min} and ${GUEST_AGE.max}`)))!,
+    )
+  }
+  if (query.members) {
+    conditions.push(
+      query.members === MEMBERS_FILTER_MAX
+        ? sql`${memberCountSql} >= ${query.members}`
+        : sql`${memberCountSql} = ${query.members}`,
+    )
   }
   return conditions.length ? and(...conditions) : undefined
 }
@@ -887,9 +967,11 @@ async function latestSessions(db: DbOrTx, familyIds: string[]): Promise<Map<stri
   return latest
 }
 
-/** The values in use in a column, sorted, in one aggregate (null when there is none). */
-function distinctValues<T>(column: AnyColumn) {
-  return sql<T[] | null>`array_agg(distinct ${column} order by ${column}) filter (where ${column} is not null)`
+/** The values of a column in use, sorted, once each; `where` narrows the rows they come from. */
+function distinctValues<T>(column: AnyColumn, where: SQL = sql`true`) {
+  return sql<
+    T[] | null
+  >`array_agg(distinct ${column} order by ${column}) filter (where ${column} is not null and ${where})`
 }
 
 /** GET /api/admin/families: one page of families, without any health detail. */
@@ -922,10 +1004,13 @@ export async function listFamilies(db: DbOrTx, query: AdminFamilyListQuery): Pro
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize),
     db.select({ value: count() }).from(families).innerJoin(users, eq(users.id, families.userId)).where(where),
-    // The choices of the filters: every province and region in use, whatever the filters.
+    // The choices of the filters: every region in use, and its provinces once a region is chosen.
     db
       .select({
-        provinces: distinctValues<string>(families.province),
+        provinces: distinctValues<string>(
+          families.province,
+          query.region ? eq(families.region, query.region) : undefined,
+        ),
         regions: distinctValues<ItalianRegion>(families.region),
       })
       .from(families),

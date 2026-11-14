@@ -1,11 +1,13 @@
-import { removeFamilyMember } from '../../../domain/families'
+import { guestAgeNotice, removeFamilyMember } from '../../../domain/families'
 
-/** Removes a member of the signed-in family (never the only referent). */
+/** Removes a member of the signed-in family (never the only referent); may send the age notice. */
 export default defineEventHandler(async event => {
   const { user, family } = await requireFamily(event)
   const memberId = requireUuidParam(event, 'id')
-  await useDb().transaction(tx =>
-    removeFamilyMember(tx, { familyId: family.id, memberId, actor: { userId: user.id, ip: clientIp(event) } }),
-  )
+  const emails = await useDb().transaction(async tx => {
+    await removeFamilyMember(tx, { familyId: family.id, memberId, actor: { userId: user.id, ip: clientIp(event) } })
+    return family.ageNoticeAt ? [] : guestAgeNotice(tx, { familyId: family.id, ctx: emailContext() })
+  })
+  await deliver(emails)
   return { ok: true }
 })

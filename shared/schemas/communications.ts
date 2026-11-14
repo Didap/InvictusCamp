@@ -155,6 +155,7 @@ export const EMAIL_TEMPLATE_LABELS: Record<string, string> = {
   'session.cancelled': 'Sessione annullata',
   'session.removed': 'Rimozione dalla sessione',
   'session.feedback': 'Questionario di fine sessione',
+  'family.age_notice': 'Fascia d’età dei ragazzi',
   'staff.convocation': 'Convocazione',
   'staff.convocation_cancelled': 'Convocazione annullata',
   'staff.approved': 'Candidatura approvata',

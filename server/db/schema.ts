@@ -147,6 +147,8 @@ export const families = pgTable(
     privacyConsentAt: timestamp(tz),
     /** Explicit consent to the processing of health data (GDPR art. 9), required before disability details. */
     healthDataConsentAt: timestamp(tz),
+    /** When the email about the camp's ages (5 to 21) left: it leaves once (server/domain/families.ts). */
+    ageNoticeAt: timestamp(tz),
     /** Internal notes of the administration; never shown to the family. */
     adminNotes: text(),
     createdAt: createdAt(),

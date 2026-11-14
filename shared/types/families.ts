@@ -5,6 +5,7 @@ import type { DisabilityInfo, FormAnswers, UsefulInfo } from './domain'
 import type { FamilyComposition } from '../schemas/families'
 import type {
   FamilyFormStatus,
+  GuestAgeStatus,
   ItalianRegion,
   MemberKind,
   MemberRelationship,
@@ -163,6 +164,8 @@ export interface FamilyHomeDto {
   nextSession: FamilySessionRef | null
   /** A completed session whose questionnaire the family has not answered yet (docs/spec.md 3.13). */
   openFeedback: { sessionId: string; title: string } | null
+  /** `out`: no young person with a condition is 5 to 21 years old today (GUEST_AGE). */
+  guestAge: GuestAgeStatus
 }
 
 /** GET /api/admin/families/:id: the record, without health details (those are in /health). */

@@ -156,6 +156,12 @@ export type UploadMimeType = (typeof UPLOAD_MIME_TYPES)[number]
 export const TIME_ZONE = 'Europe/Rome'
 export const LOCALE = 'it-IT'
 
+/** The ages of the young people with a condition the camp takes, both included. */
+export const GUEST_AGE = { min: 5, max: 21 } as const
+
+/** Whether the guests of a family fit the camp's ages: unknown while a birth date is missing. */
+export type GuestAgeStatus = 'unknown' | 'in' | 'out'
+
 /** Default place of a session. */
 export const DEFAULT_LOCATION = 'Invictus Camp, Maruggio (TA)'
 /** Default places for families of a new session. */

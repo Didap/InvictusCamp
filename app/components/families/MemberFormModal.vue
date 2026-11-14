@@ -104,6 +104,7 @@ const dietItems: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
 const withCondition = computed(() =>
   isYoungWithCondition({ kind: state.kind ?? 'adult', hasDisability: state.health.hasDisability }),
 )
+const birthDateRequired = computed(() => state.kind === 'adult' || withCondition.value)
 const relationshipLabel = computed(
   () =>
     `Legame di parentela rispetto ${props.reference ? `a ${props.reference}` : 'al ragazzo o alla ragazza con patologia o disabilità'}`,
@@ -187,8 +188,8 @@ async function save() {
           <UFormField
             label="Data di nascita"
             name="birthDate"
-            :required="state.kind === 'adult'"
-            :hint="state.kind === 'adult' ? undefined : 'Facoltativo'"
+            :required="birthDateRequired"
+            :hint="birthDateRequired ? undefined : 'Facoltativo'"
           >
             <UInput v-model="state.birthDate" type="date" :max="today" min="1900-01-01" class="w-full" />
           </UFormField>
