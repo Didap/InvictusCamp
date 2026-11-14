@@ -28,7 +28,8 @@ node scripts/check-pages.mjs                # every page of every role, desktop 
 node scripts/check-contrast.mjs             # the palette passes WCAG AA (DESIGN.md, Verified Rule)
 node scripts/check-icons.mjs                # every i-lucide-* icon exists
 node scripts/ci-local.mjs                   # local CI: format, types, icons, contrast, unit, db, build
-node --env-file-if-exists=.env scripts/create-calendar.mjs [--apply]   # 2027 sessions as drafts in DATABASE_URL
+node --env-file-if-exists=.env scripts/create-calendar.mjs [--apply --by <admin>]   # 2027 sessions as drafts
+node --env-file-if-exists=.env scripts/import-feedback.mjs <folder> [--apply --by <admin>]   # feedback 2026 pages
 ```
 
 Every check prints a few lines and exits with a code: read the outcome, not logs.
@@ -41,7 +42,7 @@ app/
   layouts/        default (dashboard shell), auth (public pages)
   components/ic/  shared building blocks <Ic...>: Page, Section, StatusBadge, StatCard, DataList,
                   CalendarMonth, FileUpload, FileLink, PdfViewer, PasswordInput, EmailSent, Logo, ConfirmModal
-  components/<area>/   sessions, staff, families, documents, communications, dashboard, users, programme, lodgings,
+  components/<area>/   sessions, staff, families, documents, communications, dashboard, users, programme, lodgings, feedback,
                        groups
   composables/    useApi, useApiFetch, useEnums, useConfirm, useNav
   utils/errors.ts notifyError, notifySuccess, apiErrorMessage

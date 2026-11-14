@@ -10,11 +10,9 @@ import { parseArgs } from 'node:util'
 import postgres from 'postgres'
 import { calendarPlan, calendarTitle } from '../shared/content/calendar-2027.ts'
 import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '../shared/utils/constants.ts'
+import { activeAdmin, failer } from './lib/admin.mjs'
 
-const fail = message => {
-  console.error(`create-calendar: ${message}`)
-  process.exit(1)
-}
+const fail = failer('create-calendar')
 const url = process.env.DATABASE_URL
 if (!url) fail('DATABASE_URL is not set')
 let args
@@ -33,8 +31,7 @@ try {
       select title, status, start_date::text as "startDate", end_date::text as "endDate" from camp_sessions`
     const plan = calendarPlan(existing)
     if (!apply || !plan.create.length) return plan
-    const [admin] = await tx`select id from users where lower(email) = lower(${by}) and role = 'admin'`
-    if (!admin) throw new Error(`no administrator with the email ${by}`)
+    const adminId = await activeAdmin(tx, by)
     const rows = await tx`insert into camp_sessions ${tx(
       plan.create.map(session => ({
         title: calendarTitle(session),
@@ -43,12 +40,12 @@ try {
         end_date: session.endDate,
         family_slots: DEFAULT_FAMILY_SLOTS,
         staff_needed: DEFAULT_STAFF_NEEDED,
-        created_by: admin.id,
+        created_by: adminId,
       })),
     )} returning id, title`
     await tx`insert into audit_log ${tx(
       rows.map(row => ({
-        actor_user_id: admin.id,
+        actor_user_id: adminId,
         action: 'session.create',
         entity_type: 'session',
         entity_id: row.id,

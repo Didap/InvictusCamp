@@ -16,6 +16,7 @@ export function useNav() {
             { label: 'Staff', icon: 'i-lucide-id-card', to: '/admin/staff' },
             { label: 'Documenti', icon: 'i-lucide-files', to: '/admin/documenti' },
             { label: 'Comunicazioni', icon: 'i-lucide-mail', to: '/admin/comunicazioni' },
+            { label: 'Feedback', icon: 'i-lucide-message-square-heart', to: '/admin/feedback' },
           ],
           [{ label: 'Utenti', icon: 'i-lucide-users-round', to: '/admin/utenti' }],
         ]

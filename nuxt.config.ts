@@ -98,5 +98,6 @@ export default defineNuxtConfig({
     clientBundle: { scan: true },
   },
 
-  typescript: { strict: true },
+  // scripts/lib holds TypeScript the scripts load with type stripping: typechecked with the Node config.
+  typescript: { strict: true, nodeTsConfig: { include: ['../scripts/lib/**/*.ts'] } },
 })
