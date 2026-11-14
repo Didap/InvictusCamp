@@ -141,7 +141,6 @@ const started = computed(() => checklist.value.some(item => item.done))
         </IcSection>
 
         <IcSection
-          v-if="home.status === 'approved'"
           title="Per la mensa"
           description="Allergie, intolleranze e preferenze alimentari, per i pasti delle sessioni a cui partecipi."
         >

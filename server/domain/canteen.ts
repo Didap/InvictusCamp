@@ -4,7 +4,7 @@
 import { eq } from 'drizzle-orm'
 import type { CanteenDto } from '../../shared/types/canteen'
 import { canteenSummary, type CanteenPerson } from '../../shared/utils/canteen'
-import { fullName } from '../../shared/utils/format'
+import { NO_CARDS, fullName, isEmptyCard } from '../../shared/utils/format'
 import { familyMembers, families, sessionFamilies, sessionStaff, staffProfiles, users } from '../db/schema'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
@@ -16,6 +16,7 @@ export async function canteenOf(db: DbOrTx, sessionId: string): Promise<CanteenD
   const [members, staff] = await Promise.all([
     db
       .select({
+        familyId: families.id,
         familyName: families.name,
         cardId: familyMembers.id,
         firstName: familyMembers.firstName,
@@ -40,9 +41,7 @@ export async function canteenOf(db: DbOrTx, sessionId: string): Promise<CanteenD
         ? [
             {
               // A card still to fill in eats too: it shows as its family.
-              name: row.firstName
-                ? fullName({ firstName: row.firstName, lastName: row.lastName ?? '' })
-                : `${row.familyName}, scheda da compilare`,
+              name: isEmptyCard(row) ? `${row.familyName}, scheda da compilare` : fullName(row),
               info: row.info,
               foodSelectivity: row.disability?.foodSelectivity ?? null,
             },
@@ -54,7 +53,7 @@ export async function canteenOf(db: DbOrTx, sessionId: string): Promise<CanteenD
   return {
     session: { title: session.title, startDate: session.startDate, endDate: session.endDate },
     ...canteenSummary(people),
-    families: new Set(members.map(row => row.familyName)).size,
+    families: new Set(members.map(row => row.familyId)).size,
     staff: staff.length,
     withoutCards: members.filter(row => !row.cardId).map(row => row.familyName),
   }
@@ -68,6 +67,6 @@ export async function canteenCsv(db: DbOrTx, sessionId: string): Promise<{ filen
     ['Totale pasti (persone a ogni pasto)', summary.total, null],
     ...summary.needs.map(need => [need.label, need.people.length, need.people.join(', ')]),
     ...summary.notes.map(note => ['Da sapere', null, `${note.name}: ${note.text}`]),
-    ...summary.withoutCards.map(name => ['Componenti non ancora indicati', null, name]),
+    ...summary.withoutCards.map(name => [NO_CARDS, null, name]),
   ])
 }

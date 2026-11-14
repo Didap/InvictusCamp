@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ALLERGIES, DIETS, choiceLabel } from '#shared/content/member-form'
+import { normalizeUsefulInfo } from '#shared/schemas/families'
 import { staffUsefulInfoSchema } from '#shared/schemas/staff'
 import type { StaffUsefulInfoDto } from '#shared/types/staff'
 import { andList } from '#shared/utils/format'
@@ -7,6 +8,7 @@ import { andList } from '#shared/utils/format'
 // The canteen details of the signed-in staff member (docs/spec.md 3.14): allergies, diet, notes, with the
 // consent to health data. They reach the canteen summary of the sessions they are convoked to.
 const api = useApi()
+const confirm = useConfirm()
 const { data, refresh } = await useApiFetch<StaffUsefulInfoDto>('/api/staff/useful-info')
 
 const summary = computed(() => {
@@ -30,10 +32,21 @@ function edit() {
   open.value = true
 }
 
-async function save() {
+/** Saves the form, or with `clear` deletes the details and withdraws the consent, after asking. */
+async function save(clear = false) {
+  const body = clear ? { info: {}, consent: false } : state
+  if (data.value?.info && !normalizeUsefulInfo(body.info)) {
+    const ok = await confirm({
+      title: 'Cancellare i dati per la mensa?',
+      description: 'Allergie, preferenze e note vengono cancellate e il consenso viene ritirato.',
+      confirmLabel: 'Cancella',
+      danger: true,
+    })
+    if (!ok) return
+  }
   saving.value = true
   try {
-    data.value = await api<StaffUsefulInfoDto>('/api/staff/useful-info', { method: 'PUT', body: state })
+    data.value = await api<StaffUsefulInfoDto>('/api/staff/useful-info', { method: 'PUT', body })
     notifySuccess(data.value.info ? 'Dati per la mensa salvati' : 'Dati per la mensa cancellati')
     open.value = false
   } catch (error) {
@@ -68,16 +81,24 @@ async function save() {
       description="Arrivano al fornitore dei pasti delle sessioni a cui partecipi, con il tuo nome."
     >
       <template #body>
-        <UForm :schema="staffUsefulInfoSchema" :state="state" class="space-y-5" @submit="save">
+        <UForm :schema="staffUsefulInfoSchema" :state="state" class="space-y-5" @submit="save()">
           <IcUsefulInfoFields v-model="state.info" name="info" />
           <UFormField name="consent">
             <UCheckbox
               v-model="state.consent"
               label="Acconsento al trattamento di questi dati per organizzare i pasti"
-              description="Allergie e intolleranze sono dati sulla salute. Per ritirare il consenso, togli tutto e salva."
+              description="Allergie e intolleranze sono dati sulla salute: li usiamo solo per organizzare i pasti del camp."
             />
           </UFormField>
           <div class="flex flex-wrap justify-end gap-2">
+            <UButton
+              v-if="data?.info"
+              label="Cancella i dati e ritira il consenso"
+              color="error"
+              variant="ghost"
+              class="me-auto pointer-coarse:min-h-11"
+              @click="save(true)"
+            />
             <UButton
               label="Annulla"
               color="neutral"

@@ -100,7 +100,8 @@ async function withdraw() {
     <p>
       Per organizzare il soggiorno ci servono alcune informazioni sulla disabilità e sui bisogni di supporto dei
       ragazzi, e su allergie, intolleranze e preferenze alimentari di tutti. Sono dati particolari: li vedete solo voi e
-      l’amministrazione del camp, non finiscono mai nelle email e ogni modifica viene registrata. Il consenso serve
+      l’amministrazione del camp, non finiscono mai nelle email e ogni modifica viene registrata. Allergie, intolleranze
+      e preferenze alimentari, con il nome, arrivano anche al fornitore dei pasti della sessione. Il consenso serve
       anche per caricare certificati medici e diagnosi. Puoi ritirarlo quando vuoi: i dati inseriti e i certificati e le
       diagnosi caricati verranno cancellati.
     </p>

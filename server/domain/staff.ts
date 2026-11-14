@@ -89,13 +89,18 @@ export async function saveStaffUsefulInfo(
   const info = normalizeUsefulInfo(input.value.info)
   const [row] = await db
     .update(staffProfiles)
-    .set({ usefulInfo: info, usefulInfoConsentAt: info ? new Date() : null })
+    // The consent keeps the day it was first given; saving nothing withdraws it.
+    .set({
+      usefulInfo: info,
+      usefulInfoConsentAt: info ? sql`coalesce(${staffProfiles.usefulInfoConsentAt}, now())` : null,
+    })
     .where(eq(staffProfiles.userId, input.userId))
     .returning({ consentAt: staffProfiles.usefulInfoConsentAt })
+  if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.useful_info',
-    entityType: 'staff_profile',
+    entityType: 'user',
     entityId: input.userId,
     data: { fields: info ? Object.keys(info) : [] },
     ip: input.actor.ip,
