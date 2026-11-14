@@ -462,6 +462,12 @@ export const documents = pgTable(
       .notNull()
       .references(() => files.id, { onDelete: 'restrict' }),
     requiresSignature: boolean().notNull().default(true),
+    /**
+     * A document the gestionale prepares for one family, its release (server/domain/releases.ts), with the
+     * digest of the data it was made from: never edited, assigned or restored by hand.
+     */
+    familyId: uuid().references(() => families.id, { onDelete: 'cascade' }),
+    sourceDigest: text(),
     /** Set when the document belongs to one session (e.g. its contract). */
     sessionId: uuid().references((): AnyPgColumn => campSessions.id, { onDelete: 'set null' }),
     createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),

@@ -45,7 +45,13 @@ const child = (values: Partial<MemberInput> = {}): MemberInput => ({
 
 const WEEKEND = 'Sessioni nel weekend (2 notti)'
 const WEEK = 'Sessioni settimanali estive (4 notti)'
-const ANSWERS = { howDidYouHear: 'Passaparola', sessionPreferences: [WEEKEND], dog: false }
+const ANSWERS = {
+  howDidYouHear: 'Passaparola',
+  sessionPreferences: [WEEKEND],
+  dog: false,
+  photoConsent: true,
+  publicationConsent: false,
+}
 
 /** The family data as /famiglia/profilo sends it: the account holder and one young person. */
 const familyData = (values: Partial<FamilyDataInput> = {}): FamilyDataInput => ({
@@ -320,7 +326,10 @@ describe('family data', () => {
         data: familyData({ answers: { howDidYouHear: 'Passaparola' } }),
         actor,
       }),
-    ).rejects.toMatchObject({ statusCode: 400, data: { missing: ['sessionPreferences', 'dog'] } })
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      data: { missing: ['sessionPreferences', 'dog', 'photoConsent', 'publicationConsent'] },
+    })
     await expect(
       saveFamilyData(db, {
         familyId: family.id,
@@ -338,6 +347,8 @@ describe('family data', () => {
           association: '   ',
           sessionPreferences: [WEEK, WEEKEND, WEEK],
           dog: true,
+          photoConsent: false,
+          publicationConsent: false,
         },
       }),
       actor,
@@ -346,6 +357,8 @@ describe('family data', () => {
       howDidYouHear: 'Passaparola',
       sessionPreferences: [WEEKEND, WEEK],
       dog: true,
+      photoConsent: false,
+      publicationConsent: false,
     })
     expect(saved).toMatchObject({ postalCode: '74121', region: 'Puglia', formStatus: 'submitted' })
   })

@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
-import { buildSignedPdf, formatSignatureTime, toWinAnsi, type CertificateData } from '~~/server/domain/signatures'
+import { toWinAnsi } from '~~/server/domain/pdf'
+import { buildSignedPdf, formatSignatureTime, type CertificateData } from '~~/server/domain/signatures'
 import { documentToReadEmail, signatureSignedEmail } from '~~/server/emails/documents'
 
 async function pdfWithPages(count: number): Promise<Uint8Array> {

@@ -776,11 +776,12 @@ const sessionRefColumns = {
   status: sessionFamilies.status,
 }
 
-/** What the card rules read (isCardToComplete, guestAgeStatus): no names, no health details. */
-function cardChecks(db: DbOrTx, familyId: string) {
+/** What the card rules read (isCardToComplete, guestAgeStatus) and the release lists, in order: no health details. */
+export function cardChecks(db: DbOrTx, familyId: string) {
   return db
     .select({
       firstName: familyMembers.firstName,
+      lastName: familyMembers.lastName,
       kind: familyMembers.kind,
       birthDate: familyMembers.birthDate,
       relationship: familyMembers.relationship,
@@ -788,6 +789,7 @@ function cardChecks(db: DbOrTx, familyId: string) {
     })
     .from(familyMembers)
     .where(eq(familyMembers.familyId, familyId))
+    .orderBy(familyMembers.position)
 }
 
 /**
