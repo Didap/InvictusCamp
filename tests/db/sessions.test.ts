@@ -740,7 +740,7 @@ describe('families in a session (spec 3.3)', () => {
       lastName: 'Rossi',
       relationship: 'sibling',
       hasDisability: true,
-      disability: { description: 'DETTAGLIO-RISERVATO' },
+      disability: { notes: 'DETTAGLIO-RISERVATO' },
     })
     const { emails } = await transitionSession(db, ctx, { sessionId: session.id, to: 'inviting', actor })
     expect(emails).toHaveLength(1)
@@ -924,7 +924,7 @@ describe('the session itself', () => {
       firstName: 'Marco',
       lastName: 'Rossi',
       relationship: 'sibling',
-      disability: { description: 'DETTAGLIO-RISERVATO' },
+      disability: { notes: 'DETTAGLIO-RISERVATO' },
     })
     const { csv, filename } = await participantsCsv(db, session.id)
     expect(filename).toBe('partecipanti-sessione-di-prova-21-06-2027.csv')

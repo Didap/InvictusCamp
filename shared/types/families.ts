@@ -1,7 +1,7 @@
 // DTOs of the families area (A3). Health details (MemberHealth) travel only in the family's own
 // endpoints and in the reserved endpoint of the administration, never in lists.
 import type { FileDto, Paginated } from './api'
-import type { DisabilityInfo, FormAnswers } from './domain'
+import type { DisabilityInfo, FormAnswers, UsefulInfo } from './domain'
 import type { FamilyComposition } from '../schemas/families'
 import type {
   FamilyFormStatus,
@@ -75,6 +75,8 @@ export interface FamilyMemberDto {
 export interface MemberHealth {
   hasDisability: boolean
   disability: DisabilityInfo | null
+  /** Allergies, diet and notes: for every member. */
+  info: UsefulInfo | null
 }
 
 /** A member as the family itself sees it: health is null while the consent is not given. */

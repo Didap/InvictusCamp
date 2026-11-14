@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasHealthData } from '#shared/schemas/families'
 import type { AdminFamilyHealth } from '#shared/types/families'
 import { formatDateTime, memberName } from '#shared/utils/format'
 
@@ -10,8 +11,8 @@ const api = useApi()
 const health = ref<AdminFamilyHealth | null>(null)
 const loading = ref(false)
 
-const withDisability = computed(() => health.value?.members.filter(member => member.hasDisability) ?? [])
-const othersCount = computed(() => (health.value?.members.length ?? 0) - withDisability.value.length)
+const withHealth = computed(() => health.value?.members.filter(hasHealthData) ?? [])
+const othersCount = computed(() => (health.value?.members.length ?? 0) - withHealth.value.length)
 
 async function show() {
   loading.value = true
@@ -58,16 +59,16 @@ watch(
         <p class="text-sm text-muted">Consenso dato il {{ formatDateTime(consentAt) }}.</p>
         <UButton label="Nascondi" icon="i-lucide-eye-off" color="neutral" variant="ghost" @click="health = null" />
       </div>
-      <p v-if="!withDisability.length" class="text-muted">Nessun componente con disabilità indicata.</p>
+      <p v-if="!withHealth.length" class="text-muted">Nessun componente con dati sulla salute.</p>
       <div
-        v-for="member in withDisability"
+        v-for="member in withHealth"
         :key="member.id"
         class="border-t border-default pt-5 first:border-t-0 first:pt-0"
       >
         <h3 class="mb-3 font-bold text-highlighted">{{ memberName(member, health?.members ?? []) }}</h3>
         <FamiliesHealthDetails :health="member" />
       </div>
-      <p v-if="withDisability.length && othersCount" class="text-sm text-muted">
+      <p v-if="withHealth.length && othersCount" class="text-sm text-muted">
         Gli altri componenti non hanno dati sulla salute.
       </p>
     </div>

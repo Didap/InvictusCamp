@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasHealthData } from '#shared/schemas/families'
 import type { FamilyMemberCard, FamilyMembersResponse, OwnFamilyMember } from '#shared/types/families'
 import { enumMeta } from '#shared/utils/constants'
 import { andList, isEmptyCard, memberLine, memberName, plural } from '#shared/utils/format'
@@ -11,7 +12,7 @@ const { data, refresh } = await useApiFetch<FamilyMembersResponse>('/api/family/
 
 const members = computed(() => data.value?.members ?? [])
 const consent = computed(() => Boolean(data.value?.healthDataConsentAt))
-const withHealth = computed(() => members.value.filter(member => member.health?.hasDisability).length)
+const withHealth = computed(() => members.value.filter(member => member.health && hasHealthData(member.health)).length)
 /** The cards come from the family data: until it is confirmed there is only the account holder's. */
 const confirmed = computed(() => data.value?.formStatus === 'submitted')
 const toComplete = computed(() => members.value.filter(member => member.toComplete))
@@ -189,7 +190,7 @@ async function remove(member: OwnFamilyMember) {
     <IcSection
       id="consenso"
       title="Dati sulla salute"
-      description="Il consenso per indicare disabilità e bisogni di supporto."
+      description="Il consenso per indicare disabilità, allergie e intolleranze."
     >
       <FamiliesHealthConsent
         :consent-at="data?.healthDataConsentAt ?? null"

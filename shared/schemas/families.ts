@@ -2,8 +2,9 @@
 // plus the pure rules of the questionnaire and of the health details, used on both sides.
 import { z } from 'zod'
 import { FAMILY_FORM_QUESTIONS, type FormQuestion } from '../content/family-form'
+import { ALLERGIES, DIETS, DISABILITY_CHOICES, type Choice, type DisabilityChoiceKey } from '../content/member-form'
 import type { MemberHealth } from '../types/families'
-import type { DisabilityInfo, FormAnswers } from '../types/domain'
+import type { DisabilityInfo, FormAnswers, UsefulInfo } from '../types/domain'
 import {
   FAMILY_FORM_STATUSES,
   ITALIAN_REGIONS,
@@ -174,54 +175,44 @@ export function missingRequiredQuestions(answers: FormAnswers): FormQuestion[] {
 
 // ─── Members and health details ─────────────────────────────────────────────────────────────────────
 
-/**
- * The fields of DisabilityInfo as the forms ask them (placeholder until sprint 2): all required for a
- * person with a condition, so the camp knows how to look after them.
- */
-export const DISABILITY_FIELDS = [
-  {
-    key: 'description',
-    label: 'Diagnosi o descrizione della condizione',
-    help: 'Con parole tue, quello che ci serve sapere.',
-  },
-  {
-    key: 'supportNeeds',
-    label: 'Bisogni di supporto nella giornata',
-    help: 'Per esempio pasti, igiene, sonno, autonomie.',
-  },
-  { key: 'mobility', label: 'Mobilità e ausili', help: 'Per esempio carrozzina, deambulatore, scale.' },
-  {
-    key: 'communication',
-    label: 'Comunicazione',
-    help: 'Come comunica e cosa lo aiuta a capire, per esempio CAA, LIS, frasi brevi.',
-  },
-  {
-    key: 'medicalNotes',
-    label: 'Terapie, allergie e note mediche',
-    help: 'Farmaci e orari, allergie, cosa fare in caso di crisi.',
-  },
-] as const satisfies readonly { key: keyof DisabilityInfo; label: string; help: string }[]
-
+/** One of the keys of `options`; typed as a string, so a form can hold it before it is checked. */
+const zChoice = (options: readonly Choice[]) =>
+  z.string().refine(value => options.some(option => option.value === value), { error: 'Scelta non valida' })
+const zChoices = (options: readonly Choice[]) => z.array(zChoice(options)).max(options.length)
 const zDetail = zText(2000).optional()
 
 export const disabilityInfoSchema = z.object({
-  description: zDetail,
-  supportNeeds: zDetail,
-  mobility: zDetail,
-  communication: zDetail,
-  medicalNotes: zDetail,
+  ...(Object.fromEntries(DISABILITY_CHOICES.map(field => [field.key, zChoices(field.options).optional()])) as Record<
+    DisabilityChoiceKey,
+    z.ZodOptional<ReturnType<typeof zChoices>>
+  >),
+  foodSelectivity: zDetail,
+  notes: zDetail,
+})
+
+export const usefulInfoSchema = z.object({
+  allergies: zChoices(ALLERGIES).optional(),
+  /** '' is no preference. */
+  diet: z.union([zChoice(DIETS), z.literal('')]).optional(),
+  notes: zText(1000).optional(),
 })
 
 export const memberHealthSchema = z
   .object({
     hasDisability: z.boolean(),
     disability: disabilityInfoSchema.nullable().optional(),
+    info: usefulInfoSchema.nullable().optional(),
   })
   .superRefine((health, ctx) => {
     if (!health.hasDisability) return
-    for (const { key } of DISABILITY_FIELDS) {
-      if (!health.disability?.[key])
-        ctx.addIssue({ code: 'custom', path: ['disability', key], message: 'Campo obbligatorio' })
+    for (const { key, options } of DISABILITY_CHOICES) {
+      const chosen: string[] = health.disability?.[key] ?? []
+      const alone = options.find(option => 'exclusive' in option && chosen.includes(option.value))
+      if (!chosen.length) {
+        ctx.addIssue({ code: 'custom', path: ['disability', key], message: 'Scegli almeno una risposta' })
+      } else if (alone && chosen.length > 1) {
+        ctx.addIssue({ code: 'custom', path: ['disability', key], message: `«${alone.label}» va scelto da solo` })
+      }
     }
   })
 
@@ -250,6 +241,11 @@ const relationshipFields = memberFields.pick({ kind: true, relationship: true, h
 
 // Whenever the fields a check reads are valid, also while another field is wrong: every missing field at once.
 export const memberSchema = memberFields
+  // Only a young person can be the one with a condition (the composition counts them so).
+  .refine(member => !member.health?.hasDisability || member.kind === 'young', {
+    path: ['kind'],
+    error: 'Solo un ragazzo o una ragazza può avere una patologia o disabilità indicata',
+  })
   .refine(member => !missingBirthDate(member), {
     path: ['birthDate'],
     error: 'Campo obbligatorio',
@@ -267,33 +263,61 @@ export const memberSchema = memberFields
   )
 export type MemberInput = z.output<typeof memberSchema>
 
-export const NO_HEALTH: MemberHealth = { hasDisability: false, disability: null }
+export const NO_HEALTH: MemberHealth = { hasDisability: false, disability: null, info: null }
 
-/** Health details as they are stored: details only for a person with a disability, empty fields dropped. */
+/** The keys picked, in the order of the options, each once. */
+function picked(options: readonly Choice[], chosen: readonly string[] | undefined): string[] {
+  return options.flatMap(option => (chosen?.includes(option.value) ? [option.value] : []))
+}
+
+/** Only what has a value; null when nothing has. */
+function compact<T extends object>(value: T): T | null {
+  const entries = Object.entries(value).filter(([, item]) => isAnswered(item))
+  return entries.length ? (Object.fromEntries(entries) as T) : null
+}
+
+/**
+ * Health data as it is stored: the disability details only for a person with a condition, choices in the
+ * order of the options, empty values dropped.
+ */
 export function normalizeHealth(
-  input: { hasDisability: boolean; disability?: DisabilityInfo | null } | null | undefined,
+  input: { hasDisability: boolean; disability?: DisabilityInfo | null; info?: UsefulInfo | null } | null | undefined,
 ): MemberHealth {
-  if (!input?.hasDisability) return { ...NO_HEALTH }
-  const details: DisabilityInfo = {}
-  for (const { key } of DISABILITY_FIELDS) {
-    const value = input.disability?.[key]?.trim()
-    if (value) details[key] = value
-  }
-  return { hasDisability: true, disability: Object.keys(details).length ? details : null }
+  const info = compact<UsefulInfo>({
+    allergies: picked(ALLERGIES, input?.info?.allergies),
+    diet: input?.info?.diet || undefined,
+    notes: input?.info?.notes?.trim(),
+  })
+  if (!input?.hasDisability) return { ...NO_HEALTH, info }
+  const details = input.disability
+  const disability = compact<DisabilityInfo>({
+    ...Object.fromEntries(DISABILITY_CHOICES.map(field => [field.key, picked(field.options, details?.[field.key])])),
+    foodSelectivity: details?.foodSelectivity?.trim(),
+    notes: details?.notes?.trim(),
+  })
+  return { hasDisability: true, disability, info }
 }
 
 export function hasHealthData(health: MemberHealth): boolean {
-  return health.hasDisability || Boolean(health.disability && Object.keys(health.disability).length)
+  return health.hasDisability || Boolean(health.disability) || Boolean(health.info)
+}
+
+/** The keys whose values differ between two records, whatever their fields. */
+function changedKeys(before: object | null, after: object | null): string[] {
+  const a: Record<string, unknown> = { ...before }
+  const b: Record<string, unknown> = { ...after }
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(
+    key => JSON.stringify(a[key] ?? null) !== JSON.stringify(b[key] ?? null),
+  )
 }
 
 /** The names (never the values) of the health fields that differ: the data of `member.health_update`. */
 export function healthChangedFields(before: MemberHealth, after: MemberHealth): string[] {
-  const fields: string[] = []
-  if (before.hasDisability !== after.hasDisability) fields.push('hasDisability')
-  for (const { key } of DISABILITY_FIELDS) {
-    if ((before.disability?.[key] ?? '') !== (after.disability?.[key] ?? '')) fields.push(key)
-  }
-  return fields
+  return [
+    ...(before.hasDisability !== after.hasDisability ? ['hasDisability'] : []),
+    ...changedKeys(before.disability, after.disability),
+    ...changedKeys(before.info, after.info).map(key => `info.${key}`),
+  ]
 }
 
 /** PUT /api/family/members/consent */
