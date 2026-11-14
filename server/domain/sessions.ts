@@ -46,6 +46,7 @@ import {
   waitingReserves,
 } from '../../shared/utils/slots'
 import {
+  lodgings,
   campSessions,
   holdsPlace,
   documents,
@@ -589,9 +590,17 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       declineReason: sessionFamilies.declineReason,
       feedbackOpen: sql<boolean>`${questionnaireOpen()}`,
       feedbackId: feedbackResponses.id,
+      group: sessionFamilies.activityGroup,
+      // Who led the family's group: names written out, the outer query has its own users-free scope.
+      groupLead: sql<string | null>`(select u.first_name || ' ' || u.last_name from session_staff ss
+        join users u on u.id = ss.user_id
+        where ss.session_id = session_families.session_id and ss.activity_group = session_families.activity_group
+        limit 1)`,
+      lodging: lodgings.name,
     })
     .from(sessionFamilies)
     .innerJoin(campSessions, eq(campSessions.id, sessionFamilies.sessionId))
+    .leftJoin(lodgings, eq(lodgings.id, sessionFamilies.lodgingId))
     .leftJoin(feedbackResponses, ownResponse())
     .where(
       and(
@@ -601,10 +610,12 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       ),
     )
     .orderBy(asc(campSessions.startDate))
-  return rows.map(({ feedbackOpen, feedbackId, ...row }) => {
+  return rows.map(({ feedbackOpen, feedbackId, group, groupLead, lodging, ...row }) => {
     const answerable = isSessionOpen(row.sessionStatus) && row.status === 'invited'
+    const lived = row.status === 'confirmed' && row.sessionStatus === 'completed'
     return {
       ...row,
+      lived: lived ? { group, groupLead, lodging } : null,
       feedback: feedbackOpen ? (feedbackId ? 'sent' : 'open') : null,
       invitedAt: iso(row.invitedAt),
       respondedAt: iso(row.respondedAt),
