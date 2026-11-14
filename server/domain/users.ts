@@ -5,6 +5,7 @@ import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } 
 import type { InviteUserInput, UserListQuery } from '../../shared/schemas/users'
 import type { Paginated } from '../../shared/types/api'
 import type { UserListItem } from '../../shared/types/users'
+import { familyNameOf } from '../../shared/utils/format'
 import { authTokens, familyMembers, families, staffProfiles, users } from '../db/schema'
 import { inviteEmail, resetPasswordEmail } from '../emails/auth'
 import type { EmailContext, EmailMessage } from '../emails/types'
@@ -68,7 +69,7 @@ export async function inviteUser(
       .insert(families)
       .values({
         userId: user!.id,
-        name: input.familyName?.trim() || `Famiglia ${input.lastName}`,
+        name: familyNameOf(input.familyName?.trim() || input.lastName),
         phone: input.phone || null,
       })
       .returning({ id: families.id })

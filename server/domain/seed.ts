@@ -21,6 +21,7 @@ import { CALENDAR_2027, calendarTitle } from '../../shared/content/calendar-2027
 import { FEEDBACK_OTHER_ITEMS } from '../../shared/content/feedback-form'
 import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '../../shared/utils/constants'
+import { familyNameOf } from '../../shared/utils/format'
 import * as t from '../db/schema'
 import type { Db, DbOrTx } from './db'
 import { storeFile } from './storage'
@@ -70,7 +71,8 @@ export async function truncateAll(db: Db): Promise<void> {
 
 interface DemoMember {
   firstName: string
-  relationship: MemberRelationship
+  /** None for the young person with a condition (`disability`): the others' relationship is to them. */
+  relationship?: MemberRelationship
   birthDate?: string
   disability?: string
 }
@@ -95,11 +97,10 @@ const FAMILIES: {
       { firstName: 'Luca', relationship: 'parent' },
       {
         firstName: 'Matteo',
-        relationship: 'child',
         birthDate: '2015-04-12',
         disability: 'Disturbo dello spettro autistico (esempio)',
       },
-      { firstName: 'Sofia', relationship: 'child', birthDate: '2018-09-30' },
+      { firstName: 'Sofia', relationship: 'sibling', birthDate: '2018-09-30' },
     ],
   },
   {
@@ -111,7 +112,6 @@ const FAMILIES: {
     members: [
       {
         firstName: 'Pietro',
-        relationship: 'child',
         birthDate: '2014-02-03',
         disability: 'Paralisi cerebrale infantile (esempio)',
       },
@@ -127,7 +127,6 @@ const FAMILIES: {
       { firstName: 'Nicola', relationship: 'parent' },
       {
         firstName: 'Alessia',
-        relationship: 'child',
         birthDate: '2016-06-21',
         disability: 'Sindrome di Down (esempio)',
       },
@@ -143,11 +142,10 @@ const FAMILIES: {
       { firstName: 'Marta', relationship: 'parent' },
       {
         firstName: 'Samuele',
-        relationship: 'child',
         birthDate: '2013-11-08',
         disability: 'Distrofia muscolare (esempio)',
       },
-      { firstName: 'Giorgia', relationship: 'child', birthDate: '2011-01-17' },
+      { firstName: 'Giorgia', relationship: 'sibling', birthDate: '2011-01-17' },
     ],
   },
   {
@@ -156,9 +154,7 @@ const FAMILIES: {
     city: 'Manduria',
     province: 'TA',
     submitted: true,
-    members: [
-      { firstName: 'Davide', relationship: 'child', birthDate: '2017-03-14', disability: 'Epilessia (esempio)' },
-    ],
+    members: [{ firstName: 'Davide', birthDate: '2017-03-14', disability: 'Epilessia (esempio)' }],
   },
   {
     first: 'Salvatore',
@@ -168,7 +164,7 @@ const FAMILIES: {
     submitted: true,
     members: [
       { firstName: 'Carla', relationship: 'parent' },
-      { firstName: 'Emma', relationship: 'child', birthDate: '2015-08-02', disability: 'Fibrosi cistica (esempio)' },
+      { firstName: 'Emma', birthDate: '2015-08-02', disability: 'Fibrosi cistica (esempio)' },
     ],
   },
   {
@@ -180,7 +176,6 @@ const FAMILIES: {
     members: [
       {
         firstName: 'Tommaso',
-        relationship: 'child',
         birthDate: '2012-05-27',
         disability: 'Disabilità intellettiva (esempio)',
       },
@@ -196,7 +191,6 @@ const FAMILIES: {
       { firstName: 'Irene', relationship: 'parent' },
       {
         firstName: 'Leonardo',
-        relationship: 'child',
         birthDate: '2016-12-09',
         disability: 'Sindrome di Rett (esempio)',
       },
@@ -211,7 +205,6 @@ const FAMILIES: {
     members: [
       {
         firstName: 'Beatrice',
-        relationship: 'child',
         birthDate: '2014-07-19',
         disability: 'Atrofia muscolare spinale (esempio)',
       },
@@ -227,7 +220,6 @@ const FAMILIES: {
       { firstName: 'Paola', relationship: 'parent' },
       {
         firstName: 'Riccardo',
-        relationship: 'child',
         birthDate: '2013-04-30',
         disability: 'Diabete di tipo 1 (esempio)',
       },
@@ -242,7 +234,6 @@ const FAMILIES: {
     members: [
       {
         firstName: 'Gabriele',
-        relationship: 'child',
         birthDate: '2018-02-11',
         disability: 'Sindrome dell’X fragile (esempio)',
       },
@@ -527,6 +518,7 @@ const DEMO_ANSWERS: FormAnswers = {
   association: 'Associazione Insieme (esempio)',
   sessionPreferences: ['Sessioni nel weekend (2 notti)', 'Sessioni settimanali estive (4 notti)'],
   accommodationNeeds: ['Bagno senza barriere architettoniche'],
+  dog: false,
 }
 
 /** An example layout of the camp: villette with a kitchen, rooms in the residence. */
@@ -690,7 +682,7 @@ export async function seedDemo(
       .insert(t.families)
       .values({
         userId: user.id,
-        name: `Famiglia ${f.last}`,
+        name: familyNameOf(f.last),
         address: f.submitted ? 'Via Roma 1 (esempio)' : null,
         city: f.city,
         province: f.province,
@@ -706,13 +698,13 @@ export async function seedDemo(
     const members: DemoMember[] = [{ firstName: f.first, relationship: 'parent' }, ...f.members]
     await db.insert(t.familyMembers).values(
       members.map((m, position) => {
-        const kind =
-          m.relationship === 'child' || m.relationship === 'sibling' ? ('young' as const) : ('adult' as const)
+        const kind = m.relationship === 'sibling' || m.disability ? ('young' as const) : ('adult' as const)
         return {
           familyId: family!.id,
           firstName: m.firstName,
           lastName: f.last,
-          relationship: m.relationship,
+          // The young person with a condition has no relationship: the others' is to them.
+          relationship: m.relationship ?? null,
           kind,
           // An adult's birth date is required by the form: one per demo adult, between 1972 and 1986.
           birthDate:

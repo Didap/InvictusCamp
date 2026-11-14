@@ -1,5 +1,6 @@
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { acceptInviteSchema } from '#shared/schemas/auth'
+import { familyNameOf } from '#shared/utils/format'
 import { ROLE_HOME } from '#shared/utils/routes'
 import { consumeToken } from '../../domain/tokens'
 
@@ -27,7 +28,7 @@ export default defineEventHandler(async event => {
     if (user.role === 'family') {
       await tx
         .insert(tables.families)
-        .values({ userId: user.id, name: `Famiglia ${user.lastName}` })
+        .values({ userId: user.id, name: familyNameOf(user.lastName) })
         .onConflictDoNothing()
       await tx
         .update(tables.families)

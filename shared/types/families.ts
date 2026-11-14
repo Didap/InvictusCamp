@@ -82,6 +82,12 @@ export interface OwnFamilyMember extends FamilyMemberDto {
   health: MemberHealth | null
 }
 
+/** A member in the family's list: whether the card is still to complete, and whether its ID is uploaded. */
+export interface FamilyMemberCard extends OwnFamilyMember {
+  toComplete: boolean
+  hasIdDocument: boolean
+}
+
 /** GET /api/family/members */
 export interface FamilyMembersResponse {
   /** Until the family data is confirmed the cards do not exist yet: only the account holder's. */
@@ -89,7 +95,7 @@ export interface FamilyMembersResponse {
   healthDataConsentAt: string | null
   /** Certificates and diagnoses uploaded: withdrawing the consent deletes them. */
   healthDocuments: number
-  members: OwnFamilyMember[]
+  members: FamilyMemberCard[]
 }
 
 /** PUT /api/family/members/consent */
@@ -124,8 +130,10 @@ export interface FamilyProfileDto {
   formAnswers: FormAnswers
   formStatus: FamilyFormStatus
   formSubmittedAt: string | null
-  /** The cards the family has, by kind: the composition can grow, never go below them. */
+  /** The cards the family has, by kind. */
   cards: FamilyComposition
+  /** The cards filled in: the composition never goes below them (an empty card goes with the «-»). */
+  filledCards: FamilyComposition
   healthDataConsentAt: string | null
 }
 
@@ -134,6 +142,8 @@ export interface FamilyDataResult {
   profile: FamilyProfileDto
   /** Cards created by this save, one per person declared beyond those already there. */
   cardsCreated: number
+  /** Empty cards removed by this save, beyond the people declared. */
+  cardsRemoved: number
 }
 
 /** GET /api/family/home: the greeting, what is left to do, the next session. */

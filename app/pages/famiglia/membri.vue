@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ageOn } from '#shared/utils/dates'
-import type { FamilyMembersResponse, OwnFamilyMember } from '#shared/types/families'
-import { enumLabel } from '#shared/utils/constants'
-import { formatAge, isCardToComplete, isEmptyCard, memberName, missingBirthDate, plural } from '#shared/utils/format'
+import type { FamilyMemberCard, FamilyMembersResponse, OwnFamilyMember } from '#shared/types/families'
+import { enumMeta } from '#shared/utils/constants'
+import { andList, isEmptyCard, memberLine, memberName, plural } from '#shared/utils/format'
 
 // The members of the family. Health details (disability) only after the explicit consent, which the
 // family gives or withdraws at the bottom of the page (docs/spec.md, 3.8).
@@ -15,7 +14,7 @@ const consent = computed(() => Boolean(data.value?.healthDataConsentAt))
 const withHealth = computed(() => members.value.filter(member => member.health?.hasDisability).length)
 /** The cards come from the family data: until it is confirmed there is only the account holder's. */
 const confirmed = computed(() => data.value?.formStatus === 'submitted')
-const toComplete = computed(() => members.value.filter(isCardToComplete))
+const toComplete = computed(() => members.value.filter(member => member.toComplete))
 /** The first card to fill in carries the one primary button of the page. */
 const nextCardId = computed(() => toComplete.value[0]?.id)
 
@@ -38,15 +37,34 @@ function openForm(member: OwnFamilyMember | null) {
   formOpen.value = true
 }
 
+/** Who the others' relationship refers to: the young people with a condition, by first name. */
+const reference = computed(() =>
+  andList(
+    members.value.flatMap(member =>
+      member.kind === 'young' && member.health?.hasDisability && member.firstName ? [member.firstName] : [],
+    ),
+  ),
+)
+
+const idDocument = enumMeta('personalDocumentCategory', 'id_document')
+const idOpen = ref(false)
+const idMember = ref<FamilyMemberCard | null>(null)
+
+function openIdUpload(member: FamilyMemberCard) {
+  idMember.value = member
+  idOpen.value = true
+}
+
+async function idUploaded() {
+  idOpen.value = false
+  await refresh()
+}
+
 /** The name, or "Adulto 2" while the card is empty. */
 const title = (member: OwnFamilyMember) => memberName(member, members.value)
 
 function summary(member: OwnFamilyMember): string {
-  if (isEmptyCard(member) || !member.relationship) return 'Scheda da compilare: nome, parentela, data di nascita'
-  const relationship = enumLabel('memberRelationship', member.relationship)
-  if (!member.birthDate) return missingBirthDate(member) ? `${relationship} · manca la data di nascita` : relationship
-  const age = ageOn(member.birthDate)
-  return `${relationship} · ${formatAge(age)}`
+  return isEmptyCard(member) ? 'Scheda da compilare: nome, parentela, data di nascita' : memberLine(member)
 }
 
 async function remove(member: OwnFamilyMember) {
@@ -111,7 +129,7 @@ async function remove(member: OwnFamilyMember) {
                 label="Referente"
               />
               <UBadge
-                v-if="isCardToComplete(member)"
+                v-if="member.toComplete"
                 color="warning"
                 variant="subtle"
                 icon="i-lucide-file-pen-line"
@@ -119,19 +137,33 @@ async function remove(member: OwnFamilyMember) {
               />
             </p>
             <p class="text-sm text-muted">{{ summary(member) }}</p>
+            <p v-if="member.hasIdDocument" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
+              <UIcon :name="idDocument.icon" class="size-4 shrink-0" aria-hidden="true" />
+              {{ idDocument.label }} caricato
+            </p>
             <p v-if="member.health?.hasDisability" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
               <UIcon name="i-lucide-lock" class="size-4 shrink-0" aria-hidden="true" />
               Patologia o disabilità indicata, dati sulla salute riservati
             </p>
           </div>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              v-if="!isEmptyCard(member) && !member.hasIdDocument"
+              :icon="idDocument.icon"
+              :label="`Carica il ${idDocument.label.toLowerCase()}`"
+              color="neutral"
+              variant="outline"
+              class="pointer-coarse:min-h-11"
+              :aria-label="`Carica il ${idDocument.label.toLowerCase()} di ${title(member)}`"
+              @click="openIdUpload(member)"
+            />
             <UButton
               icon="i-lucide-pencil"
-              :label="isCardToComplete(member) ? 'Compila' : 'Modifica'"
+              :label="member.toComplete ? 'Compila' : 'Modifica'"
               :color="member.id === nextCardId ? 'primary' : 'neutral'"
               :variant="member.id === nextCardId ? 'solid' : 'outline'"
               class="pointer-coarse:min-h-11"
-              :aria-label="`${isCardToComplete(member) ? 'Compila la scheda' : 'Modifica'} ${title(member)}`"
+              :aria-label="`${member.toComplete ? 'Compila la scheda' : 'Modifica'} ${title(member)}`"
               @click="openForm(member)"
             />
             <UButton
@@ -167,6 +199,27 @@ async function remove(member: OwnFamilyMember) {
       />
     </IcSection>
 
-    <FamiliesMemberFormModal v-model:open="formOpen" :member="editing" :consent="consent" @saved="refresh" />
+    <FamiliesMemberFormModal
+      v-model:open="formOpen"
+      :member="editing"
+      :consent="consent"
+      :reference="reference"
+      @saved="refresh"
+    />
+    <UModal
+      v-model:open="idOpen"
+      :title="`${idDocument.label} di ${idMember ? title(idMember) : ''}`"
+      description="Lo vedete solo voi e l’amministrazione del camp. Lo ritrovi nella pagina Documenti."
+    >
+      <template #body>
+        <FamiliesDocumentUploadForm
+          v-if="idMember"
+          :members="members"
+          :health-consent="consent"
+          :preset="{ category: 'id_document', member: idMember.id }"
+          @uploaded="idUploaded"
+        />
+      </template>
+    </UModal>
   </IcPage>
 </template>

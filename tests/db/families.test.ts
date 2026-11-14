@@ -36,7 +36,7 @@ const child = (values: Partial<MemberInput> = {}): MemberInput => ({
   firstName: 'Matteo',
   lastName: 'Prova',
   birthDate: '2015-04-12',
-  relationship: 'child',
+  relationship: 'sibling',
   kind: 'young',
   isReferent: false,
   ...values,
@@ -44,7 +44,7 @@ const child = (values: Partial<MemberInput> = {}): MemberInput => ({
 
 const WEEKEND = 'Sessioni nel weekend (2 notti)'
 const WEEK = 'Sessioni settimanali estive (4 notti)'
-const ANSWERS = { howDidYouHear: 'Passaparola', sessionPreferences: [WEEKEND] }
+const ANSWERS = { howDidYouHear: 'Passaparola', sessionPreferences: [WEEKEND], dog: false }
 
 /** The family data as /famiglia/profilo sends it: the account holder and one young person. */
 const familyData = (values: Partial<FamilyDataInput> = {}): FamilyDataInput => ({
@@ -307,7 +307,7 @@ describe('family data', () => {
         data: familyData({ answers: { howDidYouHear: 'Passaparola' } }),
         actor,
       }),
-    ).rejects.toMatchObject({ statusCode: 400, data: { missing: ['sessionPreferences'] } })
+    ).rejects.toMatchObject({ statusCode: 400, data: { missing: ['sessionPreferences', 'dog'] } })
     await expect(
       saveFamilyData(db, {
         familyId: family.id,
@@ -324,11 +324,16 @@ describe('family data', () => {
           unknownQuestion: 'x',
           association: '   ',
           sessionPreferences: [WEEK, WEEKEND, WEEK],
+          dog: true,
         },
       }),
       actor,
     })
-    expect(saved.formAnswers).toEqual({ howDidYouHear: 'Passaparola', sessionPreferences: [WEEKEND, WEEK] })
+    expect(saved.formAnswers).toEqual({
+      howDidYouHear: 'Passaparola',
+      sessionPreferences: [WEEKEND, WEEK],
+      dog: true,
+    })
     expect(saved).toMatchObject({ postalCode: '74121', region: 'Puglia', formStatus: 'submitted' })
   })
 
@@ -362,19 +367,62 @@ describe('family data', () => {
     expect(again.family.formSubmittedAt).toEqual(first.family.formSubmittedAt)
     expect(await auditRows('family.form_submit')).toHaveLength(1)
 
-    // Fewer people than cards: a person goes away by removing the card.
+    // The «-»: an empty card goes away, the last one first.
+    const fewer = await saveFamilyData(db, {
+      familyId: family.id,
+      data: familyData({ composition: { adults: 2, youngWithCondition: 0, youngWithoutCondition: 2 } }),
+      actor,
+    })
+    expect(fewer).toMatchObject({ cardsCreated: 0, cardsRemoved: 1 })
+
+    // A filled card stays: going below it is refused, an empty one beside it goes.
+    const [young] = (await ownFamilyMembers(db, family.id)).members.filter(member => member.kind === 'young')
+    await updateFamilyMember(db, { familyId: family.id, memberId: young!.id, member: child(), actor })
     await expect(
       saveFamilyData(db, {
         familyId: family.id,
-        data: familyData({ composition: { adults: 2, youngWithCondition: 0, youngWithoutCondition: 2 } }),
+        data: familyData({ composition: { adults: 2, youngWithCondition: 0, youngWithoutCondition: 0 } }),
         actor,
       }),
     ).rejects.toMatchObject({ statusCode: 409 })
-    expect((await familyProfile(db, again.family)).cards).toEqual({
-      adults: 3,
-      youngWithCondition: 0,
-      youngWithoutCondition: 2,
+    const one = await saveFamilyData(db, {
+      familyId: family.id,
+      data: familyData({ composition: { adults: 2, youngWithCondition: 0, youngWithoutCondition: 1 } }),
+      actor,
     })
+    expect(one.cardsRemoved).toBe(1)
+    expect(await familyProfile(db, one.family)).toMatchObject({
+      cards: { adults: 2, youngWithCondition: 0, youngWithoutCondition: 1 },
+      filledCards: { adults: 1, youngWithCondition: 0, youngWithoutCondition: 1 },
+    })
+    const kept = (await ownFamilyMembers(db, family.id)).members.filter(member => member.kind === 'young')
+    expect(kept.map(member => member.firstName)).toEqual(['Matteo'])
+  })
+
+  it('keeps no relationship for the young person with a condition, and asks it of everyone else', async () => {
+    const { family, actor } = await familyWithReferent()
+    await setHealthConsent(db, { familyId: family.id, given: true, actor })
+    const guest = await addFamilyMember(db, { familyId: family.id, member: child({ health: withDisability }), actor })
+    expect(guest.relationship).toBeNull()
+    await expect(
+      addFamilyMember(db, { familyId: family.id, member: child({ relationship: null }), actor }),
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('stores the surname as «Famiglia …»', async () => {
+    const { family, actor } = await familyWithReferent()
+    const { family: saved } = await saveFamilyData(db, {
+      familyId: family.id,
+      data: familyData({ name: 'Rossi' }),
+      actor,
+    })
+    expect(saved.name).toBe('Famiglia Rossi')
+    const same = await updateFamilyDataByAdmin(db, {
+      familyId: family.id,
+      data: familyData({ name: 'famiglia Rossi' }),
+      actor,
+    })
+    expect(same.name).toBe('famiglia Rossi')
   })
 
   it('needs the health consent to declare a young person with a condition, and gives it with the form', async () => {

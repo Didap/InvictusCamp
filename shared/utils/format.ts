@@ -1,8 +1,8 @@
 // Italian formatting shared by the interface (useFormat) and the email templates, so a date reads
 // the same on screen and in the inbox. Days are formatted as calendar days (no time zone shift);
 // instants are shown in Italian time.
-import { enumLabel, LOCALE, TIME_ZONE, type MemberKind } from './constants'
-import { daysBetween, todayIso, type IsoDay } from './dates'
+import { enumLabel, LOCALE, TIME_ZONE, type MemberKind, type MemberRelationship } from './constants'
+import { ageOn, daysBetween, todayIso, type IsoDay } from './dates'
 
 type DayStyle = 'long' | 'short' | 'numeric'
 
@@ -89,9 +89,20 @@ type MemberRef = { id: string; firstName: string | null; lastName: string | null
 /** Shown instead of the people of a family that has no cards yet (it has not confirmed its data). */
 export const NO_CARDS = 'Componenti non ancora indicati'
 
+/** The family as the lists show it, «Famiglia Rossi», from the surname the forms ask for. */
+export function familyNameOf(surname: string): string {
+  const value = surname.trim()
+  return /^famiglia(\s|$)/i.test(value) ? value : `Famiglia ${value}`
+}
+
+/** The surname a form shows for the family: its name without «Famiglia». */
+export function surnameOf(name: string): string {
+  return name.replace(/^famiglia\s+/i, '')
+}
+
 /**
  * A card created from the family data and not filled in yet: name, surname and relationship are null
- * together until the family saves it (the member schema requires all three).
+ * together until the family saves it (the young person with a condition keeps no relationship).
  */
 export function isEmptyCard(member: { firstName: string | null }): boolean {
   return member.firstName === null
@@ -102,9 +113,29 @@ export function missingBirthDate(member: { kind: MemberKind; birthDate?: string 
   return member.kind === 'adult' && !member.birthDate
 }
 
-/** A card the family still has to fill in: empty, or an adult without the birth date. */
-export function isCardToComplete(member: { firstName: string | null; kind: MemberKind; birthDate: string | null }) {
-  return isEmptyCard(member) || missingBirthDate(member)
+/** The young person with a condition, the one the camp is for: the others' relationship is to them. */
+export function isYoungWithCondition(member: { kind: MemberKind; hasDisability: boolean }): boolean {
+  return member.kind === 'young' && member.hasDisability
+}
+
+/** True when the member needs a relationship and has none: everyone but the young person with a condition. */
+export function missingRelationship(member: {
+  kind: MemberKind
+  relationship?: string | null
+  hasDisability: boolean
+}): boolean {
+  return !member.relationship && !isYoungWithCondition(member)
+}
+
+/** A card the family still has to fill in: empty, an adult without the birth date, or without a relationship. */
+export function isCardToComplete(member: {
+  firstName: string | null
+  kind: MemberKind
+  birthDate: string | null
+  relationship: string | null
+  hasDisability: boolean
+}) {
+  return isEmptyCard(member) || missingBirthDate(member) || missingRelationship(member)
 }
 
 /**
@@ -130,6 +161,11 @@ export function orList(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} o ${items.at(-1)}`
 }
 
+/** "a, b e c". */
+export function andList(items: string[]): string {
+  return new Intl.ListFormat(LOCALE, { type: 'conjunction' }).format(items)
+}
+
 export function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }
@@ -137,6 +173,22 @@ export function plural(count: number, one: string, many: string): string {
 /** "1 anno", "9 anni". */
 export function formatAge(age: number): string {
   return age === 1 ? '1 anno' : `${age} anni`
+}
+
+/**
+ * A filled card in one line: relationship and age, «Genitore · 41 anni», or what is missing. The young
+ * person with a condition has no relationship: only the age. `withDay` adds the birth date.
+ */
+export function memberLine(
+  member: { relationship: MemberRelationship | null; kind: MemberKind; birthDate: IsoDay | null },
+  withDay = false,
+): string {
+  const parts = member.relationship ? [enumLabel('memberRelationship', member.relationship)] : []
+  if (member.birthDate) {
+    const age = formatAge(ageOn(member.birthDate))
+    parts.push(withDay ? `${age} (${formatDay(member.birthDate)})` : age)
+  } else if (missingBirthDate(member)) parts.push('manca la data di nascita')
+  return parts.join(' · ') || enumLabel('memberKind', member.kind)
 }
 
 /** "9 e 14 anni", "1 anno", "12 anni, un’età da indicare": ages, youngest first; '' for none. */

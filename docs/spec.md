@@ -174,29 +174,33 @@ availability or receive convocations. The administration can move a person to th
 
 ### 3.8 The family: family data, member cards, documents
 
-- **Family data** (`/famiglia/profilo`, "Dati della famiglia"), the first form of the family: family name
-  and phone (required); residence (street and number, city, CAP and region required, province optional); the
+- **Family data** (`/famiglia/profilo`, "Dati della famiglia"), the first form of the family: the family's
+  surname, stored as «Famiglia Rossi» (the lists show it so), and phone (required); residence (street and number, city, CAP and region required, province optional); the
   composition, i.e. how many adults (the account holder included), how many young people with a severe or
   chronic illness, a neurodevelopmental disorder or a disability, how many without; and the questions of
   `shared/content/family-form.ts` (how they found the camp, association, preferred sessions: weekend with 2
   nights and/or summer week with 4 nights, accommodation needs: kitchen, bathroom without architectural
-  barriers, microwave). Answers in `families.formAnswers` by question id. Every save needs the whole form.
+  barriers, microwave; whether a dog comes along, with the notice that dogs cannot stay in the apartments and
+  kennels nearby are at the family's expense). Answers in `families.formAnswers` by question id. Every save needs the whole form.
 - **Confirming** it (`formStatus` `draft` → `submitted`, `formSubmittedAt` the first time) creates one
   **card** (`family_members` row) per person declared: the cards already there count, so the account
   holder is the first adult, and the missing ones are created empty (no name, no relationship), with their
   `kind` (`adult`/`young`) and, for a young person with a condition, `hasDisability`. The page then opens
   Componenti. Example: 2 adults, 1 young person with a disability, 1 without → 3 new cards, 4 in all.
-- Afterwards the family data stays editable and the composition shows the cards there. Raising a number
-  creates the cards missing; a number below the cards is refused (409): a person goes away by changing or
-  removing their card in Componenti.
+- Afterwards the family data stays editable and the composition shows the cards there. The «+» creates the
+  cards missing; the «-» removes empty cards (the last ones first). A number below the cards filled in is
+  refused (409): a person with data goes away by removing their card in Componenti.
 - Declaring a young person with a condition is health data: when the family has not given the consent
   yet, the form asks for it next to the composition and gives it with the save (`family.health_consent`).
   Without it, the save is refused.
-- **Member cards** (`/famiglia/membri`, "Componenti"): name, birth date, relationship, adult or young
-  person, referent, and, with the consent, the question "ha una patologia o disabilità?" (Sì/No, No by
+- **Member cards** (`/famiglia/membri`, "Componenti"): name, birth date, relationship to the young person
+  with a condition ("Legame di parentela rispetto a Matteo": genitore, fratello/sorella, nonno/nonna,
+  zio/zia, tutore, altro; that young person's own card has none), adult or young person, referent, and, with the consent, the question "ha una patologia o disabilità?" (Sì/No, No by
   default: nothing more to write) and, on Sì, its details (`DisabilityInfo`, placeholder fields, all
   required). An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling it in
-  requires name, surname, relationship and, for an adult, the birth date. Before the family data is confirmed the page shows only
+  requires name, surname, relationship (but for the young person with a condition) and, for an adult, the
+  birth date. Every filled card has «Carica il documento di identità», an upload of type `id_document` for
+  that person, until one is there. Before the family data is confirmed the page shows only
   the account holder's card and points to the family data, and adding a card is refused (409); afterwards
   cards can also be added by hand, at most 12 per number of the composition (the most the form takes).
 - The health data consent (`healthDataConsentAt`) can be given or withdrawn in Componenti; withdrawing

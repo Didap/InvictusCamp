@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { registerFamilySchema } from '#shared/schemas/auth'
 import { DISABILITY_FIELDS, memberSchema } from '#shared/schemas/families'
+import { familyNameOf, isCardToComplete, surnameOf } from '#shared/utils/format'
 
 /** The names of the fields a parse refuses, as the form shows them. */
 function refused(result: { success: boolean; error?: { issues: { path: PropertyKey[] }[] } }): string[] {
@@ -27,13 +28,35 @@ describe('family registration', () => {
 
 describe('family member', () => {
   const adult = { firstName: 'Anna', lastName: 'Rossi', relationship: 'parent', kind: 'adult', birthDate: '1985-03-02' }
-  const young = { ...adult, firstName: 'Luca', relationship: 'child', kind: 'young', birthDate: '' }
+  const young = { ...adult, firstName: 'Luca', relationship: 'sibling', kind: 'young', birthDate: '' }
   const details = Object.fromEntries(DISABILITY_FIELDS.map(field => [field.key, 'niente']))
 
   it('needs the birth date of an adult, not of a young person', () => {
     expect(memberSchema.safeParse(adult).success).toBe(true)
     expect(refused(memberSchema.safeParse({ ...adult, birthDate: '' }))).toEqual(['birthDate'])
     expect(memberSchema.safeParse(young).success).toBe(true)
+  })
+
+  it('asks the relationship of everyone but the young person with a condition', () => {
+    const health = { hasDisability: true, disability: details }
+    expect(memberSchema.safeParse({ ...young, relationship: null, health }).success).toBe(true)
+    expect(refused(memberSchema.safeParse({ ...adult, relationship: null }))).toEqual(['relationship'])
+    // Without `health` (no consent) the server knows whether the card is the young person's.
+    expect(memberSchema.safeParse({ ...young, relationship: null }).success).toBe(true)
+  })
+
+  it('counts a card without the relationship it needs as still to complete', () => {
+    const card = { firstName: 'Luca', kind: 'young', birthDate: null, relationship: null } as const
+    expect(isCardToComplete({ ...card, hasDisability: true })).toBe(false)
+    // After the consent is withdrawn the young person is like the others: the relationship is missing.
+    expect(isCardToComplete({ ...card, hasDisability: false })).toBe(true)
+  })
+
+  it('writes the family as «Famiglia …» once', () => {
+    expect(familyNameOf(' Rossi ')).toBe('Famiglia Rossi')
+    expect(familyNameOf('Famiglia')).toBe('Famiglia')
+    expect(familyNameOf('famiglia Rossi')).toBe('famiglia Rossi')
+    expect(surnameOf('Famiglia De Luca')).toBe('De Luca')
   })
 
   it('refuses what is not a member, without throwing', () => {
@@ -43,8 +66,8 @@ describe('family member', () => {
 
   it('shows the missing birth date with the other missing fields', () => {
     expect(refused(memberSchema.safeParse({ ...adult, birthDate: null, relationship: undefined }))).toEqual([
-      'relationship',
       'birthDate',
+      'relationship',
     ])
   })
 

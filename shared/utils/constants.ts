@@ -47,7 +47,11 @@ export const OPEN_CONVOCATIONS: readonly ConvocationStatus[] = ['draft', 'sent',
 export const CONVOCATION_STATUSES = ['draft', 'sent', 'accepted', 'declined', 'cancelled'] as const
 export type ConvocationStatus = (typeof CONVOCATION_STATUSES)[number]
 
-export const MEMBER_RELATIONSHIPS = ['parent', 'child', 'sibling', 'grandparent', 'guardian', 'other'] as const
+/**
+ * The relationship of a member to the young person with a condition (the camp's guest): that person's own
+ * card has none (null).
+ */
+export const MEMBER_RELATIONSHIPS = ['parent', 'sibling', 'grandparent', 'aunt_uncle', 'guardian', 'other'] as const
 export type MemberRelationship = (typeof MEMBER_RELATIONSHIPS)[number]
 
 /**
@@ -294,9 +298,9 @@ const convocationStatus: Record<ConvocationStatus, EnumMeta> = {
 
 const memberRelationship: Record<MemberRelationship, EnumMeta> = {
   parent: { label: 'Genitore', icon: 'i-lucide-user', color: 'neutral' },
-  child: { label: 'Figlio/Figlia', icon: 'i-lucide-smile', color: 'neutral' },
   sibling: { label: 'Fratello/Sorella', icon: 'i-lucide-users', color: 'neutral' },
   grandparent: { label: 'Nonno/Nonna', icon: 'i-lucide-user-round', color: 'neutral' },
+  aunt_uncle: { label: 'Zio/Zia', icon: 'i-lucide-user-round', color: 'neutral' },
   guardian: { label: 'Tutore/Tutrice', icon: 'i-lucide-shield', color: 'neutral' },
   other: { label: 'Altro', icon: 'i-lucide-user', color: 'neutral' },
 }
