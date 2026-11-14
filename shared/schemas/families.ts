@@ -281,14 +281,19 @@ function compact<T extends object>(value: T): T | null {
  * Health data as it is stored: the disability details only for a person with a condition, choices in the
  * order of the options, empty values dropped.
  */
+/** «Informazioni utili» as stored: allergies in the order of the list, empty values dropped, null for none. */
+export function normalizeUsefulInfo(info: UsefulInfo | null | undefined): UsefulInfo | null {
+  return compact<UsefulInfo>({
+    allergies: picked(ALLERGIES, info?.allergies),
+    diet: info?.diet || undefined,
+    notes: info?.notes?.trim(),
+  })
+}
+
 export function normalizeHealth(
   input: { hasDisability: boolean; disability?: DisabilityInfo | null; info?: UsefulInfo | null } | null | undefined,
 ): MemberHealth {
-  const info = compact<UsefulInfo>({
-    allergies: picked(ALLERGIES, input?.info?.allergies),
-    diet: input?.info?.diet || undefined,
-    notes: input?.info?.notes?.trim(),
-  })
+  const info = normalizeUsefulInfo(input?.info)
   if (!input?.hasDisability) return { ...NO_HEALTH, info }
   const details = input.disability
   const disability = compact<DisabilityInfo>({

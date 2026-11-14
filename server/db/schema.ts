@@ -208,6 +208,9 @@ export const staffProfiles = pgTable(
     experience: text(),
     motivation: text(),
     cvFileId: uuid().references(() => files.id, { onDelete: 'set null' }),
+    /** Allergies, diet, notes for the canteen (health data): kept only with `usefulInfoConsentAt`. */
+    usefulInfo: jsonb().$type<UsefulInfo>(),
+    usefulInfoConsentAt: timestamp(tz),
     appliedAt: timestamp(tz),
     reviewedAt: timestamp(tz),
     reviewedBy: uuid().references(() => users.id, { onDelete: 'set null' }),

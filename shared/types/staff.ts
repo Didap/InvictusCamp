@@ -1,3 +1,4 @@
+import type { UsefulInfo } from './domain'
 // DTOs of the staff area (applications, review, availability, convocations). Dates are ISO days,
 // instants ISO strings. Never a raw `users` row.
 import type { FileDto } from './api'
@@ -14,6 +15,12 @@ import type { IsoDay } from '../utils/dates'
 
 /** The outcome emails of a review, sent only by an explicit action of the administration. */
 export type StaffOutcomeTemplate = 'staff.approved' | 'staff.rejected'
+
+/** GET /api/staff/useful-info: what the canteen knows about the signed-in staff member. */
+export interface StaffUsefulInfoDto {
+  info: UsefulInfo | null
+  consentAt: string | null
+}
 
 /**
  * The contract that follows an accepted convocation: `none` when the session has no contract,

@@ -75,7 +75,8 @@ tests/unit, tests/db   vitest projects `unit` and `db`
 - **Emails**: `deliver()` sends with Resend or records them as simulated; everything lands in `email_log`.
   Access links and codes are `sensitive` (not stored). No health details in emails.
 - **Health data** (`family_members.disability`, `family_members.useful_info`): only after the family's explicit consent, only in the
-  family's pages and the admin family page, audited on change. The admin family list shows only the ages
+  family's pages, the admin family page and the Mensa tab of a session (allergies, diets, food selectivity
+  with names, reading audited), audited on change. The admin family list shows only the ages
   of the members with a condition (`hasDisability`), never the details (the type of condition is an audited
   filter, never a column); the CSV export shows neither.
 - **Files**: never public; upload with `readUpload` + `saveFile`, download through an authorised endpoint.

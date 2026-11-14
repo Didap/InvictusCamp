@@ -140,6 +140,14 @@ const started = computed(() => checklist.value.some(item => item.done))
           <p v-else class="text-muted">Nessuna sessione in programma. Quando accetti una convocazione, la trovi qui.</p>
         </IcSection>
 
+        <IcSection
+          v-if="home.status === 'approved'"
+          title="Per la mensa"
+          description="Allergie, intolleranze e preferenze alimentari, per i pasti delle sessioni a cui partecipi."
+        >
+          <StaffUsefulInfo />
+        </IcSection>
+
         <IcSection title="Documenti da firmare">
           <DocumentsPendingSignatures />
         </IcSection>

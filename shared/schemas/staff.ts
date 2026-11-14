@@ -1,6 +1,7 @@
 // Schemas of the staff area, shared by the forms (UForm) and the API (parseBody), plus the small rules
 // both sides need: what an application lacks, the moves of a review (docs/spec.md 3.4, 3.5).
 import { z } from 'zod'
+import { normalizeUsefulInfo, usefulInfoSchema } from './families'
 import {
   PERSONAL_DOCUMENT_CATEGORIES,
   STAFF_ROLES,
@@ -19,6 +20,20 @@ export const zStaffTeam = z.enum(STAFF_TEAMS)
 const zBirthDate = zIsoDay.refine(day => day >= '1920-01-01' && day < todayIso(), {
   error: 'Data di nascita non valida',
 })
+
+// ─── Canteen ───────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * PUT /api/staff/useful-info: allergies, diet and notes for the canteen. Allergies are health data: saving
+ * anything needs the consent, saving nothing withdraws it.
+ */
+export const staffUsefulInfoSchema = z
+  .object({ info: usefulInfoSchema, consent: z.boolean().default(false) })
+  .refine(value => value.consent || !normalizeUsefulInfo(value.info), {
+    path: ['consent'],
+    error: 'Per salvare questi dati serve il tuo consenso',
+  })
+export type StaffUsefulInfoInput = z.output<typeof staffUsefulInfoSchema>
 
 // ─── Application ───────────────────────────────────────────────────────────────────────────────────
 
