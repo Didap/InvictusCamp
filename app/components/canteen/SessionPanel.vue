@@ -18,7 +18,7 @@ const description = computed(() =>
 async function copy() {
   if (!data.value) return
   try {
-    await navigator.clipboard.writeText(canteenText(data.value.session, data.value))
+    await navigator.clipboard.writeText(canteenText(data.value))
     notifySuccess('Testo copiato', 'Incollalo nell’email al fornitore dei pasti.')
   } catch (error) {
     notifyError(error, 'Testo non copiato')

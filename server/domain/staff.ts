@@ -72,19 +72,10 @@ import { createError } from './errors'
 /** What a convocation declined or withdrawn lets go: its activity group and its lodging. */
 const LEAVE_SESSION = { activityGroup: null, lodgingId: null } as const
 
-/** GET /api/staff/useful-info */
-export async function staffUsefulInfo(db: DbOrTx, userId: string): Promise<StaffUsefulInfoDto> {
-  const [row] = await db
-    .select({ info: staffProfiles.usefulInfo, consentAt: staffProfiles.usefulInfoConsentAt })
-    .from(staffProfiles)
-    .where(eq(staffProfiles.userId, userId))
-  return { info: row?.info ?? null, consentAt: row?.consentAt?.toISOString() ?? null }
-}
-
 /** Saves the canteen details of a staff member with the consent, or clears both; audited without the values. */
 export async function saveStaffUsefulInfo(
   db: DbOrTx,
-  input: { userId: string; value: StaffUsefulInfoInput; actor: { userId: string; ip: string | null } },
+  input: { userId: string; value: StaffUsefulInfoInput; actor: Actor },
 ): Promise<StaffUsefulInfoDto> {
   const info = normalizeUsefulInfo(input.value.info)
   const [row] = await db
@@ -105,7 +96,7 @@ export async function saveStaffUsefulInfo(
     data: { fields: info ? Object.keys(info) : [] },
     ip: input.actor.ip,
   })
-  return { info, consentAt: row?.consentAt?.toISOString() ?? null }
+  return { info, consentAt: row.consentAt?.toISOString() ?? null }
 }
 
 /** A disabled account leaves the open sessions: its convocations let go of their group and lodging. */

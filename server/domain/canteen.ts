@@ -1,7 +1,7 @@
 // The canteen summary of a session (docs/spec.md 3.14): everyone who eats at the camp, the members of the
 // families holding a place and the staff still in play, with their allergies, diet and notes. Health data:
 // the administration only, audited by the handlers. Explicit imports only, so the database tests can load it.
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import type { CanteenDto } from '../../shared/types/canteen'
 import { canteenSummary, type CanteenPerson } from '../../shared/utils/canteen'
 import { NO_CARDS, fullName, isEmptyCard } from '../../shared/utils/format'
@@ -12,8 +12,8 @@ import { activeStaff, findSession, holdingPlace } from './sessions'
 
 /** GET /api/admin/sessions/:id/canteen */
 export async function canteenOf(db: DbOrTx, sessionId: string): Promise<CanteenDto> {
-  const session = await findSession(db, sessionId)
-  const [members, staff] = await Promise.all([
+  const [session, members, staff] = await Promise.all([
+    findSession(db, sessionId),
     db
       .select({
         familyId: families.id,
@@ -22,18 +22,19 @@ export async function canteenOf(db: DbOrTx, sessionId: string): Promise<CanteenD
         firstName: familyMembers.firstName,
         lastName: familyMembers.lastName,
         info: familyMembers.usefulInfo,
-        disability: familyMembers.disability,
+        // Only this detail of the disability, not the others.
+        foodSelectivity: sql<string | null>`${familyMembers.disability} ->> 'foodSelectivity'`,
       })
       .from(sessionFamilies)
       .innerJoin(families, eq(families.id, sessionFamilies.familyId))
       .leftJoin(familyMembers, eq(familyMembers.familyId, families.id))
-      .where(holdingPlace(session.id)),
+      .where(holdingPlace(sessionId)),
     db
       .select({ firstName: users.firstName, lastName: users.lastName, info: staffProfiles.usefulInfo })
       .from(sessionStaff)
       .innerJoin(users, eq(users.id, sessionStaff.userId))
       .leftJoin(staffProfiles, eq(staffProfiles.userId, users.id))
-      .where(activeStaff(session.id)),
+      .where(activeStaff(sessionId)),
   ])
   const people: CanteenPerson[] = [
     ...members.flatMap(row =>
@@ -43,7 +44,7 @@ export async function canteenOf(db: DbOrTx, sessionId: string): Promise<CanteenD
               // A card still to fill in eats too: it shows as its family.
               name: isEmptyCard(row) ? `${row.familyName}, scheda da compilare` : fullName(row),
               info: row.info,
-              foodSelectivity: row.disability?.foodSelectivity ?? null,
+              foodSelectivity: row.foodSelectivity,
             },
           ]
         : [],

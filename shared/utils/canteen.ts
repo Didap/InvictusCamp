@@ -41,9 +41,9 @@ export function canteenSummary(people: CanteenPerson[]): CanteenSummary {
 
 /** The text for the supplier: «Totale pasti 72 di cui: 5 senza lattosio (…)». */
 export function canteenText(
-  session: { title: string; startDate: string; endDate: string },
-  summary: CanteenSummary,
+  summary: CanteenSummary & { session: { title: string; startDate: string; endDate: string } },
 ): string {
+  const { session } = summary
   return [
     `${session.title}, ${formatDayRange(session.startDate, session.endDate)}`,
     '',

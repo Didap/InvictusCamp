@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { DISABILITY_CHOICES, HEALTH_LABELS, type Choice, type DisabilityChoiceKey } from '#shared/content/member-form'
-import { memberSchema } from '#shared/schemas/families'
+import {
+  CHOICES_UI,
+  DISABILITY_CHOICES,
+  HEALTH_LABELS,
+  type Choice,
+  type DisabilityChoiceKey,
+} from '#shared/content/member-form'
+import { memberSchema, usefulInfoForm, type UsefulInfoForm } from '#shared/schemas/families'
 import type { OwnFamilyMember } from '#shared/types/families'
 import { YES_NO_ITEMS, type MemberKind, type MemberRelationship } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
@@ -11,7 +17,6 @@ import { fullName, isEmptyCard, isYoungWithCondition } from '#shared/utils/forma
 // The options as plain strings, once: the form holds the keys before the schema checks them.
 const DISABILITY_FIELDS = DISABILITY_CHOICES.map(field => ({ ...field, items: [...field.options] as Choice[] }))
 /** Lists of choices in two columns from the tablet up. */
-const CHOICES_UI = { legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }
 
 const props = defineProps<{
   member: OwnFamilyMember | null
@@ -32,13 +37,12 @@ interface State {
   health: {
     hasDisability: boolean
     disability: Record<DisabilityChoiceKey, string[]> & { foodSelectivity: string; notes: string }
-    info: { allergies: string[]; diet: string; notes: string }
+    info: UsefulInfoForm
   }
 }
 
 function initialState(member: OwnFamilyMember | null): State {
   const disability = member?.health?.disability ?? {}
-  const info = member?.health?.info ?? {}
   return {
     firstName: member?.firstName ?? '',
     lastName: member?.lastName ?? '',
@@ -55,7 +59,7 @@ function initialState(member: OwnFamilyMember | null): State {
         foodSelectivity: disability.foodSelectivity ?? '',
         notes: disability.notes ?? '',
       },
-      info: { allergies: [...(info.allergies ?? [])], diet: info.diet ?? '', notes: info.notes ?? '' },
+      info: usefulInfoForm(member?.health?.info),
     },
   }
 }

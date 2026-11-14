@@ -1,7 +1,7 @@
 // The canteen summary of a session (docs/spec.md 3.14): the families holding a place and the staff in play.
 import { describe, expect, it } from 'vitest'
 import { canteenCsv, canteenOf } from '../../server/domain/canteen'
-import { saveStaffUsefulInfo, staffUsefulInfo } from '../../server/domain/staff'
+import { saveStaffUsefulInfo } from '../../server/domain/staff'
 import { makeFamily, makeSession, makeStaff, t, useTestDb } from './helpers'
 
 const db = useTestDb()
@@ -47,7 +47,9 @@ describe('canteen', () => {
     expect((await canteenCsv(db, session.id)).csv).toContain('Totale pasti (persone a ogni pasto);3')
 
     // Saving nothing clears the details and the consent.
-    await saveStaffUsefulInfo(db, { userId: staff.id, value: { info: {}, consent: false }, actor })
-    expect(await staffUsefulInfo(db, staff.id)).toEqual({ info: null, consentAt: null })
+    expect(await saveStaffUsefulInfo(db, { userId: staff.id, value: { info: {}, consent: false }, actor })).toEqual({
+      info: null,
+      consentAt: null,
+    })
   })
 })

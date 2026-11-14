@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import {
-  ALLERGIES,
-  DIETS,
   DISABILITY_CHOICES,
   HEALTH_LABELS,
   choiceLabel,
   type Choice,
+  usefulInfoItems,
 } from '#shared/content/member-form'
 import type { MemberHealth } from '#shared/types/families'
 import { andList } from '#shared/utils/format'
@@ -26,14 +25,7 @@ const disability = computed(() => {
   ]
 })
 
-const info = computed(() => {
-  const value = props.health.info
-  return [
-    { label: HEALTH_LABELS.allergies, value: labels(ALLERGIES, value?.allergies) ?? 'Nessuna indicata' },
-    { label: HEALTH_LABELS.diet, value: value?.diet ? choiceLabel(DIETS, value.diet) : 'Nessuna indicata' },
-    { label: HEALTH_LABELS.infoNotes, value: value?.notes ?? null },
-  ]
-})
+const info = computed(() => usefulInfoItems(props.health.info))
 </script>
 
 <template>

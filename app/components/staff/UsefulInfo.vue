@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ALLERGIES, DIETS, choiceLabel } from '#shared/content/member-form'
-import { normalizeUsefulInfo } from '#shared/schemas/families'
+import { usefulInfoItems } from '#shared/content/member-form'
+import { normalizeUsefulInfo, usefulInfoForm } from '#shared/schemas/families'
 import { staffUsefulInfoSchema } from '#shared/schemas/staff'
 import type { StaffUsefulInfoDto } from '#shared/types/staff'
-import { andList } from '#shared/utils/format'
 
 // The canteen details of the signed-in staff member (docs/spec.md 3.14): allergies, diet, notes, with the
 // consent to health data. They reach the canteen summary of the sessions they are convoked to.
@@ -11,23 +10,14 @@ const api = useApi()
 const confirm = useConfirm()
 const { data, refresh } = await useApiFetch<StaffUsefulInfoDto>('/api/staff/useful-info')
 
-const summary = computed(() => {
-  const info = data.value?.info
-  if (!info) return null
-  return [
-    info.allergies?.length && `Allergie e intolleranze: ${andList(info.allergies.map(a => choiceLabel(ALLERGIES, a)))}`,
-    info.diet && `Preferenza: ${choiceLabel(DIETS, info.diet).toLowerCase()}`,
-    info.notes,
-  ].filter(Boolean)
-})
+const items = computed(() => (data.value?.info ? usefulInfoItems(data.value.info) : null))
 
 const open = ref(false)
 const saving = ref(false)
-const state = reactive({ info: { allergies: [] as string[], diet: '', notes: '' }, consent: false })
+const state = reactive({ info: usefulInfoForm(null), consent: false })
 
 function edit() {
-  const info = data.value?.info
-  state.info = { allergies: [...(info?.allergies ?? [])], diet: info?.diet ?? '', notes: info?.notes ?? '' }
+  state.info = usefulInfoForm(data.value?.info)
   state.consent = Boolean(data.value?.consentAt)
   open.value = true
 }
@@ -60,15 +50,11 @@ async function save(clear = false) {
 
 <template>
   <div class="flex flex-wrap items-start justify-between gap-3">
-    <div class="max-w-prose space-y-1">
-      <template v-if="summary">
-        <p v-for="line in summary" :key="line">{{ line }}</p>
-      </template>
-      <p v-else class="text-muted">Non hai indicato allergie, intolleranze o preferenze alimentari.</p>
-    </div>
+    <IcDataList v-if="items" :items="items" class="min-w-0 flex-1" />
+    <p v-else class="max-w-prose text-muted">Non hai indicato allergie, intolleranze o preferenze alimentari.</p>
     <UButton
       class="pointer-coarse:min-h-11"
-      :label="summary ? 'Modifica' : 'Indica allergie e preferenze'"
+      :label="items ? 'Modifica' : 'Indica allergie e preferenze'"
       icon="i-lucide-utensils"
       color="neutral"
       variant="outline"

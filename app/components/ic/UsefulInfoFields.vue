@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ALLERGIES, DIETS, HEALTH_LABELS, type Choice } from '#shared/content/member-form'
+import { ALLERGIES, CHOICES_UI, DIETS, HEALTH_LABELS, type Choice } from '#shared/content/member-form'
+import type { UsefulInfoForm } from '#shared/schemas/families'
 
 // «Informazioni utili»: allergies and intolerances, one food preference, other notes. The fields of a family
 // member's card and of the staff's canteen details; `name` prefixes the form field names (errors land there).
-const info = defineModel<{ allergies: string[]; diet: string; notes: string }>({ required: true })
+const info = defineModel<UsefulInfoForm>({ required: true })
 defineProps<{ name: string }>()
 
 const DIET_ITEMS: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
@@ -12,12 +13,7 @@ const DIET_ITEMS: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
 <template>
   <div class="space-y-5">
     <UFormField :label="HEALTH_LABELS.allergies" :name="`${name}.allergies`" hint="Facoltativo">
-      <UCheckboxGroup
-        v-model="info.allergies"
-        :items="ALLERGIES"
-        :legend="HEALTH_LABELS.allergies"
-        :ui="{ legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }"
-      />
+      <UCheckboxGroup v-model="info.allergies" :items="ALLERGIES" :legend="HEALTH_LABELS.allergies" :ui="CHOICES_UI" />
     </UFormField>
     <UFormField :label="HEALTH_LABELS.diet" :name="`${name}.diet`">
       <URadioGroup

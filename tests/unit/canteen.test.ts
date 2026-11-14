@@ -30,10 +30,10 @@ describe('canteen', () => {
   })
 
   it('writes the text for the supplier', () => {
-    const text = canteenText(
-      { title: 'Sessione 9', startDate: '2027-06-21', endDate: '2027-06-25' },
-      canteenSummary(people),
-    )
+    const text = canteenText({
+      session: { title: 'Sessione 9', startDate: '2027-06-21', endDate: '2027-06-25' },
+      ...canteenSummary(people),
+    })
     expect(text).toContain('Totale pasti 4 (4 persone a ogni pasto) di cui:')
     expect(text).toContain('2 senza lattosio (Anna Rossi, Sara Bianchi)')
     expect(text).toContain('Matteo Rossi: Selettività alimentare: Solo cibi frullati')

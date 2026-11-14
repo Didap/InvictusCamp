@@ -277,10 +277,6 @@ function compact<T extends object>(value: T): T | null {
   return entries.length ? (Object.fromEntries(entries) as T) : null
 }
 
-/**
- * Health data as it is stored: the disability details only for a person with a condition, choices in the
- * order of the options, empty values dropped.
- */
 /** «Informazioni utili» as stored: allergies in the order of the list, empty values dropped, null for none. */
 export function normalizeUsefulInfo(info: UsefulInfo | null | undefined): UsefulInfo | null {
   return compact<UsefulInfo>({
@@ -290,6 +286,17 @@ export function normalizeUsefulInfo(info: UsefulInfo | null | undefined): Useful
   })
 }
 
+/** «Informazioni utili» as a form holds them: every field present (IcUsefulInfoFields). */
+export type UsefulInfoForm = { allergies: string[]; diet: string; notes: string }
+
+export function usefulInfoForm(info: UsefulInfo | null | undefined): UsefulInfoForm {
+  return { allergies: [...(info?.allergies ?? [])], diet: info?.diet ?? '', notes: info?.notes ?? '' }
+}
+
+/**
+ * Health data as it is stored: the disability details only for a person with a condition, choices in the
+ * order of the options, empty values dropped.
+ */
 export function normalizeHealth(
   input: { hasDisability: boolean; disability?: DisabilityInfo | null; info?: UsefulInfo | null } | null | undefined,
 ): MemberHealth {
