@@ -67,14 +67,21 @@ export function lodgingWarnings(
   return warnings
 }
 
-/** Each lodging of the layout with the family placed in it, if any, and what does not fit. */
+/**
+ * Each lodging of the layout with who sleeps in it, the family or the staff members, and what does not fit:
+ * a family's size and needs, more staff than beds.
+ */
 export function placeFamilies<
   L extends { id: string; beds: number; features: readonly LodgingFeature[] },
   F extends { lodgingId: string | null; people: number; needs: readonly LodgingFeature[] },
->(lodgings: L[], families: F[]): (L & { family: F | undefined; warnings: string[] })[] {
+  S extends { lodgingId: string | null } = never,
+>(lodgings: L[], families: F[], staff: S[] = []): (L & { family: F | undefined; staff: S[]; warnings: string[] })[] {
   const byLodging = new Map(families.flatMap(family => (family.lodgingId ? [[family.lodgingId, family] as const] : [])))
   return lodgings.map(lodging => {
     const family = byLodging.get(lodging.id)
-    return { ...lodging, family, warnings: family ? lodgingWarnings(family, lodging) : [] }
+    const guests = staff.filter(person => person.lodgingId === lodging.id)
+    const warnings = family ? lodgingWarnings(family, lodging) : []
+    if (guests.length > lodging.beds) warnings.push(`${guests.length} persone e ${bedsLabel(lodging.beds)}`)
+    return { ...lodging, family, staff: guests, warnings }
   })
 }

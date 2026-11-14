@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { SelectMenuItem } from '@nuxt/ui'
-import type { Lodging, SessionLodgingFamily, SessionLodgingsDto } from '#shared/types/lodgings'
+import type { Lodging, SessionLodgingFamily, SessionLodgingStaff, SessionLodgingsDto } from '#shared/types/lodgings'
 import { NO_CARDS, plural } from '#shared/utils/format'
 import { bedsLabel, featureLabels, groupByArea, placeFamilies } from '#shared/utils/lodgings'
 
 // The Alloggi tab of a session (docs/spec.md 3.11): each titolare holding a place gets a lodging of the
-// layout, chosen by its size and needs; below, the layout of the session lodging by lodging. Saving a
-// choice sends no email.
+// layout, chosen by its size and needs, and so does each member of the staff and v-team (several in one
+// lodging, never with a family); below, the layout of the session lodging by lodging. Saving a choice sends
+// no email.
 const props = defineProps<{ sessionId: string }>()
 
 const api = useApi()
@@ -15,7 +16,9 @@ const { data, status, refresh } = useApiFetch<SessionLodgingsDto>(
 )
 
 /** Each lodging with its family and what does not fit. */
-const placed = computed(() => (data.value ? placeFamilies(data.value.lodgings, data.value.families) : []))
+const placed = computed(() =>
+  data.value ? placeFamilies(data.value.lodgings, data.value.families, data.value.staff) : [],
+)
 /** The layout of the session, by area. */
 const layout = computed(() => groupByArea(placed.value))
 const warningsOf = computed(
@@ -27,7 +30,7 @@ const summary = computed(() => {
   const taken = placed.value.filter(item => item.family).length
   return [
     families && `${taken} su ${plural(families, 'famiglia', 'famiglie')} con un alloggio`,
-    plural(placed.value.length - taken, 'alloggio libero', 'alloggi liberi'),
+    plural(placed.value.filter(item => !item.family && !item.staff.length).length, 'alloggio libero', 'alloggi liberi'),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -39,38 +42,53 @@ const lodgingLine = (lodging: Lodging) =>
 const people = (family: SessionLodgingFamily) =>
   family.people ? plural(family.people, 'persona', 'persone') : NO_CARDS
 
-/** The choices of each family: the lodgings by area, those of other families named and not selectable. */
-const choices = computed(() => {
-  const groups = layout.value.map(group => ({
-    area: group.area,
-    items: group.items.map(item => ({ item, line: lodgingLine(item) })),
-  }))
-  return new Map<string, SelectMenuItem[][]>(
-    (data.value?.families ?? []).map(family => [
-      family.id,
-      groups.map(group => [
-        { type: 'label', label: group.area },
-        ...group.items.map(({ item, line }) => {
-          const holder = item.family?.id === family.id ? undefined : item.family
-          return {
-            label: item.name,
-            value: item.id,
-            description: holder ? `Assegnato a ${holder.familyName}` : line,
-            disabled: !!holder,
-          }
+type Placed = (typeof placed.value)[number]
+const staffLine = (item: Placed) => `${plural(item.staff.length, 'persona', 'persone')} dello staff`
+
+/** The lodgings by area as choices: `taken` says why one cannot be chosen, `line` what it is. */
+function menu(choice: (item: Placed) => { taken?: string; line?: string }): SelectMenuItem[][] {
+  return layout.value.map(group => [
+    { type: 'label', label: group.area },
+    ...group.items.map(item => {
+      const { taken, line } = choice(item)
+      return { label: item.name, value: item.id, description: taken ?? line ?? lodgingLine(item), disabled: !!taken }
+    }),
+  ])
+}
+
+/** The choices of each family: lodgings of another family or of the staff named and not selectable. */
+const choices = computed(
+  () =>
+    new Map<string, SelectMenuItem[][]>(
+      (data.value?.families ?? []).map(family => [
+        family.id,
+        menu(item => {
+          if (item.family && item.family.id !== family.id) return { taken: `Assegnato a ${item.family.familyName}` }
+          return item.staff.length ? { taken: `Ci dorme lo staff: ${staffLine(item)}` } : {}
         }),
       ]),
-    ]),
-  )
-})
+    ),
+)
+
+/** The choices of the staff: any lodging without a family, with the staff already in it. */
+const staffChoices = computed(() =>
+  menu(item =>
+    item.family
+      ? { taken: `Assegnato a ${item.family.familyName}` }
+      : item.staff.length
+        ? { line: `${staffLine(item)} · ${lodgingLine(item)}` }
+        : {},
+  ),
+)
 
 const saving = ref<string | null>(null)
-async function assign(family: SessionLodgingFamily, value: string | null | undefined) {
+/** Places a family (its participation) or a member of the staff (their convocation), or takes them out. */
+async function assign(who: { id: string; lodgingId: string | null }, path: string, value: string | null | undefined) {
   const lodgingId = value ?? null
-  if (lodgingId === family.lodgingId) return
-  saving.value = family.id
+  if (lodgingId === who.lodgingId) return
+  saving.value = who.id
   try {
-    const url: string = `/api/admin/sessions/${props.sessionId}/lodgings/${family.id}`
+    const url: string = `/api/admin/sessions/${props.sessionId}/lodgings/${path}`
     data.value = await api<SessionLodgingsDto>(url, { method: 'PUT', body: { lodgingId } })
   } catch (error) {
     notifyError(error, 'Alloggio non assegnato')
@@ -79,6 +97,10 @@ async function assign(family: SessionLodgingFamily, value: string | null | undef
     saving.value = null
   }
 }
+const assignFamily = (family: SessionLodgingFamily, value: string | null | undefined) =>
+  assign(family, family.id, value)
+const assignStaff = (person: SessionLodgingStaff, value: string | null | undefined) =>
+  assign(person, `staff/${person.id}`, value)
 </script>
 
 <template>
@@ -187,7 +209,47 @@ async function assign(family: SessionLodgingFamily, value: string | null | undef
                 :aria-label="`Alloggio di ${family.familyName}`"
                 clear
                 class="w-full"
-                @update:model-value="value => assign(family, value as string | null | undefined)"
+                @update:model-value="value => assignFamily(family, value as string | null | undefined)"
+              />
+            </UFormField>
+          </li>
+        </ul>
+      </IcSection>
+
+      <IcSection
+        title="Staff e v-team"
+        description="Chi è convocato alla sessione. Più persone possono dormire nello stesso alloggio, mai con una famiglia."
+      >
+        <UEmpty
+          v-if="!data.staff.length"
+          icon="i-lucide-id-card"
+          title="Nessuno dello staff convocato"
+          description="Qui compaiono lo staff e il v-team convocati alla sessione, finché non rifiutano."
+        />
+        <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
+          <li
+            v-for="person in data.staff"
+            :key="person.id"
+            class="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between"
+          >
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+              <span class="font-semibold text-highlighted">{{ person.name }}</span>
+              <IcStatusBadge kind="staffTeam" :value="person.team" />
+              <IcStatusBadge kind="convocationStatus" :value="person.status" />
+            </div>
+            <UFormField label="Alloggio" class="w-full shrink-0 md:w-72">
+              <USelectMenu
+                :model-value="person.lodgingId ?? undefined"
+                :items="staffChoices"
+                value-key="value"
+                placeholder="Nessun alloggio"
+                :search-input="data.lodgings.length > 8 ? { placeholder: 'Cerca un alloggio' } : false"
+                :disabled="!data.editable || saving !== null"
+                :loading="saving === person.id"
+                :aria-label="`Alloggio di ${person.name}`"
+                clear
+                class="w-full"
+                @update:model-value="value => assignStaff(person, value as string | null | undefined)"
               />
             </UFormField>
           </li>
@@ -205,7 +267,7 @@ async function assign(family: SessionLodgingFamily, value: string | null | undef
               v-for="item in group.items"
               :key="item.id"
               class="rounded-lg border p-4"
-              :class="item.family ? 'border-default bg-elevated' : 'border-dashed border-default'"
+              :class="item.family || item.staff.length ? 'border-default bg-elevated' : 'border-dashed border-default'"
             >
               <p class="font-semibold text-highlighted">{{ item.name }}</p>
               <p class="text-sm text-muted">{{ lodgingLine(item) }}</p>
@@ -214,6 +276,10 @@ async function assign(family: SessionLodgingFamily, value: string | null | undef
                 <UIcon name="i-lucide-heart-handshake" class="size-4 shrink-0 text-muted" aria-hidden="true" />
                 <span class="font-medium text-default">{{ item.family.familyName }}</span>
                 <span class="text-muted">· {{ people(item.family) }}</span>
+              </p>
+              <p v-else-if="item.staff.length" class="mt-2 flex items-start gap-1.5 text-sm">
+                <UIcon name="i-lucide-id-card" class="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
+                <span class="text-default">{{ item.staff.map(person => person.name).join(', ') }}</span>
               </p>
               <p v-else class="mt-2 text-sm text-muted">Libero</p>
               <p

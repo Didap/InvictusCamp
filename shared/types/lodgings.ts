@@ -1,4 +1,4 @@
-import type { LodgingFeature, ParticipationStatus } from '../utils/constants'
+import type { ConvocationStatus, LodgingFeature, ParticipationStatus, StaffTeam } from '../utils/constants'
 
 /** A lodging of the camp (docs/spec.md 3.11). */
 export interface Lodging {
@@ -10,7 +10,7 @@ export interface Lodging {
   description: string | null
 }
 
-/** GET /api/admin/lodgings: with the sessions, not cancelled, that place a family in it. */
+/** GET /api/admin/lodgings: with the sessions that place a family or the staff in it. */
 export interface LodgingListItem extends Lodging {
   sessions: number
 }
@@ -29,10 +29,22 @@ export interface SessionLodgingFamily {
   lodgingId: string | null
 }
 
+/** A person of the session staff or v-team (an open convocation), with the lodging they sleep in. */
+export interface SessionLodgingStaff {
+  /** The convocation (session_staff row). */
+  id: string
+  userId: string
+  name: string
+  team: StaffTeam
+  status: ConvocationStatus
+  lodgingId: string | null
+}
+
 /** GET /api/admin/sessions/:id/lodgings */
 export interface SessionLodgingsDto {
   /** Assignments change while the session is not completed nor cancelled. */
   editable: boolean
   lodgings: Lodging[]
   families: SessionLodgingFamily[]
+  staff: SessionLodgingStaff[]
 }

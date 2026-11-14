@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
   assignLodging,
+  assignStaffLodging,
   createLodging,
   deleteLodging,
   listLodgings,
@@ -13,7 +14,7 @@ import {
 import { answerInvitation, cancelParticipation } from '../../server/domain/sessions'
 import { lodgingSchema, type LodgingInput } from '../../shared/schemas/lodgings'
 import type { ParticipationKind, ParticipationStatus, SessionStatus } from '../../shared/utils/constants'
-import { makeAdmin, makeFamily, makeSession, t, useTestDb } from './helpers'
+import { makeAdmin, makeFamily, makeSession, makeStaff, t, useTestDb } from './helpers'
 
 const db = useTestDb()
 const ctx = { appUrl: 'http://localhost:3080' }
@@ -198,6 +199,7 @@ describe('a session', () => {
     expect(entry!.data).toEqual({
       name: 'Villetta 1',
       freed: [{ participationId: rossi.participation.id, sessionId: session.id }],
+      freedStaff: [],
     })
 
     await place(rossi.participation, camera)
@@ -221,6 +223,40 @@ describe('a session', () => {
     ).rejects.toThrow()
   })
 
+  it('places the staff, several in a lodging, never with a family, and lists them in the CSV', async () => {
+    const { session, actor, place } = await setup()
+    const rossi = await join(session.id, 'Famiglia Rossi', { people: 3 })
+    const villetta = await lodging({ name: 'Villetta 1', beds: 4 })
+    const camera = await lodging({ name: 'Camera 1', beds: 1 })
+    const convoke = async (status: 'accepted' | 'declined' = 'accepted') => {
+      const { user } = await makeStaff(db)
+      const [row] = await db
+        .insert(t.sessionStaff)
+        .values({ sessionId: session.id, userId: user.id, status })
+        .returning()
+      return row!
+    }
+    const anna = await convoke()
+    const luca = await convoke()
+    const declined = await convoke('declined')
+    const placeStaff = (convocationId: string, lodgingId: string | null) =>
+      assignStaffLodging(db, { sessionId: session.id, convocationId, lodgingId, actor })
+
+    await place(rossi.participation, villetta)
+    await expect(placeStaff(anna.id, villetta)).rejects.toMatchObject({ statusCode: 409 })
+    await placeStaff(anna.id, camera)
+    await placeStaff(luca.id, camera)
+    await expect(place(rossi.participation, camera)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(placeStaff(declined.id, camera)).rejects.toMatchObject({ statusCode: 404 })
+
+    const tab = await sessionLodgingsOf(db, session.id)
+    expect(tab.staff.map(person => person.lodgingId)).toEqual([camera, camera])
+    const { csv } = await lodgingsCsv(db, session.id)
+    expect(csv).toContain(';Camera 1;1;;')
+    expect(csv).toContain('2 persone e 1 posto letto')
+    expect((await listLodgings(db)).find(item => item.id === camera)?.sessions).toBe(1)
+  })
+
   it('writes the layout as CSV: every lodging, what does not fit, then the families without one', async () => {
     const { session, place } = await setup()
     const rossi = await join(session.id, 'Famiglia Rossi', {
@@ -236,7 +272,7 @@ describe('a session', () => {
     const { filename, csv } = await lodgingsCsv(db, session.id)
     expect(filename).toBe('alloggi-sessione-di-prova-21-06-2027.csv')
     expect(csv.replace('﻿', '').trim().split('\r\n')).toEqual([
-      'Zona;Alloggio;Posti letto;Dotazioni;Famiglia;Persone;Esigenze;Da controllare',
+      'Zona;Alloggio;Posti letto;Dotazioni;Chi ci dorme;Persone;Esigenze;Da controllare',
       'Residence;Camera 1;3;;;;;',
       'Villette;Villetta 1;4;Cucina;Famiglia Rossi;5;Bagno senza barriere;5 persone e 4 posti letto. Manca: Bagno senza barriere',
       ';;;;Famiglia Bianchi;3;;Senza alloggio',

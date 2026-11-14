@@ -2,15 +2,10 @@
 // of the programme (Giallo, Rosso, Blu), each led by a person of the session staff. A family is in one group
 // (session_families.activityGroup), a group has one leader (session_staff.activityGroup, unique per session).
 // Explicit imports only, so the database tests can load this file (tests/db/activity-groups.test.ts).
-import { and, asc, eq, inArray, ne } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { SessionGroupFamily, SessionGroupStaff, SessionGroupsDto } from '../../shared/types/activity-groups'
 import { distributeFamilies } from '../../shared/utils/activity-groups'
-import {
-  OPEN_CONVOCATIONS,
-  PROGRAMME_GROUPS,
-  PROGRAMME_GROUP_LABELS,
-  type ProgrammeGroup,
-} from '../../shared/utils/constants'
+import { PROGRAMME_GROUPS, PROGRAMME_GROUP_LABELS, type ProgrammeGroup } from '../../shared/utils/constants'
 import { ageOn } from '../../shared/utils/dates'
 import { NO_CARDS, fullName, memberName } from '../../shared/utils/format'
 import { isSessionEditable } from '../../shared/utils/session-status'
@@ -19,7 +14,7 @@ import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
-import { findSession, holdingPlace, lockSession, requireEditable, type Actor } from './sessions'
+import { activeStaff, findSession, holdingPlace, lockSession, requireEditable, type Actor } from './sessions'
 
 /**
  * The titolari holding a place, by name, each with its cards: the young first, with their age at the start
@@ -75,13 +70,8 @@ async function groupFamilies(db: DbOrTx, session: { id: string; startDate: strin
     })
 }
 
-/** Who can lead a group of the session: a convocation not declined nor withdrawn, an account not disabled. */
-const canLead = (sessionId: string) =>
-  and(
-    eq(sessionStaff.sessionId, sessionId),
-    inArray(sessionStaff.status, [...OPEN_CONVOCATIONS]),
-    ne(users.status, 'disabled'),
-  )
+/** Who can lead a group of the session: the staff still in play. */
+const canLead = activeStaff
 
 /** The session staff who can lead a group (canLead): group leads first. */
 async function groupStaff(db: DbOrTx, sessionId: string): Promise<SessionGroupStaff[]> {

@@ -170,6 +170,14 @@ export function requireEditable(session: SessionRow, what: string) {
 /** What a family gives back when it leaves its place: its lodging and its activity group. */
 const LEAVE_PLACE = { lodgingId: null, activityGroup: null } as const
 
+/** The session staff still in play: a convocation not declined nor withdrawn, an account not disabled. */
+export const activeStaff = (sessionId: string) =>
+  and(
+    eq(sessionStaff.sessionId, sessionId),
+    inArray(sessionStaff.status, [...OPEN_CONVOCATIONS]),
+    ne(users.status, 'disabled'),
+  )
+
 /** The participations of the session that hold a place: titolari not declined nor removed. */
 export const holdingPlace = (sessionId: string) =>
   and(eq(sessionFamilies.sessionId, sessionId), holdsPlace(sessionFamilies))
