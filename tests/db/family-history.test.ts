@@ -46,16 +46,14 @@ describe('family history', () => {
     await db
       .insert(t.sessionStaff)
       .values({ sessionId: past.id, userId: drafted.id, status: 'draft', activityGroup: 'red' })
-    await db
-      .insert(t.sessionFamilies)
-      .values({
-        sessionId: past.id,
-        familyId: family.id,
-        kind: 'slot',
-        status: 'confirmed',
-        invitedAt: new Date(),
-        activityGroup: 'red',
-      })
+    await db.insert(t.sessionFamilies).values({
+      sessionId: past.id,
+      familyId: family.id,
+      kind: 'slot',
+      status: 'confirmed',
+      invitedAt: new Date(),
+      activityGroup: 'red',
+    })
     const [item] = await familySessions(db, family.id)
     expect(item!.lived).toEqual({ group: 'red', groupLead: null, lodging: null, hasProgramme: false })
   })
