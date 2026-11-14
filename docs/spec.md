@@ -257,7 +257,7 @@ Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or 
 
 ### 3.11 Lodgings
 
-Where each family sleeps during a session.
+Where each family, and each member of the staff and v-team, sleeps during a session.
 
 - **The layout** (`/admin/alloggi`, "Alloggi"): the lodgings of the camp, entered once and used by every
   session. Each one has a name, an optional area that groups the layout ("Villette", "Residence"), its
@@ -272,8 +272,13 @@ Where each family sleeps during a session.
   per session: a lodging of another family is shown with its name and cannot be chosen. The tab flags a
   family with more people than beds, or placed where something it needs is missing; it does not refuse
   the choice. A reserve gets a lodging once called. Saving a choice sends no email and is audited.
-- **The layout of the session**: under the families, lodging by lodging, who sleeps there; "Scarica lo
-  schema (CSV)" downloads it with the families still without a lodging at the end (audited).
+- **Staff e v-team**: the people convoked to the session (a convocation not declined nor withdrawn) get a
+  lodging each (`session_staff.lodgingId`, audited `convocation.lodging`). Several can share one, never
+  with a family: a lodging of a family cannot be chosen for the staff and the other way round. More people
+  than beds is flagged. Declining or withdrawing the convocation frees the lodging.
+- **The layout of the session**: lodging by lodging, who sleeps there, the family or the staff; "Scarica
+  lo schema (CSV)" downloads it with the families and the staff still without a lodging at the end
+  (audited).
 - A family that declines or is removed frees its lodging, and so does cancelling the session. A
   completed session keeps its layout, read-only. Families and staff do not see the lodgings.
 

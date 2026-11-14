@@ -66,6 +66,28 @@ import type { DbOrTx } from './db'
 import { requestSignatures, signatureRequestEmails } from './signature-requests'
 import { createError } from './errors'
 
+/** What a convocation declined or withdrawn lets go: its activity group and its lodging. */
+const LEAVE_SESSION = { activityGroup: null, lodgingId: null } as const
+
+/** A disabled account leaves the open sessions: its convocations let go of their group and lodging. */
+export async function leaveOpenSessions(db: DbOrTx, userId: string): Promise<void> {
+  await db
+    .update(sessionStaff)
+    .set(LEAVE_SESSION)
+    .where(
+      and(
+        eq(sessionStaff.userId, userId),
+        inArray(
+          sessionStaff.sessionId,
+          db
+            .select({ id: campSessions.id })
+            .from(campSessions)
+            .where(inArray(campSessions.status, [...SESSION_EDITABLE_STATUSES])),
+        ),
+      ),
+    )
+}
+
 type ProfileRow = typeof staffProfiles.$inferSelect
 type FileRow = typeof files.$inferSelect
 
@@ -650,7 +672,7 @@ export async function cancelConvocation(
   }
   await db
     .update(sessionStaff)
-    .set({ status: 'cancelled', activityGroup: null })
+    .set({ status: 'cancelled', ...LEAVE_SESSION })
     .where(eq(sessionStaff.id, convocation.id))
   if (convocation.status === 'accepted' && session.contractDocumentId) {
     await releaseContract(db, { documentId: session.contractDocumentId, userId: convocation.userId })
@@ -758,8 +780,8 @@ export async function answerConvocation(
       status: accept ? 'accepted' : 'declined',
       respondedAt: new Date(),
       declineReason: accept ? null : input.reason?.trim() || null,
-      // Who declines leads no activity group.
-      ...(!accept && { activityGroup: null }),
+      // Who declines leads no activity group and sleeps in no lodging.
+      ...(!accept && LEAVE_SESSION),
     })
     .where(eq(sessionStaff.id, convocation.id))
   await writeAudit(db, {

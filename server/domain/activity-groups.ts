@@ -2,15 +2,10 @@
 // of the programme (Giallo, Rosso, Blu), each led by a person of the session staff. A family is in one group
 // (session_families.activityGroup), a group has one leader (session_staff.activityGroup, unique per session).
 // Explicit imports only, so the database tests can load this file (tests/db/activity-groups.test.ts).
-import { and, asc, eq, inArray, ne } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { SessionGroupFamily, SessionGroupStaff, SessionGroupsDto } from '../../shared/types/activity-groups'
 import { distributeFamilies } from '../../shared/utils/activity-groups'
-import {
-  OPEN_CONVOCATIONS,
-  PROGRAMME_GROUPS,
-  PROGRAMME_GROUP_LABELS,
-  type ProgrammeGroup,
-} from '../../shared/utils/constants'
+import { PROGRAMME_GROUPS, PROGRAMME_GROUP_LABELS, type ProgrammeGroup } from '../../shared/utils/constants'
 import { ageOn } from '../../shared/utils/dates'
 import { NO_CARDS, fullName, memberName } from '../../shared/utils/format'
 import { isSessionEditable } from '../../shared/utils/session-status'
@@ -19,7 +14,15 @@ import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
-import { findSession, holdingPlace, lockSession, requireEditable, type Actor } from './sessions'
+import {
+  activeStaff,
+  findSession,
+  requireActiveConvocation,
+  holdingPlace,
+  lockSession,
+  requireEditable,
+  type Actor,
+} from './sessions'
 
 /**
  * The titolari holding a place, by name, each with its cards: the young first, with their age at the start
@@ -75,15 +78,7 @@ async function groupFamilies(db: DbOrTx, session: { id: string; startDate: strin
     })
 }
 
-/** Who can lead a group of the session: a convocation not declined nor withdrawn, an account not disabled. */
-const canLead = (sessionId: string) =>
-  and(
-    eq(sessionStaff.sessionId, sessionId),
-    inArray(sessionStaff.status, [...OPEN_CONVOCATIONS]),
-    ne(users.status, 'disabled'),
-  )
-
-/** The session staff who can lead a group (canLead): group leads first. */
+/** The session staff who can lead a group (activeStaff): group leads first. */
 async function groupStaff(db: DbOrTx, sessionId: string): Promise<SessionGroupStaff[]> {
   const rows = await db
     .select({
@@ -96,7 +91,7 @@ async function groupStaff(db: DbOrTx, sessionId: string): Promise<SessionGroupSt
     })
     .from(sessionStaff)
     .innerJoin(users, eq(users.id, sessionStaff.userId))
-    .where(canLead(sessionId))
+    .where(activeStaff(sessionId))
   const lead = (person: { role: SessionGroupStaff['role'] }) => Number(person.role === 'group_lead')
   return rows
     .map(({ firstName, lastName, ...row }) => ({ ...row, name: fullName({ firstName, lastName }) }))
@@ -161,15 +156,7 @@ export async function setGroupLeader(
     .for('update')
   if ((current?.id ?? null) === input.convocationId) return
   // Locked, so that the person cannot decline or be withdrawn before they lead the group.
-  const [leader] = input.convocationId
-    ? await db
-        .select({ id: sessionStaff.id, group: sessionStaff.activityGroup })
-        .from(sessionStaff)
-        .innerJoin(users, eq(users.id, sessionStaff.userId))
-        .where(and(eq(sessionStaff.id, input.convocationId), canLead(session.id)))
-        .for('update', { of: sessionStaff })
-    : []
-  if (input.convocationId && !leader) throw new DomainError(404, 'Questa persona non è nello staff della sessione')
+  const leader = input.convocationId ? await requireActiveConvocation(db, session.id, input.convocationId) : undefined
   // The unique index allows one leader per group: the current one steps down first.
   if (current) await db.update(sessionStaff).set({ activityGroup: null }).where(eq(sessionStaff.id, current.id))
   if (leader) await db.update(sessionStaff).set({ activityGroup: input.group }).where(eq(sessionStaff.id, leader.id))

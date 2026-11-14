@@ -170,6 +170,29 @@ export function requireEditable(session: SessionRow, what: string) {
 /** What a family gives back when it leaves its place: its lodging and its activity group. */
 const LEAVE_PLACE = { lodgingId: null, activityGroup: null } as const
 
+/**
+ * The session staff still in play: a convocation not declined nor withdrawn, an account not disabled. Needs no
+ * join: the account is checked in a subquery, its names written out (a query on session_staff alone renders
+ * its columns unqualified).
+ */
+export const activeStaff = (sessionId: string) =>
+  and(
+    eq(sessionStaff.sessionId, sessionId),
+    inArray(sessionStaff.status, [...OPEN_CONVOCATIONS]),
+    sql`not exists (select 1 from users where users.id = session_staff.user_id and users.status = 'disabled')`,
+  )
+
+/** A convocation of the session staff still in play (activeStaff), locked until the transaction ends; else 404. */
+export async function requireActiveConvocation(db: DbOrTx, sessionId: string, convocationId: string) {
+  const [row] = await db
+    .select({ id: sessionStaff.id, group: sessionStaff.activityGroup, lodgingId: sessionStaff.lodgingId })
+    .from(sessionStaff)
+    .where(and(eq(sessionStaff.id, convocationId), activeStaff(sessionId)))
+    .for('update')
+  if (!row) throw new DomainError(404, 'Questa persona non è nello staff della sessione')
+  return row
+}
+
 /** The participations of the session that hold a place: titolari not declined nor removed. */
 export const holdingPlace = (sessionId: string) =>
   and(eq(sessionFamilies.sessionId, sessionId), holdsPlace(sessionFamilies))

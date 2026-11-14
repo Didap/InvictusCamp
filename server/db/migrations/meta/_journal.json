@@ -106,6 +106,20 @@
       "when": 1794573314576,
       "tag": "0014_age_notice",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794650435976,
+      "tag": "0015_staff_lodgings",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794651027079,
+      "tag": "0016_staff_lodging_check",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ import { inviteEmail, resetPasswordEmail } from '../emails/auth'
 import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
+import { leaveOpenSessions } from './staff'
 import { issueToken } from './tokens'
 import { DomainError } from './errors'
 
@@ -147,6 +148,8 @@ export async function setUserEnabled(db: DbOrTx, userId: string, enabled: boolea
       .update(authTokens)
       .set({ usedAt: now })
       .where(and(eq(authTokens.userId, user.id), isNull(authTokens.usedAt)))
+    // Out of the session staff: group and lodging of the open sessions go free, the closed keep theirs.
+    await leaveOpenSessions(db, user.id)
   }
   await writeAudit(db, {
     actorUserId: actor.userId,

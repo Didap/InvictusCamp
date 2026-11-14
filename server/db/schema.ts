@@ -362,6 +362,8 @@ export const sessionStaff = pgTable(
     declineReason: text(),
     /** The activity group this person is responsible for (docs/spec.md 3.12): one per group. */
     activityGroup: text().$type<ProgrammeGroup>(),
+    /** Where this person sleeps in the session (docs/spec.md 3.11): a lodging takes staff or one family. */
+    lodgingId: uuid().references(() => lodgings.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -374,6 +376,9 @@ export const sessionStaff = pgTable(
       'session_staff_activity_group',
       sql`${t.activityGroup} is null or ${t.status} in (${sqlList(OPEN_CONVOCATIONS)})`,
     ),
+    // Nor does it sleep in a lodging.
+    check('session_staff_lodging', sql`${t.lodgingId} is null or ${t.status} in (${sqlList(OPEN_CONVOCATIONS)})`),
+    index('session_staff_lodging_idx').on(t.lodgingId),
   ],
 )
 
