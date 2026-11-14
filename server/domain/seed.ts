@@ -3,7 +3,6 @@
 // document is invented; health details are placeholders marked "(esempio)". Dates are fixed around the
 // 2026 summer and the 2027 calendar (shared/content/calendar-2027.ts).
 import { and, eq, sql } from 'drizzle-orm'
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { DisabilityInfo, FormAnswers, UsefulInfo } from '../../shared/types/domain'
 import type { FeedbackArchive } from '../../shared/types/feedback'
 import type {
@@ -24,6 +23,7 @@ import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '..
 import { familyNameOf } from '../../shared/utils/format'
 import * as t from '../db/schema'
 import type { Db, DbOrTx } from './db'
+import { textPdf } from './pdf'
 import { storeFile } from './storage'
 
 export const DEMO_PASSWORD = 'invictus-demo'
@@ -533,6 +533,8 @@ const DEMO_ANSWERS: FormAnswers = {
   sessionPreferences: ['Sessioni nel weekend (2 notti)', 'Sessioni settimanali estive (4 notti)'],
   accommodationNeeds: ['Bagno senza barriere architettoniche'],
   dog: false,
+  photoConsent: true,
+  publicationConsent: false,
 }
 
 /** An example layout of the camp: villette with a kitchen, rooms in the residence. */
@@ -574,42 +576,6 @@ function slug(value: string): string {
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '.')
     .replace(/^\.|\.$/g, '')
-}
-
-/** A one-page PDF with a title and some paragraphs. */
-async function demoPdf(title: string, paragraphs: string[]): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create()
-  pdf.setTitle(title)
-  pdf.setAuthor('Invictus Camp')
-  pdf.setCreator('Gestionale Invictus Camp (documento di esempio)')
-  const page = pdf.addPage([595.28, 841.89])
-  const font = await pdf.embedFont(StandardFonts.Helvetica)
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
-  page.drawText('Invictus Camp', { x: 56, y: 780, size: 11, font: bold, color: rgb(0.114, 0.373, 0.69) })
-  page.drawText(title, { x: 56, y: 748, size: 17, font: bold, color: rgb(0.12, 0.11, 0.1) })
-  let y = 712
-  for (const text of paragraphs) {
-    const words = text.split(' ')
-    let line = ''
-    for (const word of words) {
-      const next = line ? `${line} ${word}` : word
-      if (font.widthOfTextAtSize(next, 11) > 480) {
-        page.drawText(line, { x: 56, y, size: 11, font })
-        y -= 16
-        line = word
-      } else line = next
-    }
-    if (line) page.drawText(line, { x: 56, y, size: 11, font })
-    y -= 26
-  }
-  page.drawText('Documento di esempio generato dal gestionale: non ha valore.', {
-    x: 56,
-    y: 48,
-    size: 9,
-    font,
-    color: rgb(0.4, 0.4, 0.4),
-  })
-  return pdf.save()
 }
 
 const LOREM = [
@@ -664,7 +630,7 @@ export async function seedDemo(
     uploadedBy: string | null,
   ) =>
     storeFile(db, options.uploadsDir, {
-      data: await demoPdf(title, LOREM),
+      data: await textPdf(title, LOREM, 'Documento di esempio generato dal gestionale: non ha valore.'),
       originalName: `${name}.pdf`,
       mimeType: 'application/pdf',
       purpose,

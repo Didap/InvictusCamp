@@ -1,6 +1,7 @@
+import { cardsChanged } from '#server/domain/releases'
 import { memberSchema } from '#shared/schemas/families'
 import type { OwnFamilyMember } from '#shared/types/families'
-import { guestAgeNotice, updateFamilyMember } from '../../../domain/families'
+import { updateFamilyMember } from '../../../domain/families'
 
 /**
  * Changes a member of the signed-in family (404 for anyone else's); health changes are audited. The last card
@@ -13,7 +14,13 @@ export default defineEventHandler(async (event): Promise<OwnFamilyMember> => {
   const actor = { userId: user.id, ip: clientIp(event) }
   const { saved, emails } = await useDb().transaction(async tx => ({
     saved: await updateFamilyMember(tx, { familyId: family.id, memberId, member, actor }),
-    emails: family.ageNoticeAt ? [] : await guestAgeNotice(tx, { familyId: family.id, ctx: emailContext() }),
+    emails: await cardsChanged(tx, {
+      familyId: family.id,
+      ctx: emailContext(),
+      uploadsDir: uploadsDir(),
+      actor,
+      ageNoticeSent: Boolean(family.ageNoticeAt),
+    }),
   }))
   await deliver(emails)
   return saved

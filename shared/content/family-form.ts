@@ -80,6 +80,28 @@ export const FAMILY_FORM_SECTIONS: FormSection[] = [
       },
     ],
   },
+  {
+    id: 'release',
+    title: 'Liberatoria',
+    description:
+      'Le tue risposte finiscono nella liberatoria che prepariamo con i dati dei componenti: la trovi da firmare in Documenti.',
+    questions: [
+      {
+        id: 'photoConsent',
+        label: 'Autorizzi foto e riprese video della tua famiglia durante il soggiorno?',
+        type: 'boolean',
+        required: true,
+        help: 'Servono a documentare le attività del camp.',
+      },
+      {
+        id: 'publicationConsent',
+        label: 'Autorizzi la pubblicazione di foto e video sui canali del camp?',
+        type: 'boolean',
+        required: true,
+        help: 'Sito, social e materiali informativi di Invictus Camp.',
+      },
+    ],
+  },
 ]
 
 export const FAMILY_FORM_QUESTIONS: FormQuestion[] = FAMILY_FORM_SECTIONS.flatMap(section => section.questions)

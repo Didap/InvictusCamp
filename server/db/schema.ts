@@ -149,6 +149,9 @@ export const families = pgTable(
     healthDataConsentAt: timestamp(tz),
     /** When the email about the camp's ages (5 to 21) left: it leaves once (server/domain/families.ts). */
     ageNoticeAt: timestamp(tz),
+    /** The release generated from the cards (server/domain/releases.ts) and the digest of its text. */
+    releaseDocumentId: uuid().references((): AnyPgColumn => documents.id, { onDelete: 'set null' }),
+    releaseDigest: text(),
     /** Internal notes of the administration; never shown to the family. */
     adminNotes: text(),
     createdAt: createdAt(),

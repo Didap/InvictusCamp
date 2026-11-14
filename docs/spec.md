@@ -205,6 +205,12 @@ availability or receive convocations. The administration can move a person to th
   too. An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling it in
   requires name, surname, relationship (but for the young person with a condition) and the birth date of an
   adult and of the young person with a condition (a sibling's is optional).
+- **Release** (liberatoria): when the family data is confirmed and every card is complete, the camp prepares
+  the release with the members (name, birth date, relationship; never health data) and the answers of the
+  «Liberatoria» section of the family data (photos and videos during the stay, their publication), as a PDF
+  document (category consent) the family signs in Documenti (`families.releaseDocumentId`, audited
+  `family.release`). When those data change, a new release replaces it: the old one is archived and its
+  pending signature cancelled. The text is a draft until the camp gives its own (shared/content/release.ts).
 - **Ages**: the camp takes young people with a condition from 5 to 21 (`GUEST_AGE`), counted today, as the
   admin list shows and filters them. One of them within the ages is enough. When
   every card is complete (after a save or a removal) and none is, the family gets one email (`family.age_notice`, never naming a
