@@ -33,7 +33,6 @@ export interface SessionLodgingFamily {
 export interface SessionLodgingStaff {
   /** The convocation (session_staff row). */
   id: string
-  userId: string
   name: string
   team: StaffTeam
   status: ConvocationStatus

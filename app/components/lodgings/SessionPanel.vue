@@ -2,7 +2,7 @@
 import type { SelectMenuItem } from '@nuxt/ui'
 import type { Lodging, SessionLodgingFamily, SessionLodgingStaff, SessionLodgingsDto } from '#shared/types/lodgings'
 import { NO_CARDS, plural } from '#shared/utils/format'
-import { bedsLabel, featureLabels, groupByArea, placeFamilies } from '#shared/utils/lodgings'
+import { bedsLabel, featureLabels, groupByArea, placeGuests } from '#shared/utils/lodgings'
 
 // The Alloggi tab of a session (docs/spec.md 3.11): each titolare holding a place gets a lodging of the
 // layout, chosen by its size and needs, and so does each member of the staff and v-team (several in one
@@ -17,7 +17,7 @@ const { data, status, refresh } = useApiFetch<SessionLodgingsDto>(
 
 /** Each lodging with its family and what does not fit. */
 const placed = computed(() =>
-  data.value ? placeFamilies(data.value.lodgings, data.value.families, data.value.staff) : [],
+  data.value ? placeGuests(data.value.lodgings, data.value.families, data.value.staff) : [],
 )
 /** The layout of the session, by area. */
 const layout = computed(() => groupByArea(placed.value))
@@ -64,7 +64,9 @@ const choices = computed(
         family.id,
         menu(item => {
           if (item.family && item.family.id !== family.id) return { taken: `Assegnato a ${item.family.familyName}` }
-          return item.staff.length ? { taken: `Ci dorme lo staff: ${staffLine(item)}` } : {}
+          return item.staff.length
+            ? { taken: `Ci dorme lo staff (${plural(item.staff.length, 'persona', 'persone')})` }
+            : {}
         }),
       ]),
     ),

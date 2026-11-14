@@ -70,10 +70,7 @@ async function groupFamilies(db: DbOrTx, session: { id: string; startDate: strin
     })
 }
 
-/** Who can lead a group of the session: the staff still in play. */
-const canLead = activeStaff
-
-/** The session staff who can lead a group (canLead): group leads first. */
+/** The session staff who can lead a group (activeStaff): group leads first. */
 async function groupStaff(db: DbOrTx, sessionId: string): Promise<SessionGroupStaff[]> {
   const rows = await db
     .select({
@@ -86,7 +83,7 @@ async function groupStaff(db: DbOrTx, sessionId: string): Promise<SessionGroupSt
     })
     .from(sessionStaff)
     .innerJoin(users, eq(users.id, sessionStaff.userId))
-    .where(canLead(sessionId))
+    .where(activeStaff(sessionId))
   const lead = (person: { role: SessionGroupStaff['role'] }) => Number(person.role === 'group_lead')
   return rows
     .map(({ firstName, lastName, ...row }) => ({ ...row, name: fullName({ firstName, lastName }) }))
@@ -156,7 +153,7 @@ export async function setGroupLeader(
         .select({ id: sessionStaff.id, group: sessionStaff.activityGroup })
         .from(sessionStaff)
         .innerJoin(users, eq(users.id, sessionStaff.userId))
-        .where(and(eq(sessionStaff.id, input.convocationId), canLead(session.id)))
+        .where(and(eq(sessionStaff.id, input.convocationId), activeStaff(session.id)))
         .for('update', { of: sessionStaff })
     : []
   if (input.convocationId && !leader) throw new DomainError(404, 'Questa persona non è nello staff della sessione')

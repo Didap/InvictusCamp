@@ -2,7 +2,7 @@
 // entered once and used by every session. In a session a lodging hosts one family (session_families.lodgingId,
 // with its unique index and check) or members of the staff and v-team (session_staff.lodgingId), never both.
 // Explicit imports only, so the database tests can load this file (tests/db/lodgings.test.ts).
-import { and, count, eq, ne, sql } from 'drizzle-orm'
+import { and, count, eq, inArray, ne, sql } from 'drizzle-orm'
 import type { LodgingValues } from '../../shared/schemas/lodgings'
 import type { FormAnswers } from '../../shared/types/domain'
 import type {
@@ -11,9 +11,9 @@ import type {
   SessionLodgingStaff,
   SessionLodgingsDto,
 } from '../../shared/types/lodgings'
-import { enumLabel } from '../../shared/utils/constants'
+import { OPEN_CONVOCATIONS, enumLabel } from '../../shared/utils/constants'
 import { NO_CARDS, fullName } from '../../shared/utils/format'
-import { accommodationNeeds, featureLabels, placeFamilies, sortLodgings } from '../../shared/utils/lodgings'
+import { accommodationNeeds, featureLabels, placeGuests, sortLodgings } from '../../shared/utils/lodgings'
 import { isSessionEditable } from '../../shared/utils/session-status'
 import { campSessions, families, lodgings, sessionFamilies, sessionStaff, staffProfiles, users } from '../db/schema'
 import { writeAudit } from './audit'
@@ -133,7 +133,6 @@ async function lodgingStaff(db: DbOrTx, sessionId: string): Promise<SessionLodgi
   const rows = await db
     .select({
       id: sessionStaff.id,
-      userId: users.id,
       firstName: users.firstName,
       lastName: users.lastName,
       team: staffProfiles.team,
@@ -170,6 +169,42 @@ export async function sessionLodgingsOf(db: DbOrTx, sessionId: string): Promise<
   return { editable: isSessionEditable(session.status), ...rest }
 }
 
+/**
+ * The lodging, if it can take who is placed in the session: a lodging hosts one family (`family`, the
+ * participation placed now) or members of the staff (`staff`), never both. 404 for a lodging not in the
+ * layout, 409 for one already taken.
+ */
+async function requireLodgingFor(
+  db: DbOrTx,
+  sessionId: string,
+  lodgingId: string,
+  who: { family: string } | { staff: true },
+) {
+  const [lodging] = await db.select(columns).from(lodgings).where(eq(lodgings.id, lodgingId))
+  if (!lodging) throw notFound()
+  const [holder] = await db
+    .select({ familyName: families.name })
+    .from(sessionFamilies)
+    .innerJoin(families, eq(families.id, sessionFamilies.familyId))
+    .where(
+      and(
+        eq(sessionFamilies.sessionId, sessionId),
+        eq(sessionFamilies.lodgingId, lodging.id),
+        'family' in who ? ne(sessionFamilies.id, who.family) : undefined,
+      ),
+    )
+  if (holder) throw new DomainError(409, `«${lodging.name}» è già assegnato a ${holder.familyName}`)
+  if ('family' in who) {
+    const [staff] = await db
+      .select({ total: count() })
+      .from(sessionStaff)
+      .innerJoin(users, eq(users.id, sessionStaff.userId))
+      .where(and(activeStaff(sessionId), eq(sessionStaff.lodgingId, lodging.id)))
+    if (staff?.total) throw new DomainError(409, `In «${lodging.name}» dorme già lo staff`)
+  }
+  return lodging
+}
+
 /** Places a titolare of the session in a lodging, or takes it out (lodgingId null). */
 export async function assignLodging(
   db: DbOrTx,
@@ -183,27 +218,7 @@ export async function assignLodging(
     .where(and(eq(sessionFamilies.id, input.participationId), holdingPlace(session.id)))
   if (!row) throw new DomainError(404, 'La famiglia non ha un posto in questa sessione')
   if (row.lodgingId === input.lodgingId) return
-  if (input.lodgingId) {
-    const [lodging] = await db.select(columns).from(lodgings).where(eq(lodgings.id, input.lodgingId))
-    if (!lodging) throw notFound()
-    const [holder] = await db
-      .select({ familyName: families.name })
-      .from(sessionFamilies)
-      .innerJoin(families, eq(families.id, sessionFamilies.familyId))
-      .where(
-        and(
-          eq(sessionFamilies.sessionId, session.id),
-          eq(sessionFamilies.lodgingId, lodging.id),
-          ne(sessionFamilies.id, row.id),
-        ),
-      )
-    if (holder) throw new DomainError(409, `«${lodging.name}» è già assegnato a ${holder.familyName}`)
-    const [staff] = await db
-      .select({ total: count() })
-      .from(sessionStaff)
-      .where(and(eq(sessionStaff.sessionId, session.id), eq(sessionStaff.lodgingId, lodging.id)))
-    if (staff?.total) throw new DomainError(409, `In «${lodging.name}» dorme già lo staff`)
-  }
+  if (input.lodgingId) await requireLodgingFor(db, session.id, input.lodgingId, { family: row.id })
   await db.update(sessionFamilies).set({ lodgingId: input.lodgingId }).where(eq(sessionFamilies.id, row.id))
   await writeAudit(db, {
     actorUserId: input.actor.userId,
@@ -232,17 +247,14 @@ export async function assignStaffLodging(
     .where(and(eq(sessionStaff.id, input.convocationId), activeStaff(session.id)))
   if (!row) throw new DomainError(404, 'Questa persona non è nello staff della sessione')
   if (row.lodgingId === input.lodgingId) return
-  if (input.lodgingId) {
-    const [lodging] = await db.select(columns).from(lodgings).where(eq(lodgings.id, input.lodgingId))
-    if (!lodging) throw notFound()
-    const [holder] = await db
-      .select({ familyName: families.name })
-      .from(sessionFamilies)
-      .innerJoin(families, eq(families.id, sessionFamilies.familyId))
-      .where(and(eq(sessionFamilies.sessionId, session.id), eq(sessionFamilies.lodgingId, lodging.id)))
-    if (holder) throw new DomainError(409, `«${lodging.name}» è già assegnato a ${holder.familyName}`)
-  }
-  await db.update(sessionStaff).set({ lodgingId: input.lodgingId }).where(eq(sessionStaff.id, row.id))
+  if (input.lodgingId) await requireLodgingFor(db, session.id, input.lodgingId, { staff: true })
+  // Still in play when written: a decline committed meanwhile leaves its lodging empty.
+  const [updated] = await db
+    .update(sessionStaff)
+    .set({ lodgingId: input.lodgingId })
+    .where(and(eq(sessionStaff.id, row.id), inArray(sessionStaff.status, [...OPEN_CONVOCATIONS])))
+    .returning({ id: sessionStaff.id })
+  if (!updated) throw new DomainError(409, 'La convocazione è appena stata rifiutata o ritirata')
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'convocation.lodging',
@@ -275,7 +287,7 @@ export async function lodgingsCsv(db: DbOrTx, sessionId: string): Promise<{ file
   ]
   return sessionCsv(session, 'alloggi', [
     ['Zona', 'Alloggio', 'Posti letto', 'Dotazioni', 'Chi ci dorme', 'Persone', 'Esigenze', 'Da controllare'],
-    ...placeFamilies(layout, placed, staff).map(lodging => [
+    ...placeGuests(layout, placed, staff).map(lodging => [
       lodging.area,
       lodging.name,
       lodging.beds,
