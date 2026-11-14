@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { CalendarEvent } from '~/components/ic/CalendarMonth.vue'
 import type { FamilySessionItem } from '#shared/types/sessions'
-import { enumLabel } from '#shared/utils/constants'
+import { PROGRAMME_GROUP_LABELS, enumLabel } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDayRange } from '#shared/utils/format'
+import { isSessionOver } from '#shared/utils/session-status'
 
 // The family's sessions (docs/spec.md 3.3): the invitations to answer, the calendar, the next sessions
 // and the history. A session appears only once the family has been invited. Calendar events carry no
@@ -16,10 +17,9 @@ const today = todayIso()
 const items = computed(() => data.value ?? [])
 const isUpcoming = (item: FamilySessionItem) =>
   !item.canConfirm &&
-  item.endDate >= today &&
   (item.status === 'confirmed' || item.status === 'invited') &&
   item.sessionStatus !== 'cancelled' &&
-  item.sessionStatus !== 'completed'
+  !isSessionOver({ status: item.sessionStatus, endDate: item.endDate }, today)
 const upcoming = computed(() => items.value.filter(isUpcoming))
 const history = computed(() =>
   items.value
@@ -82,7 +82,7 @@ const showCalendar = computed(() => events.value.filter(event => event.endDate >
       <IcSection
         v-if="history.length"
         title="Storico"
-        description="Le sessioni passate, quelle a cui hai rinunciato e quelle annullate."
+        description="Le sessioni passate, con il tuo gruppo, l’alloggio e il programma, quelle a cui hai rinunciato e quelle annullate."
       >
         <ul class="divide-y divide-default overflow-hidden rounded-lg border border-default bg-elevated">
           <li
@@ -97,6 +97,27 @@ const showCalendar = computed(() => events.value.filter(event => event.endDate >
               <p v-if="item.status === 'declined' && item.declineReason" class="mt-1 text-sm text-muted">
                 Motivo: {{ item.declineReason }}
               </p>
+              <div v-if="item.lived" class="mt-2 space-y-1 text-sm">
+                <p v-if="item.lived.group" class="flex items-center gap-2">
+                  <ProgrammeGroupDot :group="item.lived.group" />
+                  {{
+                    `Gruppo ${PROGRAMME_GROUP_LABELS[item.lived.group]}${item.lived.groupLead ? `, con ${item.lived.groupLead}` : ''}`
+                  }}
+                </p>
+                <p v-if="item.lived.lodging" class="flex items-center gap-2">
+                  <UIcon name="i-lucide-bed-double" class="size-4 shrink-0 text-muted" aria-hidden="true" />
+                  {{ item.lived.lodging }}
+                </p>
+                <UButton
+                  v-if="item.lived.hasProgramme"
+                  class="mt-2 pointer-coarse:min-h-11"
+                  :to="`/famiglia/programma/${item.sessionId}`"
+                  icon="i-lucide-calendar-clock"
+                  label="Il programma della settimana"
+                  color="neutral"
+                  variant="outline"
+                />
+              </div>
               <p v-if="item.feedback === 'sent'" class="mt-1 text-sm text-muted">Questionario inviato, grazie.</p>
               <UButton
                 v-else-if="item.feedback === 'open'"

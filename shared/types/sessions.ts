@@ -7,6 +7,7 @@ import type {
   SessionStatus,
   FamilyFormStatus,
   UserStatus,
+  ProgrammeGroup,
 } from '../utils/constants'
 import type { IsoDay } from '../utils/dates'
 import type { FeedbackState } from './feedback'
@@ -212,4 +213,15 @@ export interface FamilySessionItem {
   canDecline: boolean
   /** The end-of-session questionnaire (docs/spec.md 3.13): open to answer, sent, or none. */
   feedback: FeedbackState
+  /**
+   * What the family lived, once the session it was confirmed in is over (docs/spec.md 3.3): its activity group
+   * and who led it, its lodging, whether there is a programme. Null before then, and for a session it missed.
+   */
+  lived: {
+    group: ProgrammeGroup | null
+    groupLead: string | null
+    lodging: string | null
+    /** The session has a programme to read (its own or its year's). */
+    hasProgramme: boolean
+  } | null
 }
