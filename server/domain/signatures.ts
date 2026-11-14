@@ -235,6 +235,8 @@ export async function setDocumentArchived(
 ): Promise<{ cancelled: number }> {
   const document = await requireDocument(db, input.documentId, 'update')
   if (Boolean(document.archivedAt) === input.archived) return { cancelled: 0 }
+  // A release replaced or withdrawn stays so: the gestionale prepares the one in force.
+  if (!input.archived && document.familyId) throw fail(409, 'Una liberatoria archiviata non si ripristina')
   await db
     .update(documents)
     .set({ archivedAt: input.archived ? new Date() : null })
@@ -329,6 +331,7 @@ export async function assignDocument(
 ): Promise<{ result: AssignResult; messages: EmailMessage[] }> {
   const document = await requireDocument(db, input.documentId, 'share')
   if (document.archivedAt) throw fail(409, 'Il documento è archiviato: ripristinalo prima di assegnarlo')
+  if (document.familyId) throw fail(409, 'È la liberatoria di una famiglia: non si assegna ad altri')
   if (input.dueDate && input.dueDate < todayIso()) throw fail(400, 'La scadenza non può essere nel passato')
   const userIds = await resolveAssignees(db, input.target)
   const existing = userIds.length

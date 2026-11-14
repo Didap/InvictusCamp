@@ -3,7 +3,7 @@
 // changes, the release is made again and the old one archived (its pending signature cancelled). No health
 // data in it. Explicit imports only, so the database tests can load it.
 import { createHash } from 'node:crypto'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { releaseText } from '../../shared/content/release'
 import { fullName, isCardToComplete } from '../../shared/utils/format'
 import { documents, families, familyMembers } from '../db/schema'
@@ -38,8 +38,9 @@ export async function familyRelease(
   db: DbOrTx,
   input: Omit<CardsChangedInput, 'ageNoticeSent'>,
 ): Promise<EmailMessage[]> {
-  const [[family], cards] = await Promise.all([
-    db.select().from(families).where(eq(families.id, input.familyId)),
+  // Locked: two saves at once would both see the old digest and both make a release.
+  const [family] = await db.select().from(families).where(eq(families.id, input.familyId)).for('update')
+  const [cards, [current]] = await Promise.all([
     db
       .select({
         firstName: familyMembers.firstName,
@@ -52,19 +53,38 @@ export async function familyRelease(
       .from(familyMembers)
       .where(eq(familyMembers.familyId, input.familyId))
       .orderBy(familyMembers.position),
+    db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(eq(documents.familyId, input.familyId), isNull(documents.archivedAt))),
   ])
-  if (!family || family.formStatus !== 'submitted' || !cards.length || cards.some(isCardToComplete)) return []
-  const text = releaseText({
-    familyName: family.name,
-    members: cards.map(card => ({ name: fullName(card), birthDate: card.birthDate, relationship: card.relationship })),
-    photoConsent: family.formAnswers.photoConsent === true,
-    publicationConsent: family.formAnswers.publicationConsent === true,
-  })
-  const digest = createHash('sha256').update(JSON.stringify(text)).digest('hex')
-  if (family.releaseDigest === digest) return []
-
-  if (family.releaseDocumentId) {
-    await setDocumentArchived(db, { documentId: family.releaseDocumentId, archived: true, actor: input.actor })
+  if (!family) return []
+  const { photoConsent, publicationConsent } = family.formAnswers
+  const ready =
+    family.formStatus === 'submitted' &&
+    cards.length > 0 &&
+    !cards.some(isCardToComplete) &&
+    typeof photoConsent === 'boolean' &&
+    typeof publicationConsent === 'boolean'
+  const text = ready
+    ? releaseText({
+        familyName: family.name,
+        members: cards.map(card => ({
+          name: fullName(card),
+          birthDate: card.birthDate,
+          relationship: card.relationship,
+        })),
+        photoConsent,
+        publicationConsent,
+      })
+    : null
+  const digest = text && createHash('sha256').update(JSON.stringify(text)).digest('hex')
+  if (current && family.releaseDigest === digest) return []
+  // The release in force no longer matches the family: it goes, and a new one comes once the data is complete.
+  if (current) await setDocumentArchived(db, { documentId: current.id, archived: true, actor: input.actor })
+  if (!text) {
+    if (family.releaseDigest) await db.update(families).set({ releaseDigest: null }).where(eq(families.id, family.id))
+    return []
   }
   const file = await storeFile(db, input.uploadsDir, {
     data: await textPdf(
@@ -85,19 +105,17 @@ export async function familyRelease(
       category: 'consent',
       fileId: file.id,
       requiresSignature: true,
+      familyId: family.id,
     })
     .returning({ id: documents.id })
-  await db
-    .update(families)
-    .set({ releaseDocumentId: document!.id, releaseDigest: digest })
-    .where(eq(families.id, family.id))
+  await db.update(families).set({ releaseDigest: digest }).where(eq(families.id, family.id))
   const requests = await requestSignatures(db, { documentId: document!.id, userIds: [family.userId] })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'family.release',
     entityType: 'family',
     entityId: family.id,
-    data: { documentId: document!.id, replaced: family.releaseDocumentId },
+    data: { documentId: document!.id, replaced: current?.id ?? null },
     ip: input.actor.ip ?? null,
   })
   return signatureRequestEmails(

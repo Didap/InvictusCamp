@@ -3,9 +3,10 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { familyRelease } from '../../server/domain/releases'
+import { assignDocument, setDocumentArchived } from '../../server/domain/signatures'
 import { makeFamily, t, useTestDb } from './helpers'
 
 const db = useTestDb()
@@ -31,9 +32,12 @@ describe('release', () => {
     await db.update(t.familyMembers).set({ birthDate: '1985-04-12' }).where(eq(t.familyMembers.id, anna!.id))
     const [email] = await familyRelease(db, input)
     expect(email).toMatchObject({ template: 'signature.request', to: user.email })
-    const [first] = await db.select().from(t.families).where(eq(t.families.id, family.id))
-    const [document] = await db.select().from(t.documents).where(eq(t.documents.id, first!.releaseDocumentId!))
+    const [document] = await db.select().from(t.documents).where(eq(t.documents.familyId, family.id))
     expect(document).toMatchObject({ title: 'Liberatoria · Famiglia Rossi', category: 'consent', archivedAt: null })
+    // A release is the family's own: never assigned to anyone else, never restored once replaced.
+    await expect(
+      assignDocument(db, ctx, { documentId: document!.id, target: { type: 'all_families' }, actor }),
+    ).rejects.toMatchObject({ statusCode: 409 })
 
     // Nothing changed: nothing new.
     expect(await familyRelease(db, input)).toEqual([])
@@ -51,5 +55,35 @@ describe('release', () => {
       .from(t.signatureRequests)
       .where(eq(t.signatureRequests.documentId, document!.id))
     expect(request!.status).toBe('cancelled')
+    await expect(setDocumentArchived(db, { documentId: document!.id, archived: false, actor })).rejects.toMatchObject({
+      statusCode: 409,
+    })
+
+    // A new empty card: the release in force goes, none comes until the card is filled in.
+    await db.insert(t.familyMembers).values({ familyId: family.id, kind: 'young' })
+    expect(await familyRelease(db, input)).toEqual([])
+    const active = await db
+      .select()
+      .from(t.documents)
+      .where(and(eq(t.documents.familyId, family.id), isNull(t.documents.archivedAt)))
+    expect(active).toEqual([])
+  })
+
+  it('writes a name the standard fonts cannot, and waits for both answers', async () => {
+    const { user, family } = await makeFamily(db, { name: 'Famiglia Nguyễn', formStatus: 'submitted', formAnswers: {} })
+    await db.insert(t.familyMembers).values({
+      familyId: family.id,
+      firstName: 'Łukasz',
+      lastName: 'Nguyễn',
+      relationship: 'parent',
+      birthDate: '1980-01-01',
+    })
+    const input = { familyId: family.id, ctx, uploadsDir, actor: { userId: user.id, ip: null } }
+    expect(await familyRelease(db, input)).toEqual([])
+    await db
+      .update(t.families)
+      .set({ formAnswers: { photoConsent: false, publicationConsent: false } })
+      .where(eq(t.families.id, family.id))
+    expect(await familyRelease(db, input)).toHaveLength(1)
   })
 })

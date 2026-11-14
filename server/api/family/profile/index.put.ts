@@ -1,4 +1,3 @@
-import { cardsChanged } from '#server/domain/releases'
 import { familyDataSchema } from '#shared/schemas/families'
 import type { FamilyDataResult } from '#shared/types/families'
 import { saveFamilyData, toFamilyProfile } from '../../../domain/families'
@@ -13,13 +12,7 @@ export default defineEventHandler(async (event): Promise<FamilyDataResult> => {
   const actor = { userId: user.id, ip: clientIp(event) }
   const { saved, emails } = await useDb().transaction(async tx => ({
     saved: await saveFamilyData(tx, { familyId: family.id, data, actor }),
-    emails: await cardsChanged(tx, {
-      familyId: family.id,
-      ctx: emailContext(),
-      uploadsDir: uploadsDir(),
-      actor,
-      ageNoticeSent: Boolean(family.ageNoticeAt),
-    }),
+    emails: await familyChanged(tx, event, family, actor),
   }))
   await deliver(emails)
   return {

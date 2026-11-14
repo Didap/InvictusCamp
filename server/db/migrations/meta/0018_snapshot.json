@@ -1,5 +1,5 @@
 {
-  "id": "e694d083-0395-4363-9f3e-167fa5eaa69e",
+  "id": "cf57b5be-6e77-4e9e-ba3e-745d58e78cbb",
   "prevId": "b78b66ca-23cb-4266-bff1-177e2a1f58b3",
   "version": "7",
   "dialect": "postgresql",
@@ -556,6 +556,12 @@
           "notNull": true,
           "default": true
         },
+        "family_id": {
+          "name": "family_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "session_id": {
           "name": "session_id",
           "type": "uuid",
@@ -618,6 +624,19 @@
             "id"
           ],
           "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "documents_family_id_families_id_fk": {
+          "name": "documents_family_id_families_id_fk",
+          "tableFrom": "documents",
+          "tableTo": "families",
+          "columnsFrom": [
+            "family_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "documents_session_id_camp_sessions_id_fk": {
@@ -938,12 +957,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "release_document_id": {
-          "name": "release_document_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "release_digest": {
           "name": "release_digest",
           "type": "text",
@@ -1000,19 +1013,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "families_release_document_id_documents_id_fk": {
-          "name": "families_release_document_id_documents_id_fk",
-          "tableFrom": "families",
-          "tableTo": "documents",
-          "columnsFrom": [
-            "release_document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

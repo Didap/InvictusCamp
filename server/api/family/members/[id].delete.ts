@@ -1,4 +1,3 @@
-import { cardsChanged } from '#server/domain/releases'
 import { removeFamilyMember } from '../../../domain/families'
 
 /** Removes a member of the signed-in family (never the only referent); may send the age notice. */
@@ -8,13 +7,7 @@ export default defineEventHandler(async event => {
   const actor = { userId: user.id, ip: clientIp(event) }
   const emails = await useDb().transaction(async tx => {
     await removeFamilyMember(tx, { familyId: family.id, memberId, actor })
-    return cardsChanged(tx, {
-      familyId: family.id,
-      ctx: emailContext(),
-      uploadsDir: uploadsDir(),
-      actor,
-      ageNoticeSent: Boolean(family.ageNoticeAt),
-    })
+    return familyChanged(tx, event, family, actor)
   })
   await deliver(emails)
   return { ok: true }

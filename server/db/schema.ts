@@ -149,8 +149,7 @@ export const families = pgTable(
     healthDataConsentAt: timestamp(tz),
     /** When the email about the camp's ages (5 to 21) left: it leaves once (server/domain/families.ts). */
     ageNoticeAt: timestamp(tz),
-    /** The release generated from the cards (server/domain/releases.ts) and the digest of its text. */
-    releaseDocumentId: uuid().references((): AnyPgColumn => documents.id, { onDelete: 'set null' }),
+    /** The digest of the text of the release now in force (server/domain/releases.ts): a change redoes it. */
     releaseDigest: text(),
     /** Internal notes of the administration; never shown to the family. */
     adminNotes: text(),
@@ -466,6 +465,8 @@ export const documents = pgTable(
       .references(() => files.id, { onDelete: 'restrict' }),
     requiresSignature: boolean().notNull().default(true),
     /** Set when the document belongs to one session (e.g. its contract). */
+    /** A family's own document: its release (server/domain/releases.ts), never assigned to anyone else. */
+    familyId: uuid().references(() => families.id, { onDelete: 'cascade' }),
     sessionId: uuid().references((): AnyPgColumn => campSessions.id, { onDelete: 'set null' }),
     createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),
     archivedAt: timestamp(tz),
