@@ -117,6 +117,19 @@ export const DISABILITY_CHOICES = [
 ] as const satisfies readonly { key: string; label: string; options: readonly Choice[] }[]
 export type DisabilityChoiceKey = (typeof DISABILITY_CHOICES)[number]['key']
 
+/** A list of choices in two columns from the tablet up, the legend for screen readers only. */
+export const CHOICES_UI = { legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }
+
+/** «Informazioni utili» as label and value, for the family's and the staff's views. */
+export function usefulInfoItems(info: { allergies?: string[]; diet?: string; notes?: string } | null) {
+  const allergies = info?.allergies?.map(value => choiceLabel(ALLERGIES, value))
+  return [
+    { label: HEALTH_LABELS.allergies, value: allergies?.length ? allergies.join(', ') : 'Nessuna indicata' },
+    { label: HEALTH_LABELS.diet, value: info?.diet ? choiceLabel(DIETS, info.diet) : 'Nessuna indicata' },
+    { label: HEALTH_LABELS.infoNotes, value: info?.notes ?? null },
+  ]
+}
+
 /** The label of a stored choice; an unknown key (an option removed since) shows as it is. */
 export function choiceLabel(options: readonly Choice[], value: string): string {
   return options.find(option => option.value === value)?.label ?? value

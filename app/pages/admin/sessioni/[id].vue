@@ -28,6 +28,7 @@ const TABS = [
   { value: 'famiglie', label: 'Famiglie', icon: 'i-lucide-heart-handshake', slot: 'famiglie' as const },
   { value: 'alloggi', label: 'Alloggi', icon: 'i-lucide-bed-double', slot: 'alloggi' as const },
   { value: 'gruppi', label: 'Gruppi', icon: 'i-lucide-shapes', slot: 'gruppi' as const },
+  { value: 'mensa', label: 'Mensa', icon: 'i-lucide-utensils', slot: 'mensa' as const },
   { value: 'staff', label: 'Staff', icon: 'i-lucide-id-card', slot: 'staff' as const },
   { value: 'programma', label: 'Programma', icon: 'i-lucide-calendar-clock', slot: 'programma' as const },
   { value: 'documenti', label: 'Documenti', icon: 'i-lucide-files', slot: 'documenti' as const },
@@ -520,6 +521,9 @@ const staffHint = computed(() => {
         </template>
         <template #alloggi>
           <LodgingsSessionPanel :session-id="session.id" />
+        </template>
+        <template #mensa>
+          <CanteenSessionPanel :session-id="session.id" />
         </template>
         <template #gruppi>
           <GroupsSessionPanel :session-id="session.id" />

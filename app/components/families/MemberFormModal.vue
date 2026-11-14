@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import {
-  ALLERGIES,
-  DIETS,
+  CHOICES_UI,
   DISABILITY_CHOICES,
   HEALTH_LABELS,
   type Choice,
   type DisabilityChoiceKey,
 } from '#shared/content/member-form'
-import { memberSchema } from '#shared/schemas/families'
+import { memberSchema, usefulInfoForm, type UsefulInfoForm } from '#shared/schemas/families'
 import type { OwnFamilyMember } from '#shared/types/families'
 import { YES_NO_ITEMS, type MemberKind, type MemberRelationship } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
@@ -18,7 +17,6 @@ import { fullName, isEmptyCard, isYoungWithCondition } from '#shared/utils/forma
 // The options as plain strings, once: the form holds the keys before the schema checks them.
 const DISABILITY_FIELDS = DISABILITY_CHOICES.map(field => ({ ...field, items: [...field.options] as Choice[] }))
 /** Lists of choices in two columns from the tablet up. */
-const CHOICES_UI = { legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }
 
 const props = defineProps<{
   member: OwnFamilyMember | null
@@ -39,13 +37,12 @@ interface State {
   health: {
     hasDisability: boolean
     disability: Record<DisabilityChoiceKey, string[]> & { foodSelectivity: string; notes: string }
-    info: { allergies: string[]; diet: string; notes: string }
+    info: UsefulInfoForm
   }
 }
 
 function initialState(member: OwnFamilyMember | null): State {
   const disability = member?.health?.disability ?? {}
-  const info = member?.health?.info ?? {}
   return {
     firstName: member?.firstName ?? '',
     lastName: member?.lastName ?? '',
@@ -62,7 +59,7 @@ function initialState(member: OwnFamilyMember | null): State {
         foodSelectivity: disability.foodSelectivity ?? '',
         notes: disability.notes ?? '',
       },
-      info: { allergies: [...(info.allergies ?? [])], diet: info.diet ?? '', notes: info.notes ?? '' },
+      info: usefulInfoForm(member?.health?.info),
     },
   }
 }
@@ -96,7 +93,6 @@ const { options } = useEnums()
 const relationships = options('memberRelationship')
 const kinds = options('memberKind')
 const today = todayIso()
-const dietItems: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
 /**
  * Only a young person can be the one with a condition (an adult's card asks none of it), and that is the
  * person the others' relationship refers to: no relationship of their own.
@@ -273,26 +269,7 @@ async function save() {
               <UIcon name="i-lucide-utensils" class="size-4 text-muted" aria-hidden="true" />
               Informazioni utili su {{ state.firstName.trim() || 'questa persona' }}
             </legend>
-            <UFormField :label="HEALTH_LABELS.allergies" name="health.info.allergies" hint="Facoltativo">
-              <UCheckboxGroup
-                v-model="state.health.info.allergies"
-                :items="ALLERGIES"
-                :legend="HEALTH_LABELS.allergies"
-                :ui="CHOICES_UI"
-              />
-            </UFormField>
-            <UFormField :label="HEALTH_LABELS.diet" name="health.info.diet">
-              <URadioGroup
-                v-model="state.health.info.diet"
-                :items="dietItems"
-                :legend="HEALTH_LABELS.diet"
-                orientation="horizontal"
-                :ui="{ legend: 'sr-only', fieldset: 'flex-wrap gap-x-4 gap-y-2' }"
-              />
-            </UFormField>
-            <UFormField :label="HEALTH_LABELS.infoNotes" name="health.info.notes" hint="Facoltativo">
-              <UTextarea v-model="state.health.info.notes" autoresize :rows="2" class="w-full" />
-            </UFormField>
+            <IcUsefulInfoFields v-model="state.health.info" name="health.info" />
           </fieldset>
         </template>
         <UAlert

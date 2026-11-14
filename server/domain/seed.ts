@@ -773,6 +773,13 @@ export async function seedDemo(
         : null,
       motivation: applied ? 'Voglio contribuire a un’estate inclusiva per le famiglie del camp (esempio).' : null,
       cvFileId: cv?.id ?? null,
+      // Some canteen details of the approved staff, with the consent.
+      ...(s.status === 'approved' && index % 3 === 1
+        ? {
+            usefulInfo: DEMO_USEFUL_INFO[index % DEMO_USEFUL_INFO.length] ?? { diet: 'vegetarian' },
+            usefulInfoConsentAt: new Date(),
+          }
+        : {}),
       appliedAt: applied ? new Date('2026-10-05T09:00:00Z') : null,
       reviewedAt: s.status === 'approved' || s.status === 'rejected' ? new Date('2026-10-12T09:00:00Z') : null,
       reviewedBy: s.status === 'approved' || s.status === 'rejected' ? admin.id : null,

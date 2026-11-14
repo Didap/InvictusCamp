@@ -348,6 +348,22 @@ questions of 2026 so that the years compare):
 - The demo seed has an invented 2025 (imported) and the answers of four families to the completed 2026
   session; famiglia@ has not answered yet.
 
+### 3.14 Canteen
+
+What the supplier of the meals needs for a session: the **Mensa** tab of the session.
+
+- **Who eats**: every member of the families holding a place (their cards; a card still to fill in counts
+  as its family) and the staff and v-team still in play (activeStaff). «Totale pasti» is the people at each
+  meal. Families without cards are listed apart: they are not counted until they fill in their data.
+- **Needs**: allergies and intolerances («senza lattosio», «senza glutine»…) and food preferences
+  («vegetariana»…), each with how many and who, by name; then «Da sapere»: the food selectivity of the young
+  people with a condition and the other notes. They come from «Informazioni utili» of the cards (3.8) and, for
+  the staff, from «Per la mensa» on their home (`staff_profiles.usefulInfo`, with a consent of their own:
+  saving nothing withdraws it).
+- «Copia il testo per il fornitore» copies «Totale pasti 72 di cui: 5 senza lattosio (…)»; «Scarica CSV»
+  downloads the same. Health data with names: administration only; reading and download are audited
+  (`session.canteen_view`, `session.canteen_export`).
+
 ## 4. Emails
 
 | Template | When | To |

@@ -13,7 +13,9 @@ import {
   type ConvocationSendInput,
   type StaffApplicationDraft,
   type StaffApplicationInput,
+  type StaffUsefulInfoInput,
 } from '../../shared/schemas/staff'
+import { normalizeUsefulInfo } from '../../shared/schemas/families'
 import type { FileDto } from '../../shared/types/api'
 import type {
   AvailabilitySession,
@@ -30,6 +32,7 @@ import type {
   StaffHome,
   StaffListItem,
   StaffOutcomeTemplate,
+  StaffUsefulInfoDto,
 } from '../../shared/types/staff'
 import {
   OPEN_CONVOCATIONS,
@@ -68,6 +71,33 @@ import { createError } from './errors'
 
 /** What a convocation declined or withdrawn lets go: its activity group and its lodging. */
 const LEAVE_SESSION = { activityGroup: null, lodgingId: null } as const
+
+/** Saves the canteen details of a staff member with the consent, or clears both; audited without the values. */
+export async function saveStaffUsefulInfo(
+  db: DbOrTx,
+  input: { userId: string; value: StaffUsefulInfoInput; actor: Actor },
+): Promise<StaffUsefulInfoDto> {
+  const info = normalizeUsefulInfo(input.value.info)
+  const [row] = await db
+    .update(staffProfiles)
+    // The consent keeps the day it was first given; saving nothing withdraws it.
+    .set({
+      usefulInfo: info,
+      usefulInfoConsentAt: info ? sql`coalesce(${staffProfiles.usefulInfoConsentAt}, now())` : null,
+    })
+    .where(eq(staffProfiles.userId, input.userId))
+    .returning({ consentAt: staffProfiles.usefulInfoConsentAt })
+  if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.useful_info',
+    entityType: 'user',
+    entityId: input.userId,
+    data: { fields: info ? Object.keys(info) : [] },
+    ip: input.actor.ip,
+  })
+  return { info, consentAt: row.consentAt?.toISOString() ?? null }
+}
 
 /** A disabled account leaves the open sessions: its convocations let go of their group and lodging. */
 export async function leaveOpenSessions(db: DbOrTx, userId: string): Promise<void> {
