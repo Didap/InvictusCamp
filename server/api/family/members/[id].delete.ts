@@ -7,7 +7,7 @@ export default defineEventHandler(async event => {
   const actor = { userId: user.id, ip: clientIp(event) }
   const emails = await useDb().transaction(async tx => {
     await removeFamilyMember(tx, { familyId: family.id, memberId, actor })
-    return familyChanged(tx, event, family, actor)
+    return familyChanged(tx, family, actor)
   })
   await deliver(emails)
   return { ok: true }

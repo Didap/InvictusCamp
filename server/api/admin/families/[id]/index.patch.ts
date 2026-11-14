@@ -9,7 +9,7 @@ export default defineEventHandler(async event => {
   const actor = { userId: admin.id, ip: clientIp(event) }
   const { row, emails } = await useDb().transaction(async tx => {
     const row = await updateFamilyDataByAdmin(tx, { familyId, data, actor })
-    return { row, emails: await familyChanged(tx, event, row, actor) }
+    return { row, emails: await familyChanged(tx, row, actor) }
   })
   await deliver(emails)
   return familyFields(row)

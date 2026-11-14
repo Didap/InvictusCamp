@@ -46,6 +46,7 @@ import type { DbOrTx } from './db'
 import { requestSignatures, signatureRequestEmails } from './signature-requests'
 import { cleanName, deleteStoredFile, readStoredFile, storeFile, type FileRow } from './storage'
 import { DomainError } from './errors'
+import { toWinAnsi, wrap } from './pdf'
 
 /** A code is valid 10 minutes, a new one can be asked after 60 seconds, 5 attempts per code. */
 export const CODE_TTL_MS = 10 * 60_000
@@ -80,6 +81,11 @@ async function requireDocument(db: DbOrTx, documentId: string, lock?: DocumentLo
   const [row] = lock ? await query.for(lock) : await query
   if (!row) throw fail(404, 'Documento non trovato')
   return row
+}
+
+/** A document the gestionale prepares for a family (its release) is not changed by hand. */
+function assertNotGenerated(document: { familyId: string | null }) {
+  if (document.familyId) throw fail(409, 'È la liberatoria di una famiglia: la prepara e la aggiorna il gestionale')
 }
 
 async function requireSession(db: DbOrTx, sessionId: string): Promise<void> {
@@ -161,6 +167,7 @@ export async function updateDocument(
   input: { documentId: string; fields: DocumentFields; actor: Actor },
 ): Promise<void> {
   const document = await requireDocument(db, input.documentId, 'update')
+  assertNotGenerated(document)
   if (document.requiresSignature !== input.fields.requiresSignature && (await signedCount(db, document.id)) > 0) {
     throw fail(409, 'Qualcuno lo ha già firmato o letto: non puoi più cambiare se va firmato')
   }
@@ -192,6 +199,7 @@ export async function replaceDocumentFile(
   input: { documentId: string; data: Uint8Array; filename: string; actor: Actor },
 ): Promise<{ oldFileId: string }> {
   const document = await requireDocument(db, input.documentId, 'update')
+  assertNotGenerated(document)
   if ((await signedCount(db, document.id)) > 0) {
     throw fail(409, 'Qualcuno lo ha già firmato o letto: carica un nuovo documento invece di sostituirlo')
   }
@@ -236,7 +244,7 @@ export async function setDocumentArchived(
   const document = await requireDocument(db, input.documentId, 'update')
   if (Boolean(document.archivedAt) === input.archived) return { cancelled: 0 }
   // A release replaced or withdrawn stays so: the gestionale prepares the one in force.
-  if (!input.archived && document.familyId) throw fail(409, 'Una liberatoria archiviata non si ripristina')
+  if (!input.archived) assertNotGenerated(document)
   await db
     .update(documents)
     .set({ archivedAt: input.archived ? new Date() : null })
@@ -331,7 +339,7 @@ export async function assignDocument(
 ): Promise<{ result: AssignResult; messages: EmailMessage[] }> {
   const document = await requireDocument(db, input.documentId, 'share')
   if (document.archivedAt) throw fail(409, 'Il documento è archiviato: ripristinalo prima di assegnarlo')
-  if (document.familyId) throw fail(409, 'È la liberatoria di una famiglia: non si assegna ad altri')
+  assertNotGenerated(document)
   if (input.dueDate && input.dueDate < todayIso()) throw fail(400, 'La scadenza non può essere nel passato')
   const userIds = await resolveAssignees(db, input.target)
   const existing = userIds.length
@@ -416,6 +424,12 @@ export async function remindRequests(
 
 /** Cancels a request still to sign: the person can no longer sign it. No email. */
 export async function cancelRequest(db: DbOrTx, input: { requestId: string; actor: Actor }): Promise<void> {
+  const [target] = await db
+    .select({ familyId: documents.familyId })
+    .from(signatureRequests)
+    .innerJoin(documents, eq(documents.id, signatureRequests.documentId))
+    .where(eq(signatureRequests.id, input.requestId))
+  if (target) assertNotGenerated(target)
   const [row] = await db
     .update(signatureRequests)
     .set({ status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 })
@@ -871,48 +885,6 @@ const signatureTime = new Intl.DateTimeFormat(LOCALE, {
 /** "29 ottobre 2026, 19:30:00 (ora italiana)" */
 export function formatSignatureTime(date: Date): string {
   return `${signatureTime.format(date).replace(/ alle ore |, /, ', ')} (ora italiana)`
-}
-
-/**
- * Text the standard fonts can draw (WinAnsi): accented letters outside it lose the accent ("ł" stays
- * "?", "ș" becomes "s"), control characters become spaces, anything else becomes "?".
- */
-export function toWinAnsi(font: PDFFont, text: string): string {
-  const supported = new Set(font.getCharacterSet())
-  let out = ''
-  for (const char of text.normalize('NFC').replace(/[\u0000-\u001f\u007f]/g, ' ')) {
-    if (supported.has(char.codePointAt(0)!)) {
-      out += char
-      continue
-    }
-    const base = char.normalize('NFD').replace(/\p{M}/gu, '')
-    out += base && [...base].every(c => supported.has(c.codePointAt(0)!)) ? base : '?'
-  }
-  return out
-}
-
-/** Lines of at most `width` points; words longer than a line are cut. */
-function wrap(font: PDFFont, text: string, size: number, width: number): string[] {
-  const lines: string[] = []
-  let line = ''
-  for (const word of text.split(/\s+/).filter(Boolean)) {
-    let piece = word
-    while (font.widthOfTextAtSize(piece, size) > width) {
-      let cut = piece.length - 1
-      while (cut > 1 && font.widthOfTextAtSize(piece.slice(0, cut), size) > width) cut--
-      if (line) lines.push(line)
-      lines.push(piece.slice(0, cut))
-      line = ''
-      piece = piece.slice(cut)
-    }
-    const next = line ? `${line} ${piece}` : piece
-    if (font.widthOfTextAtSize(next, size) > width) {
-      lines.push(line)
-      line = piece
-    } else line = next
-  }
-  if (line) lines.push(line)
-  return lines.length ? lines : ['']
 }
 
 /** The original PDF with the signature certificate appended as its last page. */

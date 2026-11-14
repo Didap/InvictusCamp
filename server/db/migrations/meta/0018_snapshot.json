@@ -1,5 +1,5 @@
 {
-  "id": "cf57b5be-6e77-4e9e-ba3e-745d58e78cbb",
+  "id": "4ff70eb3-8182-4537-9c1a-df2e42bc2e3d",
   "prevId": "b78b66ca-23cb-4266-bff1-177e2a1f58b3",
   "version": "7",
   "dialect": "postgresql",
@@ -562,6 +562,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "source_digest": {
+          "name": "source_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "session_id": {
           "name": "session_id",
           "type": "uuid",
@@ -954,12 +960,6 @@
         "age_notice_at": {
           "name": "age_notice_at",
           "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "release_digest": {
-          "name": "release_digest",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

@@ -12,7 +12,7 @@ export default defineEventHandler(async (event): Promise<FamilyDataResult> => {
   const actor = { userId: user.id, ip: clientIp(event) }
   const { saved, emails } = await useDb().transaction(async tx => ({
     saved: await saveFamilyData(tx, { familyId: family.id, data, actor }),
-    emails: await familyChanged(tx, event, family, actor),
+    emails: await familyChanged(tx, family, actor),
   }))
   await deliver(emails)
   return {
