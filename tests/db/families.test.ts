@@ -63,6 +63,7 @@ const familyData = (values: Partial<FamilyDataInput> = {}): FamilyDataInput => (
   region: 'Puglia',
   phone: '',
   composition: { adults: 1, youngWithCondition: 0, youngWithoutCondition: 1 },
+  guestNames: [],
   healthConsent: false,
   answers: ANSWERS,
   ...values,
@@ -460,11 +461,26 @@ describe('family data', () => {
     })
     expect((await ownFamilyMembers(db, family.id)).members).toHaveLength(1)
 
-    const saved = await saveFamilyData(db, { familyId: family.id, data: { ...data, healthConsent: true }, actor })
+    // The young person with a condition comes with a name: without it, nothing is saved.
+    await expect(
+      saveFamilyData(db, { familyId: family.id, data: { ...data, healthConsent: true }, actor }),
+    ).rejects.toMatchObject({ statusCode: 400, data: { missing: ['guestNames'] } })
+
+    const saved = await saveFamilyData(db, {
+      familyId: family.id,
+      data: { ...data, healthConsent: true, guestNames: [' Matteo '] },
+      actor,
+    })
     expect(saved.cardsCreated).toBe(1)
     expect(saved.family.healthDataConsentAt).toBeInstanceOf(Date)
     const card = (await ownFamilyMembers(db, family.id)).members[1]!
-    expect(card).toMatchObject({ kind: 'young', firstName: null, health: { hasDisability: true } })
+    expect(card).toMatchObject({
+      kind: 'young',
+      firstName: 'Matteo',
+      lastName: 'Prova',
+      relationship: null,
+      health: { hasDisability: true },
+    })
     expect(await auditRows('family.health_consent')).toHaveLength(1)
     expect(await auditRows('member.health_update')).toHaveLength(1)
 

@@ -70,6 +70,7 @@ import {
   isYoungWithCondition,
   missingBirthDate,
   plural,
+  surnameOf,
 } from '../../shared/utils/format'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 import {
@@ -286,6 +287,22 @@ export async function saveFamilyData(
     await setHealthConsent(db, { familyId: family.id, given: true, actor: input.actor })
   }
 
+  const removed = emptyCardsBeyond(rows, composition)
+  const kept = rows.filter(card => !removed.includes(card))
+  // Every young person with a condition added now comes with a name (the form asks it next to the number).
+  const newGuests = composition.youngWithCondition - countCards(kept).youngWithCondition
+  const guestNames = input.data.guestNames
+    .map(name => name.trim())
+    .filter(Boolean)
+    .slice(0, Math.max(0, newGuests))
+  if (guestNames.length < newGuests) {
+    throw createError({
+      statusCode: 400,
+      message: 'Scrivi il nome di ogni ragazzo o ragazza con patologie o disabilità',
+      data: { missing: ['guestNames'] },
+    })
+  }
+
   const firstTime = family.formStatus !== 'submitted'
   const [row] = await db
     .update(families)
@@ -298,8 +315,6 @@ export async function saveFamilyData(
     .where(eq(families.id, family.id))
     .returning()
 
-  const removed = emptyCardsBeyond(rows, composition)
-  const kept = rows.filter(card => !removed.includes(card))
   if (removed.length) {
     await db.delete(familyMembers).where(
       inArray(
@@ -312,7 +327,10 @@ export async function saveFamilyData(
     const fields = card.hasDisability ? ['hasDisability'] : []
     await auditHealth(db, input.actor, { id: card.id, familyId: family.id }, fields, 'member_removed')
   }
-  const created = await createCards(db, family.id, composition, countCards(kept), nextPosition(rows))
+  const created = await createCards(db, family.id, composition, countCards(kept), nextPosition(rows), {
+    firstNames: guestNames,
+    lastName: surnameOf(row!.name),
+  })
   for (const card of created) {
     if (card.hasDisability) await auditHealth(db, input.actor, card, ['hasDisability'])
   }
@@ -347,20 +365,25 @@ function emptyCardsBeyond(rows: CardRow[], composition: FamilyComposition): Card
   })
 }
 
-/** The empty cards that bring the family from `cards` up to `composition`, from `position` on. */
+/**
+ * The cards that bring the family from `cards` up to `composition`, from `position` on: empty, but for the
+ * young people with a condition, born with the names the form asked (`guests`) and the family's surname.
+ */
 async function createCards(
   db: DbOrTx,
   familyId: string,
   composition: FamilyComposition,
   cards: FamilyComposition,
   position: number,
+  guests: { firstNames: string[]; lastName: string },
 ): Promise<MemberRow[]> {
   const values = COMPOSITION_GROUPS.flatMap(group =>
-    Array.from({ length: composition[group.key] - cards[group.key] }, () => ({
+    Array.from({ length: composition[group.key] - cards[group.key] }, (_, i) => ({
       familyId,
       kind: group.kind,
       hasDisability: group.hasDisability,
       position: position++,
+      ...(group.key === 'youngWithCondition' ? { firstName: guests.firstNames[i], lastName: guests.lastName } : {}),
     })),
   )
   return values.length ? db.insert(familyMembers).values(values).returning() : []
