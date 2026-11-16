@@ -465,6 +465,9 @@ describe('family data', () => {
     await expect(
       saveFamilyData(db, { familyId: family.id, data: { ...data, healthConsent: true }, actor }),
     ).rejects.toMatchObject({ statusCode: 400, data: { missing: ['guestNames'] } })
+    // Refused before anything is written: no consent recorded either.
+    const [refused] = await db.select().from(t.families).where(eq(t.families.id, family.id))
+    expect(refused!.healthDataConsentAt).toBeNull()
 
     const saved = await saveFamilyData(db, {
       familyId: family.id,
@@ -483,6 +486,15 @@ describe('family data', () => {
     })
     expect(await auditRows('family.health_consent')).toHaveLength(1)
     expect(await auditRows('member.health_update')).toHaveLength(1)
+
+    // A card with only the name the form asked is still the form's: the «-» takes it away, then it comes back.
+    const fewer = await saveFamilyData(db, {
+      familyId: family.id,
+      data: { ...data, composition: { adults: 1, youngWithCondition: 0, youngWithoutCondition: 0 } },
+      actor,
+    })
+    expect(fewer.cardsRemoved).toBe(1)
+    await saveFamilyData(db, { familyId: family.id, data: { ...data, guestNames: ['Matteo'] }, actor })
 
     // Withdrawing the consent deletes the health data: the card stays, without the condition.
     await setHealthConsent(db, { familyId: family.id, given: false, actor })

@@ -151,7 +151,8 @@ function cardRows(db: DbOrTx, familyId: string): Promise<CardRow[]> {
       kind: familyMembers.kind,
       hasDisability: familyMembers.hasDisability,
       position: familyMembers.position,
-      filled: sql<boolean>`${familyMembers.firstName} is not null`,
+      // Saved by the family: a card the form made (empty, or a name only) goes with the «-».
+      filled: sql<boolean>`${familyMembers.filledAt} is not null`,
     })
     .from(familyMembers)
     .where(eq(familyMembers.familyId, familyId))
@@ -276,32 +277,28 @@ export async function saveFamilyData(
       })
     }
   }
-  if (composition.youngWithCondition > 0 && !family.healthDataConsentAt) {
-    if (!input.data.healthConsent) {
-      throw createError({
-        statusCode: 400,
-        message: 'Per indicare ragazzi o ragazze con patologie o disabilità serve il tuo consenso ai dati sulla salute',
-        data: { missing: ['healthConsent'] },
-      })
-    }
-    await setHealthConsent(db, { familyId: family.id, given: true, actor: input.actor })
+  // Checked before anything is written: the consent comes with the save, once the rest is right.
+  const needsConsent = composition.youngWithCondition > 0 && !family.healthDataConsentAt
+  if (needsConsent && !input.data.healthConsent) {
+    throw createError({
+      statusCode: 400,
+      message: 'Per indicare ragazzi o ragazze con patologie o disabilità serve il tuo consenso ai dati sulla salute',
+      data: { missing: ['healthConsent'] },
+    })
   }
-
   const removed = emptyCardsBeyond(rows, composition)
   const kept = rows.filter(card => !removed.includes(card))
-  // Every young person with a condition added now comes with a name (the form asks it next to the number).
-  const newGuests = composition.youngWithCondition - countCards(kept).youngWithCondition
-  const guestNames = input.data.guestNames
-    .map(name => name.trim())
-    .filter(Boolean)
-    .slice(0, Math.max(0, newGuests))
-  if (guestNames.length < newGuests) {
+  // Every young person with a condition added now comes with a name, one per field of the form.
+  const newGuests = Math.max(0, composition.youngWithCondition - countCards(kept).youngWithCondition)
+  const guestNames = Array.from({ length: newGuests }, (_, i) => input.data.guestNames[i]?.trim() ?? '')
+  if (guestNames.some(name => !name)) {
     throw createError({
       statusCode: 400,
       message: 'Scrivi il nome di ogni ragazzo o ragazza con patologie o disabilità',
       data: { missing: ['guestNames'] },
     })
   }
+  if (needsConsent) await setHealthConsent(db, { familyId: family.id, given: true, actor: input.actor })
 
   const firstTime = family.formStatus !== 'submitted'
   const [row] = await db
@@ -383,7 +380,10 @@ async function createCards(
       kind: group.kind,
       hasDisability: group.hasDisability,
       position: position++,
-      ...(group.key === 'youngWithCondition' ? { firstName: guests.firstNames[i], lastName: guests.lastName } : {}),
+      filledAt: null,
+      ...(group.key === 'youngWithCondition' && guests.firstNames[i]
+        ? { firstName: guests.firstNames[i], lastName: guests.lastName }
+        : {}),
     })),
   )
   return values.length ? db.insert(familyMembers).values(values).returning() : []
@@ -541,6 +541,7 @@ export async function addFamilyMember(
       relationship: relationshipOf(input.member, health.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
+      filledAt: new Date(),
       ...healthColumns(health),
       position: nextPosition(rows),
     })
@@ -585,6 +586,7 @@ export async function updateFamilyMember(
       relationship: relationshipOf(input.member, after.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
+      filledAt: row.filledAt ?? new Date(),
       ...healthColumns(after),
     })
     .where(eq(familyMembers.id, row.id))
