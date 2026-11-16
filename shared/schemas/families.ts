@@ -118,6 +118,11 @@ export const familyDataFieldsSchema = familyProfileSchema.extend({
   postalCode: zPostalCode.refine(value => value !== '', { error: 'Campo obbligatorio' }),
   region: zRegion,
   composition: familyCompositionSchema,
+  /**
+   * The first names of the young people with a condition added by this save, in order: their cards are born
+   * with the name, so the others' relationship can name them from the start.
+   */
+  guestNames: z.array(zText(100)).max(MAX_MEMBERS_OF_A_KIND).default([]),
   healthConsent: z.boolean().default(false),
 })
 

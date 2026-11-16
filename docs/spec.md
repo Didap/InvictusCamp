@@ -188,7 +188,10 @@ availability or receive convocations. The administration can move a person to th
 - **Confirming** it (`formStatus` `draft` → `submitted`, `formSubmittedAt` the first time) creates one
   **card** (`family_members` row) per person declared: the cards already there count, so the account
   holder is the first adult, and the missing ones are created empty (no name, no relationship), with their
-  `kind` (`adult`/`young`) and, for a young person with a condition, `hasDisability`. The page then opens
+  `kind` (`adult`/`young`) and, for a young person with a condition, `hasDisability`. The young people
+  with a condition are asked their first name next to their number (one field per person added): their
+  cards are born with it and the family's surname, so the others' relationship names them from the start.
+  Until the family saves a card (`filledAt`), it is still the form's: the «-» removes it like an empty one. The page then opens
   Componenti. Example: 2 adults, 1 young person with a disability, 1 without → 3 new cards, 4 in all.
 - Afterwards the family data stays editable and the composition shows the cards there. The «+» creates the
   cards missing; the «-» removes empty cards (the last ones first). A number below the cards filled in is

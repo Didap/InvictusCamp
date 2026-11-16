@@ -34,8 +34,17 @@ const state = reactive({
   province: '',
   region: undefined as ItalianRegion | undefined,
   composition: {} as Partial<FamilyComposition>,
+  /** The names of the young people with a condition added now, asked next to their number. */
+  guestNames: [] as string[],
   healthConsent: false,
 })
+
+/** The young people with a condition this save adds: the form asks their names now, their cards are born with them. */
+const newGuests = computed(() =>
+  Math.max(0, (state.composition.youngWithCondition ?? 0) - (profile.value?.cards.youngWithCondition ?? 0)),
+)
+const guestLabel = (i: number) =>
+  newGuests.value > 1 ? `Nome del ragazzo o della ragazza ${i + 1}` : 'Nome del ragazzo o della ragazza'
 
 // The answers to the questions: one record per kind of field, so every input gets a value of its own type.
 const texts = reactive<Record<string, string>>({})
@@ -94,6 +103,9 @@ function validate(): FormError[] {
     name: question.id,
     message: 'Rispondi a questa domanda',
   }))
+  for (let i = 0; i < newGuests.value; i++) {
+    if (!state.guestNames[i]?.trim()) errors.push({ name: `guestNames.${i}`, message: 'Scrivi il nome' })
+  }
   if (needsConsent.value && !state.healthConsent) {
     errors.push({ name: 'healthConsent', message: 'Senza il consenso non puoi indicare questi ragazzi e ragazze' })
   }
@@ -117,9 +129,10 @@ async function save() {
   try {
     const result = await api<FamilyDataResult>('/api/family/profile', {
       method: 'PUT',
-      body: { ...state, answers: answers() },
+      body: { ...state, guestNames: state.guestNames.slice(0, newGuests.value), answers: answers() },
     })
     profile.value = result.profile
+    state.guestNames = []
     state.healthConsent = false
     const title = firstTime ? 'Dati confermati' : 'Dati salvati'
     const removed = result.cardsRemoved
@@ -188,22 +201,37 @@ async function save() {
         description="Per aggiungere una persona premi sul tasto «+». Per ogni persona del nucleo familiare è prevista una scheda personale. Per rimuovere una persona dal nucleo familiare premi sul tasto «-»."
       >
         <div class="space-y-5">
-          <UFormField
-            v-for="field in COMPOSITION_GROUPS"
-            :key="field.key"
-            :label="field.label"
-            :help="fieldHelp(field)"
-            :name="`composition.${field.key}`"
-            :data-field="`composition.${field.key}`"
-            required
-          >
-            <UInputNumber
-              v-model="state.composition[field.key]"
-              :min="filledCards[field.key]"
-              :max="MAX_MEMBERS_OF_A_KIND"
-              class="w-40"
-            />
-          </UFormField>
+          <template v-for="field in COMPOSITION_GROUPS" :key="field.key">
+            <UFormField
+              :label="field.label"
+              :help="fieldHelp(field)"
+              :name="`composition.${field.key}`"
+              :data-field="`composition.${field.key}`"
+              required
+            >
+              <UInputNumber
+                v-model="state.composition[field.key]"
+                :min="filledCards[field.key]"
+                :max="MAX_MEMBERS_OF_A_KIND"
+                class="w-40"
+              />
+            </UFormField>
+            <div
+              v-if="field.key === 'youngWithCondition' && newGuests"
+              class="grid gap-4 border-s-2 border-default ps-4 sm:grid-cols-2"
+            >
+              <UFormField
+                v-for="(_, i) in newGuests"
+                :key="i"
+                :label="guestLabel(i)"
+                :name="`guestNames.${i}`"
+                :data-field="`guestNames.${i}`"
+                required
+              >
+                <UInput v-model="state.guestNames[i]" autocomplete="off" class="w-full" />
+              </UFormField>
+            </div>
+          </template>
 
           <div v-if="needsConsent" class="space-y-3 rounded-lg border border-default p-4">
             <p class="flex max-w-prose items-start gap-2 text-sm">

@@ -182,6 +182,11 @@ export const familyMembers = pgTable(
     usefulInfo: jsonb().$type<UsefulInfo>(),
     notes: text(),
     position: integer().notNull().default(0),
+    /**
+     * When the family first saved the card. Null for a card the family data form made (empty, or only the name
+     * it asked), which the «-» removes; every other card is born filled.
+     */
+    filledAt: timestamp(tz).defaultNow(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -70,6 +70,8 @@ export interface FamilyMemberDto {
   relationship: MemberRelationship | null
   kind: MemberKind
   isReferent: boolean
+  /** When the family saved the card; null while it is the form's (isEmptyCard). */
+  filledAt: string | null
 }
 
 /** Health details of a member: special category data (GDPR art. 9), only after the consent. */
