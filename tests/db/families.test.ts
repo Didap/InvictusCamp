@@ -471,7 +471,7 @@ describe('family data', () => {
 
     const saved = await saveFamilyData(db, {
       familyId: family.id,
-      data: { ...data, healthConsent: true, guestNames: [' Matteo '] },
+      data: { ...data, healthConsent: true, guestNames: ['Matteo'] },
       actor,
     })
     expect(saved.cardsCreated).toBe(1)

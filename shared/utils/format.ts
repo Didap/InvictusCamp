@@ -109,11 +109,11 @@ export function surnameOf(name: string): string {
 }
 
 /**
- * A card created from the family data and not filled in yet: name, surname and relationship are null
- * together until the family saves it (the young person with a condition keeps no relationship).
+ * A card the family has not saved yet (`filledAt`): made by the family data form, empty or with only the name
+ * it asked of a young person with a condition. The «-» of the form removes it.
  */
-export function isEmptyCard(member: { firstName: string | null }): boolean {
-  return member.firstName === null
+export function isEmptyCard(member: { filledAt: Date | string | null }): boolean {
+  return member.filledAt === null
 }
 
 /**
@@ -163,6 +163,7 @@ export function guestAgeStatus(
 /** A card the family still has to fill in: empty, an adult without the birth date, or without a relationship. */
 export function isCardToComplete(member: {
   firstName: string | null
+  filledAt: Date | string | null
   kind: MemberKind
   birthDate: string | null
   relationship: string | null
@@ -176,7 +177,7 @@ export function isCardToComplete(member: {
  * numbered among the cards of its kind in `members` (the whole family, in its order).
  */
 export function memberName(member: MemberRef, members: Pick<MemberRef, 'id' | 'kind'>[]): string {
-  if (!isEmptyCard(member)) return fullName(member)
+  if (member.firstName) return fullName(member)
   const sameKind = members.filter(other => other.kind === member.kind)
   return `${enumLabel('memberKind', member.kind)} ${sameKind.findIndex(other => other.id === member.id) + 1}`
 }

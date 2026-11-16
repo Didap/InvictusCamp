@@ -290,7 +290,7 @@ export async function saveFamilyData(
   const kept = rows.filter(card => !removed.includes(card))
   // Every young person with a condition added now comes with a name, one per field of the form.
   const newGuests = Math.max(0, composition.youngWithCondition - countCards(kept).youngWithCondition)
-  const guestNames = Array.from({ length: newGuests }, (_, i) => input.data.guestNames[i]?.trim() ?? '')
+  const guestNames = Array.from({ length: newGuests }, (_, i) => input.data.guestNames[i] ?? '')
   if (guestNames.some(name => !name)) {
     throw createError({
       statusCode: 400,
@@ -381,9 +381,7 @@ async function createCards(
       hasDisability: group.hasDisability,
       position: position++,
       filledAt: null,
-      ...(group.key === 'youngWithCondition' && guests.firstNames[i]
-        ? { firstName: guests.firstNames[i], lastName: guests.lastName }
-        : {}),
+      ...(group.key === 'youngWithCondition' && { firstName: guests.firstNames[i], lastName: guests.lastName }),
     })),
   )
   return values.length ? db.insert(familyMembers).values(values).returning() : []
@@ -400,6 +398,7 @@ function toMember(row: MemberRow): FamilyMemberDto {
     relationship: row.relationship,
     kind: row.kind,
     isReferent: row.isReferent,
+    filledAt: iso(row.filledAt),
   }
 }
 
@@ -541,7 +540,6 @@ export async function addFamilyMember(
       relationship: relationshipOf(input.member, health.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
-      filledAt: new Date(),
       ...healthColumns(health),
       position: nextPosition(rows),
     })
@@ -805,6 +803,7 @@ const sessionRefColumns = {
 export function cardChecks(db: DbOrTx, familyId: string) {
   return db
     .select({
+      filledAt: familyMembers.filledAt,
       firstName: familyMembers.firstName,
       lastName: familyMembers.lastName,
       kind: familyMembers.kind,

@@ -4,7 +4,7 @@
 import { eq, sql } from 'drizzle-orm'
 import type { CanteenDto } from '../../shared/types/canteen'
 import { canteenSummary, type CanteenPerson } from '../../shared/utils/canteen'
-import { NO_CARDS, fullName, isEmptyCard } from '../../shared/utils/format'
+import { NO_CARDS, fullName } from '../../shared/utils/format'
 import { familyMembers, families, sessionFamilies, sessionStaff, staffProfiles, users } from '../db/schema'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
@@ -42,7 +42,7 @@ export async function canteenOf(db: DbOrTx, sessionId: string): Promise<CanteenD
         ? [
             {
               // A card still to fill in eats too: it shows as its family.
-              name: isEmptyCard(row) ? `${row.familyName}, scheda da compilare` : fullName(row),
+              name: row.firstName ? fullName(row) : `${row.familyName}, scheda da compilare`,
               info: row.info,
               foodSelectivity: row.foodSelectivity,
             },
