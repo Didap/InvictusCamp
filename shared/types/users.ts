@@ -1,5 +1,5 @@
 // DTOs of the accounts page (/admin/utenti). Never the users row itself: it holds the password hash.
-import type { StaffStatus, UserRole, UserStatus } from '../utils/constants'
+import type { StaffStatus, StaffTeam, UserRole, UserStatus } from '../utils/constants'
 
 /** A row of GET /api/admin/users. */
 export interface UserListItem {
@@ -17,6 +17,8 @@ export interface UserListItem {
   familyId: string | null
   familyName: string | null
   staffStatus: StaffStatus | null
+  /** Staff or v-team: the list the page of the person is under. */
+  staffTeam: StaffTeam | null
   /** Invited accounts: until when the last invitation link works (null when none does). */
   inviteExpiresAt: string | null
 }

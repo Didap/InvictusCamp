@@ -24,9 +24,10 @@ export const V_TEAM_QUERY = 'v-team'
 
 /**
  * Staff and v-team are two separate lists of the administration, `/admin/staff` and `/admin/v-team`, each
- * with the pages of its people (docs/spec.md 3.4): the segment of the path of each team.
+ * with the pages of its people (docs/spec.md 3.4): the segment of the path of each team. The two pages of
+ * app/pages/admin/staff repeat them in their `:team(staff|v-team)` path.
  */
-export const TEAM_SEGMENT: Record<StaffTeam, string> = { staff: 'staff', volunteer: V_TEAM_QUERY }
+export const TEAM_SEGMENT: Record<StaffTeam, string> = { staff: 'staff', volunteer: 'v-team' }
 
 /** The list of a team, or the page of one of its people. */
 export function teamPath(team: StaffTeam, userId?: string): string {
@@ -35,7 +36,7 @@ export function teamPath(team: StaffTeam, userId?: string): string {
 
 /** The team of a `:team` segment of the path (`staff` or `v-team`). */
 export function teamOfSegment(segment: unknown): StaffTeam {
-  return segment === V_TEAM_QUERY ? 'volunteer' : 'staff'
+  return segment === TEAM_SEGMENT.volunteer ? 'volunteer' : 'staff'
 }
 
 export const GUEST_ONLY_PATHS = ['/accedi', '/registrati', '/candidati', '/password-dimenticata'] as const

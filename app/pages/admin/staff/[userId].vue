@@ -9,7 +9,8 @@ import { TEAM_SEGMENT, teamOfSegment, teamPath } from '#shared/utils/routes'
 // One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, application,
 // review with internal notes, the outcome email sent only from "Comunica l’esito", availability,
 // convocations, personal documents, signatures.
-definePageMeta({ path: '/admin/:team(staff|v-team)/:userId' })
+// Keyed by the person: moving to the list of the other team keeps the page, and what is typed in it.
+definePageMeta({ path: '/admin/:team(staff|v-team)/:userId', key: route => String(route.params.userId) })
 const route = useRoute()
 const userId = computed(() => String(route.params.userId))
 const api = useApi()

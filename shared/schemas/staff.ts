@@ -192,7 +192,7 @@ export const availabilityAnswerSchema = z.object({ available: z.boolean() })
 // ─── Convocations ──────────────────────────────────────────────────────────────────────────────────
 
 /** GET /api/admin/staff?team=&sessionId=: one team, and whether each person gave availability for that session. */
-export const staffListQuerySchema = z.object({ team: z.enum(STAFF_TEAMS).optional(), sessionId: zUuid.optional() })
+export const staffListQuerySchema = z.object({ team: zStaffTeam.optional(), sessionId: zUuid.optional() })
 
 /** GET /api/admin/convocations?sessionId= */
 export const sessionStaffQuerySchema = z.object({ sessionId: zUuid })

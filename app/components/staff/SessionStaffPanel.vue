@@ -23,7 +23,6 @@ const { data, status, refresh } = useApiFetch<SessionStaffData>('/api/admin/conv
 
 const session = computed(() => data.value?.session)
 const convocations = computed(() => data.value?.convocations ?? [])
-const counts = computed(() => data.value?.counts)
 const editable = computed(() => session.value?.editable ?? false)
 const drafts = computed(() => convocations.value.filter(c => c.status === 'draft' && c.sendable))
 
@@ -35,21 +34,8 @@ watch(drafts, list => {
 const toSend = computed(() =>
   selected.value.length ? drafts.value.filter(c => selected.value.includes(c.id)) : drafts.value,
 )
-function toggleSelected(id: string, value: boolean) {
-  selected.value = value ? [...new Set([...selected.value, id])] : selected.value.filter(other => other !== id)
-}
-
-// Each team is a list of its own; selecting and sending work across both.
-const teams = computed(() =>
-  STAFF_TEAMS.map(team => {
-    const list = convocations.value.filter(c => c.team === team)
-    const draftIds = list.filter(c => c.status === 'draft' && c.sendable).map(c => c.id)
-    const ticked = draftIds.filter(id => selected.value.includes(id)).length
-    const allSelected: boolean | 'indeterminate' = !ticked ? false : ticked === draftIds.length ? true : 'indeterminate'
-    return { team, list, draftIds, allSelected }
-  }),
-)
-function selectAll(ids: string[], value: boolean) {
+/** Ticks or unticks drafts: one, or all those of a list. */
+function select(ids: string[], value: boolean) {
   selected.value = value ? [...new Set([...selected.value, ...ids])] : selected.value.filter(id => !ids.includes(id))
 }
 
@@ -162,22 +148,6 @@ function statusNote(c: SessionConvocation): string {
   }
 }
 
-// The base of a session (spec 3.5): `staffNeeded` people of the staff, plus a coordinator for the staff
-// and one for the v-team. Counted on the convocations still open (draft, sent, accepted).
-const confirmedAs = (slot: StaffTeam) => convocations.value.filter(c => c.confirmed && staffSlot(c) === slot).length
-const staffConfirmed = computed(() => confirmedAs('staff'))
-function coordinatorsOf(team: StaffTeam): string[] {
-  return convocations.value
-    .filter(c => c.team === team && staffSlot(c) === 'coordinator' && OPEN_CONVOCATIONS.includes(c.status))
-    .map(c => (c.confirmed ? fullName(c) : `${fullName(c)} (non ancora confermato)`))
-}
-/** Under the title of a list: the staff against `staffNeeded` (coordinator aside), the v-team as it is. */
-function teamDescription(team: StaffTeam): string {
-  if (team === 'volunteer') return plural(confirmedAs('volunteer'), 'confermato', 'confermati')
-  const needed = session.value?.staffNeeded ?? 0
-  return `${plural(staffConfirmed.value, 'confermato', 'confermati')} su ${plural(needed, 'necessario', 'necessari')}, coordinatore a parte`
-}
-
 const sendLabel = computed(() => {
   if (selected.value.length) {
     return selected.value.length === 1
@@ -187,26 +157,57 @@ const sendLabel = computed(() => {
   return drafts.value.length === 1 ? 'Invia la convocazione' : `Invia le ${drafts.value.length} convocazioni`
 })
 
-function summaryOf(team: StaffTeam): string {
-  const c = counts.value?.[team]
-  if (!c) return ''
-  const parts = [
-    c.accepted && `${c.accepted} ${c.accepted === 1 ? 'accettata' : 'accettate'}`,
-    c.waiting && `${c.waiting} in attesa di risposta`,
-    c.draft && `${c.draft} da inviare`,
-    c.declined && `${c.declined} ${c.declined === 1 ? 'rifiutata' : 'rifiutate'}`,
-  ].filter(Boolean)
-  return parts.join(' · ')
+/** «3 accettate · 2 in attesa di risposta · 1 da inviare · 1 rifiutata» for one list. */
+function summaryOf(list: SessionConvocation[]): string {
+  const count = (status: SessionConvocation['status']) => list.filter(c => c.status === status).length
+  const [accepted, waiting, draft, declined] = [count('accepted'), count('sent'), count('draft'), count('declined')]
+  return [
+    accepted && `${accepted} ${accepted === 1 ? 'accettata' : 'accettate'}`,
+    waiting && `${waiting} in attesa di risposta`,
+    draft && `${draft} da inviare`,
+    declined && `${declined} ${declined === 1 ? 'rifiutata' : 'rifiutate'}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
-const columns = (draftIds: string[]): TableColumn<SessionConvocation>[] => [
-  ...(editable.value && draftIds.length ? [{ id: 'select' }] : []),
+const COLUMNS: TableColumn<SessionConvocation>[] = [
   { id: 'person', header: 'Persona' },
   { id: 'role', header: 'Ruolo nella sessione' },
   { id: 'available', header: 'Disponibilità' },
   { id: 'status', header: 'Stato' },
   { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Azioni') },
 ]
+
+// Each team is a list of its own, with its coordinator; selecting and sending work across both. The base of
+// a session (spec 3.5): `staffNeeded` people of the staff, plus a coordinator for the staff and one for the
+// v-team, counted on the convocations still open (draft, sent, accepted).
+const teams = computed(() =>
+  STAFF_TEAMS.map(team => {
+    const list = convocations.value.filter(c => c.team === team)
+    const draftIds = drafts.value.filter(c => c.team === team).map(c => c.id)
+    const ticked = draftIds.filter(id => selected.value.includes(id)).length
+    // Confirmed in the slot of the team: the coordinator is counted apart.
+    const confirmed = list.filter(c => c.confirmed && staffSlot(c) === team).length
+    return {
+      team,
+      list,
+      confirmed,
+      draftIds,
+      allSelected: (!ticked ? false : ticked === draftIds.length ? true : 'indeterminate') as boolean | 'indeterminate',
+      columns: editable.value && draftIds.length ? [{ id: 'select' }, ...COLUMNS] : COLUMNS,
+      coordinators: list
+        .filter(c => staffSlot(c) === 'coordinator' && OPEN_CONVOCATIONS.includes(c.status))
+        .map(c => (c.confirmed ? fullName(c) : `${fullName(c)} (non ancora confermato)`)),
+      // The staff against `staffNeeded` (coordinator aside), the v-team as it is.
+      description:
+        team === 'staff'
+          ? `${plural(confirmed, 'confermato', 'confermati')} su ${plural(session.value?.staffNeeded ?? 0, 'necessario', 'necessari')}, coordinatore a parte`
+          : plural(confirmed, 'confermato', 'confermati'),
+      summary: summaryOf(list),
+    }
+  }),
+)
 </script>
 
 <template>
@@ -268,10 +269,10 @@ const columns = (draftIds: string[]): TableColumn<SessionConvocation>[] => [
       </div>
 
       <IcSection
-        v-for="{ team, list, draftIds, allSelected } in teams"
+        v-for="{ team, list, confirmed, draftIds, allSelected, columns, coordinators, description, summary } in teams"
         :key="team"
         :title="label('staffTeam', team)"
-        :description="teamDescription(team)"
+        :description="description"
       >
         <template v-if="editable" #actions>
           <UButton
@@ -287,21 +288,21 @@ const columns = (draftIds: string[]): TableColumn<SessionConvocation>[] => [
         <div class="mb-5 space-y-3">
           <UProgress
             v-if="team === 'staff' && session.staffNeeded > 0"
-            :model-value="Math.min(staffConfirmed, session.staffNeeded)"
+            :model-value="Math.min(confirmed, session.staffNeeded)"
             :max="session.staffNeeded"
             size="sm"
-            :aria-label="`Staff confermato: ${staffConfirmed} su ${session.staffNeeded}`"
+            :aria-label="`Staff confermato: ${confirmed} su ${session.staffNeeded}`"
             class="max-w-md"
           />
           <p class="flex items-start gap-2 text-sm">
             <UIcon name="i-lucide-flag" class="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
             <span>
               <span class="text-muted">Coordinatore:</span>{{ ' ' }}
-              <span v-if="coordinatorsOf(team).length">{{ coordinatorsOf(team).join(', ') }}</span>
+              <span v-if="coordinators.length">{{ coordinators.join(', ') }}</span>
               <span v-else class="text-warning">da scegliere</span>
             </span>
           </p>
-          <p v-if="summaryOf(team)" class="text-sm text-muted">{{ summaryOf(team) }}</p>
+          <p v-if="summary" class="text-sm text-muted">{{ summary }}</p>
         </div>
 
         <UEmpty
@@ -311,17 +312,17 @@ const columns = (draftIds: string[]): TableColumn<SessionConvocation>[] => [
           :description="
             editable
               ? 'Aggiungi chi ha detto che c’è per questa sessione. Le convocazioni partono solo quando le invii.'
-              : 'Nessuno è stato convocato per questa sessione.'
+              : undefined
           "
         />
 
         <template v-else>
-          <UTable :data="list" :columns="columns(draftIds)" :get-row-id="row => row.id" class="hidden md:block">
+          <UTable :data="list" :columns="columns" :get-row-id="row => row.id" class="hidden md:block">
             <template #select-header>
               <UCheckbox
                 :model-value="allSelected"
                 :aria-label="`Seleziona tutte le convocazioni ${OF_TEAM[team]} da inviare`"
-                @update:model-value="value => selectAll(draftIds, value === true)"
+                @update:model-value="value => select(draftIds, value === true)"
               />
             </template>
             <template #select-cell="{ row }">
@@ -329,7 +330,7 @@ const columns = (draftIds: string[]): TableColumn<SessionConvocation>[] => [
                 v-if="row.original.status === 'draft' && row.original.sendable"
                 :model-value="selected.includes(row.original.id)"
                 :aria-label="`Seleziona ${fullName(row.original)}`"
-                @update:model-value="value => toggleSelected(row.original.id, value === true)"
+                @update:model-value="value => select([row.original.id], value === true)"
               />
             </template>
             <template #person-cell="{ row }">
@@ -426,7 +427,7 @@ const columns = (draftIds: string[]): TableColumn<SessionConvocation>[] => [
                 :model-value="selected.includes(c.id)"
                 label="Seleziona per l’invio"
                 class="py-2"
-                @update:model-value="value => toggleSelected(c.id, value === true)"
+                @update:model-value="value => select([c.id], value === true)"
               />
             </li>
           </ul>

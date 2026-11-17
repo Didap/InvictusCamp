@@ -8,7 +8,7 @@ import { DEMO_ACCOUNTS } from '../../domain/seed'
 export default defineEventHandler(async event => {
   if (!import.meta.dev) throw createError({ statusCode: 404, message: 'Non trovato' })
   const db = useDb()
-  const { campSessions, families, users, documents, signatureRequests, communications } = tables
+  const { campSessions, families, users, documents, signatureRequests, communications, staffProfiles } = tables
   // The first one with families: the calendar adds empty drafts before the demo's.
   const sessionIn = async (status: 'inviting' | 'draft' | 'completed') =>
     (
@@ -46,12 +46,15 @@ export default defineEventHandler(async event => {
     family,
     staff: await userId(DEMO_ACCOUNTS.staff),
     candidate: await userId(DEMO_ACCOUNTS.candidate),
+    // The first approved member of the v-team, by name.
     volunteer:
       (
         await db
-          .select({ id: tables.staffProfiles.userId })
-          .from(tables.staffProfiles)
-          .where(eq(tables.staffProfiles.team, 'volunteer'))
+          .select({ id: staffProfiles.userId })
+          .from(staffProfiles)
+          .innerJoin(users, eq(users.id, staffProfiles.userId))
+          .where(and(eq(staffProfiles.team, 'volunteer'), eq(staffProfiles.status, 'approved')))
+          .orderBy(asc(users.lastName), asc(users.firstName))
           .limit(1)
       )[0]?.id ?? null,
     document:

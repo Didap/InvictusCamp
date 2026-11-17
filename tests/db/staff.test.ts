@@ -489,7 +489,6 @@ describe('convocations', () => {
     expect((await convocation(id))!.status).toBe('accepted')
     const data = await sessionStaffData(db, session.id)
     expect(data.convocations[0]).toMatchObject({ contract: 'none', confirmed: true })
-    expect(data.counts.staff).toMatchObject({ confirmed: 1, accepted: 1 })
     expect(await db.select().from(t.signatureRequests)).toHaveLength(0)
   })
 
@@ -522,7 +521,6 @@ describe('convocations', () => {
     await db.update(t.signatureRequests).set({ status: 'signed' }).where(eq(t.signatureRequests.id, request!.id))
     data = await sessionStaffData(db, session.id)
     expect(data.convocations[0]).toMatchObject({ contract: 'signed', confirmed: true })
-    expect(data.counts.staff.confirmed).toBe(1)
   })
 
   it('declining keeps the reason; a convocation is answered once, only by its person', async () => {
@@ -676,7 +674,7 @@ describe('convocations', () => {
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
-  it('the Staff tab offers only who is available for the session, staff first', async () => {
+  it('the Staff tab offers only who is available for the session, with their team', async () => {
     const admin = await makeAdmin(db)
     const session = await makeSession(db)
     const volunteer = await makeStaff(db, 'approved')
@@ -688,10 +686,11 @@ describe('convocations', () => {
       .insert(t.sessionAvailability)
       .values([volunteer, staff, applied].map(person => ({ sessionId: session.id, userId: person.user.id })))
     const data = await sessionStaffData(db, session.id)
-    expect(data.available.map(person => [person.userId, person.team])).toEqual([
-      [staff.user.id, 'staff'],
-      [volunteer.user.id, 'volunteer'],
-    ])
+    // Each team adds from its own list: the order between the two does not matter.
+    expect(Object.fromEntries(data.available.map(person => [person.userId, person.team]))).toEqual({
+      [staff.user.id]: 'staff',
+      [volunteer.user.id]: 'volunteer',
+    })
 
     // A person convoked without (or after withdrawing) availability shows it on the convocation.
     await addConvocations(db, {
