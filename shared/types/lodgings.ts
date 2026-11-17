@@ -1,11 +1,21 @@
-import type { ConvocationStatus, LodgingFeature, ParticipationStatus, StaffTeam } from '../utils/constants'
+import type {
+  ConvocationStatus,
+  LodgingFeature,
+  LodgingLocation,
+  ParticipationStatus,
+  StaffTeam,
+} from '../utils/constants'
 
 /** A lodging of the camp (docs/spec.md 3.11). */
 export interface Lodging {
   id: string
   name: string
-  area: string | null
+  location: LodgingLocation
   beds: number
+  singleBeds: number
+  doubleBeds: number
+  sofaBeds: number
+  accessible: boolean
   features: LodgingFeature[]
   description: string | null
 }

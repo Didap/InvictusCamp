@@ -538,22 +538,43 @@ const DEMO_ANSWERS: FormAnswers = {
   publicationConsent: false,
 }
 
-/** An example layout of the camp: villette with a kitchen, rooms in the residence. */
+/** An example layout of the camp: villette with a kitchen at the camp, rooms at the B&B Melina. */
 type NewLodging = typeof t.lodgings.$inferInsert
 const DEMO_LODGINGS: NewLodging[] = [
   ...[1, 2, 3, 4, 5, 6].map((n): NewLodging => ({
     name: `Villetta ${n}`,
-    area: 'Villette',
-    beds: n <= 2 ? 4 : 5,
-    features: n <= 2 ? ['kitchen', 'accessible_bathroom', 'microwave'] : ['kitchen', 'microwave'],
-    description: n <= 2 ? '1 matrimoniale e 2 singoli, piano terra' : '1 matrimoniale, 1 a castello e 1 divano letto',
+    location: 'invictus_camp',
+    ...(n <= 2
+      ? {
+          beds: 4,
+          doubleBeds: 1,
+          singleBeds: 2,
+          accessible: true,
+          features: ['kitchen', 'accessible_bathroom', 'microwave'],
+          description: 'Piano terra',
+        }
+      : {
+          beds: 5,
+          doubleBeds: 1,
+          singleBeds: 2,
+          sofaBeds: 1,
+          features: ['kitchen', 'microwave'],
+          description: 'Letti singoli a castello',
+        }),
   })),
   ...[1, 2, 3, 4].map((n): NewLodging => ({
     name: `Camera ${n}`,
-    area: 'Residence',
-    beds: n === 1 ? 3 : 4,
-    features: n === 1 ? ['accessible_bathroom', 'microwave'] : ['microwave'],
-    description: n === 1 ? '1 matrimoniale e 1 singolo, piano terra' : '1 matrimoniale e 2 singoli, primo piano',
+    location: 'melina',
+    ...(n === 1
+      ? {
+          beds: 3,
+          doubleBeds: 1,
+          singleBeds: 1,
+          accessible: true,
+          features: ['accessible_bathroom', 'microwave'],
+          description: 'Piano terra',
+        }
+      : { beds: 4, doubleBeds: 1, singleBeds: 2, features: ['microwave'], description: 'Primo piano' }),
   })),
 ]
 

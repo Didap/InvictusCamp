@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_FAMILY_FORM, formQuestions } from '../../shared/content/family-form'
-import { accommodationNeeds, groupByArea, lodgingWarnings, sortLodgings } from '../../shared/utils/lodgings'
+import {
+  accommodationNeeds,
+  groupByLocation,
+  lodgingLine,
+  lodgingWarnings,
+  sortLodgings,
+} from '../../shared/utils/lodgings'
 
 describe('accommodation needs', () => {
   it('keeps the options the families answered with: answers are stored as labels', () => {
@@ -17,30 +23,32 @@ describe('accommodation needs', () => {
 })
 
 describe('lodgings', () => {
-  it('sorts by area, then by name with numbers in order, those without an area last', () => {
+  it('sorts by location in the order of the list, then by name with numbers in order', () => {
     const sorted = sortLodgings([
-      { name: 'Villetta 10', area: 'Villette' },
-      { name: 'Tenda', area: null },
-      { name: 'villetta 2', area: 'Villette' },
-      { name: 'Camera 1', area: 'Residence' },
+      { name: 'Villetta 10', location: 'invictus_camp' as const },
+      { name: 'Appartamento 1', location: 'torricella' as const },
+      { name: 'villetta 2', location: 'invictus_camp' as const },
+      { name: 'Camera 1', location: 'melina' as const },
     ])
-    expect(sorted.map(item => item.name)).toEqual(['Camera 1', 'villetta 2', 'Villetta 10', 'Tenda'])
+    expect(sorted.map(item => item.name)).toEqual(['Camera 1', 'Appartamento 1', 'villetta 2', 'Villetta 10'])
+    expect(groupByLocation(sorted).map(group => [group.label, group.items.length])).toEqual([
+      ['B&B Melina', 1],
+      ['Appartamenti Torricella', 1],
+      ['Alloggi Invictus Camp', 2],
+    ])
   })
 
-  it('keeps areas that differ only by case apart, each under one heading', () => {
-    const groups = groupByArea(
-      sortLodgings([
-        { name: 'Villetta 1', area: 'Villette' },
-        { name: 'Villetta 2', area: 'villette' },
-        { name: 'Villetta 3', area: 'Villette' },
-        { name: 'Tenda', area: null },
-      ]),
+  it('says how a lodging is made: places, kinds of beds there are, accessibility, features', () => {
+    const lodging = { beds: 5, singleBeds: 2, doubleBeds: 1, sofaBeds: 1, accessible: true, features: [] }
+    expect(lodgingLine(lodging)).toBe(
+      '5 posti letto (1 letto matrimoniale, 2 letti singoli, 1 divano letto) · Accessibile',
     )
-    expect(groups.map(group => [group.area, group.items.length])).toEqual([
-      ['villette', 1],
-      ['Villette', 2],
-      ['Altri alloggi', 1],
-    ])
+    expect(lodgingLine({ ...lodging, singleBeds: 0, doubleBeds: 0, sofaBeds: 2, accessible: false })).toBe(
+      '5 posti letto (2 divani letto)',
+    )
+    expect(lodgingLine({ ...lodging, singleBeds: 0, doubleBeds: 0, sofaBeds: 0, features: ['kitchen'] })).toBe(
+      '5 posti letto · Accessibile · Cucina',
+    )
   })
 
   it('says what does not fit: more people than beds, the needs the lodging lacks', () => {

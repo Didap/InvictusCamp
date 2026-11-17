@@ -29,6 +29,7 @@ import {
 } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
 import { formatDateTime, fullName, plural } from '../../shared/utils/format'
+import { lodgingName } from '../../shared/utils/lodgings'
 import {
   SESSION_TRANSITIONS,
   SESSION_TRANSITION_ACTIONS,
@@ -600,7 +601,7 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
       leadFirstName: leadUser.firstName,
       leadLastName: leadUser.lastName,
       lodging: lodgings.name,
-      lodgingArea: lodgings.area,
+      lodgingLocation: lodgings.location,
       hasProgramme: sql<boolean>`${sessionHasProgramme()}`,
     })
     .from(sessionFamilies)
@@ -627,7 +628,17 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
     .orderBy(asc(campSessions.startDate))
   const today = todayIso()
   return rows.map(
-    ({ feedbackOpen, feedbackId, group, leadFirstName, leadLastName, lodging, lodgingArea, hasProgramme, ...row }) => {
+    ({
+      feedbackOpen,
+      feedbackId,
+      group,
+      leadFirstName,
+      leadLastName,
+      lodging,
+      lodgingLocation,
+      hasProgramme,
+      ...row
+    }) => {
       const answerable = isSessionOpen(row.sessionStatus) && row.status === 'invited'
       const lived =
         row.status === 'confirmed' && isSessionOver({ status: row.sessionStatus, endDate: row.endDate }, today)
@@ -637,7 +648,7 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
           ? {
               group,
               groupLead: leadFirstName ? fullName({ firstName: leadFirstName, lastName: leadLastName }) : null,
-              lodging: lodging ? (lodgingArea ? `${lodging} (${lodgingArea})` : lodging) : null,
+              lodging: lodging && lodgingLocation ? lodgingName({ name: lodging, location: lodgingLocation }) : null,
               hasProgramme,
             }
           : null,

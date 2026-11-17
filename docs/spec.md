@@ -298,9 +298,11 @@ Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or 
 Where each family, and each member of the staff and v-team, sleeps during a session.
 
 - **The layout** (`/admin/alloggi`, "Alloggi"): the lodgings of the camp, entered once and used by every
-  session. Each one has a name, an optional area that groups the layout ("Villette", "Residence"), its
-  beds, what it offers (kitchen, bathroom without architectural barriers, microwave: the three needs the
-  family data asks about) and how the beds are made. Editing a lodging leaves the families where they
+  session. Each one has a location, from a closed list that also groups the layout (B&B Melina, B&B Nu
+  Suennu, Appartamenti Torricella, Alloggi Invictus Camp), a name (the room or the apartment), its beds
+  (how many people sleep in it) and how many of them are single beds, double beds and sofa beds, whether
+  it is accessible (without architectural barriers), what it offers (kitchen, bathroom without
+  architectural barriers, microwave: the three needs the family data asks about) and notes. Editing a lodging leaves the families where they
   are and changes it everywhere, completed sessions included. Deleting one says in how many sessions it
   hosts a family: in open sessions those families are left without one (audited); a lodging in the
   layout of a completed session cannot be deleted.
@@ -314,9 +316,12 @@ Where each family, and each member of the staff and v-team, sleeps during a sess
   lodging each (`session_staff.lodgingId`, audited `convocation.lodging`). Several can share one, never
   with a family: a lodging of a family cannot be chosen for the staff and the other way round. More people
   than beds is flagged. Declining or withdrawing the convocation frees the lodging.
-- **The layout of the session**: lodging by lodging, who sleeps there, the family or the staff; "Scarica
-  lo schema (CSV)" downloads it with the families and the staff still without a lodging at the end
-  (audited).
+- **The layout of the session**: location by location, who sleeps in each lodging, the family or the
+  staff. «Genera PDF dello schema» (the primary action) downloads it to print or send: each lodging with
+  the family, its number of people and its referent with a phone (the family's, else the account's), or
+  the staff, what to check and how the lodging is made; at the end, the families and the staff still
+  without a lodging. «Scarica CSV» downloads the same as a table. Both are audited
+  (`session.lodgings_export`, with `format: 'pdf'` for the PDF).
 - A family that declines or is removed frees its lodging, and so does cancelling the session. A
   completed session keeps its layout, read-only. Families and staff do not see the lodgings, but a family sees its own in the history of a completed
   session (3.3).

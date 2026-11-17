@@ -10,7 +10,10 @@ describe('family history', () => {
     const { family } = await makeFamily(db)
     const past = await makeSession(db, { status: 'completed', startDate: '2026-06-01', endDate: '2026-06-05' })
     const next = await makeSession(db, { status: 'confirmed' })
-    const [lodging] = await db.insert(t.lodgings).values({ name: 'Villetta 3', beds: 4 }).returning()
+    const [lodging] = await db
+      .insert(t.lodgings)
+      .values({ name: 'Villetta 3', location: 'invictus_camp', beds: 4 })
+      .returning()
     const { user: lead } = await makeStaff(db)
     await db
       .insert(t.sessionStaff)
@@ -33,7 +36,7 @@ describe('family history', () => {
     expect(items.find(item => item.sessionId === past.id)!.lived).toEqual({
       group: 'yellow',
       groupLead: `${lead.firstName} ${lead.lastName}`,
-      lodging: 'Villetta 3',
+      lodging: 'Villetta 3 (Alloggi Invictus Camp)',
       hasProgramme: false,
     })
     expect(items.find(item => item.sessionId === next.id)!.lived).toBeNull()

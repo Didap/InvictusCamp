@@ -8,19 +8,23 @@ import {
   deleteLodging,
   listLodgings,
   lodgingsCsv,
+  lodgingsPdf,
+  layoutWithContacts,
+  lodgingsPdfBlocks,
   sessionLodgingsOf,
   updateLodging,
 } from '../../server/domain/lodgings'
 import { answerInvitation, cancelParticipation } from '../../server/domain/sessions'
 import { lodgingSchema, type LodgingInput } from '../../shared/schemas/lodgings'
 import type { ParticipationKind, ParticipationStatus, SessionStatus } from '../../shared/utils/constants'
+import { sniffMimeType } from '../../server/domain/storage'
 import { makeAdmin, makeFamily, makeSession, makeStaff, t, useTestDb } from './helpers'
 
 const db = useTestDb()
 const ctx = { appUrl: 'http://localhost:3080' }
 
 const lodging = (values: Partial<LodgingInput> = {}) =>
-  createLodging(db, lodgingSchema.parse({ name: 'Villetta 1', beds: 4, ...values }))
+  createLodging(db, lodgingSchema.parse({ name: 'Villetta 1', location: 'invictus_camp', beds: 4, ...values }))
 
 async function setup(status: SessionStatus = 'confirmed') {
   const admin = await makeAdmin(db)
@@ -36,10 +40,17 @@ async function setup(status: SessionStatus = 'confirmed') {
 async function join(
   sessionId: string,
   name: string,
-  options: { kind?: ParticipationKind; status?: ParticipationStatus; people?: number; needs?: string[] } = {},
+  options: {
+    kind?: ParticipationKind
+    status?: ParticipationStatus
+    people?: number
+    needs?: string[]
+    phone?: string
+  } = {},
 ) {
   const { family } = await makeFamily(db, {
     name,
+    phone: options.phone ?? null,
     formAnswers: options.needs ? { accommodationNeeds: options.needs } : {},
   })
   const people = options.people ?? 0
@@ -71,29 +82,37 @@ async function lodgingOf(participationId: string) {
 }
 
 describe('the layout', () => {
-  it('lists the lodgings by area, then by name with numbers in order, those without an area last', async () => {
-    await lodging({ name: 'Villetta 10', area: 'Villette' })
-    await lodging({ name: 'Villetta 2', area: 'Villette' })
-    await lodging({ name: 'Tenda', area: '' })
-    await lodging({ name: 'Camera 1', area: 'Residence', features: ['microwave', 'kitchen', 'microwave'] })
+  it('lists the lodgings by location, in the order of the list, then by name with numbers in order', async () => {
+    await lodging({ name: 'Villetta 10' })
+    await lodging({ name: 'Villetta 2' })
+    await lodging({ name: 'Appartamento 1', location: 'torricella', doubleBeds: 1, sofaBeds: 1, accessible: true })
+    await lodging({ name: 'Camera 1', location: 'melina', features: ['microwave', 'kitchen', 'microwave'] })
     const list = await listLodgings(db)
-    expect(list.map(item => item.name)).toEqual(['Camera 1', 'Villetta 2', 'Villetta 10', 'Tenda'])
+    expect(list.map(item => item.name)).toEqual(['Camera 1', 'Appartamento 1', 'Villetta 2', 'Villetta 10'])
     expect(list[0]).toMatchObject({ features: ['kitchen', 'microwave'], sessions: 0, description: null })
-    expect(list[3]!.area).toBeNull()
+    expect(list[1]).toMatchObject({ singleBeds: 0, doubleBeds: 1, sofaBeds: 1, accessible: true })
   })
 
   it('edits and deletes a lodging; a missing one is 404', async () => {
     const { actor } = await setup()
     const id = await lodging()
-    await updateLodging(db, id, lodgingSchema.parse({ name: 'Villetta A', beds: 6, description: 'Due camere' }))
+    await updateLodging(
+      db,
+      id,
+      lodgingSchema.parse({ name: 'Villetta A', location: 'melina', beds: 6, description: 'Due camere' }),
+    )
     expect((await listLodgings(db))[0]).toMatchObject({ name: 'Villetta A', beds: 6, description: 'Due camere' })
     await deleteLodging(db, id, actor)
     expect(await listLodgings(db)).toEqual([])
     await expect(deleteLodging(db, id, actor)).rejects.toMatchObject({ statusCode: 404 })
   })
 
-  it('refuses a lodging without beds', () => {
-    expect(lodgingSchema.safeParse({ name: 'Villetta', beds: 0 }).success).toBe(false)
+  it('refuses a lodging without beds, without a location, or with a negative number of beds of a kind', () => {
+    const valid = { name: 'Villetta', location: 'melina', beds: 2 }
+    expect(lodgingSchema.safeParse(valid).success).toBe(true)
+    expect(lodgingSchema.safeParse({ ...valid, beds: 0 }).success).toBe(false)
+    expect(lodgingSchema.safeParse({ ...valid, location: 'Villette' }).success).toBe(false)
+    expect(lodgingSchema.safeParse({ ...valid, sofaBeds: -1 }).success).toBe(false)
   })
 })
 
@@ -121,7 +140,7 @@ describe('a session', () => {
 
     await expect(place(bianchi.participation, villetta)).rejects.toMatchObject({
       statusCode: 409,
-      message: '«Villetta 1» è già assegnato a Famiglia Rossi',
+      message: '«Villetta 1 (Alloggi Invictus Camp)» è già assegnato a Famiglia Rossi',
     })
 
     await place(rossi.participation, null)
@@ -206,7 +225,7 @@ describe('a session', () => {
     await db.update(t.campSessions).set({ status: 'completed' }).where(eq(t.campSessions.id, session.id))
     await expect(deleteLodging(db, camera, actor)).rejects.toMatchObject({
       statusCode: 409,
-      message: '«Camera 1» è nello schema di una sessione conclusa: non si può eliminare',
+      message: '«Camera 1 (Alloggi Invictus Camp)» è nello schema di una sessione conclusa: non si può eliminare',
     })
     expect(await lodgingOf(rossi.participation.id)).toBe(camera)
   })
@@ -252,7 +271,7 @@ describe('a session', () => {
     const tab = await sessionLodgingsOf(db, session.id)
     expect(tab.staff.map(person => person.lodgingId)).toEqual([camera, camera])
     const { csv } = await lodgingsCsv(db, session.id)
-    expect(csv).toContain(';Camera 1;1;;')
+    expect(csv).toContain(';Camera 1;1;;No;;')
     expect(csv).toContain('2 persone e 1 posto letto')
     expect((await listLodgings(db)).find(item => item.id === camera)?.sessions).toBe(1)
   })
@@ -262,21 +281,48 @@ describe('a session', () => {
     const rossi = await join(session.id, 'Famiglia Rossi', {
       people: 5,
       needs: ['Bagno senza barriere architettoniche'],
+      phone: '333 1234567',
     })
-    await join(session.id, 'Famiglia Bianchi', { people: 3 })
+    const bianchi = await join(session.id, 'Famiglia Bianchi', { people: 3 })
     await join(session.id, 'Famiglia Verdi')
-    const villetta = await lodging({ area: 'Villette', features: ['kitchen'] })
-    await lodging({ name: 'Camera 1', area: 'Residence', beds: 3 })
+    const villetta = await lodging({ features: ['kitchen'], doubleBeds: 1, singleBeds: 2 })
+    await lodging({ name: 'Camera 1', location: 'melina', beds: 3, accessible: true })
     await place(rossi.participation, villetta)
 
     const { filename, csv } = await lodgingsCsv(db, session.id)
     expect(filename).toBe('alloggi-sessione-di-prova-21-06-2027.csv')
     expect(csv.replace('﻿', '').trim().split('\r\n')).toEqual([
-      'Zona;Alloggio;Posti letto;Dotazioni;Chi ci dorme;Persone;Esigenze;Da controllare',
-      'Residence;Camera 1;3;;;;;',
-      'Villette;Villetta 1;4;Cucina;Famiglia Rossi;5;Bagno senza barriere;5 persone e 4 posti letto. Manca: Bagno senza barriere',
-      ';;;;Famiglia Bianchi;3;;Senza alloggio',
-      ';;;;Famiglia Verdi;;;Componenti non ancora indicati. Senza alloggio',
+      'Località;Alloggio;Posti letto;Letti;Accessibile;Dotazioni;Chi ci dorme;Referente;Telefono;Persone;Esigenze;Da controllare',
+      'B&B Melina;Camera 1;3;;Sì;;;;;;;',
+      'Alloggi Invictus Camp;Villetta 1;4;1 letto matrimoniale, 2 letti singoli;No;Cucina;Famiglia Rossi;Prova Utente;333 1234567;5;Bagno senza barriere;5 persone e 4 posti letto. Manca: Bagno senza barriere',
+      ';;;;;;Famiglia Bianchi;Prova Utente;;3;;Senza alloggio',
+      ';;;;;;Famiglia Verdi;Prova Utente;;;;Componenti non ancora indicati. Senza alloggio',
     ])
+
+    // The PDF: by location in the order of the list, each lodging with who sleeps in it and who to call
+    // (the account's phone when the family has none), how it is made; then who has no lodging. What does
+    // not fit is not in it: next to a name and a phone it would tell what the family needs.
+    await db.update(t.users).set({ phone: '080 1234567' }).where(eq(t.users.id, bianchi.family.userId))
+    const { user: anna } = await makeStaff(db)
+    await db.insert(t.sessionStaff).values({ sessionId: session.id, userId: anna.id, status: 'accepted' })
+    expect(lodgingsPdfBlocks(await layoutWithContacts(db, session.id))).toEqual([
+      { heading: 'B&B Melina' },
+      { label: 'Camera 1' },
+      'Libero.',
+      '3 posti letto · Accessibile',
+      { heading: 'Alloggi Invictus Camp' },
+      { label: 'Villetta 1' },
+      'Famiglia Rossi, 5 persone. Referente: Prova Utente, 333 1234567.',
+      '4 posti letto (1 letto matrimoniale, 2 letti singoli) · Cucina',
+      { heading: 'Senza alloggio' },
+      'Famiglia Bianchi, 3 persone. Referente: Prova Utente, 080 1234567.',
+      'Famiglia Verdi, componenti non ancora indicati. Referente: Prova Utente, telefono non indicato.',
+      'Staff: Prova Utente (Staff).',
+    ])
+    // The tab gets the families without their contacts.
+    expect((await sessionLodgingsOf(db, session.id)).families[0]).not.toHaveProperty('phone')
+    const pdf = await lodgingsPdf(db, session.id)
+    expect(pdf.filename).toBe('alloggi-sessione-di-prova-21-06-2027.pdf')
+    expect(sniffMimeType(pdf.data)).toBe('application/pdf')
   })
 })

@@ -1,0 +1,2 @@
+ALTER TABLE "lodgings" DROP COLUMN "area";--> statement-breakpoint
+ALTER TABLE "lodgings" ADD CONSTRAINT "lodgings_location" CHECK ("lodgings"."location" in ('melina', 'nu_suennu', 'torricella', 'invictus_camp'));
