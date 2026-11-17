@@ -25,7 +25,7 @@ const [{ data: profile }, { data: form, error: formError, refresh: refreshForm }
   useApiFetch<FamilyFormView>('/api/family/form'),
 ])
 const sections = computed(() => form.value?.sections ?? [])
-const questions = computed(() => formQuestions({ sections: sections.value }))
+const questions = computed(() => formQuestions(sections.value))
 
 const submitted = computed(() => profile.value?.formStatus === 'submitted')
 const filledCards = computed<FamilyComposition>(
@@ -153,7 +153,7 @@ async function save() {
     } else notifySuccess(title, removed || (firstTime ? undefined : 'L’amministrazione vede già i dati nuovi.'))
   } catch (error) {
     notifyError(error, 'Dati non salvati')
-    if (apiErrorData(error)?.formChanged) await reloadQuestions()
+    if (apiErrorData(error)?.reason === 'form_changed') await reloadQuestions()
   } finally {
     saving.value = false
   }

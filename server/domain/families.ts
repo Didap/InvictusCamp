@@ -262,18 +262,18 @@ export async function saveFamilyData(
   db: DbOrTx,
   input: { familyId: string; data: FamilyDataInput; actor: Actor },
 ): Promise<{ family: FamilyRow; cards: CardRow[]; cardsCreated: number; cardsRemoved: number }> {
-  // Locked: two saves at once (two tabs, a retry) would both count the same cards and both add the missing ones.
   // The form first, then the family: the administration's save takes them in the same order.
   const form = await getFamilyForm(db, 'share')
-  const family = await requireFamilyRow(db, input.familyId, true)
   if (input.data.formRevision !== undefined && input.data.formRevision !== form.revision) {
     throw createError({
       statusCode: 409,
       message: 'Nel frattempo abbiamo cambiato qualche domanda: ricontrolla le risposte e salva di nuovo.',
-      data: { formChanged: true },
+      data: { reason: 'form_changed' },
     })
   }
-  const questions = formQuestions(form.content)
+  // Locked: two saves at once (two tabs, a retry) would both count the same cards and both add the missing ones.
+  const family = await requireFamilyRow(db, input.familyId, true)
+  const questions = formQuestions(form.content.sections)
   const { answers, invalid } = normalizeFormAnswers(input.data.answers, questions)
   if (invalid.length) {
     throw createError({ statusCode: 400, message: `Risposta non valida alla domanda «${invalid[0]!.label}»` })
@@ -913,14 +913,14 @@ export async function familyHome(
       )
       .orderBy(desc(campSessions.startDate))
       .limit(1),
-    getFamilyForm(db),
+    // Only a family that confirmed its data can have questions left after a change of the form.
+    family.formStatus === 'submitted' ? getFamilyForm(db) : null,
   ])
   return {
     firstName: input.firstName,
     familyName: family.name,
     formStatus: family.formStatus,
-    questionsToAnswer:
-      family.formStatus === 'submitted' ? questionsToAnswer(family.formAnswers, formQuestions(form.content)) : 0,
+    questionsToAnswer: form ? questionsToAnswer(family.formAnswers, formQuestions(form.content.sections)) : 0,
     memberCount: cards.length,
     cardsToComplete: cards.filter(isCardToComplete).length,
     healthConsent: Boolean(family.healthDataConsentAt),
@@ -1168,6 +1168,7 @@ export async function adminFamilyDetail(db: DbOrTx, familyId: string): Promise<A
     members: members.map(toMember),
     documents: await listPersonalDocuments(db, family.userId),
     activeSessionIds: active.map(item => item.sessionId),
+    form: (await getFamilyForm(db)).content,
   }
 }
 

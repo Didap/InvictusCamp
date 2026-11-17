@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { adminNotesSchema } from '#shared/schemas/families'
-import type { AdminFamilyDetail, FamilyFormDto, FamilyMemberDto } from '#shared/types/families'
+import type { AdminFamilyDetail, FamilyMemberDto } from '#shared/types/families'
 import { formatDateTime, fullName, isEmptyCard, memberLine, memberName, plural } from '#shared/utils/format'
 
 // The record of one family for the administration: data and contacts, members (health details only
@@ -10,11 +10,11 @@ import { formatDateTime, fullName, isEmptyCard, memberLine, memberName, plural }
 const route = useRoute()
 const familyId = computed(() => String(route.params.id))
 const api = useApi()
-const [{ data: family, error, refresh }, { data: form, error: formError }] = await Promise.all([
-  useApiFetch<AdminFamilyDetail>(() => `/api/admin/families/${familyId.value}`),
-  // The questions of the answers, as the form is now (/admin/famiglie/modulo).
-  useApiFetch<FamilyFormDto>('/api/admin/family-form'),
-])
+const {
+  data: family,
+  error,
+  refresh,
+} = await useApiFetch<AdminFamilyDetail>(() => `/api/admin/families/${familyId.value}`)
 
 const contacts = computed(() => {
   const f = family.value
@@ -173,10 +173,7 @@ async function saveNotes() {
         <template #actions>
           <IcStatusBadge kind="familyFormStatus" :value="family.formStatus" />
         </template>
-        <FamiliesQuestionnaireAnswers v-if="form" :answers="family.formAnswers" :form="form.content" />
-        <p v-else-if="formError" class="text-error">
-          Le risposte non si sono caricate: {{ apiErrorMessage(formError) }}. Ricarica la pagina.
-        </p>
+        <FamiliesQuestionnaireAnswers :answers="family.formAnswers" :form="family.form" />
       </IcSection>
 
       <IcSection title="Documenti personali" description="Caricati dalla famiglia: certificati, diagnosi, documenti.">

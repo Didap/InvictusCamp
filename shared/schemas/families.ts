@@ -185,11 +185,31 @@ export function missingRequiredQuestions(answers: FormAnswers, questions: readon
 }
 
 /**
+ * The stored answers that still fit the questions, as the family's form shows them: a choice taken out of
+ * the options goes (from a multiple choice, the others stay), and so does an answer of another kind.
+ */
+export function fitAnswers(answers: FormAnswers, questions: readonly FormQuestion[]): FormAnswers {
+  const fit: FormAnswers = {}
+  for (const question of questions) {
+    const value = Object.hasOwn(answers, question.id) ? answers[question.id] : undefined
+    const options = question.options ?? []
+    if (question.type === 'multiselect') {
+      if (Array.isArray(value)) fit[question.id] = value.filter(option => options.includes(option))
+    } else if (question.type === 'boolean') {
+      if (typeof value === 'boolean') fit[question.id] = value
+    } else if (typeof value === 'string' && (question.type !== 'select' || options.includes(value))) {
+      fit[question.id] = value
+    }
+  }
+  return fit
+}
+
+/**
  * The required questions a family that confirmed its data must still answer, after the administration
  * changed the form: new ones, ones made required, ones whose chosen option was taken out.
  */
 export function questionsToAnswer(answers: FormAnswers, questions: readonly FormQuestion[]): number {
-  return missingRequiredQuestions(normalizeFormAnswers(answers, questions).answers, questions).length
+  return missingRequiredQuestions(fitAnswers(answers, questions), questions).length
 }
 
 // ─── Members and health details ─────────────────────────────────────────────────────────────────────

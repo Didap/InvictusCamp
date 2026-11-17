@@ -5,14 +5,13 @@ import {
   familyFormSaveSchema,
   hasOptions,
   MAX_FORM_SECTIONS,
-  newFormId,
   type FamilyFormSaveInput,
   type OptionRename,
 } from '#shared/schemas/questionnaires'
 import type { FamilyFormDto, FamilyFormSaveResult } from '#shared/types/families'
 import { enumLabel } from '#shared/utils/constants'
-import { formatDateTime, plural } from '#shared/utils/format'
-import { copyOf, sameContent } from '#shared/utils/programme'
+import { plural } from '#shared/utils/format'
+import { copyOf, newId, sameContent } from '#shared/utils/plain'
 import { answerFields, type AnswerFields } from '~/utils/family-form'
 import type { EditedQuestion } from './FormQuestionModal.vue'
 
@@ -28,21 +27,21 @@ const api = useApi()
 const confirm = useConfirm()
 const toast = useToast()
 
-type Origins = Record<string, (string | null)[]>
-const originsOf = (sections: FormSection[]): Origins =>
-  Object.fromEntries(formQuestions({ sections }).map(question => [question.id, [...(question.options ?? [])]]))
+/** The questions as they are saved, by id: their type stays, their options are where renames start. */
+const saved = computed(
+  () => new Map(formQuestions(props.form.content.sections).map(question => [question.id, question])),
+)
 
 const draft = ref<FormSection[]>([])
-const origins = ref<Origins>({})
+/** The origins of the options of the questions edited since the last save; the others are as saved. */
+const origins = ref<Record<string, (string | null)[]>>({})
+const originsOf = (id: string) => origins.value[id] ?? saved.value.get(id)?.options ?? []
 function reset() {
   draft.value = copyOf(props.form.content.sections)
-  origins.value = originsOf(props.form.content.sections)
+  origins.value = {}
 }
 reset()
 watch(() => props.form, reset)
-
-/** The questions as they are saved, by id: their type stays, their options are where renames start. */
-const saved = computed(() => new Map(formQuestions(props.form.content).map(question => [question.id, question])))
 
 /** The draft as the server stores it: an empty description is no description. */
 const cleaned = (sections: FormSection[]) =>
@@ -50,9 +49,9 @@ const cleaned = (sections: FormSection[]) =>
 const dirty = computed(() => !sameContent(cleaned(draft.value), props.form.content.sections))
 
 function renames(): OptionRename[] {
-  return formQuestions({ sections: draft.value }).flatMap(question =>
+  return formQuestions(draft.value).flatMap(question =>
     (question.options ?? []).flatMap((option, i) => {
-      const from = origins.value[question.id]?.[i]
+      const from = originsOf(question.id)[i]
       return from && from !== option ? [{ questionId: question.id, from, to: option }] : []
     }),
   )
@@ -62,7 +61,7 @@ function renames(): OptionRename[] {
 
 /** What the families will notice, said before saving: questions taken out, new required questions. */
 function consequences(): string[] {
-  const next = formQuestions({ sections: draft.value })
+  const next = formQuestions(draft.value)
   const ids = new Set(next.map(question => question.id))
   const removed = [...saved.value.values()].filter(question => !ids.has(question.id)).length
   const required = next.filter(question => question.required && !saved.value.get(question.id)?.required).length
@@ -128,23 +127,12 @@ async function onSave() {
   }
 }
 
-async function discard() {
-  const ok = await confirm({
-    title: 'Annullare le modifiche?',
-    description: 'Il modulo torna com’era all’ultimo salvataggio.',
-    confirmLabel: 'Annulla le modifiche',
-    cancelLabel: 'Continua a modificare',
-    danger: true,
-  })
-  if (ok) reset()
-}
-
 useLeaveGuard(dirty, 'al modulo')
 
 // ─── Sections ──────────────────────────────────────────────────────────────────────────────────────
 
 function addSection() {
-  draft.value.push({ id: newFormId('s'), title: '', questions: [] })
+  draft.value.push({ id: newId('s'), title: '', questions: [] })
 }
 
 function moveSection(index: number, by: number) {
@@ -238,7 +226,7 @@ function removeQuestion(section: FormSection, index: number) {
         variant: 'outline',
         onClick: () => {
           const target = draft.value.find(item => item.id === sectionId)
-          if (!target || formQuestions({ sections: draft.value }).some(item => item.id === question!.id)) return
+          if (!target || formQuestions(draft.value).some(item => item.id === question!.id)) return
           target.questions.splice(Math.min(index, target.questions.length), 0, question!)
         },
       },
@@ -293,51 +281,22 @@ const TABS = [
 const tab = ref('edit')
 const previewFields = ref<AnswerFields>(answerFields([]))
 watch(tab, value => {
-  if (value === 'preview') previewFields.value = answerFields(formQuestions({ sections: draft.value }))
+  if (value === 'preview') previewFields.value = answerFields(formQuestions(draft.value))
 })
 </script>
 
 <template>
   <div>
-    <!-- Negative top = the body padding of IcPage (p-4 sm:p-6 lg:p-8): the bar sits flush under the navbar. -->
-    <div
-      class="sticky -top-4 z-10 mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-default bg-default py-3 sm:-top-6 lg:-top-8"
-    >
-      <p class="flex items-center gap-2 text-sm" role="status">
-        <template v-if="dirty">
-          <UIcon name="i-lucide-circle-dot" class="size-4 shrink-0 text-warning" aria-hidden="true" />
-          Modifiche non salvate
-        </template>
-        <template v-else-if="form.updatedAt">
-          <UIcon name="i-lucide-circle-check" class="size-4 shrink-0 text-success" aria-hidden="true" />
-          Salvato il {{ formatDateTime(form.updatedAt)
-          }}<template v-if="form.updatedByName"> da {{ form.updatedByName }}</template>
-        </template>
-        <template v-else>
-          <UIcon name="i-lucide-circle-check" class="size-4 shrink-0 text-success" aria-hidden="true" />
-          Il modulo di partenza, mai modificato
-        </template>
-      </p>
-      <div class="flex flex-wrap gap-2">
-        <UButton
-          v-if="dirty"
-          color="neutral"
-          variant="outline"
-          label="Annulla le modifiche"
-          class="pointer-coarse:min-h-11"
-          :disabled="saving"
-          @click="discard"
-        />
-        <UButton
-          icon="i-lucide-save"
-          label="Salva"
-          class="pointer-coarse:min-h-11"
-          :disabled="!dirty"
-          :loading="saving"
-          @click="onSave"
-        />
-      </div>
-    </div>
+    <IcSaveBar
+      :dirty="dirty"
+      :saving="saving"
+      :updated-at="form.updatedAt"
+      :updated-by-name="form.updatedByName"
+      never-saved="Il modulo di partenza, mai modificato"
+      discard-description="Il modulo torna com’era all’ultimo salvataggio."
+      @save="onSave"
+      @discard="reset"
+    />
 
     <UAlert
       class="mb-6"
@@ -446,7 +405,7 @@ watch(tab, value => {
     <FamiliesFormQuestionModal
       v-model:open="modalOpen"
       :question="editing.question"
-      :origins="editing.question ? (origins[editing.question.id] ?? []) : []"
+      :origins="editing.question ? originsOf(editing.question.id) : []"
       :saved="editing.question ? (saved.get(editing.question.id) ?? null) : null"
       @submit="applyQuestion"
     />

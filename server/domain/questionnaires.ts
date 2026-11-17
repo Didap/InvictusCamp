@@ -13,11 +13,13 @@ import {
   lockedReason,
   type FamilyFormContent,
   type FormQuestion,
+  type FormSection,
 } from '../../shared/content/family-form'
 import { typesFor, type FamilyFormSaveValues, type OptionRename } from '../../shared/schemas/questionnaires'
 import type { FormAnswers } from '../../shared/types/domain'
 import type { FamilyFormDto, FamilyFormSaveResult } from '../../shared/types/families'
 import { fullName } from '../../shared/utils/format'
+import { sameContent } from '../../shared/utils/plain'
 import { families, questionnaires, users } from '../db/schema'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
@@ -25,21 +27,23 @@ import { DomainError } from './errors'
 import type { Actor } from './families'
 
 const FAMILY_FORM = 'family'
+/** The key of the lock that keeps the administration's save and the families' saves apart. */
+const LOCK_KEY = sql`hashtext('questionnaire:family')`
 
-const CODE_QUESTIONS = new Map(formQuestions(DEFAULT_FAMILY_FORM).map(question => [question.id, question]))
+const CODE_QUESTIONS = new Map(formQuestions(DEFAULT_FAMILY_FORM.sections).map(question => [question.id, question]))
 
-/** The locked questions with type, options and requirement of the code, text and help of the saved form. */
-function withCodeLocks(content: FamilyFormContent): FamilyFormContent {
+/**
+ * The locked questions with type, options and requirement of the code, text and help as given: on reading
+ * (a change in the code reaches a form saved before it) and on saving (the editor cannot change them).
+ */
+function withCodeLocks(sections: FormSection[]): FormSection[] {
   const lock = (question: FormQuestion): FormQuestion => {
     if (!lockedReason(question.id)) return question
     const { type, options, required } = CODE_QUESTIONS.get(question.id)!
     const { options: _, required: __, ...text } = question
     return { ...text, type, ...(options ? { options } : {}), ...(required ? { required } : {}) }
   }
-  return {
-    ...content,
-    sections: content.sections.map(section => ({ ...section, questions: section.questions.map(lock) })),
-  }
+  return sections.map(section => ({ ...section, questions: section.questions.map(lock) }))
 }
 
 /**
@@ -48,8 +52,8 @@ function withCodeLocks(content: FamilyFormContent): FamilyFormContent {
  * for those saves and makes them wait. A lock on a key, not on the row: there is no row before the first save.
  */
 export async function getFamilyForm(db: DbOrTx, lock?: 'share' | 'update'): Promise<FamilyFormDto> {
-  if (lock === 'share') await db.execute(sql`select pg_advisory_xact_lock_shared(hashtext('questionnaire:family'))`)
-  if (lock === 'update') await db.execute(sql`select pg_advisory_xact_lock(hashtext('questionnaire:family'))`)
+  if (lock === 'share') await db.execute(sql`select pg_advisory_xact_lock_shared(${LOCK_KEY})`)
+  else if (lock === 'update') await db.execute(sql`select pg_advisory_xact_lock(${LOCK_KEY})`)
   const [row] = await db
     .select({
       content: questionnaires.content,
@@ -64,41 +68,19 @@ export async function getFamilyForm(db: DbOrTx, lock?: 'share' | 'update'): Prom
     .limit(1)
   if (!row) return { content: DEFAULT_FAMILY_FORM, revision: 0, updatedAt: null, updatedByName: null }
   return {
-    content: withCodeLocks(row.content),
+    content: { ...row.content, sections: withCodeLocks(row.content.sections) },
     revision: row.revision,
     updatedAt: row.updatedAt.toISOString(),
     updatedByName: fullName(row) || null,
   }
 }
 
-const sameList = (a: readonly string[] = [], b: readonly string[] = []) =>
-  a.length === b.length && a.every((item, i) => item === b[i])
-
-/** Same question, whatever the order of the keys (jsonb reorders them). */
-function sameQuestion(a: FormQuestion, b: FormQuestion): boolean {
-  return (
-    a.label === b.label &&
-    (a.help ?? '') === (b.help ?? '') &&
-    a.type === b.type &&
-    sameList(a.options, b.options) &&
-    !!a.required === !!b.required
-  )
-}
-
+/** The questions the code reads stay in the form. */
 function checkLocked(next: Map<string, FormQuestion>, before: Map<string, FormQuestion>): void {
   for (const [id, reason] of Object.entries(LOCKED_QUESTIONS)) {
-    const locked = CODE_QUESTIONS.get(id)!
-    const question = next.get(id)
-    if (!question) {
-      throw new DomainError(400, `La domanda «${(before.get(id) ?? locked).label}» non si toglie: ${reason}`)
-    }
-    if (
-      question.type !== locked.type ||
-      !sameList(question.options, locked.options) ||
-      !!question.required !== !!locked.required
-    ) {
-      throw new DomainError(400, `Della domanda «${question.label}» si cambiano solo il testo e l’aiuto: ${reason}`)
-    }
+    if (next.has(id)) continue
+    const label = (before.get(id) ?? CODE_QUESTIONS.get(id)!).label
+    throw new DomainError(400, `La domanda «${label}» non si toglie: ${reason}`)
   }
 }
 
@@ -149,7 +131,7 @@ async function renameAnswers(
     for (const [id, map] of maps) {
       if (Object.hasOwn(answers, id)) answers[id] = renamedAnswer(answers[id]!, map, next.get(id)!.options ?? [])
     }
-    if (JSON.stringify(answers) === JSON.stringify(row.formAnswers)) continue
+    if (sameContent(answers, row.formAnswers)) continue
     await db.update(families).set({ formAnswers: answers }).where(eq(families.id, row.id))
     changed++
   }
@@ -173,11 +155,12 @@ export async function saveFamilyForm(
     )
   if (input.values.revision !== current.revision) throw conflict()
 
-  const was = formQuestions(current.content)
+  const was = formQuestions(current.content.sections)
   const previous = new Map(was.map(question => [question.id, question]))
   // A retired question that comes back keeps its kind of answer too: its answers are still there.
   const before = new Map([...current.content.retired.map(question => [question.id, question] as const), ...previous])
-  const next = new Map(formQuestions(input.values).map(question => [question.id, question]))
+  const sections = withCodeLocks(input.values.sections)
+  const next = new Map(formQuestions(sections).map(question => [question.id, question]))
   checkLocked(next, before)
   for (const question of next.values()) {
     const old = before.get(question.id)
@@ -192,7 +175,7 @@ export async function saveFamilyForm(
 
   const removed = was.filter(question => !next.has(question.id))
   const content: FamilyFormContent = {
-    sections: input.values.sections,
+    sections,
     retired: [...current.content.retired.filter(question => !next.has(question.id)), ...removed],
   }
   const [row] =
@@ -220,7 +203,7 @@ export async function saveFamilyForm(
       added: [...next.keys()].filter(id => !previous.has(id)),
       removed: removed.map(question => question.id),
       changed: [...next.values()]
-        .filter(question => previous.has(question.id) && !sameQuestion(previous.get(question.id)!, question))
+        .filter(question => previous.has(question.id) && !sameContent(previous.get(question.id), question))
         .map(question => question.id),
       renamedOptions: [...maps.values()].reduce((sum, map) => sum + map.size, 0),
       answersUpdated,

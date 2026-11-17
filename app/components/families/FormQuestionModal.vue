@@ -1,14 +1,9 @@
 <script setup lang="ts">
 import type { FormError } from '@nuxt/ui'
 import { lockedReason as reasonOf, type FormQuestion } from '#shared/content/family-form'
-import {
-  formQuestionSchema,
-  hasOptions,
-  MAX_QUESTION_OPTIONS,
-  newFormId,
-  typesFor,
-} from '#shared/schemas/questionnaires'
+import { formQuestionSchema, hasOptions, MAX_QUESTION_OPTIONS, typesFor } from '#shared/schemas/questionnaires'
 import type { FormQuestionType } from '#shared/utils/constants'
+import { newId } from '#shared/utils/plain'
 
 // Adds a question (`question` null) or edits one of the questionnaire «Dati della famiglia». Every option
 // carries its `origin`, the text it has in the saved form (null when new): the editor turns the
@@ -50,7 +45,7 @@ watch(open, value => {
   if (!value) return
   const question = props.question
   Object.assign(state, {
-    id: question?.id ?? newFormId('q'),
+    id: question?.id ?? newId('q'),
     label: question?.label ?? '',
     help: question?.help ?? '',
     type: question?.type ?? 'select',
@@ -68,7 +63,7 @@ const lockedReason = computed(() => reasonOf(state.id))
 const typeItems = computed(() => enums.options('formQuestionType', typesFor(props.saved?.type ?? null)))
 const typeHelp = computed(() => {
   if (lockedReason.value) return undefined
-  if (props.saved && typeItems.value.length < 2) {
+  if (typeItems.value.length < 2) {
     return 'Il tipo non si cambia: le famiglie potrebbero aver già risposto. Per un tipo diverso, togli la domanda e creane una nuova.'
   }
   return enums.meta('formQuestionType', state.type).description

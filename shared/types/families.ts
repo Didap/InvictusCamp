@@ -1,6 +1,6 @@
 // DTOs of the families area (A3). Health details (MemberHealth) travel only in the family's own
 // endpoints and in the reserved endpoint of the administration, never in lists.
-import type { FamilyFormContent, FormSection } from '../content/family-form'
+import type { FamilyFormContent } from '../content/family-form'
 import type { FileDto, Paginated } from './api'
 import type { DisabilityInfo, FormAnswers, UsefulInfo } from './domain'
 import type { FamilyComposition } from '../schemas/families'
@@ -205,6 +205,8 @@ export interface AdminFamilyDetail {
   documents: PersonalDocumentDto[]
   /** Sessions where the family already holds a participation (selected, invited or confirmed). */
   activeSessionIds: string[]
+  /** The questionnaire as it is now: the questions of `formAnswers`, and those taken out (`retired`). */
+  form: FamilyFormContent
 }
 
 /** GET /api/admin/families/:id/health: the reserved section of the admin record. */
@@ -229,7 +231,4 @@ export interface FamilyFormSaveResult {
 }
 
 /** GET /api/family/form: the questions the family answers, with the revision they come from. */
-export interface FamilyFormView {
-  sections: FormSection[]
-  revision: number
-}
+export type FamilyFormView = Pick<FamilyFormContent, 'sections'> & Pick<FamilyFormDto, 'revision'>

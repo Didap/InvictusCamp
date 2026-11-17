@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { familyHome, saveFamilyData } from '../../server/domain/families'
 import { getFamilyForm, saveFamilyForm } from '../../server/domain/questionnaires'
-import { DEFAULT_FAMILY_FORM, type FormSection } from '../../shared/content/family-form'
+import { DEFAULT_FAMILY_FORM, formQuestions, type FormSection } from '../../shared/content/family-form'
 import type { FamilyDataInput } from '../../shared/schemas/families'
 import { familyFormSaveSchema, type OptionRename } from '../../shared/schemas/questionnaires'
 import { makeAdmin, makeFamily, t, useTestDb } from './helpers'
@@ -40,8 +40,7 @@ const familyData = (answers: FamilyDataInput['answers'] = ANSWERS): FamilyDataIn
 
 /** The starting form, to change in a test. */
 const sections = (): FormSection[] => structuredClone(DEFAULT_FAMILY_FORM.sections)
-const question = (form: FormSection[], id: string) =>
-  form.flatMap(section => section.questions).find(item => item.id === id)!
+const question = (form: FormSection[], id: string) => formQuestions(form).find(item => item.id === id)!
 
 async function save(form: FormSection[], revision: number, renames: OptionRename[] = []) {
   const admin = await makeAdmin(db)
@@ -86,18 +85,16 @@ describe('family form', () => {
     without[2]!.questions = without[2]!.questions.filter(item => item.id !== 'photoConsent')
     await expect(save(without, 0)).rejects.toMatchObject({ statusCode: 400 })
 
-    const fewer = sections()
-    question(fewer, 'accommodationNeeds').options!.pop()
-    await expect(save(fewer, 0)).rejects.toMatchObject({ statusCode: 400 })
-
-    const optional = sections()
-    delete question(optional, 'publicationConsent').required
-    await expect(save(optional, 0)).rejects.toMatchObject({ statusCode: 400 })
-
+    // Moved, with a new text: fine. Options and requirement sent otherwise are the code's once saved.
     const moved = sections()
     const consent = moved[2]!.questions.shift()!
     moved[0]!.questions.push({ ...consent, label: 'Possiamo fotografarvi?', help: 'Per il sito.' })
-    expect((await save(moved, 0)).form.revision).toBe(1)
+    question(moved, 'accommodationNeeds').options!.pop()
+    delete question(moved, 'publicationConsent').required
+    const { form: saved } = await save(moved, 0)
+    expect(question(saved.content.sections, 'accommodationNeeds').options).toHaveLength(3)
+    expect(question(saved.content.sections, 'publicationConsent').required).toBe(true)
+    expect(question(saved.content.sections, 'photoConsent').label).toBe('Possiamo fotografarvi?')
 
     // Type, options and requirement come from the code even when the saved copy is older: a change in the
     // code (a new lodging feature) reaches the families, and the next save is not refused.
@@ -212,7 +209,7 @@ describe('family form', () => {
     const actor = { userId: user.id, ip: null }
     await expect(
       saveFamilyData(db, { familyId: family.id, data: { ...familyData(), formRevision: 0 }, actor }),
-    ).rejects.toMatchObject({ statusCode: 409, data: { formChanged: true } })
+    ).rejects.toMatchObject({ statusCode: 409, data: { reason: 'form_changed' } })
     await saveFamilyData(db, { familyId: family.id, data: { ...familyData(), formRevision: form.revision }, actor })
   })
 })

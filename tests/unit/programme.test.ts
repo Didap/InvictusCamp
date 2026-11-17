@@ -12,11 +12,10 @@ import {
   dayCaptions,
   groupRotation,
   moveBlock,
-  newBlockId,
   openPoints,
   placeBlock,
-  sameContent,
 } from '~~/shared/utils/programme'
+import { newId, sameContent } from '~~/shared/utils/plain'
 
 const block = (values: Partial<ProgrammeBlock>): ProgrammeBlock => ({
   id: crypto.randomUUID(),
@@ -172,7 +171,7 @@ describe('editor helpers', () => {
   })
 
   it('makes distinct block ids and shares the reading rule of families', () => {
-    expect(newBlockId()).not.toBe(newBlockId())
+    expect(newId('b')).not.toBe(newId('b'))
     expect(canFamilyReadProgramme('invited', 'inviting')).toBe(true)
     expect(canFamilyReadProgramme('confirmed', 'cancelled')).toBe(false)
     expect(canFamilyReadProgramme('declined', 'confirmed')).toBe(false)

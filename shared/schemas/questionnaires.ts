@@ -34,11 +34,6 @@ const zFormId = z
   .regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/, { error: 'Identificativo non valido' })
   .refine(id => !(id in Object.prototype), { error: 'Identificativo non valido' })
 
-/** A new id for a section or a question, never one used before (answers stay under the old ones). */
-export function newFormId(prefix: 'q' | 's'): string {
-  return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
-}
-
 const sameOption = (a: string, b: string) => a.trim().toLocaleLowerCase('it') === b.trim().toLocaleLowerCase('it')
 
 export const formQuestionSchema = z

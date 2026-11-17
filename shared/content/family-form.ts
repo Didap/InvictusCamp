@@ -40,7 +40,7 @@ export const ACCOMMODATION_NEED_LABELS: Readonly<Record<LodgingFeature, string>>
   microwave: 'Microonde',
 }
 
-export const FAMILY_FORM_SECTIONS: FormSection[] = [
+const FAMILY_FORM_SECTIONS: FormSection[] = [
   {
     id: 'about',
     title: 'Come ci hai conosciuto',
@@ -131,6 +131,6 @@ export function lockedReason(id: string): string | undefined {
   return Object.hasOwn(LOCKED_QUESTIONS, id) ? LOCKED_QUESTIONS[id] : undefined
 }
 
-export function formQuestions(form: Pick<FamilyFormContent, 'sections'>): FormQuestion[] {
-  return form.sections.flatMap(section => section.questions)
+export function formQuestions(sections: readonly FormSection[]): FormQuestion[] {
+  return sections.flatMap(section => section.questions)
 }

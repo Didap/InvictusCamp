@@ -1,4 +1,5 @@
 import type { FormQuestion } from '#shared/content/family-form'
+import { fitAnswers } from '#shared/schemas/families'
 import type { FormAnswers } from '#shared/types/domain'
 
 /** The inputs of the questionnaire, one record per kind of field: every input gets a value of its own type. */
@@ -9,22 +10,17 @@ export interface AnswerFields {
 }
 
 /**
- * The inputs filled with the stored answers that still fit the questions: an option the administration
- * took out is not ticked, so the next save does not send it back.
+ * The inputs filled with the stored answers that still fit the questions (fitAnswers): an option the
+ * administration took out is not ticked, so the next save does not send it back.
  */
 export function answerFields(questions: readonly FormQuestion[], stored: FormAnswers = {}): AnswerFields {
+  const fit = fitAnswers(stored, questions)
   const fields: AnswerFields = { texts: {}, choices: {}, yesNo: {} }
-  for (const question of questions) {
-    const answer = stored[question.id]
-    if (question.type === 'multiselect') {
-      fields.choices[question.id] = Array.isArray(answer)
-        ? answer.filter(option => question.options?.includes(option))
-        : []
-    } else if (question.type === 'boolean') {
-      fields.yesNo[question.id] = typeof answer === 'boolean' ? answer : undefined
-    } else if (question.type === 'select') {
-      fields.texts[question.id] = typeof answer === 'string' && question.options?.includes(answer) ? answer : ''
-    } else fields.texts[question.id] = typeof answer === 'string' ? answer : ''
+  for (const { id, type } of questions) {
+    const answer = fit[id]
+    if (type === 'multiselect') fields.choices[id] = Array.isArray(answer) ? [...answer] : []
+    else if (type === 'boolean') fields.yesNo[id] = typeof answer === 'boolean' ? answer : undefined
+    else fields.texts[id] = typeof answer === 'string' ? answer : ''
   }
   return fields
 }
@@ -32,10 +28,10 @@ export function answerFields(questions: readonly FormQuestion[], stored: FormAns
 /** The answers as the API takes them. */
 export function fieldAnswers(questions: readonly FormQuestion[], fields: AnswerFields): FormAnswers {
   const result: FormAnswers = {}
-  for (const question of questions) {
-    if (question.type === 'multiselect') result[question.id] = [...(fields.choices[question.id] ?? [])]
-    else if (question.type === 'boolean') result[question.id] = fields.yesNo[question.id] ?? null
-    else result[question.id] = fields.texts[question.id] ?? ''
+  for (const { id, type } of questions) {
+    if (type === 'multiselect') result[id] = [...(fields.choices[id] ?? [])]
+    else if (type === 'boolean') result[id] = fields.yesNo[id] ?? null
+    else result[id] = fields.texts[id] ?? ''
   }
   return result
 }

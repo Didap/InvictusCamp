@@ -4,7 +4,7 @@ import { accommodationNeeds, groupByArea, lodgingWarnings, sortLodgings } from '
 
 describe('accommodation needs', () => {
   it('keeps the options the families answered with: answers are stored as labels', () => {
-    const question = formQuestions(DEFAULT_FAMILY_FORM).find(item => item.id === 'accommodationNeeds')
+    const question = formQuestions(DEFAULT_FAMILY_FORM.sections).find(item => item.id === 'accommodationNeeds')
     expect(question?.options).toEqual(['Cucina', 'Bagno senza barriere architettoniche', 'Microonde'])
   })
 
