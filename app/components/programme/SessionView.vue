@@ -4,9 +4,9 @@ import { rangeDays } from '#shared/utils/dates'
 import { formatDayRange } from '#shared/utils/format'
 
 // The programme of one session as a family or a staff member reads it (pages famiglia/programma and
-// staff/programma): the server already left out what they must not read. `pdf`: the same programme as a
-// PDF to print (families).
-const props = defineProps<{ url: string; back: string; pdf?: string }>()
+// staff/programma): the server already left out what they must not read. `printable`: the same programme
+// as a PDF to print, at `${url}/pdf` (families).
+const props = defineProps<{ url: string; back: string; printable?: boolean }>()
 const { data, error, refresh } = await useApiFetch<ProgrammeView>(() => props.url)
 </script>
 
@@ -29,9 +29,9 @@ const { data, error, refresh } = await useApiFetch<ProgrammeView>(() => props.ur
           {{ formatDayRange(data.session.startDate, data.session.endDate, 'long') }}
         </p>
         <UButton
-          v-if="pdf && data.content"
+          v-if="printable && data.content"
           class="pointer-coarse:min-h-11"
-          :to="pdf"
+          :to="`${url}/pdf`"
           external
           target="_blank"
           icon="i-lucide-printer"

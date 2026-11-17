@@ -239,9 +239,8 @@ export async function groupsCsv(db: DbOrTx, sessionId: string): Promise<{ filena
 export function groupsPdfBlocks(groups: GroupedFamilies): PdfBlock[] {
   const tally = tallyGroups(groups.families)
   return byGroup(groups).flatMap(({ group, families: grouped, leader }) => {
-    if (!group && !grouped.length) return []
     const people = grouped.flatMap(family => [{ label: family.familyName }, membersLabel(family.members)])
-    if (!group) return [{ heading: 'Senza gruppo' }, ...people]
+    if (!group) return people.length ? [{ heading: 'Senza gruppo' }, ...people] : []
     return [
       { heading: `Gruppo ${PROGRAMME_GROUP_LABELS[group]}` },
       [leader ? `Responsabile: ${leader.name}` : 'Nessun responsabile', tallyLabel(tally[group])].join(' · '),

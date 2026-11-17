@@ -4,6 +4,7 @@ import type { SessionGroupFamily, SessionGroupStaff, SessionGroupsDto } from '#s
 import { tallyGroups, tallyLabel } from '#shared/utils/activity-groups'
 import { PROGRAMME_GROUP_LABELS, PROGRAMME_GROUPS, enumLabel, type ProgrammeGroup } from '#shared/utils/constants'
 import { plural } from '#shared/utils/format'
+import type { DragListOptions } from '~/utils/drag-list'
 
 // The Gruppi tab of a session (docs/spec.md 3.12): the families holding a place split among the groups of
 // the programme, Giallo, Rosso and Blu, each with its leader from the session staff. A family moves by
@@ -116,24 +117,22 @@ const pdfIsMain = computed(() => families.value.length > 0 && !canDistribute.val
 /** «Senza gruppo»: its families, or the place to drag one out of its group while groups can change. */
 const showWaiting = computed(() => !!data.value?.editable || waiting.value.length > 0)
 
+/** Nothing moves while the session is closed or a change is saving. */
+const locked = computed(() => !data.value?.editable || saving.value !== null)
+
 // A family moves by dragging it to another group, or back among those without one (data-group ""). Let
 // go away from every list, it goes back where it was (revertOnSpill): only a list chooses a group.
-const waitingList = useTemplateRef<HTMLUListElement>('waitingList')
-const groupLists = useTemplateRef<HTMLUListElement[]>('groupLists')
-useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list => list !== null), {
+const dragList: DragListOptions = {
   group: 'activity-groups',
   draggable: '.groups-card',
   filter: '.groups-no-drag',
   sort: false,
   revertOnSpill: true,
-  // The lists of the template: shown with the families (v-else of UEmpty) and showWaiting.
-  key: () => families.value.length > 0 && showWaiting.value,
-  disabled: () => !data.value?.editable || saving.value !== null,
   onDrop: ({ item, to }) => {
     const family = families.value.find(other => other.id === item.dataset.id)
     if (family) assign(family, (to.dataset.group || null) as ProgrammeGroup | null)
   },
-})
+}
 </script>
 
 <template>
@@ -219,29 +218,16 @@ useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list 
               persone, e poi puoi spostare chi vuoi.
             </p>
           </div>
-          <!-- The hint shows while the list has no family, also the one held over it during a drag. -->
-          <div class="group/drop relative">
-            <ul
-              ref="waitingList"
-              data-group=""
-              class="min-h-14 divide-y divide-default rounded-lg border bg-elevated"
-              :class="waiting.length ? 'border-default' : 'border-dashed border-accented'"
-            >
-              <GroupsFamilyItem
-                v-for="family in waiting"
-                :key="family.id"
-                :family="family"
-                :disabled="!data.editable || saving !== null"
-                :loading="saving === family.id"
-                @assign="group => assign(family, group)"
-              />
-            </ul>
-            <p
-              class="pointer-events-none absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted group-has-[li]/drop:hidden"
-            >
-              Trascina qui una famiglia per toglierla dal suo gruppo.
-            </p>
-          </div>
+          <GroupsFamilyList
+            :families="waiting"
+            :group="null"
+            hint="Trascina qui una famiglia per toglierla dal suo gruppo."
+            :drag="dragList"
+            :locked="locked"
+            :saving="saving"
+            :list-class="`min-h-14 rounded-lg border bg-elevated ${waiting.length ? 'border-default' : 'border-dashed border-accented'}`"
+            @assign="assign"
+          />
         </section>
 
         <div class="grid gap-4 lg:grid-cols-3">
@@ -273,7 +259,7 @@ useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list 
                   value-key="value"
                   placeholder="Nessun responsabile"
                   :search-input="data.staff.length > 8 ? { placeholder: 'Cerca nello staff' } : false"
-                  :disabled="!data.editable || !data.staff.length || saving !== null"
+                  :disabled="locked || !data.staff.length"
                   :loading="saving === `leader:${column.group}`"
                   :aria-label="`Responsabile del gruppo ${column.label}`"
                   clear
@@ -285,23 +271,16 @@ useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list 
               </UFormField>
             </div>
             <!-- Always there, also empty: a group without families is where one is dropped. -->
-            <div class="group/drop relative">
-              <ul ref="groupLists" :data-group="column.group" class="min-h-20 divide-y divide-default">
-                <GroupsFamilyItem
-                  v-for="family in column.families"
-                  :key="family.id"
-                  :family="family"
-                  :disabled="!data.editable || saving !== null"
-                  :loading="saving === family.id"
-                  @assign="group => assign(family, group)"
-                />
-              </ul>
-              <p
-                class="pointer-events-none absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted group-has-[li]/drop:hidden"
-              >
-                {{ data.editable ? 'Trascina qui una famiglia.' : 'Nessuna famiglia.' }}
-              </p>
-            </div>
+            <GroupsFamilyList
+              :families="column.families"
+              :group="column.group"
+              :hint="data.editable ? 'Trascina qui una famiglia.' : 'Nessuna famiglia.'"
+              :drag="dragList"
+              :locked="locked"
+              :saving="saving"
+              list-class="min-h-20"
+              @assign="assign"
+            />
           </section>
         </div>
       </template>

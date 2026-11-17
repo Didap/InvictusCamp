@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { ProgrammeBlock, ProgrammeContent, ProgrammeDay } from '#shared/types/domain'
 import { blockTime, dayCaptions, type BlockMove } from '#shared/utils/programme'
+import { DRAG_ITEM_CLASS, vDragList, type DragListOptions } from '~/utils/drag-list'
 
 // The week of the editor as a board: one column per day, side by side once there is room for five
 // (a container query: the page and the session tab are not equally wide), two or three columns on a
 // tablet, one under the other on a phone. A block is a card: a click or a tap opens it (`open`), a drag
-// moves it within its day or to another one (useDragLists; on touch screens after a short press, so a
+// moves it within its day or to another one (v-drag-list; on touch screens after a short press, so a
 // swipe still scrolls). The drop is emitted as `move` and the data moves it, Vue keeps the DOM.
 // Keyboards and screen readers open and move a block from its menu (slot `block-actions`): the card
 // holds no other control, since Firefox does not start a drag on a button.
@@ -17,16 +18,13 @@ defineSlots<{
 
 const captions = computed(() => dayCaptions(props.content, props.dates))
 
-const lists = useTemplateRef<HTMLUListElement[]>('lists')
-useDragLists(() => lists.value ?? [], {
+const dragList: DragListOptions = {
   group: 'programme-week',
   draggable: '.programme-card',
   filter: '.programme-no-drag',
-  // Another programme loaded: new lists.
-  key: () => props.content.days.map(day => day.id).join(),
   onDrop: ({ from, to, oldIndex, newIndex }) =>
     emit('move', { from: from.dataset.day!, oldIndex, to: to.dataset.day!, newIndex }),
-})
+}
 </script>
 
 <template>
@@ -46,7 +44,7 @@ useDragLists(() => lists.value ?? [], {
           Niente in programma: trascina qui un blocco o aggiungine uno.
         </p>
         <ul
-          ref="lists"
+          v-drag-list="dragList"
           :data-day="day.id"
           class="flex min-h-20 flex-col gap-2 rounded-md"
           :class="!day.blocks.length && 'border border-dashed border-accented'"
@@ -55,7 +53,8 @@ useDragLists(() => lists.value ?? [], {
             v-for="(block, index) in day.blocks"
             :id="`blocco-${block.id}`"
             :key="block.id"
-            class="programme-card min-w-0 scroll-mt-24 cursor-grab select-none [-webkit-touch-callout:none] rounded-md border border-default bg-elevated p-2 hover:border-accented active:cursor-grabbing"
+            class="programme-card min-w-0 scroll-mt-24 rounded-md border border-default bg-elevated p-2 hover:border-accented"
+            :class="DRAG_ITEM_CLASS"
             @click="emit('open', day.id, block)"
           >
             <div class="flex items-start justify-between gap-1">

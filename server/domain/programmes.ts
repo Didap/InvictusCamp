@@ -203,17 +203,19 @@ export async function staffProgramme(db: DbOrTx, input: { userId: string; sessio
 
 // ─── The PDF to hand out ───────────────────────────────────────────────────────────────────────────
 
+/** "Piscina, con Marco", or "Piscina" when nobody is named. */
+const withLead = (what: string, lead: string) => (lead ? `${what}, con ${lead}` : what)
+
 /** A block on paper: time and title, then on their own lines what it is and who leads it, the note, the groups. */
 function blockPdf(block: ProgrammeBlock): PdfBlock[] {
   const title = [blockTime(block), block.title].filter(Boolean).join(' · ')
   const lines = [
-    [enumLabel('programmeBlockKind', block.kind), block.lead && `con ${block.lead}`].filter(Boolean).join(', '),
+    withLead(enumLabel('programmeBlockKind', block.kind), block.lead),
     block.note,
     ...PROGRAMME_GROUPS.flatMap(group => {
       const turn = block.groups?.[group]
       if (!turn) return []
-      const lead = turn.lead ? `, con ${turn.lead}` : ''
-      return [`${PROGRAMME_GROUP_LABELS[group]}: ${turn.activity ?? 'da definire'}${lead}`]
+      return `${PROGRAMME_GROUP_LABELS[group]}: ${withLead(turn.activity ?? 'da definire', turn.lead)}`
     }),
   ]
   return [{ label: block.toConfirm ? `${title} (da confermare)` : title }, lines.filter(Boolean).join('\n')]
