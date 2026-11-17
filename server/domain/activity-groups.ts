@@ -4,7 +4,7 @@
 // Explicit imports only, so the database tests can load this file (tests/db/activity-groups.test.ts).
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { SessionGroupFamily, SessionGroupStaff, SessionGroupsDto } from '../../shared/types/activity-groups'
-import { distributeFamilies } from '../../shared/utils/activity-groups'
+import { distributeFamilies, membersLabel, tallyGroups, tallyLabel } from '../../shared/utils/activity-groups'
 import { PROGRAMME_GROUPS, PROGRAMME_GROUP_LABELS, type ProgrammeGroup } from '../../shared/utils/constants'
 import { ageOn } from '../../shared/utils/dates'
 import { NO_CARDS, fullName, memberName } from '../../shared/utils/format'
@@ -14,6 +14,7 @@ import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
+import { sessionPdf, type PdfBlock } from './pdf'
 import {
   activeStaff,
   findSession,
@@ -198,30 +199,62 @@ export async function distributeGroups(db: DbOrTx, input: { sessionId: string; a
   return placed.size
 }
 
+type GroupedFamilies = Omit<SessionGroupsDto, 'editable'>
+
+/** Giallo, Rosso, Blu with their leader, then the families without a group: the order of both exports. */
+function byGroup({ families: grouped, staff }: GroupedFamilies) {
+  return [...PROGRAMME_GROUPS, null].map(group => ({
+    group,
+    families: grouped.filter(family => family.group === group),
+    leader: group ? staff.find(person => person.group === group) : undefined,
+  }))
+}
+
 /**
  * The groups of the session as CSV, one row per person: group by group with its leader, then the families
  * still without a group. Names and the age of the young, never the health details.
  */
 export async function groupsCsv(db: DbOrTx, sessionId: string): Promise<{ filename: string; csv: string }> {
-  const { session, families: grouped, staff } = await loadSession(db, sessionId)
-  const rowsOf = (group: ProgrammeGroup | null) => {
-    const label = group ? PROGRAMME_GROUP_LABELS[group] : 'Senza gruppo'
-    const leader = (group && staff.find(person => person.group === group)?.name) || null
-    return grouped
-      .filter(family => family.group === group)
-      .flatMap(family =>
+  const { session, ...groups } = await loadSession(db, sessionId)
+  return sessionCsv(session, 'gruppi', [
+    ['Gruppo', 'Responsabile', 'Famiglia', 'Componente', 'Età'],
+    ...byGroup(groups).flatMap(({ group, families: grouped, leader }) =>
+      grouped.flatMap(family =>
         (family.members.length ? family.members : [null]).map(member => [
-          label,
-          leader,
+          group ? PROGRAMME_GROUP_LABELS[group] : 'Senza gruppo',
+          leader?.name || null,
           family.familyName,
           member?.name ?? NO_CARDS,
           member?.age ?? null,
         ]),
-      )
-  }
-  return sessionCsv(session, 'gruppi', [
-    ['Gruppo', 'Responsabile', 'Famiglia', 'Componente', 'Età'],
-    ...PROGRAMME_GROUPS.flatMap(rowsOf),
-    ...rowsOf(null),
+      ),
+    ),
   ])
+}
+
+/**
+ * The groups as a PDF to print, the CSV in pages: group by group its leader and size, then each family with
+ * its people; last the families still without a group, if any.
+ */
+export function groupsPdfBlocks(groups: GroupedFamilies): PdfBlock[] {
+  const tally = tallyGroups(groups.families)
+  return byGroup(groups).flatMap(({ group, families: grouped, leader }) => {
+    const people = grouped.flatMap(family => [{ label: family.familyName }, membersLabel(family.members)])
+    if (!group) return people.length ? [{ heading: 'Senza gruppo' }, ...people] : []
+    return [
+      { heading: `Gruppo ${PROGRAMME_GROUP_LABELS[group]}` },
+      [leader ? `Responsabile: ${leader.name}` : 'Nessun responsabile', tallyLabel(tally[group])].join(' · '),
+      ...people,
+    ]
+  })
+}
+
+export async function groupsPdf(db: DbOrTx, sessionId: string): Promise<{ filename: string; data: Uint8Array }> {
+  const { session, ...groups } = await loadSession(db, sessionId)
+  return sessionPdf(session, {
+    prefix: 'gruppi',
+    title: 'Gruppi attività',
+    blocks: groupsPdfBlocks(groups),
+    notice: 'Contiene i nomi e l’età dei ragazzi: serve solo a organizzare le attività.',
+  })
 }

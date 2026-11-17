@@ -5,5 +5,5 @@ const url = computed(() => `/api/family/programmes/${String(route.params.id)}`)
 </script>
 
 <template>
-  <ProgrammeSessionView :url="url" back="/famiglia/sessioni" />
+  <ProgrammeSessionView :url="url" printable back="/famiglia/sessioni" />
 </template>

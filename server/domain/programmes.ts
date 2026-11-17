@@ -4,18 +4,19 @@
 import { and, eq, ne, or, sql, type SQL } from 'drizzle-orm'
 import { emptyWeek, programmeTemplate } from '../../shared/content/programme-template'
 import type { ProgrammeCreateInput, ProgrammeSaveValues } from '../../shared/schemas/programmes'
-import type { ProgrammeContent } from '../../shared/types/domain'
+import type { ProgrammeBlock, ProgrammeContent } from '../../shared/types/domain'
 import type { ProgrammeDto, ProgrammeView, ProgrammeYearItem, SessionProgrammeDto } from '../../shared/types/programmes'
-import type { SessionStatus } from '../../shared/utils/constants'
+import { PROGRAMME_GROUPS, PROGRAMME_GROUP_LABELS, enumLabel, type SessionStatus } from '../../shared/utils/constants'
 import { rangeDays } from '../../shared/utils/dates'
 import { fullName } from '../../shared/utils/format'
-import { canFamilyReadProgramme, canStaffReadProgramme } from '../../shared/utils/programme'
+import { blockTime, canFamilyReadProgramme, canStaffReadProgramme, dayCaptions } from '../../shared/utils/programme'
 import { SESSION_EDITABLE_STATUSES, isSessionEditable } from '../../shared/utils/session-status'
 import { campSessions, programmes, sessionFamilies, sessionStaff, users } from '../db/schema'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
 import type { Actor } from './families'
+import { sessionPdf, type PdfBlock } from './pdf'
 
 type SessionRow = Pick<typeof campSessions.$inferSelect, 'id' | 'title' | 'startDate' | 'endDate' | 'status'>
 
@@ -170,6 +171,11 @@ async function viewerProgramme(
   return { session, content: programme ? programmeForViewer(programme.content, viewer) : null }
 }
 
+/** The programme of a session as its families read it: what the administration prints for them. */
+export function sessionProgrammeForFamilies(db: DbOrTx, sessionId: string): Promise<ProgrammeView> {
+  return viewerProgramme(db, sessionId, 'family', () => true)
+}
+
 /** A family reads the programme of a session it is invited to or confirmed in (not cancelled). */
 export async function familyProgramme(
   db: DbOrTx,
@@ -193,6 +199,46 @@ export async function staffProgramme(db: DbOrTx, input: { userId: string; sessio
     .limit(1)
   if (!row) throw new DomainError(404, NOT_AVAILABLE)
   return viewerProgramme(db, input.sessionId, 'staff', session => canStaffReadProgramme(row.status, session))
+}
+
+// ─── The PDF to hand out ───────────────────────────────────────────────────────────────────────────
+
+/** "Piscina, con Marco", or "Piscina" when nobody is named. */
+const withLead = (what: string, lead: string) => (lead ? `${what}, con ${lead}` : what)
+
+/** A block on paper: time and title, then on their own lines what it is and who leads it, the note, the groups. */
+function blockPdf(block: ProgrammeBlock): PdfBlock[] {
+  const title = [blockTime(block), block.title].filter(Boolean).join(' · ')
+  const lines = [
+    withLead(enumLabel('programmeBlockKind', block.kind), block.lead),
+    block.note,
+    ...PROGRAMME_GROUPS.flatMap(group => {
+      const turn = block.groups?.[group]
+      if (!turn) return []
+      return `${PROGRAMME_GROUP_LABELS[group]}: ${withLead(turn.activity ?? 'da definire', turn.lead)}`
+    }),
+  ]
+  return [{ label: block.toConfirm ? `${title} (da confermare)` : title }, lines.filter(Boolean).join('\n')]
+}
+
+/** The week day by day, as the family pages show it (ProgrammeWeek); never the internal notes. */
+export function programmePdfBlocks(content: ProgrammeContent, dates: string[]): PdfBlock[] {
+  const captions = dayCaptions(content, dates)
+  return content.days.flatMap((day, i) => [
+    { heading: [day.name, captions[i]].filter(Boolean).join(' · ') },
+    ...(day.blocks.length ? day.blocks.flatMap(blockPdf) : ['Niente in programma.']),
+  ])
+}
+
+/** The programme a family reads (familyProgramme, sessionProgrammeForFamilies) as a PDF to print. */
+export async function programmePdf(view: ProgrammeView): Promise<{ filename: string; data: Uint8Array }> {
+  if (!view.content) throw new DomainError(404, 'Il programma della sessione non c’è ancora')
+  return sessionPdf(view.session, {
+    prefix: 'programma',
+    title: 'Programma',
+    blocks: programmePdfBlocks(view.content, rangeDays(view.session)),
+    notice: 'Il programma può cambiare: quello aggiornato è sempre nella tua area riservata.',
+  })
 }
 
 // ─── Writing ───────────────────────────────────────────────────────────────────────────────────────

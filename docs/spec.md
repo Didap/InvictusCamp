@@ -289,6 +289,10 @@ Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or 
   staff who accepted the convocation (`/staff/sessioni`), read-only, once the session is not cancelled.
   Families never see "solo staff" blocks or internal notes; staff see everything. The days carry the session's dates when the session starts on a Monday and is at least as
   long as the programme.
+- **On paper**: "PDF per le famiglie" in the Programma tab opens the programme the session uses as its
+  families read it (no "solo staff" blocks, no internal notes), the saved version, to print and hand out;
+  families open the same PDF from their programme page ("Stampa o scarica"). Day by day, each block with its
+  time, title, kind, who leads it, the note and what each group does.
 - **Closed sessions** keep the programme they had: completing or cancelling a session without a copy
   gives it one, and a closed session never falls back to the year's programme, so later changes to the
   year do not rewrite it. A completed or cancelled session's programme is no longer edited.
@@ -339,9 +343,14 @@ rotate through the activities together.
   them there.
 - **"Dividi le famiglie senza gruppo"** puts every family without a group into one, the largest family first
   into the group with the fewest people, so the groups stay even; the families already in a group stay.
-  Moving a family by hand is always possible.
+  Moving a family by hand is always possible: dragging it to another group, or back among those without one
+  (on a touch screen after a short press; let go away from every list, it stays where it was), or from the
+  menu next to its name. "Senza gruppo" stays as the place to drop it while the groups can change. The
+  family moves at once and the change is saved: every page that shows the group (the history of the session, the feedback by group,
+  the exports) reads the saved one.
 - "Scarica i gruppi (CSV)" downloads one row per person, group by group with its leader, then the families
-  without a group (audited). Saving a group or a leader sends no email and is audited.
+  without a group; "Genera PDF dei gruppi" has the same on paper, each group with its leader and size, then
+  each family with its people (both audited). Saving a group or a leader sends no email and is audited.
 - A family that declines or is removed leaves its group, and so does cancelling the session; a leader who
   declines or whose convocation is withdrawn leaves the group without one. A completed session keeps its
   groups, read-only. Families and staff do not see the groups of an open session; a family sees its own, with who led it, in

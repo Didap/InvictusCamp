@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
-import { toWinAnsi } from '~~/server/domain/pdf'
+import { blockLines, toWinAnsi } from '~~/server/domain/pdf'
 import { buildSignedPdf, formatSignatureTime, type CertificateData } from '~~/server/domain/signatures'
 import { documentToReadEmail, signatureSignedEmail } from '~~/server/emails/documents'
 
@@ -37,6 +37,18 @@ describe('the signed copy', () => {
     expect(toWinAnsi(font, 'riga\nnuova')).toBe('riga nuova')
     // Intl puts thin spaces around the dash of a range across two months.
     expect(toWinAnsi(font, '28 giugno\u2009–\u20092 luglio')).toBe('28 giugno – 2 luglio')
+  })
+
+  it('starts a new line at a line break in a block, a blank line where there are two', async () => {
+    const pdf = await PDFDocument.create()
+    const font = await pdf.embedFont(StandardFonts.Helvetica)
+    expect(blockLines(font, 'Accoglienza, con Nicola\nGiallo: Piscina', 11, 480)).toEqual([
+      'Accoglienza, con Nicola',
+      'Giallo: Piscina',
+    ])
+    expect(blockLines(font, 'Care famiglie,\r\n\r\nA presto', 11, 480)).toEqual(['Care famiglie,', '', 'A presto'])
+    // Each line still wraps at the width.
+    expect(blockLines(font, 'uno due tre\nquattro', 11, 40)).toEqual(['uno due', 'tre', 'quattro'])
   })
 
   it('writes the time of the signature in Italian time', () => {

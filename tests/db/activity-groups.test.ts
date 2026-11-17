@@ -6,11 +6,14 @@ import {
   assignGroup,
   distributeGroups,
   groupsCsv,
+  groupsPdf,
+  groupsPdfBlocks,
   sessionGroupsOf,
   setGroupLeader,
 } from '../../server/domain/activity-groups'
 import { answerInvitation, cancelParticipation, transitionSession } from '../../server/domain/sessions'
 import { answerConvocation, cancelConvocation } from '../../server/domain/staff'
+import { sniffMimeType } from '../../server/domain/storage'
 import type {
   ConvocationStatus,
   ParticipationKind,
@@ -269,8 +272,9 @@ describe('cancelling the session', () => {
   })
 })
 
-describe('the CSV', () => {
-  it('lists the people group by group with the leader, then the families without a group', async () => {
+describe('the CSV and the PDF', () => {
+  /** Rossi in Giallo with Anna leading it, Bianchi (no cards yet) in Blu, Verdi without a group. */
+  async function grouped() {
     const { session, assign, lead } = await setup()
     const rossi = await join(session.id, 'Famiglia Rossi', {
       cards: [
@@ -283,7 +287,11 @@ describe('the CSV', () => {
     await assign(rossi.id, 'yellow')
     await assign(bianchi.id, 'blue')
     await lead('yellow', (await convoke(session.id, 'Anna')).id)
+    return session
+  }
 
+  it('the CSV lists the people group by group with the leader, then the families without a group', async () => {
+    const session = await grouped()
     const { filename, csv } = await groupsCsv(db, session.id)
     expect(filename).toBe('gruppi-sessione-di-prova-21-06-2027.csv')
     expect(csv.replace('﻿', '').trim().split('\r\n')).toEqual([
@@ -293,5 +301,27 @@ describe('the CSV', () => {
       'Blu;;Famiglia Bianchi;Componenti non ancora indicati;',
       'Senza gruppo;;Famiglia Verdi;Ugo;',
     ])
+  })
+
+  it('the PDF has each group with its leader, size and families, then the families without a group', async () => {
+    const session = await grouped()
+    expect(groupsPdfBlocks(await sessionGroupsOf(db, session.id))).toEqual([
+      { heading: 'Gruppo Giallo' },
+      'Responsabile: Anna Staff · 2 persone · 1 famiglia',
+      { label: 'Famiglia Rossi' },
+      'Matteo, 6 anni · Grazia',
+      { heading: 'Gruppo Rosso' },
+      'Nessun responsabile · 0 persone · 0 famiglie',
+      { heading: 'Gruppo Blu' },
+      'Nessun responsabile · 0 persone · 1 famiglia',
+      { label: 'Famiglia Bianchi' },
+      'Componenti non ancora indicati',
+      { heading: 'Senza gruppo' },
+      { label: 'Famiglia Verdi' },
+      'Ugo',
+    ])
+    const pdf = await groupsPdf(db, session.id)
+    expect(pdf.filename).toBe('gruppi-sessione-di-prova-21-06-2027.pdf')
+    expect(sniffMimeType(pdf.data)).toBe('application/pdf')
   })
 })

@@ -22,8 +22,13 @@ export function sendCsv(event: H3Event, file: { filename: string; csv: string })
   return file.csv
 }
 
-export function sendPdf(event: H3Event, file: { filename: string; data: Uint8Array }): Uint8Array {
+/** A PDF to download, or to open in the browser (`download: false`), whose viewer prints it. */
+export function sendPdf(
+  event: H3Event,
+  file: { filename: string; data: Uint8Array },
+  { download = true }: { download?: boolean } = {},
+): Uint8Array {
   const type = 'application/pdf'
-  setFileHeaders(event, { filename: file.filename, type, length: file.data.byteLength, download: true })
+  setFileHeaders(event, { filename: file.filename, type, length: file.data.byteLength, download })
   return file.data
 }

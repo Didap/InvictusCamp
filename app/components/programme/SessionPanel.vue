@@ -122,6 +122,22 @@ async function save(body: ProgrammeSaveInput) {
         class="mb-8"
       />
 
+      <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <p class="max-w-prose text-sm text-muted">
+          Da stampare e consegnare alle famiglie: il programma salvato, senza i blocchi e le note per lo staff.
+        </p>
+        <UButton
+          class="pointer-coarse:min-h-11"
+          :to="`${url}/pdf`"
+          external
+          target="_blank"
+          icon="i-lucide-printer"
+          label="PDF per le famiglie"
+          color="neutral"
+          variant="outline"
+        />
+      </div>
+
       <ProgrammeEditor
         v-if="data.source === 'session' && data.editable"
         :programme="data.programme"

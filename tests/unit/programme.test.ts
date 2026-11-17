@@ -1,7 +1,7 @@
 // Pure rules of the week programme: the model week passes its own schema, what families and staff
 // receive, the rotation check, the open points, the placement of a block and the dates of the days.
 import { describe, expect, it } from 'vitest'
-import { programmeForViewer } from '~~/server/domain/programmes'
+import { programmeForViewer, programmePdfBlocks } from '~~/server/domain/programmes'
 import { emptyWeek, programmeTemplate } from '~~/shared/content/programme-template'
 import { programmeBlockSchema, programmeContentSchema } from '~~/shared/schemas/programmes'
 import type { ProgrammeBlock, ProgrammeContent } from '~~/shared/types/domain'
@@ -188,5 +188,51 @@ describe('editor helpers', () => {
     expect(dayCaptions(week, seven.slice(0, 3))).toEqual(undated)
     expect(dayCaptions(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual(undated)
     expect(dayCaptions(week, undefined)).toEqual(undated)
+  })
+})
+
+describe('programme PDF', () => {
+  it('lists the week day by day, each block with its kind, lead, note and groups, never the internal note', () => {
+    const week = emptyWeek()
+    week.days[0]!.subtitle = 'Arrivo'
+    week.days[0]!.blocks = [
+      block({
+        start: '15:00',
+        end: '17:00',
+        title: 'Accoglienza',
+        kind: 'welcome',
+        lead: 'Nicola',
+        note: 'Portate le lenzuola.',
+        staffNote: 'Chiavi in segreteria',
+        toConfirm: true,
+      }),
+      block({
+        start: '17:30',
+        title: 'Attività',
+        kind: 'groups',
+        groups: {
+          yellow: { activity: 'Piscina', lead: 'Marco' },
+          red: { activity: null, lead: '' },
+          blue: { activity: 'Musica', lead: '' },
+        },
+      }),
+      block({ title: 'Cena', kind: 'meal' }),
+    ]
+    const monday = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25']
+    const blocks = programmePdfBlocks(week, monday)
+    expect(blocks.slice(0, 9)).toEqual([
+      { heading: `Lunedì · ${formatDay('2027-06-21', 'long')} · Arrivo` },
+      { label: '15:00–17:00 · Accoglienza (da confermare)' },
+      'Accoglienza, con Nicola\nPortate le lenzuola.',
+      { label: '17:30 · Attività' },
+      'Attività a gruppi\nGiallo: Piscina, con Marco\nRosso: da definire\nBlu: Musica',
+      { label: 'Cena' },
+      'Pasto',
+      { heading: `Martedì · ${formatDay('2027-06-22', 'long')}` },
+      'Niente in programma.',
+    ])
+    expect(JSON.stringify(blocks)).not.toContain('Chiavi')
+    // A session that does not start on Monday: the days without dates.
+    expect(programmePdfBlocks(week, ['2027-06-19', ...monday])[7]).toEqual({ heading: 'Martedì' })
   })
 })
