@@ -1,7 +1,7 @@
 // Accounts managed by the administration (/admin/utenti, docs/spec.md 3.1).
 import { z } from 'zod'
 import { USER_ROLES, USER_STATUSES } from '../utils/constants'
-import { zEmail, zListQuery, zPersonName, zPhone, zText } from './common'
+import { blankAsMissing, zEmail, zListQuery, zPersonName, zPhone, zText } from './common'
 
 /** Who starts a staff account invited by the administration: to apply, or already approved. */
 export const INVITE_STAFF_STATUSES = ['registered', 'approved'] as const
@@ -19,8 +19,7 @@ export const inviteUserSchema = z.object({
 })
 export type InviteUserInput = z.infer<typeof inviteUserSchema>
 
-const optional = <T extends z.ZodType>(schema: T) =>
-  z.preprocess(value => (value === '' || value === null ? undefined : value), schema.optional())
+const optional = <T extends z.ZodType>(schema: T) => z.preprocess(blankAsMissing, schema.optional())
 
 /** The columns /admin/utenti sorts by, on the server because the list comes a page at a time. */
 export const USER_LIST_SORTS = ['name', 'role', 'status', 'lastLogin'] as const

@@ -22,13 +22,15 @@ export const zPersonName = z
   .min(1, { error: 'Campo obbligatorio' })
   .max(100, { error: 'Al massimo 100 caratteri' })
 
-/** A person's birth date, required: an empty field ('' or null) reads as missing. */
+/** An empty field ('' or null, as forms and query strings send it) reads as missing. */
+export const blankAsMissing = (value: unknown) => (value === '' || value === null ? undefined : value)
+
+/** A person's birth date, required. */
 export const zBirthDate = z.preprocess(
-  value => (value === '' || value === null ? undefined : value),
+  blankAsMissing,
   z
     .string({ error: 'Campo obbligatorio' })
-    .refine(isIsoDay, { error: 'Data non valida' })
-    .refine(day => day >= '1900-01-01', { error: 'Data non valida' })
+    .refine(day => isIsoDay(day) && day >= '1900-01-01', { error: 'Data non valida' })
     .refine(day => day <= todayIso(), { error: 'La data di nascita non può essere nel futuro' }),
 )
 

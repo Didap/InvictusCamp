@@ -14,7 +14,7 @@ import {
 } from '../utils/constants'
 import { orList, plural } from '../utils/format'
 import { fieldIssue, messageIssue } from '../utils/message-fields'
-import { zListQuery, zRequiredText, zText } from './common'
+import { blankAsMissing, zListQuery, zRequiredText, zText } from './common'
 
 export const AUDIENCE_TYPES = [
   'all_families',
@@ -124,8 +124,7 @@ export const messageTemplateSchema = z
 export type MessageTemplateInput = z.infer<typeof messageTemplateSchema>
 
 /** Empty query values ("?status=") read as missing. */
-const optional = <T extends z.ZodType>(schema: T) =>
-  z.preprocess(value => (value === '' || value === null ? undefined : value), schema.optional())
+const optional = <T extends z.ZodType>(schema: T) => z.preprocess(blankAsMissing, schema.optional())
 
 export const communicationListQuery = zListQuery.extend({
   sessionId: optional(z.uuid()),

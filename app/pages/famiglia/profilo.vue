@@ -4,6 +4,8 @@ import { FAMILY_FORM_QUESTIONS, FAMILY_FORM_SECTIONS } from '#shared/content/fam
 import {
   COMPOSITION_GROUPS,
   familyDataFieldsSchema,
+  GUEST_MISSING_MESSAGE,
+  guestsMin,
   MAX_MEMBERS_OF_A_KIND,
   missingRequiredQuestions,
   type FamilyComposition,
@@ -39,9 +41,10 @@ const state = reactive({
   healthConsent: false,
 })
 
-/** The inputs stop at the cards filled in; before the first confirmation, at one young person with a condition. */
+/** The inputs stop at the cards filled in, the young people with a condition also at `guestsMin`. */
+const guestsAtLeast = computed(() => guestsMin(profile.value?.formStatus ?? 'draft'))
 const minOf = (key: keyof FamilyComposition) =>
-  key === 'youngWithCondition' && !submitted.value ? Math.max(1, filledCards.value[key]) : filledCards.value[key]
+  Math.max(filledCards.value[key], key === 'youngWithCondition' ? guestsAtLeast.value : 0)
 
 /** The young people with a condition this save adds: the form asks their names now, their cards are born with them. */
 const newGuests = computed(() =>
@@ -107,6 +110,9 @@ function validate(): FormError[] {
     name: question.id,
     message: 'Rispondi a questa domanda',
   }))
+  if ((state.composition.youngWithCondition ?? 0) < guestsAtLeast.value) {
+    errors.push({ name: 'composition.youngWithCondition', message: GUEST_MISSING_MESSAGE })
+  }
   for (let i = 0; i < newGuests.value; i++) {
     if (!state.guestNames[i]?.trim()) errors.push({ name: `guestNames.${i}`, message: 'Scrivi il nome' })
   }

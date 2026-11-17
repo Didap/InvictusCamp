@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { loginSchema, type LoginInput } from '#shared/schemas/auth'
 import type { LoginResult } from '#shared/types/api'
+import { enumMeta } from '#shared/utils/constants'
 import { areaRole, safeRedirect, V_TEAM_QUERY } from '#shared/utils/routes'
 
 definePageMeta({ layout: 'auth' })
@@ -22,13 +23,13 @@ const WAYS_IN = [
   },
   {
     to: '/candidati',
-    icon: 'i-lucide-briefcase',
+    icon: enumMeta('staffTeam', 'staff').icon,
     question: 'Vuoi far parte dello staff?',
     action: 'Candidati per lo staff',
   },
   {
     to: `/candidati?squadra=${V_TEAM_QUERY}`,
-    icon: 'i-lucide-hand-heart',
+    icon: enumMeta('staffTeam', 'volunteer').icon,
     question: 'Vuoi far parte del v-team (volontari e volontarie)?',
     action: 'Candidati per il v-team',
   },

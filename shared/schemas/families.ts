@@ -17,7 +17,17 @@ import {
   type PersonalDocumentCategory,
 } from '../utils/constants'
 import { missingRelationship } from '../utils/format'
-import { zBirthDate, zListQuery, zPersonName, zPhone, zRequiredPhone, zRequiredText, zText, zUuid } from './common'
+import {
+  blankAsMissing,
+  zBirthDate,
+  zListQuery,
+  zPersonName,
+  zPhone,
+  zRequiredPhone,
+  zRequiredText,
+  zText,
+  zUuid,
+} from './common'
 
 /** An Italian province as its two-letter code ("TA"); empty is allowed. */
 const zProvince = z
@@ -72,12 +82,12 @@ export const GUEST_MISSING_MESSAGE =
   'Il camp è per le famiglie con almeno un ragazzo o una ragazza in questa condizione: indica quanti sono'
 
 /**
- * The first confirmation of the family data needs a young person with a condition: the camp is for them, a
- * family without any does not register. Later a withdrawn consent can leave none, and the family can still
- * edit its data.
+ * The fewest young people with a condition the family data takes: one until the first confirmation (the camp
+ * is for them, a family without any does not register), none after it (a withdrawn consent can leave none, and
+ * the family still edits its data).
  */
-export function guestMissing(family: { formStatus: FamilyFormStatus }, composition: FamilyComposition): boolean {
-  return family.formStatus !== 'submitted' && composition.youngWithCondition < 1
+export function guestsMin(formStatus: FamilyFormStatus): number {
+  return formStatus === 'submitted' ? 0 : 1
 }
 
 /**
@@ -348,7 +358,7 @@ export const healthConsentSchema = z.object({ given: z.boolean() })
 export const personalDocumentSchema = z.object({
   category: z.enum(PERSONAL_DOCUMENT_CATEGORIES, { error: 'Scegli il tipo di documento' }),
   title: zRequiredText(150),
-  familyMemberId: z.preprocess(value => (value === '' || value === null ? undefined : value), zUuid.optional()),
+  familyMemberId: z.preprocess(blankAsMissing, zUuid.optional()),
 })
 export type PersonalDocumentInput = z.output<typeof personalDocumentSchema>
 
@@ -394,11 +404,7 @@ export const adminFamilyListQuerySchema = zListQuery.extend({
   province: z.string().trim().toUpperCase().max(40).optional(),
   region: zRegion.optional(),
   /** How many young people with a condition (the list shows only their ages). */
-  // An unknown value (the «none» of an old link) reads as no filter.
-  disability: z
-    .enum(DISABILITY_COUNT_FILTERS.map(filter => filter.value))
-    .optional()
-    .catch(undefined),
+  disability: z.enum(DISABILITY_COUNT_FILTERS.map(filter => filter.value)).optional(),
   /** A type of condition («Tipologia»): health data, so the filter is audited and the list never shows it. */
   condition: zChoice(CONDITIONS).optional(),
   ageRange: z.enum(GUEST_AGE_FILTERS.map(filter => filter.value)).optional(),

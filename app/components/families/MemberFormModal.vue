@@ -119,7 +119,7 @@ async function save() {
   const body = {
     firstName: state.firstName,
     lastName: state.lastName,
-    birthDate: state.birthDate || null,
+    birthDate: state.birthDate,
     relationship: withCondition.value ? null : state.relationship,
     kind: state.kind,
     isReferent: state.isReferent,
