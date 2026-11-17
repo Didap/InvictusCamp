@@ -5,11 +5,15 @@ import { STAFF_AGE_FILTERS } from '#shared/schemas/staff'
 import type { StaffListItem } from '#shared/types/staff'
 import { ageOn, todayIso } from '#shared/utils/dates'
 import { formatAge, formatDayRange, fullName } from '#shared/utils/format'
+import { teamOfSegment, teamPath } from '#shared/utils/routes'
 
-// Staff of the camp: applications to review, approved staff, everyone (spec 3.4). Tab in the query string.
-// The table shows who people are (roles, city, age) and the «Valutazione»; status, application date and
-// availability are on the page of each person.
+// The staff, or the v-team (/admin/v-team): two separate lists of the same page (spec 3.4). Applications to
+// review, approved people, everyone; tab in the query string. The table shows who people are (roles, city,
+// age) and the «Valutazione»; status, application date and availability are on the page of each person.
+definePageMeta({ path: '/admin/:team(staff|v-team)' })
 const route = useRoute()
+const team = computed(() => teamOfSegment(route.params.team))
+const { label } = useEnums()
 const router = useRouter()
 const api = useApi()
 const confirm = useConfirm()
@@ -20,7 +24,7 @@ const SESSION_FREE = ['all', 'any', 'none']
 const sessionId = computed(() => (SESSION_FREE.includes(availability.value) ? null : availability.value))
 const [{ data, refresh }, { data: sessions }] = await Promise.all([
   useApiFetch<StaffListItem[]>('/api/admin/staff', {
-    query: computed(() => (sessionId.value ? { sessionId: sessionId.value } : {})),
+    query: computed(() => ({ team: team.value, ...(sessionId.value ? { sessionId: sessionId.value } : {}) })),
   }),
   useApiFetch<SessionListItem[]>('/api/admin/sessions', { query: { status: 'draft,inviting,confirmed' } }),
 ])
@@ -56,7 +60,7 @@ const tab = computed<Tab>({
 })
 const tabItems = computed(() => [
   { label: 'Da valutare', value: 'review', badge: counts.value.review || undefined },
-  { label: 'Staff approvato', value: 'approved', badge: counts.value.approved },
+  { label: `${label('staffTeam', team.value)} approvato`, value: 'approved', badge: counts.value.approved },
   { label: 'Tutti', value: 'all', badge: counts.value.all },
 ])
 
@@ -194,7 +198,7 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
 </script>
 
 <template>
-  <IcPage title="Staff" width="wide">
+  <IcPage :title="label('staffTeam', team)" width="wide">
     <template #actions>
       <UButton
         icon="i-lucide-tags"
@@ -278,7 +282,7 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
             />
           </template>
           <template #name-cell="{ row }">
-            <ULink :to="`/admin/staff/${row.original.userId}`" class="font-semibold text-primary hover:underline">
+            <ULink :to="teamPath(team, row.original.userId)" class="font-semibold text-primary hover:underline">
               {{ fullName(row.original) }}
             </ULink>
           </template>
@@ -308,7 +312,7 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
             />
             <div class="min-w-0 flex-1 space-y-2">
               <div class="flex flex-wrap items-start justify-between gap-2">
-                <ULink :to="`/admin/staff/${person.userId}`" class="font-semibold text-primary hover:underline">
+                <ULink :to="teamPath(team, person.userId)" class="font-semibold text-primary hover:underline">
                   {{ fullName(person) }}
                 </ULink>
               </div>

@@ -61,7 +61,15 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
       : [],
     staffCountsOf(db, sessions),
     Promise.all([
-      total(db.select({ total: count() }).from(t.staffProfiles).where(eq(t.staffProfiles.status, 'applied'))),
+      db
+        .select({ team: t.staffProfiles.team, total: count() })
+        .from(t.staffProfiles)
+        .where(eq(t.staffProfiles.status, 'applied'))
+        .groupBy(t.staffProfiles.team)
+        .then(rows => ({
+          staff: rows.find(row => row.team === 'staff')?.total ?? 0,
+          volunteer: rows.find(row => row.team === 'volunteer')?.total ?? 0,
+        })),
       total(db.select({ total: count() }).from(t.families).where(eq(t.families.formStatus, 'draft'))),
       total(
         db

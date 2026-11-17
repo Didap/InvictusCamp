@@ -1,23 +1,36 @@
 <script setup lang="ts">
 import { FAILED_EMAIL_DAYS, type DashboardDto } from '#shared/types/dashboard'
+import { OF_TEAM, STAFF_TEAMS, enumLabel, type StaffTeam } from '#shared/utils/constants'
 import { formatNumber } from '#shared/utils/format'
+import { teamPath } from '#shared/utils/routes'
 
 // Panoramica (docs/spec.md, 3.9): the next session, the numbers that lead to action (each one opens
 // its list), what to do now, the sessions to come with their progress. A number is not repeated in
 // "Da fare"; emails not delivered get a tile only when there are some, otherwise one quiet line.
 const { data, error, refresh } = await useApiFetch<DashboardDto>('/api/admin/dashboard')
 
+// Staff and v-team are two lists: the tile opens the one with applications waiting, the staff first.
+function applicationsTile(waiting: Record<StaffTeam, number>) {
+  const teams = STAFF_TEAMS.filter(team => waiting[team])
+  return {
+    label: 'Candidature da valutare',
+    value: formatNumber(waiting.staff + waiting.volunteer),
+    hint:
+      teams.length === 1
+        ? `${enumLabel('staffTeam', teams[0]!)} in attesa dell’esito`
+        : teams.length
+          ? teams.map(team => `${waiting[team]} ${OF_TEAM[team]}`).join(', ')
+          : 'Staff e v-team in attesa dell’esito',
+    icon: 'i-lucide-inbox',
+    to: `${teamPath(teams[0] ?? 'staff')}?tab=review`,
+  }
+}
+
 const tiles = computed(() => {
   const counts = data.value?.counts
   if (!counts) return []
   return [
-    {
-      label: 'Candidature da valutare',
-      value: formatNumber(counts.applicationsToReview),
-      hint: 'Staff in attesa dell’esito',
-      icon: 'i-lucide-inbox',
-      to: '/admin/staff?tab=review',
-    },
+    applicationsTile(counts.applicationsToReview),
     {
       label: 'Dati della famiglia da confermare',
       value: formatNumber(counts.formsToComplete),

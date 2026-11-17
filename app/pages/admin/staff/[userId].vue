@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
-import type { StaffStatus, StaffTeam } from '#shared/utils/constants'
+import { OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
 import { formatAge, formatDateTime, formatDay, formatDayRange, fullName } from '#shared/utils/format'
+import { TEAM_SEGMENT, teamOfSegment, teamPath } from '#shared/utils/routes'
 
-// One staff member (spec 3.4): contacts, application, review with internal notes, the outcome email sent
-// only from "Comunica l’esito", availability, convocations, personal documents, signatures.
+// One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, application,
+// review with internal notes, the outcome email sent only from "Comunica l’esito", availability,
+// convocations, personal documents, signatures.
+definePageMeta({ path: '/admin/:team(staff|v-team)/:userId' })
 const route = useRoute()
 const userId = computed(() => String(route.params.userId))
 const api = useApi()
@@ -15,6 +18,15 @@ const { label, options } = useEnums()
 // Started before the await, so the menus of roles and tags fill with the page.
 const { roleItems, tags } = useStaffLabels()
 const { data: person, refresh } = await useApiFetch<StaffDetail>(() => `/api/admin/staff/${userId.value}`)
+// The list of the team in the path; an old link, or a change of team, moves to the list of the person.
+const list = computed(() => teamPath(person.value?.team ?? teamOfSegment(route.params.team)))
+watch(
+  () => person.value?.team,
+  team => {
+    if (team && TEAM_SEGMENT[team] !== route.params.team) navigateTo(teamPath(team, userId.value), { replace: true })
+  },
+  { immediate: true },
+)
 
 const name = computed(() => (person.value ? fullName(person.value) : ''))
 const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
@@ -78,7 +90,7 @@ async function changeTeam(team: StaffTeam) {
     const url: string = `/api/admin/staff/${userId.value}/team`
     await api(url, { method: 'PUT', body: { team } })
     if (person.value) person.value = { ...person.value, team }
-    notifySuccess('Squadra cambiata', `${name.value}: ${label('staffTeam', team)}`)
+    notifySuccess('Squadra cambiata', `${name.value} ora è nell’elenco ${OF_TEAM[team]}.`)
   } catch (error) {
     notifyError(error)
     await refresh()
@@ -215,7 +227,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
 </script>
 
 <template>
-  <IcPage :title="person ? name : 'Staff'" back="/admin/staff" width="wide">
+  <IcPage :title="person ? name : label('staffTeam', teamOfSegment(route.params.team))" :back="list" width="wide">
     <template #actions>
       <UButton
         class="pointer-coarse:min-h-11"
@@ -240,8 +252,8 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
       v-if="!person"
       icon="i-lucide-user-x"
       title="Persona non trovata"
-      description="Forse l’account è stato eliminato. Torna all’elenco dello staff."
-      :actions="[{ label: 'Vai allo staff', to: '/admin/staff', color: 'neutral', variant: 'outline' }]"
+      description="Forse l’account è stato eliminato. Torna all’elenco."
+      :actions="[{ label: 'Torna all’elenco', to: list, color: 'neutral', variant: 'outline' }]"
     />
 
     <div v-else class="grid gap-x-12 lg:grid-cols-[minmax(0,1fr)_21rem]">
@@ -258,7 +270,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               :help="
                 person.status === 'registered'
                   ? 'La sceglie la persona nella candidatura, finché non la invia.'
-                  : 'Scelta nella candidatura. Chi è nel v-team è un volontario.'
+                  : 'Scelta nella candidatura. Se la cambi, la persona passa all’altro elenco.'
               "
             >
               <USelect

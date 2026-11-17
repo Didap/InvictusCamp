@@ -120,7 +120,8 @@ function actionsFor(user: UserListItem): DropdownMenuItem[][] {
     })
   }
   if (user.role === 'staff') {
-    open.push({ label: 'Apri la scheda dello staff', icon: 'i-lucide-id-card', to: `/admin/staff/${user.id}` })
+    // Staff or v-team: the page moves to the list of the person's team.
+    open.push({ label: 'Apri la scheda della persona', icon: 'i-lucide-id-card', to: `/admin/staff/${user.id}` })
   }
   if (user.status === 'active') {
     open.push({

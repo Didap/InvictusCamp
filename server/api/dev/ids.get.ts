@@ -46,6 +46,14 @@ export default defineEventHandler(async event => {
     family,
     staff: await userId(DEMO_ACCOUNTS.staff),
     candidate: await userId(DEMO_ACCOUNTS.candidate),
+    volunteer:
+      (
+        await db
+          .select({ id: tables.staffProfiles.userId })
+          .from(tables.staffProfiles)
+          .where(eq(tables.staffProfiles.team, 'volunteer'))
+          .limit(1)
+      )[0]?.id ?? null,
     document:
       (await db.select({ id: documents.id }).from(documents).orderBy(asc(documents.createdAt)).limit(1))[0]?.id ?? null,
     communication: (await db.select({ id: communications.id }).from(communications).limit(1))[0]?.id ?? null,

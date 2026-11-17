@@ -1,4 +1,4 @@
-import type { UserRole } from './constants'
+import type { StaffTeam, UserRole } from './constants'
 
 /** Where each role lands after signing in, and the prefix of its pages. */
 export const ROLE_HOME: Record<UserRole, string> = {
@@ -21,6 +21,22 @@ export const PUBLIC_PATHS = [
 
 /** `/candidati?squadra=v-team`: the application starts with the v-team chosen. */
 export const V_TEAM_QUERY = 'v-team'
+
+/**
+ * Staff and v-team are two separate lists of the administration, `/admin/staff` and `/admin/v-team`, each
+ * with the pages of its people (docs/spec.md 3.4): the segment of the path of each team.
+ */
+export const TEAM_SEGMENT: Record<StaffTeam, string> = { staff: 'staff', volunteer: V_TEAM_QUERY }
+
+/** The list of a team, or the page of one of its people. */
+export function teamPath(team: StaffTeam, userId?: string): string {
+  return `/admin/${TEAM_SEGMENT[team]}${userId ? `/${userId}` : ''}`
+}
+
+/** The team of a `:team` segment of the path (`staff` or `v-team`). */
+export function teamOfSegment(segment: unknown): StaffTeam {
+  return segment === V_TEAM_QUERY ? 'volunteer' : 'staff'
+}
 
 export const GUEST_ONLY_PATHS = ['/accedi', '/registrati', '/candidati', '/password-dimenticata'] as const
 

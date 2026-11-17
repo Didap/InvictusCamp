@@ -36,6 +36,7 @@ import type {
 } from '../../shared/types/staff'
 import {
   OPEN_CONVOCATIONS,
+  STAFF_TEAMS,
   type ConvocationStatus,
   type SignatureStatus,
   type StaffRole,
@@ -906,12 +907,13 @@ export async function answerConvocation(
 // ─── Reads: administration ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Every staff account with its application, for /admin/staff: how many sessions not started yet each
- * person can come to and, with `sessionId`, whether they can come to that one (P1: filter by session).
+ * Every staff account with its application, for /admin/staff and /admin/v-team (with `team`, one of the
+ * two): how many sessions not started yet each person can come to and, with `sessionId`, whether they can
+ * come to that one (P1: filter by session).
  */
 export async function staffList(
   db: DbOrTx,
-  options: { today?: string; sessionId?: string } = {},
+  options: { today?: string; team?: StaffTeam; sessionId?: string } = {},
 ): Promise<StaffListItem[]> {
   const today = options.today ?? todayIso()
   const session = options.sessionId ? await sessionFor(db, options.sessionId) : null
@@ -932,6 +934,7 @@ export async function staffList(
     })
     .from(staffProfiles)
     .innerJoin(users, eq(users.id, staffProfiles.userId))
+    .where(options.team ? eq(staffProfiles.team, options.team) : undefined)
     .orderBy(asc(users.lastName), asc(users.firstName))
   const answered = db
     .select({ userId: sessionAvailability.userId, count: sql<number>`count(*)::int` })
@@ -1211,13 +1214,22 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
       editable: isSessionEditable(session.status),
       contract: contractId ? { id: contractId, title: row.contractTitle ?? 'Contratto' } : null,
     },
-    counts: {
-      confirmed: convocations.filter(c => c.confirmed).length,
-      accepted: convocations.filter(c => c.status === 'accepted').length,
-      waiting: convocations.filter(c => c.status === 'sent').length,
-      draft: convocations.filter(c => c.status === 'draft').length,
-      declined: convocations.filter(c => c.status === 'declined').length,
-    },
+    counts: Object.fromEntries(
+      STAFF_TEAMS.map(team => {
+        const ofTeam = convocations.filter(c => c.team === team)
+        const status = (value: ConvocationStatus) => ofTeam.filter(c => c.status === value).length
+        return [
+          team,
+          {
+            confirmed: ofTeam.filter(c => c.confirmed).length,
+            accepted: status('accepted'),
+            waiting: status('sent'),
+            draft: status('draft'),
+            declined: status('declined'),
+          },
+        ]
+      }),
+    ) as SessionStaffData['counts'],
     convocations,
     available,
   }

@@ -393,6 +393,16 @@ describe('team', () => {
     expect((await staffDetail(db, user.id)).team).toBe('staff')
     expect((await auditActions(user.id)).filter(action => action === 'staff.team')).toHaveLength(1)
   })
+
+  it('makes two lists: the staff and the v-team', async () => {
+    const staff = await makeStaff(db, 'approved')
+    const volunteer = await makeStaff(db, 'approved')
+    await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.userId, volunteer.user.id))
+    const ids = async (team: 'staff' | 'volunteer') => (await staffList(db, { team })).map(row => row.userId)
+    expect(await ids('staff')).toEqual([staff.user.id])
+    expect(await ids('volunteer')).toEqual([volunteer.user.id])
+    expect(await staffList(db)).toHaveLength(2)
+  })
 })
 
 describe('convocations', () => {
@@ -479,7 +489,7 @@ describe('convocations', () => {
     expect((await convocation(id))!.status).toBe('accepted')
     const data = await sessionStaffData(db, session.id)
     expect(data.convocations[0]).toMatchObject({ contract: 'none', confirmed: true })
-    expect(data.counts).toMatchObject({ confirmed: 1, accepted: 1 })
+    expect(data.counts.staff).toMatchObject({ confirmed: 1, accepted: 1 })
     expect(await db.select().from(t.signatureRequests)).toHaveLength(0)
   })
 
@@ -512,7 +522,7 @@ describe('convocations', () => {
     await db.update(t.signatureRequests).set({ status: 'signed' }).where(eq(t.signatureRequests.id, request!.id))
     data = await sessionStaffData(db, session.id)
     expect(data.convocations[0]).toMatchObject({ contract: 'signed', confirmed: true })
-    expect(data.counts.confirmed).toBe(1)
+    expect(data.counts.staff.confirmed).toBe(1)
   })
 
   it('declining keeps the reason; a convocation is answered once, only by its person', async () => {

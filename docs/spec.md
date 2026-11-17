@@ -36,8 +36,9 @@ Public: `/accedi`, `/registrati` (family), `/candidati` (staff), `/password-dime
 `/reimposta-password?token`, `/invito?token`, `/verifica-email?token`, `/privacy`.
 
 Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova`, `/admin/sessioni/:id`
-(tabs Panoramica, Famiglie, Alloggi, Gruppi, Staff, Programma, Documenti, Comunicazioni), `/admin/famiglie`, `/admin/famiglie/:id`,
-`/admin/staff`, `/admin/staff/:userId`, `/admin/documenti`, `/admin/documenti/:id`,
+(tabs Panoramica, Famiglie, Alloggi, Gruppi, Mensa, Staff e v-team, Programma, Documenti, Comunicazioni), `/admin/famiglie`,
+`/admin/famiglie/:id`, `/admin/staff`, `/admin/staff/:userId`, `/admin/v-team`, `/admin/v-team/:userId` (3.4),
+`/admin/documenti`, `/admin/documenti/:id`,
 `/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/programma`,
 `/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/feedback` (3.13), `/admin/utenti`.
 
@@ -131,21 +132,28 @@ availability or receive convocations. The administration can move a person to th
 - **Valutazione**: tags the administration creates in the same place (name and colour, table `staff_tags`;
   0023 brings the camp's examples: Staff tecnico, Leader, Animatore, Top, Energia moderata, Da guidare, In
   training) and gives to people from their page (audited, `staff.tags`). Never shown to the person.
-- The `/admin/staff` table shows name, roles, city, age and Valutazione; status, application date and
-  availability are on each person's page. Filters: search, role, age (ranges of years at today), availability
-  (at least one session, none, or a session not started yet).
+- **Staff and v-team are two separate lists**, two items of the menu: `/admin/staff` and `/admin/v-team`, each
+  with the pages of its people (`/admin/staff/:userId`, `/admin/v-team/:userId`). A person's page opened under
+  the other team (an old link, the users list, a change of team) moves to the list of their team. The
+  application is one for both: the team comes from the link (`/candidati?squadra=v-team`) or the person's
+  choice. Roles and Valutazione are the same for both lists. The Panoramica counts the applications to
+  review of both and opens the list that has some, the staff first.
+- Each list shows name, roles, city, age and Valutazione; status, application date and availability are on
+  each person's page. Filters: search, role, age (ranges of years at today), availability (at least one
+  session, none, or a session not started yet).
 
 ### 3.5 Availability, convocations, contract
 
 - `/staff/disponibilita` lists the sessions not started yet (neither concluded nor cancelled), by date: approved
   staff and v-team switch "Ci sono" on or off for each one, for the whole session (`session_availability`).
   Taking it back keeps the convocations already received; the administration sees it on them.
-- In a session's Staff tab the administration adds people as convocations `draft` with a role for the session,
-  choosing only among the approved staff and v-team who said they are available for that session (the server
-  does not refuse the others: the rule is about what is offered); the list shows team, roles, age and
-  Valutazione of each. The base of a session is `staffNeeded`
-  people of the staff (10 by default) plus a **coordinator** of the staff and one of the v-team (role
-  `coordinator`); the tab shows both coordinators, or "da scegliere".
+- A session's tab «Staff e v-team» has **two lists**, the staff and the v-team, each with its coordinator and
+  its own «Aggiungi persone». The administration adds people as convocations `draft` with a role for the
+  session, choosing only among the approved people of that team who said they are available for that session
+  (the server does not refuse the others: the rule is about what is offered); the choice shows roles, age and
+  Valutazione of each. The base of a session is `staffNeeded` people of the staff (10 by default) plus a
+  **coordinator** of the staff and one of the v-team (role `coordinator`); each list shows its coordinator, or
+  "da scegliere". Selecting and sending the convocations work across both lists.
 - **Invia la convocazione** (one or many, optional message) → `sent` + `staff.convocation` email. Sending
   is always an explicit action ("puntualmente dalla dashboard").
 - The staff member accepts or declines (with reason) from `/staff/convocazioni`. On accept, when the

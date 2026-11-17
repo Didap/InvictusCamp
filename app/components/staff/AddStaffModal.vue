@@ -1,22 +1,21 @@
 <script setup lang="ts">
 import type { AvailableStaff } from '#shared/types/staff'
-import { COORDINATOR_ROLE, type StaffTeam } from '#shared/utils/constants'
+import { COORDINATOR_ROLE, OF_TEAM, type StaffTeam } from '#shared/utils/constants'
 import { ageOn } from '#shared/utils/dates'
 import { formatAge, fullName } from '#shared/utils/format'
+import { teamPath } from '#shared/utils/routes'
 
-// Picks people for a session among the approved staff and v-team who said they can come to it (spec 3.5):
-// their team, roles, age and «Valutazione», the role they will have. They are added as convocations to send
+// Picks people of one team for a session, among the approved ones who said they can come to it (spec 3.5):
+// their roles, age and «Valutazione», the role they will have. They are added as convocations to send
 // (drafts): nothing is emailed here.
-const props = defineProps<{ sessionId: string; available: AvailableStaff[] }>()
+const props = defineProps<{ sessionId: string; team: StaffTeam; available: AvailableStaff[] }>()
 const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ added: [count: number] }>()
 
 const api = useApi()
-const { label, options } = useEnums()
 const { roleItems, roleFilterItems, roleList, tagsOf } = useStaffLabels()
 
 const roleFilter = ref('all')
-const teamFilter = ref<StaffTeam | 'all'>('all')
 /** userId → role in the session (null: to decide later), for the people ticked. */
 const chosen = ref<Record<string, string | null>>({})
 const saving = ref(false)
@@ -25,20 +24,11 @@ watch(open, value => {
   if (!value) return
   chosen.value = {}
   roleFilter.value = 'all'
-  teamFilter.value = 'all'
 })
 
-const teamItems = computed(() => [
-  { label: 'Staff e v-team', value: 'all' },
-  ...options('staffTeam').map(option => ({ label: option.label, value: option.value })),
-])
-
+const ofTeam = computed(() => props.available.filter(person => person.team === props.team))
 const visible = computed(() =>
-  props.available.filter(
-    person =>
-      (roleFilter.value === 'all' || person.roles.includes(roleFilter.value)) &&
-      (teamFilter.value === 'all' || person.team === teamFilter.value),
-  ),
+  ofTeam.value.filter(person => roleFilter.value === 'all' || person.roles.includes(roleFilter.value)),
 )
 const count = computed(() => Object.keys(chosen.value).length)
 const ticked = (person: AvailableStaff) => person.userId in chosen.value
@@ -57,9 +47,7 @@ function toggle(person: AvailableStaff, value: boolean) {
 
 function describe(person: AvailableStaff): string {
   const age = person.birthDate && formatAge(ageOn(person.birthDate))
-  return [label('staffTeam', person.team), roleList(person.roles, 'Ruolo non indicato'), age, person.city]
-    .filter(Boolean)
-    .join(' · ')
+  return [roleList(person.roles, 'Ruolo non indicato'), age, person.city].filter(Boolean).join(' · ')
 }
 
 const PREVIOUS = { declined: 'Aveva rifiutato la convocazione', cancelled: 'La convocazione era stata annullata' }
@@ -91,30 +79,27 @@ async function add() {
 <template>
   <UModal
     v-model:open="open"
-    title="Aggiungi persone alla sessione"
+    :title="`Aggiungi persone ${OF_TEAM[team]}`"
     description="Qui trovi solo chi ha detto che c’è per tutta la sessione. Scegli le persone e il ruolo che avranno: le aggiungi come convocazioni da inviare, nessuna email parte adesso."
     :ui="{ content: 'sm:max-w-3xl' }"
   >
     <template #body>
       <UEmpty
-        v-if="!available.length"
+        v-if="!ofTeam.length"
         icon="i-lucide-users"
         title="Nessuna persona da aggiungere"
-        description="Chi ha dato disponibilità per questa sessione è già tra i convocati, oppure nessuno l’ha ancora data. Staff e v-team la indicano dalla loro area, sessione per sessione."
-        :actions="[{ label: 'Vai allo staff', to: '/admin/staff?tab=approved', color: 'neutral', variant: 'outline' }]"
+        description="Chi ha dato disponibilità per questa sessione è già tra i convocati, oppure nessuno l’ha ancora data. Ognuno la indica dalla sua area, sessione per sessione."
+        :actions="[
+          { label: 'Vai all’elenco', to: `${teamPath(team)}?tab=approved`, color: 'neutral', variant: 'outline' },
+        ]"
       />
       <template v-else>
-        <div class="mb-4 grid gap-3 sm:grid-cols-2">
-          <UFormField label="Squadra">
-            <USelect v-model="teamFilter" :items="teamItems" class="w-full" />
-          </UFormField>
-          <UFormField label="Ruolo">
-            <USelect v-model="roleFilter" :items="roleFilterItems" class="w-full" />
-          </UFormField>
-        </div>
+        <UFormField label="Ruolo" class="mb-4 sm:max-w-xs">
+          <USelect v-model="roleFilter" :items="roleFilterItems" class="w-full" />
+        </UFormField>
 
         <p v-if="!visible.length" class="py-6 text-center text-muted">
-          Nessuna persona corrisponde ai filtri: prova con un’altra squadra o un altro ruolo.
+          Nessuna persona corrisponde al filtro: prova con un altro ruolo.
         </p>
         <ul v-else class="divide-y divide-default rounded-lg border border-default">
           <li v-for="person in visible" :key="person.userId" class="space-y-3 p-3 sm:p-4">

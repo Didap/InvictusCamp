@@ -207,7 +207,8 @@ export interface AvailableStaff {
 /** GET /api/admin/convocations?sessionId= */
 export interface SessionStaffData {
   session: SessionStaffSession
-  counts: { confirmed: number; accepted: number; waiting: number; draft: number; declined: number }
+  /** Each team is a list of its own (docs/spec.md 3.5). */
+  counts: Record<StaffTeam, { confirmed: number; accepted: number; waiting: number; draft: number; declined: number }>
   convocations: SessionConvocation[]
   available: AvailableStaff[]
 }

@@ -51,6 +51,8 @@ export type StaffTagColor = (typeof STAFF_TAG_COLORS)[number]
 /** The two teams of the staff side: the staff and the volunteers (v-team). Each has its own coordinator. */
 export const STAFF_TEAMS = ['staff', 'volunteer'] as const
 export type StaffTeam = (typeof STAFF_TEAMS)[number]
+/** «Aggiungi persone dello staff», «3 del v-team»: the team after a noun or a number. */
+export const OF_TEAM: Record<StaffTeam, string> = { staff: 'dello staff', volunteer: 'del v-team' }
 
 /** Who a document went to, for the filter of the documents list: families, or one of the two teams. */
 export const DOCUMENT_AUDIENCES = ['family', ...STAFF_TEAMS] as const
