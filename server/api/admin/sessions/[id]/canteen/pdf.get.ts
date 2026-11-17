@@ -12,11 +12,5 @@ export default defineEventHandler(async event => {
     entityId: sessionId,
     data: { format: 'pdf' },
   })
-  setResponseHeaders(event, {
-    'Content-Type': 'application/pdf',
-    'Content-Length': String(file.data.byteLength),
-    'Content-Disposition': `attachment; filename="${file.filename}"`,
-    'Cache-Control': 'private, no-store',
-  })
-  return Buffer.from(file.data)
+  return sendPdf(event, file)
 })

@@ -36,7 +36,7 @@ const TABS = [
 ]
 // Nine tabs: they wrap on narrow screens instead of scrolling, so none hides past the edge (on a phone a
 // scrolling bar showed three and gave no sign of the others). The sliding indicator cannot follow a wrap:
-// the active tab draws its own line.
+// the active tab draws its own line, under itself, since only the last row touches the border.
 const TABS_UI = {
   root: 'gap-8',
   list: 'flex-wrap',

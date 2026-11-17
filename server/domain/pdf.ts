@@ -11,12 +11,13 @@ const SIZE = 11
 
 /**
  * Text the standard fonts can draw (WinAnsi): accented letters outside it lose the accent ("ł" stays
- * "?", "ș" becomes "s"), control characters become spaces, anything else becomes "?".
+ * "?", "ș" becomes "s"), control characters and every kind of space become spaces (Intl puts thin spaces
+ * around the dash of "28 giugno – 2 luglio"), anything else becomes "?".
  */
 export function toWinAnsi(font: PDFFont, text: string): string {
   const supported = new Set(font.getCharacterSet())
   let out = ''
-  for (const char of text.normalize('NFC').replace(/[\u0000-\u001f\u007f]/g, ' ')) {
+  for (const char of text.normalize('NFC').replace(/[\u0000-\u001f\u007f\p{Zs}]/gu, ' ')) {
     if (supported.has(char.codePointAt(0)!)) {
       out += char
       continue
@@ -51,11 +52,16 @@ export function wrap(font: PDFFont, text: string, size: number, width: number): 
   return lines.length ? lines : ['']
 }
 
-/**
- * A paragraph; a heading (13 pt, bold, space above); a bold label that stays with the paragraph after it.
- * Headings and labels never end a page.
- */
+/** A paragraph; a heading (13 pt, bold, space above); a bold label that stays with the paragraph after it. */
 export type PdfBlock = string | { heading: string } | { label: string }
+
+// `room`: the lowest line a block starts on. A heading keeps a label and a line under it on its page, a
+// label a line: neither ends a page.
+const STYLES = {
+  paragraph: { size: SIZE, before: 0, after: 10, room: 80 },
+  heading: { size: 13, before: 8, after: 4, room: 130 },
+  label: { size: SIZE, before: 0, after: 0, room: 100 },
+}
 
 export async function textPdf(title: string, blocks: PdfBlock[], footer: string): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
@@ -71,25 +77,25 @@ export async function textPdf(title: string, blocks: PdfBlock[], footer: string)
   page.drawText(toWinAnsi(bold, title), { x: MARGIN, y: 748, size: 17, font: bold, color: rgb(0.12, 0.11, 0.1) })
   let y = 712
   for (const block of blocks) {
-    const [text, face, size, after] =
+    const [kind, text] =
       typeof block === 'string'
-        ? [block, font, SIZE, 10]
+        ? (['paragraph', block] as const)
         : 'heading' in block
-          ? [block.heading, bold, 13, 4]
-          : [block.label, bold, SIZE, 0]
-    if (typeof block !== 'string' && 'heading' in block) y -= 8
-    // A heading or a label keeps two lines of what follows on its page.
-    const room = typeof block === 'string' ? 80 : 120
-    for (const line of wrap(face, toWinAnsi(face, text), size, WIDTH)) {
-      if (y < room) {
+          ? (['heading', block.heading] as const)
+          : (['label', block.label] as const)
+    const style = STYLES[kind]
+    const face = kind === 'paragraph' ? font : bold
+    y -= style.before
+    for (const line of wrap(face, toWinAnsi(face, text), style.size, WIDTH)) {
+      if (y < style.room) {
         drawFooter()
         page = pdf.addPage(PAGE)
         y = TOP
       }
-      page.drawText(line, { x: MARGIN, y, size, font: face })
-      y -= size + 5
+      page.drawText(line, { x: MARGIN, y, size: style.size, font: face })
+      y -= style.size + 5
     }
-    y -= after
+    y -= style.after
   }
   drawFooter()
   return pdf.save()

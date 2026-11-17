@@ -72,6 +72,7 @@ describe('canteen', () => {
       expect.arrayContaining([
         { heading: 'Totale pasti: 4' },
         'Persone a ogni pasto: 2 di 1 famiglia, 1 dello staff e 1 del v-team.',
+        '1 famiglia non ha ancora indicato i componenti e non è nel totale.',
         { label: '1 vegetariana' },
         volunteerName,
       ]),

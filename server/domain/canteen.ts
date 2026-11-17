@@ -4,7 +4,8 @@
 // tests can load it.
 import { eq, sql } from 'drizzle-orm'
 import type { CanteenDto } from '../../shared/types/canteen'
-import { canteenSummary, canteenWho, type CanteenPerson } from '../../shared/utils/canteen'
+import { canteenNotCounted, canteenSummary, canteenWho, type CanteenPerson } from '../../shared/utils/canteen'
+import { ENUM_META } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
 import { NO_CARDS, formatDay, formatDayRange, fullName } from '../../shared/utils/format'
 import { familyMembers, families, sessionFamilies, sessionStaff, staffProfiles, users } from '../db/schema'
@@ -78,8 +79,8 @@ export async function canteenCsv(db: DbOrTx, sessionId: string): Promise<{ filen
     ['Voce', 'Persone', 'Chi'],
     ['Totale pasti (persone a ogni pasto)', summary.total, null],
     ['Persone delle famiglie', summary.familyPeople, null],
-    ['Staff', summary.staff, null],
-    ['V-team', summary.volunteers, null],
+    [ENUM_META.staffTeam.staff.label, summary.staff, null],
+    [ENUM_META.staffTeam.volunteer.label, summary.volunteers, null],
     ...summary.needs.map(need => [need.label, need.people.length, need.people.join(', ')]),
     ...summary.notes.map(note => ['Da sapere', null, `${note.name}: ${note.text}`]),
     ...summary.withoutCards.map(name => [NO_CARDS, null, name]),
@@ -89,10 +90,12 @@ export async function canteenCsv(db: DbOrTx, sessionId: string): Promise<{ filen
 /** The PDF for the supplier: the total, who eats, then each need with how many and who, then what to know. */
 export function canteenPdfBlocks(summary: CanteenDto): PdfBlock[] {
   const { session } = summary
+  const notCounted = canteenNotCounted(summary)
   return [
     `${session.title}, ${formatDayRange(session.startDate, session.endDate, 'long')}.`,
     { heading: `Totale pasti: ${summary.total}` },
     `Persone a ogni pasto: ${canteenWho(summary)}.`,
+    ...(notCounted ? [notCounted] : []),
     { heading: 'Esigenze alimentari' },
     ...(summary.needs.length
       ? summary.needs.flatMap(need => [{ label: `${need.people.length} ${need.label}` }, need.people.join(', ')])

@@ -47,17 +47,27 @@ export interface CanteenGroups {
   /** The staff and the v-team still in play. */
   staff: number
   volunteers: number
+  /** Families holding a place without cards: their people are not counted yet. */
+  withoutCards: string[]
 }
 
-/** «60 di 12 famiglie, 10 dello staff e 2 del v-team». */
+/** «60 di 12 famiglie, 10 dello staff e 2 del v-team»: only the groups with someone. */
 export function canteenWho(groups: CanteenGroups): string {
-  return andList([
-    groups.families
-      ? `${groups.familyPeople} di ${plural(groups.families, 'famiglia', 'famiglie')}`
-      : 'nessuna famiglia',
-    `${groups.staff} dello staff`,
-    `${groups.volunteers} del v-team`,
-  ])
+  const parts = [
+    ...(groups.families ? [`${groups.familyPeople} di ${plural(groups.families, 'famiglia', 'famiglie')}`] : []),
+    ...(groups.staff ? [`${groups.staff} dello staff`] : []),
+    ...(groups.volunteers ? [`${groups.volunteers} del v-team`] : []),
+  ]
+  return parts.length ? andList(parts) : 'nessuno'
+}
+
+/** For the supplier, how many families are not in the total yet (not who), or null. */
+export function canteenNotCounted(groups: CanteenGroups): string | null {
+  const count = groups.withoutCards.length
+  if (!count) return null
+  return count === 1
+    ? '1 famiglia non ha ancora indicato i componenti e non è nel totale.'
+    : `${count} famiglie non hanno ancora indicato i componenti e non sono nel totale.`
 }
 
 export interface CanteenSession {
@@ -69,11 +79,13 @@ export interface CanteenSession {
 /** The text for the supplier: «Totale pasti 72 di cui: 5 senza lattosio (…)». */
 export function canteenText(summary: CanteenSummary & CanteenGroups & { session: CanteenSession }): string {
   const { session } = summary
+  const notCounted = canteenNotCounted(summary)
   return [
     `${session.title}, ${formatDayRange(session.startDate, session.endDate)}`,
     '',
     `Totale pasti ${summary.total} (persone a ogni pasto: ${canteenWho(summary)})${summary.needs.length ? ' di cui:' : ''}`,
     ...summary.needs.map(need => `${need.people.length} ${need.label} (${need.people.join(', ')})`),
+    ...(notCounted ? ['', notCounted] : []),
     ...(summary.notes.length ? ['', 'Da sapere:', ...summary.notes.map(note => `${note.name}: ${note.text}`)] : []),
   ].join('\n')
 }

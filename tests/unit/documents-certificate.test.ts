@@ -35,6 +35,8 @@ describe('the signed copy', () => {
     expect(toWinAnsi(font, 'Șerban è d’accordo')).toBe('Serban è d’accordo')
     expect(toWinAnsi(font, 'Ł 😀 ≥')).toBe('? ? ?')
     expect(toWinAnsi(font, 'riga\nnuova')).toBe('riga nuova')
+    // Intl puts thin spaces around the dash of a range across two months.
+    expect(toWinAnsi(font, '28 giugno\u2009–\u20092 luglio')).toBe('28 giugno – 2 luglio')
   })
 
   it('writes the time of the signature in Italian time', () => {
