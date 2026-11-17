@@ -14,6 +14,7 @@ export function useNav() {
             { label: 'Alloggi', icon: 'i-lucide-bed-double', to: '/admin/alloggi' },
             { label: 'Famiglie', icon: 'i-lucide-heart-handshake', to: '/admin/famiglie' },
             { label: 'Staff', icon: 'i-lucide-id-card', to: '/admin/staff' },
+            { label: 'V-team', icon: 'i-lucide-hand-heart', to: '/admin/v-team' },
             { label: 'Documenti', icon: 'i-lucide-files', to: '/admin/documenti' },
             { label: 'Comunicazioni', icon: 'i-lucide-mail', to: '/admin/comunicazioni' },
             { label: 'Feedback', icon: 'i-lucide-message-square-heart', to: '/admin/feedback' },

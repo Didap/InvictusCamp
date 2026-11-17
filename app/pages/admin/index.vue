@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { FAILED_EMAIL_DAYS, type DashboardDto } from '#shared/types/dashboard'
+import { OF_TEAM, STAFF_TEAMS, enumMeta } from '#shared/utils/constants'
 import { formatNumber } from '#shared/utils/format'
+import { teamPath } from '#shared/utils/routes'
 
 // Panoramica (docs/spec.md, 3.9): the next session, the numbers that lead to action (each one opens
 // its list), what to do now, the sessions to come with their progress. A number is not repeated in
@@ -11,13 +13,14 @@ const tiles = computed(() => {
   const counts = data.value?.counts
   if (!counts) return []
   return [
-    {
-      label: 'Candidature da valutare',
-      value: formatNumber(counts.applicationsToReview),
-      hint: 'Staff in attesa dell’esito',
-      icon: 'i-lucide-inbox',
-      to: '/admin/staff?tab=review',
-    },
+    // Staff and v-team are two lists: a tile for each, opening its applications.
+    ...STAFF_TEAMS.map(team => ({
+      label: `Candidature ${OF_TEAM[team]} da valutare`,
+      value: formatNumber(counts.applicationsToReview[team]),
+      hint: 'In attesa dell’esito',
+      icon: enumMeta('staffTeam', team).icon,
+      to: `${teamPath(team)}?tab=review`,
+    })),
     {
       label: 'Dati della famiglia da confermare',
       value: formatNumber(counts.formsToComplete),

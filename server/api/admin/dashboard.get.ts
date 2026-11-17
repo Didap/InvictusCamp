@@ -6,7 +6,7 @@ import {
   type DashboardTodo,
 } from '#shared/types/dashboard'
 import { staffCountsOf } from '~~/server/domain/sessions'
-import { enumLabel, type SessionStatus } from '#shared/utils/constants'
+import { STAFF_TEAMS, enumLabel, type SessionStatus, type StaffTeam } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDay, plural } from '#shared/utils/format'
 import { slotSummary } from '#shared/utils/slots'
@@ -61,7 +61,17 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
       : [],
     staffCountsOf(db, sessions),
     Promise.all([
-      total(db.select({ total: count() }).from(t.staffProfiles).where(eq(t.staffProfiles.status, 'applied'))),
+      db
+        .select({ team: t.staffProfiles.team, total: count() })
+        .from(t.staffProfiles)
+        .where(eq(t.staffProfiles.status, 'applied'))
+        .groupBy(t.staffProfiles.team)
+        .then(
+          rows =>
+            Object.fromEntries(
+              STAFF_TEAMS.map(team => [team, rows.find(row => row.team === team)?.total ?? 0]),
+            ) as Record<StaffTeam, number>,
+        ),
       total(db.select({ total: count() }).from(t.families).where(eq(t.families.formStatus, 'draft'))),
       total(
         db

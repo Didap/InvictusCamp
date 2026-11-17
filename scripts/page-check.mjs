@@ -4,7 +4,7 @@
 //
 //   node scripts/page-check.mjs <path> [options]
 //
-// <path> tokens (GET /api/dev/ids): {session} {sessionDraft} {sessionPast} {family} {staff} {candidate}
+// <path> tokens (GET /api/dev/ids): {session} {sessionDraft} {sessionPast} {family} {staff} {candidate} {volunteer}
 //   {document} {communication} {signature} (a pending signature of the signed-in account)
 // Options:
 //   --as <who>       admin (default), famiglia, staff, candidato, guest (signed out)

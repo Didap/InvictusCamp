@@ -3,7 +3,9 @@ import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import { USER_LIST_SORTS, type UserListSort } from '#shared/schemas/users'
 import type { Paginated } from '#shared/types/api'
 import type { UserListItem } from '#shared/types/users'
+import { OF_TEAM } from '#shared/utils/constants'
 import { formatDateTime, fullName, plural } from '#shared/utils/format'
+import { teamPath } from '#shared/utils/routes'
 
 // Every account (docs/spec.md, 3.1): search, filter by role and status, sort by name, role, status or
 // last sign-in (on the server: the list comes a page at a time), invite a person, send the invitation
@@ -120,7 +122,8 @@ function actionsFor(user: UserListItem): DropdownMenuItem[][] {
     })
   }
   if (user.role === 'staff') {
-    open.push({ label: 'Apri la scheda dello staff', icon: 'i-lucide-id-card', to: `/admin/staff/${user.id}` })
+    const team = user.staffTeam ?? 'staff'
+    open.push({ label: `Apri la scheda ${OF_TEAM[team]}`, icon: 'i-lucide-id-card', to: teamPath(team, user.id) })
   }
   if (user.status === 'active') {
     open.push({

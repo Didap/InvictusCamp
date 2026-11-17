@@ -24,6 +24,8 @@ export const PAGES = {
     '/admin/staff',
     '/admin/staff/{staff}',
     '/admin/staff/{candidate}',
+    '/admin/v-team',
+    '/admin/v-team/{volunteer}',
     '/admin/documenti',
     '/admin/documenti/{document}',
     '/admin/comunicazioni',

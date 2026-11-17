@@ -1,6 +1,6 @@
 // GET /api/admin/dashboard: the Panoramica of the administration (docs/spec.md, 3.9).
 import type { IsoDay } from '../utils/dates'
-import type { SessionStatus } from '../utils/constants'
+import type { SessionStatus, StaffTeam } from '../utils/constants'
 import type { StaffCounts } from './sessions'
 
 /** A session that has not ended yet, with the progress of its families and staff. */
@@ -40,8 +40,8 @@ export interface DashboardDto {
   /** The three sessions not ended yet (draft, inviting, confirmed) after the next one: a season is on the sessions page. */
   following: DashboardSession[]
   counts: {
-    /** Staff applications `applied`. */
-    applicationsToReview: number
+    /** Staff applications `applied`, by team: staff and v-team are two lists. */
+    applicationsToReview: Record<StaffTeam, number>
     /** Families that have not confirmed their data yet. */
     formsToComplete: number
     /** Signature requests pending, documents not archived. */

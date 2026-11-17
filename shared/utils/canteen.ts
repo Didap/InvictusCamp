@@ -3,6 +3,7 @@
 import { ALLERGIES, DIETS, HEALTH_LABELS } from '../content/member-form'
 import type { CanteenDto } from '../types/canteen'
 import type { UsefulInfo } from '../types/domain'
+import { OF_TEAM } from './constants'
 import { andList, formatDayRange, plural } from './format'
 
 /** Someone who eats at the camp in the session: a member of a family holding a place, or of the staff. */
@@ -56,8 +57,8 @@ export interface CanteenGroups {
 export function canteenWho(groups: CanteenGroups): string {
   const parts = [
     ...(groups.families ? [`${groups.familyPeople} di ${plural(groups.families, 'famiglia', 'famiglie')}`] : []),
-    ...(groups.staff ? [`${groups.staff} dello staff`] : []),
-    ...(groups.volunteers ? [`${groups.volunteers} del v-team`] : []),
+    ...(groups.staff ? [`${groups.staff} ${OF_TEAM.staff}`] : []),
+    ...(groups.volunteers ? [`${groups.volunteers} ${OF_TEAM.volunteer}`] : []),
   ]
   return parts.length ? andList(parts) : 'nessuno'
 }

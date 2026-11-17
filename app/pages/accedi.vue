@@ -2,7 +2,7 @@
 import { loginSchema, type LoginInput } from '#shared/schemas/auth'
 import type { LoginResult } from '#shared/types/api'
 import { enumMeta } from '#shared/utils/constants'
-import { areaRole, safeRedirect, V_TEAM_QUERY } from '#shared/utils/routes'
+import { areaRole, safeRedirect, TEAM_SLUG } from '#shared/utils/routes'
 
 definePageMeta({ layout: 'auth' })
 useHead({ title: 'Accedi · Invictus Camp' })
@@ -28,7 +28,7 @@ const WAYS_IN = [
     action: 'Candidati per lo staff',
   },
   {
-    to: `/candidati?squadra=${V_TEAM_QUERY}`,
+    to: `/candidati?squadra=${TEAM_SLUG.volunteer}`,
     icon: enumMeta('staffTeam', 'volunteer').icon,
     question: 'Vuoi far parte del v-team (volontari e volontarie)?',
     action: 'Candidati per il v-team',

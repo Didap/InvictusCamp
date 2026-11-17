@@ -260,6 +260,7 @@ export async function listUsers(db: DbOrTx, query: UserListQuery): Promise<Pagin
         familyId: families.id,
         familyName: families.name,
         staffStatus: staffProfiles.status,
+        staffTeam: staffProfiles.team,
         inviteExpiresAt,
       })
       .from(users)
@@ -286,6 +287,7 @@ export async function listUsers(db: DbOrTx, query: UserListQuery): Promise<Pagin
       familyId: row.familyId,
       familyName: row.familyName,
       staffStatus: row.staffStatus,
+      staffTeam: row.staffTeam,
       inviteExpiresAt: row.status === 'invited' ? (row.inviteExpiresAt?.toISOString() ?? null) : null,
     })),
     total: totals?.total ?? 0,

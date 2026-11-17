@@ -906,12 +906,13 @@ export async function answerConvocation(
 // ─── Reads: administration ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Every staff account with its application, for /admin/staff: how many sessions not started yet each
- * person can come to and, with `sessionId`, whether they can come to that one (P1: filter by session).
+ * Every staff account with its application, for /admin/staff and /admin/v-team (with `team`, one of the
+ * two): how many sessions not started yet each person can come to and, with `sessionId`, whether they can
+ * come to that one (P1: filter by session).
  */
 export async function staffList(
   db: DbOrTx,
-  options: { today?: string; sessionId?: string } = {},
+  options: { today?: string; team?: StaffTeam; sessionId?: string } = {},
 ): Promise<StaffListItem[]> {
   const today = options.today ?? todayIso()
   const session = options.sessionId ? await sessionFor(db, options.sessionId) : null
@@ -932,6 +933,7 @@ export async function staffList(
     })
     .from(staffProfiles)
     .innerJoin(users, eq(users.id, staffProfiles.userId))
+    .where(options.team ? eq(staffProfiles.team, options.team) : undefined)
     .orderBy(asc(users.lastName), asc(users.firstName))
   const answered = db
     .select({ userId: sessionAvailability.userId, count: sql<number>`count(*)::int` })
@@ -1094,7 +1096,6 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
 }
 
 const STATUS_ORDER: Record<ConvocationStatus, number> = { draft: 0, sent: 1, accepted: 2, declined: 3, cancelled: 4 }
-const TEAM_ORDER: Record<StaffTeam, number> = { staff: 0, volunteer: 1 }
 
 /**
  * The Staff tab of a session: its convocations, and the approved people who can still be added, only
@@ -1186,7 +1187,7 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
           (convocation.status !== 'draft' || person.profileStatus === 'approved'),
       }
     })
-    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || TEAM_ORDER[a.team] - TEAM_ORDER[b.team])
+    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
 
   const open = new Set(convocations.filter(c => OPEN_CONVOCATIONS.includes(c.status)).map(c => c.userId))
   const previous = new Map(
@@ -1198,7 +1199,6 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
   const available: AvailableStaff[] = availablePeople
     .filter(person => !open.has(person.userId))
     .map(person => ({ ...person, previousStatus: previous.get(person.userId) ?? null }))
-    .sort((a, b) => TEAM_ORDER[a.team] - TEAM_ORDER[b.team])
 
   return {
     session: {
@@ -1210,13 +1210,6 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
       staffNeeded: session.staffNeeded,
       editable: isSessionEditable(session.status),
       contract: contractId ? { id: contractId, title: row.contractTitle ?? 'Contratto' } : null,
-    },
-    counts: {
-      confirmed: convocations.filter(c => c.confirmed).length,
-      accepted: convocations.filter(c => c.status === 'accepted').length,
-      waiting: convocations.filter(c => c.status === 'sent').length,
-      draft: convocations.filter(c => c.status === 'draft').length,
-      declined: convocations.filter(c => c.status === 'declined').length,
     },
     convocations,
     available,

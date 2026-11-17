@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { registerStaffSchema } from '#shared/schemas/auth'
-import type { StaffTeam } from '#shared/utils/constants'
-import { V_TEAM_QUERY } from '#shared/utils/routes'
+import { teamOfSlug } from '#shared/utils/routes'
 
 definePageMeta({ layout: 'auth' })
 
 // From «Vuoi far parte del v-team?» the account is born for the v-team; the application can still change it.
 const route = useRoute()
-const team = computed<StaffTeam>(() => (route.query.squadra === V_TEAM_QUERY ? 'volunteer' : 'staff'))
+const team = computed(() => teamOfSlug(route.query.squadra))
 const title = computed(() => (team.value === 'volunteer' ? 'Candidati per il v-team' : 'Candidati per lo staff'))
 useHead({ title: () => `${title.value} · Invictus Camp` })
 
