@@ -8,7 +8,7 @@ const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ sent: [] }>()
 
 const api = useApi()
-const { label } = useEnums()
+const { roleName } = useStaffLabels()
 const message = ref('')
 const sending = ref(false)
 
@@ -58,7 +58,7 @@ async function send() {
           <ul class="mt-1 space-y-1">
             <li v-for="convocation in convocations" :key="convocation.id">
               <span class="font-semibold text-highlighted">{{ fullName(convocation) }}</span>
-              <span v-if="convocation.role" class="text-muted">, {{ label('staffRole', convocation.role) }}</span>
+              <span v-if="roleName(convocation.role)" class="text-muted">, {{ roleName(convocation.role) }}</span>
             </li>
           </ul>
         </div>

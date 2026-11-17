@@ -58,8 +58,12 @@ const teamItems = computed(() =>
   })),
 )
 
+// The roles the administration created (spec 3.4): it can change them after the application is sent.
 const roleItems = computed(() =>
-  options('staffRole').map(option => ({ label: option.label, value: option.value as StaffRole })),
+  (application.value?.roleOptions ?? []).map(role => ({ label: role.name, value: role.id })),
+)
+const roleNames = computed(() =>
+  (application.value?.roleOptions ?? []).filter(role => application.value?.roles.includes(role.id)),
 )
 
 const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
@@ -167,14 +171,8 @@ const texts = computed(() => {
         </IcSection>
         <IcSection title="Ruoli">
           <ul class="flex flex-wrap gap-2">
-            <li v-for="role in application.roles" :key="role">
-              <UBadge
-                :icon="meta('staffRole', role).icon"
-                :label="label('staffRole', role)"
-                color="neutral"
-                variant="outline"
-                size="lg"
-              />
+            <li v-for="role in roleNames" :key="role.id">
+              <UBadge :label="role.name" color="neutral" variant="outline" size="lg" />
             </li>
           </ul>
         </IcSection>

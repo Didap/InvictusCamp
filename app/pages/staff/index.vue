@@ -8,7 +8,6 @@ import { formatDay, formatDayRange, plural } from '#shared/utils/format'
 // wait for the review. Approved: convocations to answer, next sessions, documents to sign, availability.
 // Not selected: a kind message. Inactive: no convocations for now.
 const { user } = useUserSession()
-const { label } = useEnums()
 const { data: home, refresh } = await useApiFetch<StaffHome>('/api/staff/home')
 
 const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
@@ -122,7 +121,7 @@ const started = computed(() => checklist.value.some(item => item.done))
                 <p class="font-semibold text-highlighted">{{ c.session.title }}</p>
                 <p class="text-sm text-muted">
                   {{ formatDayRange(c.session.startDate, c.session.endDate, 'long')
-                  }}<template v-if="c.role"> · {{ label('staffRole', c.role) }}</template>
+                  }}<template v-if="c.roleName"> · {{ c.roleName }}</template>
                 </p>
               </div>
               <div class="flex flex-wrap items-center gap-2">

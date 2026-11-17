@@ -1,7 +1,6 @@
 // Emails of the staff area: the outcome of a review (written or kept by the administration and sent
 // only from "Comunica l’esito"), a convocation to a session and its cancellation. No health details,
 // no access links: they are kept in email_log.
-import { enumLabel, type StaffRole } from '../../shared/utils/constants'
 import type { StaffOutcomeTemplate } from '../../shared/types/staff'
 import { formatDayRange } from '../../shared/utils/format'
 import { appLink, renderEmail } from './layout'
@@ -80,20 +79,20 @@ export function staffOutcomeEmail(
   }
 }
 
-function sessionDetails(session: ConvocationSession, role: StaffRole | null) {
+function sessionDetails(session: ConvocationSession, roleName: string | null) {
   const details = [
     { label: 'Sessione', value: session.title },
     { label: 'Date', value: formatDayRange(session.startDate, session.endDate, 'long') },
     { label: 'Luogo', value: session.location },
   ]
-  if (role) details.push({ label: 'Ruolo', value: enumLabel('staffRole', role) })
+  if (roleName) details.push({ label: 'Ruolo', value: roleName })
   return details
 }
 
 /** `staff.convocation`: sent by "Invia la convocazione". */
 export function convocationEmail(
   ctx: EmailContext,
-  input: Recipient & { session: ConvocationSession; role: StaffRole | null; message?: string | null },
+  input: Recipient & { session: ConvocationSession; roleName: string | null; message?: string | null },
 ): EmailMessage {
   const { html, text } = renderEmail(ctx, {
     preheader: `Una convocazione per «${input.session.title}»: rispondi dal gestionale.`,
@@ -103,7 +102,7 @@ export function convocationEmail(
       `l’amministrazione di Invictus Camp ti convoca per la sessione «${input.session.title}».`,
       ...messageParagraphs(input.message ?? ''),
     ],
-    details: sessionDetails(input.session, input.role),
+    details: sessionDetails(input.session, input.roleName),
     action: { label: 'Rispondi alla convocazione', url: appLink(ctx, '/staff/convocazioni') },
     after: [
       'Puoi accettare o rifiutare dal gestionale. Se accetti, ti chiederemo di firmare il contratto della sessione.',
@@ -126,7 +125,7 @@ export function convocationEmail(
  */
 export function convocationCancelledEmail(
   ctx: EmailContext,
-  input: Recipient & { session: ConvocationSession; role: StaffRole | null; sessionCancelled?: boolean },
+  input: Recipient & { session: ConvocationSession; roleName: string | null; sessionCancelled?: boolean },
 ): EmailMessage {
   const title = input.session.title
   const { html, text } = renderEmail(ctx, {
@@ -141,7 +140,7 @@ export function convocationCancelledEmail(
         : `l’amministrazione di Invictus Camp ha annullato la tua convocazione per la sessione «${title}».`,
       'Non devi fare nulla. Se hai domande, scrivi all’amministrazione del camp.',
     ],
-    details: sessionDetails(input.session, input.role),
+    details: sessionDetails(input.session, input.roleName),
     action: { label: 'Vedi le tue convocazioni', url: appLink(ctx, '/staff/convocazioni') },
   })
   return {

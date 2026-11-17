@@ -3,8 +3,9 @@
 import { z } from 'zod'
 import { normalizeUsefulInfo, usefulInfoSchema } from './families'
 import {
+  COORDINATOR_ROLE,
   PERSONAL_DOCUMENT_CATEGORIES,
-  STAFF_ROLES,
+  STAFF_TAG_COLORS,
   STAFF_TEAMS,
   type PersonalDocumentCategory,
   type StaffRole,
@@ -14,8 +15,12 @@ import {
 import { todayIso } from '../utils/dates'
 import { zIsoDay, zRequiredText, zText, zUuid } from './common'
 
-export const zStaffRole = z.enum(STAFF_ROLES)
+/** The id of a role of `staff_roles` (the server checks it exists). */
+export const zStaffRole = z.string().trim().min(1).max(64)
 export const zStaffTeam = z.enum(STAFF_TEAMS)
+/** The most roles or tags a person can have. */
+const STAFF_LABELS_MAX = 40
+const zRoles = z.array(zStaffRole).max(STAFF_LABELS_MAX)
 
 const zBirthDate = zIsoDay.refine(day => day >= '1920-01-01' && day < todayIso(), {
   error: 'Data di nascita non valida',
@@ -42,7 +47,7 @@ export const staffApplicationSchema = z.object({
   team: zStaffTeam,
   birthDate: zBirthDate,
   city: zRequiredText(100),
-  roles: z.array(zStaffRole).min(1, { error: 'Scegli almeno un ruolo' }).max(STAFF_ROLES.length),
+  roles: zRoles.min(1, { error: 'Scegli almeno un ruolo' }),
   qualifications: zRequiredText(2000),
   experience: zRequiredText(4000),
   motivation: zRequiredText(2000),
@@ -54,7 +59,7 @@ export const staffApplicationDraftSchema = z.object({
   team: zStaffTeam.optional(),
   birthDate: zBirthDate.nullable().optional(),
   city: zText(100).nullable().optional(),
-  roles: z.array(zStaffRole).max(STAFF_ROLES.length).optional(),
+  roles: zRoles.optional(),
   qualifications: zText(2000).nullable().optional(),
   experience: zText(4000).nullable().optional(),
   motivation: zText(2000).nullable().optional(),
@@ -103,7 +108,7 @@ export function applicationMissing(profile: ApplicationFields): ApplicationPart[
  * staff (counted toward `staffNeeded`) or of the v-team.
  */
 export function staffSlot(person: { team: StaffTeam; role: StaffRole | null }): 'coordinator' | StaffTeam {
-  return person.role === 'coordinator' ? 'coordinator' : person.team
+  return person.role === COORDINATOR_ROLE ? 'coordinator' : person.team
 }
 
 /** `staffNeeded` counts the people of the staff team, the coordinators aside. */
@@ -145,6 +150,28 @@ export type StaffStatusInput = z.infer<typeof staffStatusSchema>
 /** PUT /api/admin/staff/:userId/team */
 export const staffTeamSchema = z.object({ team: zStaffTeam })
 
+/** PUT /api/admin/staff/:userId/roles: the roles the administration gives the person. */
+export const staffRolesSchema = z.object({ roles: zRoles })
+
+/** PUT /api/admin/staff/:userId/tags: the «Valutazione», tags of `staff_tags`. */
+export const staffTagsSchema = z.object({ tags: z.array(zUuid).max(STAFF_LABELS_MAX) })
+
+/** POST /api/admin/staff/roles, PUT /api/admin/staff/roles/:id: a role of staff and v-team. */
+export const staffRoleInputSchema = z.object({ name: zRequiredText(60) })
+export type StaffRoleInput = z.infer<typeof staffRoleInputSchema>
+
+/** POST /api/admin/staff/tags, PUT /api/admin/staff/tags/:id: a tag of the «Valutazione». */
+export const staffTagInputSchema = z.object({ name: zRequiredText(40), color: z.enum(STAFF_TAG_COLORS) })
+export type StaffTagInput = z.infer<typeof staffTagInputSchema>
+
+/** The filter of /admin/staff by age: years at today, from the birth date of the application. */
+export const STAFF_AGE_FILTERS = [
+  { value: 'under25', label: 'Meno di 25 anni', min: 0, max: 24 },
+  { value: '25to34', label: 'Da 25 a 34 anni', min: 25, max: 34 },
+  { value: '35to49', label: 'Da 35 a 49 anni', min: 35, max: 49 },
+  { value: 'over50', label: '50 anni o più', min: 50, max: Infinity },
+] as const
+
 /** PUT /api/admin/staff/:userId/notes */
 export const staffNotesSchema = z.object({ notes: zText(4000) })
 
@@ -174,7 +201,7 @@ export const sessionStaffQuerySchema = z.object({ sessionId: zUuid })
 export const convocationAddSchema = z.object({
   sessionId: zUuid,
   people: z
-    .array(z.object({ userId: zUuid, role: zStaffRole }))
+    .array(z.object({ userId: zUuid, role: zStaffRole.nullable() }))
     .min(1, { error: 'Scegli almeno una persona' })
     .max(200),
 })

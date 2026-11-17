@@ -8,6 +8,7 @@ import type {
   SessionStatus,
   StaffRole,
   StaffStatus,
+  StaffTagColor,
   StaffTeam,
   UserStatus,
 } from '../utils/constants'
@@ -47,6 +48,28 @@ export interface StaffDocumentDto {
 
 // ─── Administration ────────────────────────────────────────────────────────────────────────────────
 
+/** A role of staff and v-team (docs/spec.md 3.4), with how many people and convocations have it. */
+export interface StaffRoleDto {
+  id: StaffRole
+  name: string
+  people: number
+  convocations: number
+}
+
+/** A tag of the «Valutazione», with how many people have it. */
+export interface StaffTagDto {
+  id: string
+  name: string
+  color: StaffTagColor
+  people: number
+}
+
+/** GET /api/admin/staff/labels: the roles and the tags the administration created, in their order. */
+export interface StaffLabels {
+  roles: StaffRoleDto[]
+  tags: StaffTagDto[]
+}
+
 /** GET /api/admin/staff: one row per staff account. */
 export interface StaffListItem {
   userId: string
@@ -57,7 +80,10 @@ export interface StaffListItem {
   status: StaffStatus
   team: StaffTeam
   roles: StaffRole[]
+  /** Ids of the tags of the «Valutazione». */
+  tags: string[]
   city: string | null
+  birthDate: IsoDay | null
   appliedAt: string | null
   /** Sessions not started yet the person said they can come to. */
   availableSessions: number
@@ -73,7 +99,7 @@ export interface StaffConvocationSummary {
   sessionStatus: SessionStatus
   startDate: IsoDay
   endDate: IsoDay
-  role: StaffRole | null
+  roleName: string | null
   status: ConvocationStatus
   sentAt: string | null
   respondedAt: string | null
@@ -105,6 +131,8 @@ export interface StaffDetail {
   birthDate: IsoDay | null
   city: string | null
   roles: StaffRole[]
+  /** Ids of the tags of the «Valutazione»: never shown to the person. */
+  tags: string[]
   qualifications: string | null
   experience: string | null
   motivation: string | null
@@ -169,7 +197,9 @@ export interface AvailableStaff {
   lastName: string
   team: StaffTeam
   roles: StaffRole[]
+  tags: string[]
   city: string | null
+  birthDate: IsoDay | null
   /** A previous convocation to this session that was declined or cancelled. */
   previousStatus: Extract<ConvocationStatus, 'declined' | 'cancelled'> | null
 }
@@ -193,6 +223,8 @@ export interface StaffApplicationDto {
   birthDate: IsoDay | null
   city: string | null
   roles: StaffRole[]
+  /** The roles the administration created, to choose from. */
+  roleOptions: { id: StaffRole; name: string }[]
   qualifications: string | null
   experience: string | null
   motivation: string | null
@@ -212,7 +244,7 @@ export interface MyConvocation {
     endDate: IsoDay
     status: SessionStatus
   }
-  role: StaffRole | null
+  roleName: string | null
   status: ConvocationStatus
   message: string | null
   sentAt: string | null

@@ -31,7 +31,7 @@ const leaderItems = (group: ProgrammeGroup): SelectMenuItem[] =>
     label: person.name,
     value: person.id,
     description: [
-      person.role && enumLabel('staffRole', person.role),
+      person.roleName,
       convocationNote(person),
       person.group && person.group !== group && `Guida il gruppo ${PROGRAMME_GROUP_LABELS[person.group]}`,
     ]

@@ -162,6 +162,13 @@
       "when": 1794910714923,
       "tag": "0022_lodging_drop_area",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794916252129,
+      "tag": "0023_staff_roles_tags",
+      "breakpoints": true
     }
   ]
 }

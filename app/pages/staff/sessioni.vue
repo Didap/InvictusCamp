@@ -6,7 +6,6 @@ import { formatDayRange } from '#shared/utils/format'
 import { canStaffReadProgramme } from '#shared/utils/programme'
 
 // The sessions the person accepted: a month calendar (an agenda on phones) and the list, upcoming first.
-const { label } = useEnums()
 const { data } = await useApiFetch<MyConvocations>('/api/staff/convocations')
 
 const today = todayIso()
@@ -75,7 +74,7 @@ const events = computed<CalendarEvent[]>(() =>
                 <p class="text-sm text-muted">
                   {{ formatDayRange(c.session.startDate, c.session.endDate, 'long') }} · {{ c.session.location }}
                 </p>
-                <p v-if="c.role" class="text-sm">Ruolo: {{ label('staffRole', c.role) }}</p>
+                <p v-if="c.roleName" class="text-sm">Ruolo: {{ c.roleName }}</p>
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <StaffConvocationBadge :status="c.status" :confirmed="c.confirmed" />
@@ -107,7 +106,7 @@ const events = computed<CalendarEvent[]>(() =>
                 <p class="font-semibold">{{ c.session.title }}</p>
                 <p class="text-sm text-muted">
                   {{ formatDayRange(c.session.startDate, c.session.endDate, 'long')
-                  }}<template v-if="c.role"> · {{ label('staffRole', c.role) }}</template>
+                  }}<template v-if="c.roleName"> · {{ c.roleName }}</template>
                 </p>
               </div>
               <div class="flex flex-wrap items-center gap-2">

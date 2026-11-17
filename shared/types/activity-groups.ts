@@ -1,4 +1,4 @@
-import type { ConvocationStatus, ParticipationStatus, ProgrammeGroup, StaffRole } from '../utils/constants'
+import type { ConvocationStatus, ParticipationStatus, ProgrammeGroup } from '../utils/constants'
 
 /** A person of a family, as the groups list it: the first name ("Adulto 2" for a card still to fill in). */
 export interface GroupMember {
@@ -24,7 +24,7 @@ export interface SessionGroupStaff {
   /** The convocation (session_staff row). */
   id: string
   name: string
-  role: StaffRole | null
+  roleName: string | null
   status: ConvocationStatus
   /** The group this person leads. */
   group: ProgrammeGroup | null

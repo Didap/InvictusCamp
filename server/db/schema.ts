@@ -38,12 +38,13 @@ import type {
   SignatureStatus,
   StaffRole,
   StaffStatus,
+  StaffTagColor,
   StaffTeam,
   TokenPurpose,
   UserRole,
   UserStatus,
 } from '../../shared/utils/constants'
-import { LODGING_LOCATIONS, OPEN_CONVOCATIONS } from '../../shared/utils/constants'
+import { LODGING_LOCATIONS, OPEN_CONVOCATIONS, STAFF_TAG_COLORS } from '../../shared/utils/constants'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 
 const tz = { withTimezone: true } as const
@@ -55,6 +56,9 @@ const updatedAt = () =>
     .defaultNow()
     .$onUpdate(() => new Date())
 const day = () => date({ mode: 'string' })
+
+/** A list of constants for `in (…)`. */
+const sqlList = (values: readonly string[]) => sql.raw(values.map(value => `'${value}'`).join(', '))
 
 // ─── Accounts ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -211,6 +215,46 @@ export const familyMembers = pgTable(
 
 // ─── Staff ─────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The roles of staff and v-team, created by the administration (docs/spec.md 3.4). The id is text: the first
+ * four keep the keys they had as a fixed list (`coordinator` and `group_lead` mean something to the app, see
+ * COORDINATOR_ROLE), the new ones get a uuid. Profiles keep the ids in `staff_profiles.roles`.
+ */
+export const staffRoles = pgTable(
+  'staff_roles',
+  {
+    id: text()
+      .primaryKey()
+      .default(sql`gen_random_uuid()::text`),
+    name: text().notNull(),
+    /** The order of the lists: the next free one for a new role. */
+    position: integer().notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  t => [uniqueIndex('staff_roles_name_key').on(sql`lower(${t.name})`)],
+)
+
+/**
+ * The tags of the «Valutazione» of staff and v-team (e.g. «Leader», «In training»): created by the
+ * administration, given to people in `staff_profiles.tags`, never shown to the person.
+ */
+export const staffTags = pgTable(
+  'staff_tags',
+  {
+    id: pk(),
+    name: text().notNull(),
+    color: text().$type<StaffTagColor>().notNull().default('neutral'),
+    position: integer().notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  t => [
+    uniqueIndex('staff_tags_name_key').on(sql`lower(${t.name})`),
+    check('staff_tags_color', sql`${t.color} in (${sqlList(STAFF_TAG_COLORS)})`),
+  ],
+)
+
 /** The staff side of a staff account: the application (candidatura) and its review. */
 export const staffProfiles = pgTable(
   'staff_profiles',
@@ -224,7 +268,10 @@ export const staffProfiles = pgTable(
     team: text().$type<StaffTeam>().notNull().default('staff'),
     birthDate: day(),
     city: text(),
+    /** Ids of `staff_roles`: chosen in the application, then given by the administration. */
     roles: jsonb().$type<StaffRole[]>().notNull().default([]),
+    /** Ids of `staff_tags`: the «Valutazione» of the administration, never shown to the person. */
+    tags: jsonb().$type<string[]>().notNull().default([]),
     qualifications: text(),
     experience: text(),
     motivation: text(),
@@ -277,9 +324,6 @@ export const campSessions = pgTable(
     check('camp_sessions_slots', sql`${t.familySlots} >= 0 and ${t.staffNeeded} >= 0`),
   ],
 )
-
-/** A list of constants for `in (…)`. */
-const sqlList = (values: readonly string[]) => sql.raw(values.map(value => `'${value}'`).join(', '))
 
 /**
  * A lodging of the camp (alloggio, docs/spec.md 3.11): the bed layout the administration enters once and
@@ -388,8 +432,10 @@ export const sessionStaff = pgTable(
     userId: uuid()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    /** Role in this session. */
-    role: text().$type<StaffRole>(),
+    /** Role in this session: lost if the administration deletes the role. */
+    role: text()
+      .$type<StaffRole>()
+      .references(() => staffRoles.id, { onDelete: 'set null' }),
     status: text().$type<ConvocationStatus>().notNull().default('draft'),
     /** Message sent with the convocation. */
     message: text(),

@@ -29,8 +29,24 @@ export type ParticipationStatus = (typeof PARTICIPATION_STATUSES)[number]
 export const STAFF_STATUSES = ['registered', 'applied', 'approved', 'rejected', 'inactive'] as const
 export type StaffStatus = (typeof STAFF_STATUSES)[number]
 
-export const STAFF_ROLES = ['coordinator', 'group_lead', 'activity_lead', 'other'] as const
-export type StaffRole = (typeof STAFF_ROLES)[number]
+/**
+ * A role of staff and v-team: the id of a row of `staff_roles`, which the administration creates, renames
+ * and deletes (docs/spec.md 3.4). Two ids come with migration 0023 and the app knows them: the coordinator
+ * (one per team in the base of a session, so it cannot be deleted) and the group lead (first among the
+ * staff of an activity group).
+ */
+export type StaffRole = string
+export const COORDINATOR_ROLE = 'coordinator'
+export const GROUP_LEAD_ROLE = 'group_lead'
+/** The roles the app knows cannot be deleted, only renamed: why, for the editor and the refusal. */
+export const PROTECTED_ROLES = new Map<string, string>([
+  [COORDINATOR_ROLE, 'Serve alla base della sessione (un coordinatore per squadra)'],
+  [GROUP_LEAD_ROLE, 'Mette per primi i responsabili quando scegli chi guida un gruppo attività'],
+])
+
+/** The colours a tag of the «Valutazione» can have: the tones of the theme, always next to its name. */
+export const STAFF_TAG_COLORS = ['neutral', 'info', 'success', 'warning', 'error', 'secondary'] as const
+export type StaffTagColor = (typeof STAFF_TAG_COLORS)[number]
 
 /** The two teams of the staff side: the staff and the volunteers (v-team). Each has its own coordinator. */
 export const STAFF_TEAMS = ['staff', 'volunteer'] as const
@@ -263,13 +279,6 @@ const staffStatus: Record<StaffStatus, EnumMeta> = {
   inactive: { label: 'Non attivo', icon: 'i-lucide-pause', color: 'neutral', description: 'Non viene più convocato' },
 }
 
-const staffRole: Record<StaffRole, EnumMeta> = {
-  coordinator: { label: 'Coordinatore', icon: 'i-lucide-flag', color: 'neutral' },
-  group_lead: { label: 'Responsabile di gruppo', icon: 'i-lucide-users', color: 'neutral' },
-  activity_lead: { label: 'Responsabile attività', icon: 'i-lucide-shapes', color: 'neutral' },
-  other: { label: 'Altro', icon: 'i-lucide-user', color: 'neutral' },
-}
-
 const staffTeam: Record<StaffTeam, EnumMeta> = {
   staff: { label: 'Staff', icon: 'i-lucide-id-card', color: 'neutral' },
   volunteer: { label: 'V-team', icon: 'i-lucide-hand-heart', color: 'neutral', description: 'Volontari' },
@@ -406,6 +415,15 @@ const lodgingLocation: Record<LodgingLocation, EnumMeta> = {
   invictus_camp: { label: 'Alloggi Invictus Camp', icon: 'i-lucide-map-pin', color: 'neutral' },
 }
 
+const staffTagColor: Record<StaffTagColor, EnumMeta> = {
+  neutral: { label: 'Sabbia', icon: 'i-lucide-circle', color: 'neutral' },
+  info: { label: 'Azzurro', icon: 'i-lucide-circle', color: 'info' },
+  success: { label: 'Verde', icon: 'i-lucide-circle', color: 'success' },
+  warning: { label: 'Giallo', icon: 'i-lucide-circle', color: 'warning' },
+  error: { label: 'Rosso', icon: 'i-lucide-circle', color: 'error' },
+  secondary: { label: 'Viola', icon: 'i-lucide-circle', color: 'secondary' },
+}
+
 const lodgingFeature: Record<LodgingFeature, EnumMeta> = {
   kitchen: { label: 'Cucina', icon: 'i-lucide-cooking-pot', color: 'neutral' },
   accessible_bathroom: { label: 'Bagno senza barriere', icon: 'i-lucide-accessibility', color: 'neutral' },
@@ -421,8 +439,8 @@ export const ENUM_META = {
   participationKind,
   participationStatus,
   staffStatus,
-  staffRole,
   staffTeam,
+  staffTagColor,
   staffAvailability,
   convocationStatus,
   memberRelationship,
