@@ -201,7 +201,7 @@ describe('emails', () => {
       toUserId: 'u2',
       firstName: 'Chiara',
       session,
-      role: null,
+      roleName: null,
     })
     expect(email).toMatchObject({ template: 'staff.convocation_cancelled', sessionId: 's1' })
     expect(email.html).not.toContain('Ruolo')

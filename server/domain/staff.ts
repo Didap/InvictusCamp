@@ -215,7 +215,7 @@ export async function saveApplicationDraft(db: DbOrTx, userId: string, input: St
   if (input.team !== undefined) values.team = input.team
   if (input.birthDate !== undefined) values.birthDate = input.birthDate
   if (input.city !== undefined) values.city = input.city || null
-  if (input.roles !== undefined) values.roles = await checkLabels(db, 'role', input.roles)
+  if (input.roles !== undefined) values.roles = await checkLabels(db, 'role', input.roles, { dropMissing: true })
   if (input.qualifications !== undefined) values.qualifications = input.qualifications || null
   if (input.experience !== undefined) values.experience = input.experience || null
   if (input.motivation !== undefined) values.motivation = input.motivation || null
@@ -242,9 +242,12 @@ export async function submitApplication(
   if (!profile.cvFileId) {
     throw createError({ statusCode: 400, message: 'Carica il tuo CV in PDF prima di inviare la candidatura' })
   }
+  // A role deleted while the form was open is left out; the application still needs one.
+  const roles = await checkLabels(db, 'role', input.roles, { dropMissing: true })
+  if (!roles.length) throw createError({ statusCode: 400, message: 'Scegli almeno un ruolo' })
   await db
     .update(staffProfiles)
-    .set({ ...input, roles: await checkLabels(db, 'role', input.roles), status: 'applied', appliedAt: new Date() })
+    .set({ ...input, roles, status: 'applied', appliedAt: new Date() })
     .where(eq(staffProfiles.id, profile.id))
   await writeAudit(db, {
     actorUserId: userId,

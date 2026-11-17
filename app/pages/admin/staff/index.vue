@@ -13,7 +13,7 @@ const route = useRoute()
 const router = useRouter()
 const api = useApi()
 const confirm = useConfirm()
-const { roleItems: roleChoices, roleList, tagsOf, refresh: refreshLabels } = useStaffLabels()
+const { roleItems: roleChoices, roleList, tagsOf } = useStaffLabels()
 // Availability (P1): anyone, at least one session not started yet, none, or a session (who can come to it).
 const availability = ref('all')
 const SESSION_FREE = ['all', 'any', 'none']
@@ -113,9 +113,6 @@ const rows = computed(() => {
 
 const rolesOf = (person: StaffListItem) => roleList(person.roles, 'Non indicati')
 const labelsOpen = ref(false)
-async function labelsChanged() {
-  await Promise.all([refresh(), refreshLabels()])
-}
 
 // Bulk approval (Da valutare): no email leaves, the outcome is communicated person by person.
 const selection = ref<Record<string, boolean>>({})
@@ -208,7 +205,7 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
         @click="labelsOpen = true"
       />
     </template>
-    <StaffLabelsModal v-model:open="labelsOpen" @changed="labelsChanged" />
+    <StaffLabelsModal v-model:open="labelsOpen" @deleted="refresh" />
 
     <div class="space-y-5">
       <UTabs v-model="tab" :items="tabItems" :content="false" variant="link" class="w-full overflow-x-auto" />

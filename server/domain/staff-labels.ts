@@ -5,10 +5,10 @@
 import { asc, count, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import type { StaffRoleInput, StaffTagInput } from '../../shared/schemas/staff'
 import type { StaffLabels } from '../../shared/types/staff'
-import { COORDINATOR_ROLE } from '../../shared/utils/constants'
+import { PROTECTED_ROLES } from '../../shared/utils/constants'
 import { sessionStaff, staffProfiles, staffRoles, staffTags } from '../db/schema'
 import { writeAudit } from './audit'
-import type { DbOrTx } from './db'
+import { isUniqueViolation, type DbOrTx } from './db'
 import { httpError, type Actor } from './users'
 
 const KINDS = {
@@ -47,31 +47,50 @@ export async function staffLabels(db: DbOrTx): Promise<StaffLabels> {
   }
 }
 
-/** The names of the roles, by id: for the emails and the pages that show a role. */
-export async function roleNames(db: DbOrTx): Promise<Map<string, string>> {
-  const rows = await db.select({ id: staffRoles.id, name: staffRoles.name }).from(staffRoles)
-  return new Map(rows.map(row => [row.id, row.name]))
-}
-
-/** Every id exists: a role or a tag deleted meanwhile is refused, not saved. */
-export async function checkLabels(db: DbOrTx, kind: Kind, ids: readonly string[]): Promise<string[]> {
+/**
+ * The ids without repeats, all existing: one deleted meanwhile is refused (409), or left out with
+ * `dropMissing` (the application form, which still shows what the person ticked before). The rows stay
+ * locked until the commit, so a delete running at the same time waits and then strips what was saved.
+ */
+export async function checkLabels(
+  db: DbOrTx,
+  kind: Kind,
+  ids: readonly string[],
+  options: { dropMissing?: boolean } = {},
+): Promise<string[]> {
   const unique = [...new Set(ids)]
   if (!unique.length) return unique
   const { table } = KINDS[kind]
-  const found = await db.select({ id: table.id }).from(table).where(inArray(table.id, unique))
-  if (found.length !== unique.length) {
+  const found = new Set(
+    (await db.select({ id: table.id }).from(table).where(inArray(table.id, unique)).for('share')).map(row => row.id),
+  )
+  if (found.size !== unique.length && !options.dropMissing) {
     throw httpError(409, kind === 'role' ? 'Un ruolo scelto non esiste più' : 'Un tag scelto non esiste più')
   }
-  return unique
+  return unique.filter(id => found.has(id))
 }
 
+const nameTakenError = (kind: Kind) => httpError(409, `C’è già un ${KINDS[kind].noun} con questo nome`)
+
 async function nameTaken(db: DbOrTx, kind: Kind, name: string, except?: string): Promise<void> {
-  const { table, noun } = KINDS[kind]
+  const { table } = KINDS[kind]
   const [row] = await db
     .select({ id: table.id })
     .from(table)
     .where(sql`lower(${table.name}) = lower(${name}) and ${table.id}::text <> ${except ?? ''}`)
-  if (row) throw httpError(409, `C’è già un ${noun} con questo nome`)
+  if (row) throw nameTakenError(kind)
+}
+
+/**
+ * Writes a name in a savepoint: two requests with the same name at once both pass nameTaken, and the unique
+ * index refuses the second, which gets the same 409 instead of a server error.
+ */
+async function writeName<T>(db: DbOrTx, kind: Kind, write: (db: DbOrTx) => Promise<T>): Promise<T> {
+  try {
+    return await db.transaction(write)
+  } catch (error) {
+    throw isUniqueViolation(error) ? nameTakenError(kind) : error
+  }
 }
 
 async function nextPosition(db: DbOrTx, kind: Kind): Promise<number> {
@@ -82,10 +101,10 @@ async function nextPosition(db: DbOrTx, kind: Kind): Promise<number> {
 
 export async function createStaffRole(db: DbOrTx, input: StaffRoleInput, actor: Actor): Promise<string> {
   await nameTaken(db, 'role', input.name)
-  const [row] = await db
-    .insert(staffRoles)
-    .values({ name: input.name, position: await nextPosition(db, 'role') })
-    .returning({ id: staffRoles.id })
+  const position = await nextPosition(db, 'role')
+  const [row] = await writeName(db, 'role', tx =>
+    tx.insert(staffRoles).values({ name: input.name, position }).returning({ id: staffRoles.id }),
+  )
   await audit(db, 'staff_role.create', row!.id, { name: input.name }, actor)
   return row!.id
 }
@@ -95,16 +114,19 @@ export async function renameStaffRole(db: DbOrTx, id: string, input: StaffRoleIn
   const [before] = await db.select({ name: staffRoles.name }).from(staffRoles).where(eq(staffRoles.id, id))
   if (!before) throw httpError(404, KINDS.role.notFound)
   if (before.name === input.name) return
-  await db.update(staffRoles).set({ name: input.name }).where(eq(staffRoles.id, id))
+  await writeName(db, 'role', tx => tx.update(staffRoles).set({ name: input.name }).where(eq(staffRoles.id, id)))
   await audit(db, 'staff_role.update', id, { from: before.name, to: input.name }, actor)
 }
 
 export async function createStaffTag(db: DbOrTx, input: StaffTagInput, actor: Actor): Promise<string> {
   await nameTaken(db, 'tag', input.name)
-  const [row] = await db
-    .insert(staffTags)
-    .values({ ...input, position: await nextPosition(db, 'tag') })
-    .returning({ id: staffTags.id })
+  const position = await nextPosition(db, 'tag')
+  const [row] = await writeName(db, 'tag', tx =>
+    tx
+      .insert(staffTags)
+      .values({ ...input, position })
+      .returning({ id: staffTags.id }),
+  )
   await audit(db, 'staff_tag.create', row!.id, { ...input }, actor)
   return row!.id
 }
@@ -117,19 +139,25 @@ export async function updateStaffTag(db: DbOrTx, id: string, input: StaffTagInpu
     .where(eq(staffTags.id, id))
   if (!before) throw httpError(404, KINDS.tag.notFound)
   if (before.name === input.name && before.color === input.color) return
-  await db.update(staffTags).set(input).where(eq(staffTags.id, id))
+  await writeName(db, 'tag', tx => tx.update(staffTags).set(input).where(eq(staffTags.id, id)))
   await audit(db, 'staff_tag.update', id, { from: before, to: input }, actor)
 }
 
 /**
  * Deletes a role or a tag and takes it away from every profile; a convocation with the role keeps no role
- * (the foreign key). The coordinator stays: the base of a session counts it (spec 3.5).
+ * (the foreign key), also in sessions already over: the audit keeps which ones had it. The roles the app
+ * knows (PROTECTED_ROLES) stay.
  */
 export async function deleteStaffLabel(db: DbOrTx, kind: Kind, id: string, actor: Actor): Promise<void> {
-  if (kind === 'role' && id === COORDINATOR_ROLE) {
-    throw httpError(409, 'Il ruolo del coordinatore serve alla base della sessione: puoi rinominarlo, non eliminarlo')
-  }
+  const reason = kind === 'role' ? PROTECTED_ROLES[id] : undefined
+  if (reason) throw httpError(409, `${reason}: puoi rinominarlo, non eliminarlo`)
   const { table, column, notFound } = KINDS[kind]
+  const convocations =
+    kind === 'role'
+      ? (await db.select({ id: sessionStaff.id }).from(sessionStaff).where(eq(sessionStaff.role, id))).map(
+          row => row.id,
+        )
+      : []
   const [row] = await db.delete(table).where(eq(table.id, id)).returning({ name: table.name })
   if (!row) throw httpError(404, notFound)
   const stripped = await db
@@ -137,7 +165,8 @@ export async function deleteStaffLabel(db: DbOrTx, kind: Kind, id: string, actor
     .set({ [kind === 'role' ? 'roles' : 'tags']: sql`${column} - ${id}::text` })
     .where(holds(kind, id))
     .returning({ id: staffProfiles.id })
-  await audit(db, `staff_${kind}.delete`, id, { name: row.name, people: stripped.length }, actor)
+  const data = { name: row.name, people: stripped.length, ...(kind === 'role' ? { convocations } : {}) }
+  await audit(db, `staff_${kind}.delete`, id, data, actor)
 }
 
 /** The first roles have text ids (`coordinator`): `entity_id` is a uuid, so the id goes in the data. */

@@ -62,9 +62,10 @@ const TABLES = [
 ]
 
 /**
- * Empties every table but `message_templates`: its examples come from migration 0006, and an administration
- * keeps its templates across a reset of the demo data. No cascade: a table left out that references one of
- * these makes the reset fail instead of being emptied with them. Development and tests only.
+ * Empties every table but `message_templates`, `staff_roles` and `staff_tags`: their first rows come from the
+ * migrations (0006, 0023), and an administration keeps its templates, roles and tags across a reset of the
+ * demo data. No cascade: a table left out that references one of these makes the reset fail instead of being
+ * emptied with them. Development and tests only.
  */
 export async function truncateAll(db: Db): Promise<void> {
   await db.execute(sql.raw(`truncate table ${TABLES.join(', ')} restart identity`))

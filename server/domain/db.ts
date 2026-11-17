@@ -22,3 +22,9 @@ export function createDb(url: string, options: { max?: number } = {}) {
 }
 
 export { schema }
+
+/** A unique constraint was violated (e.g. the same email twice): Postgres code 23505. */
+export function isUniqueViolation(error: unknown): boolean {
+  const code = error as { code?: string; cause?: { code?: string } } | null
+  return code?.code === '23505' || code?.cause?.code === '23505'
+}

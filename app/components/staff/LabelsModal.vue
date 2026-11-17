@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { COORDINATOR_ROLE, type StaffTagColor } from '#shared/utils/constants'
+import { PROTECTED_ROLES, type StaffTagColor } from '#shared/utils/constants'
 import { plural } from '#shared/utils/format'
 
 // The roles of staff and v-team and the tags of the «Valutazione» (spec 3.4): the administration creates,
 // renames and deletes them here. A name is saved when the field is left; deleting takes the role or the
 // tag away from everyone who has it.
 const open = defineModel<boolean>('open', { default: false })
-const emit = defineEmits<{ changed: [] }>()
+/** A role or a tag was deleted: the people who had it changed. Names refresh by themselves (useStaffLabels). */
+const emit = defineEmits<{ deleted: [] }>()
 
 const api = useApi()
 const confirm = useConfirm()
@@ -41,14 +42,16 @@ watch(open, value => {
 })
 
 const busy = ref(false)
-async function run(action: () => Promise<unknown>, success: string) {
+/** Runs a change and reloads the lists; false when it failed (the error is shown). */
+async function run(action: () => Promise<unknown>, success: string): Promise<boolean> {
   busy.value = true
   try {
     await action()
     notifySuccess(success)
-    emit('changed')
+    return true
   } catch (error) {
     notifyError(error)
+    return false
   } finally {
     await refresh()
     busy.value = false
@@ -83,7 +86,11 @@ async function remove(k: Kind, item: { id: string; name: string; people: number;
   })
   if (!ok) return
   const url: string = `${base(k)}/${item.id}`
-  await run(() => api<{ ok: true }>(url, { method: 'DELETE' }), k === 'role' ? 'Ruolo eliminato' : 'Tag eliminato')
+  if (
+    await run(() => api<{ ok: true }>(url, { method: 'DELETE' }), k === 'role' ? 'Ruolo eliminato' : 'Tag eliminato')
+  ) {
+    emit('deleted')
+  }
 }
 
 const fresh = reactive({ name: '', color: 'neutral' as StaffTagColor })
@@ -94,11 +101,11 @@ async function add() {
   const name = fresh.name.trim()
   if (!name) return
   const url = base(kind.value)
-  await run(
+  const added = await run(
     () => api<{ id: string }>(url, { method: 'POST', body: bodyOf(kind.value, name, fresh.color) }),
     kind.value === 'role' ? 'Ruolo aggiunto' : 'Tag aggiunto',
   )
-  fresh.name = ''
+  if (added) fresh.name = ''
 }
 
 const usage = (item: { people: number; convocations?: number }) =>
@@ -133,7 +140,7 @@ const usage = (item: { people: number; convocations?: number }) =>
             />
             <span class="text-sm text-muted tabular-nums">{{ usage(role) }}</span>
             <UButton
-              v-if="role.id !== COORDINATOR_ROLE"
+              v-if="!PROTECTED_ROLES[role.id]"
               icon="i-lucide-trash-2"
               color="neutral"
               variant="ghost"
@@ -142,7 +149,7 @@ const usage = (item: { people: number; convocations?: number }) =>
               @click="remove('role', role)"
             />
             <p v-else class="w-full text-sm text-muted">
-              Serve alla base della sessione (un coordinatore per squadra): puoi rinominarlo, non eliminarlo.
+              {{ PROTECTED_ROLES[role.id] }}: puoi rinominarlo, non eliminarlo.
             </p>
           </li>
         </template>

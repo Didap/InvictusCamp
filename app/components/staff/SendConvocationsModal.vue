@@ -58,7 +58,7 @@ async function send() {
           <ul class="mt-1 space-y-1">
             <li v-for="convocation in convocations" :key="convocation.id">
               <span class="font-semibold text-highlighted">{{ fullName(convocation) }}</span>
-              <span v-if="convocation.role" class="text-muted">, {{ roleName(convocation.role) }}</span>
+              <span v-if="roleName(convocation.role)" class="text-muted">, {{ roleName(convocation.role) }}</span>
             </li>
           </ul>
         </div>

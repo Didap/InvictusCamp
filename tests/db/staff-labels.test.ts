@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
   addConvocations,
+  saveApplicationDraft,
   sessionStaffData,
   setStaffRoles,
   setStaffTags,
@@ -21,7 +22,7 @@ import {
   staffLabels,
   updateStaffTag,
 } from '../../server/domain/staff-labels'
-import { COORDINATOR_ROLE } from '../../shared/utils/constants'
+import { COORDINATOR_ROLE, GROUP_LEAD_ROLE } from '../../shared/utils/constants'
 import { makeAdmin, makeSession, makeStaff, t, useTestDb } from './helpers'
 
 const db = useTestDb()
@@ -86,14 +87,14 @@ describe('roles', () => {
     const [convocation] = await db.select().from(t.sessionStaff).where(eq(t.sessionStaff.userId, user.id))
     expect(convocation!.role).toBeNull()
     const [audit] = await db.select().from(t.auditLog).where(eq(t.auditLog.action, 'staff_role.delete'))
-    expect(audit).toMatchObject({ entityId: id, data: { people: 1 } })
+    expect(audit).toMatchObject({ entityId: id, data: { people: 1, convocations: [convocation!.id] } })
   })
 
-  it('the coordinator cannot be deleted, only renamed', async () => {
+  it('the coordinator and the group lead cannot be deleted, only renamed', async () => {
     const admin = await makeAdmin(db)
-    await expect(deleteStaffLabel(db, 'role', COORDINATOR_ROLE, { userId: admin.id })).rejects.toMatchObject({
-      statusCode: 409,
-    })
+    for (const id of [COORDINATOR_ROLE, GROUP_LEAD_ROLE]) {
+      await expect(deleteStaffLabel(db, 'role', id, { userId: admin.id })).rejects.toMatchObject({ statusCode: 409 })
+    }
     await renameStaffRole(db, COORDINATOR_ROLE, { name: 'Coordinatore di squadra' }, { userId: admin.id })
     expect((await staffLabels(db)).roles[0]!.name).toBe('Coordinatore di squadra')
     await renameStaffRole(db, COORDINATOR_ROLE, { name: 'Coordinatore' }, { userId: admin.id })
@@ -119,6 +120,15 @@ describe('roles', () => {
 })
 
 describe('roles of a person', () => {
+  it('a role deleted while the application form is open is left out of the draft', async () => {
+    const admin = await makeAdmin(db)
+    const id = await createStaffRole(db, { name: unique('Autista') }, { userId: admin.id })
+    const { user } = await makeStaff(db, 'registered')
+    await deleteStaffLabel(db, 'role', id, { userId: admin.id })
+    await saveApplicationDraft(db, user.id, { roles: [id, 'other'] })
+    expect((await profile(user.id)).roles).toEqual(['other'])
+  })
+
   it('are the administration’s once the application is sent, audited', async () => {
     const admin = await makeAdmin(db)
     const draft = await makeStaff(db, 'registered')

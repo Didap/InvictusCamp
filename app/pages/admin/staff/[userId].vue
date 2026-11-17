@@ -13,7 +13,7 @@ const api = useApi()
 const confirm = useConfirm()
 const { label, options } = useEnums()
 const { data: person, refresh } = await useApiFetch<StaffDetail>(() => `/api/admin/staff/${userId.value}`)
-const { roleItems, tags, refresh: refreshLabels } = useStaffLabels()
+const { roleItems, tags } = useStaffLabels()
 
 const name = computed(() => (person.value ? fullName(person.value) : ''))
 const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
@@ -45,25 +45,27 @@ async function saveNotes() {
 
 // ─── Roles and «Valutazione»: saved at every change ───
 const tagItems = computed(() => tags.value.map(tag => ({ label: tag.name, value: tag.id, chip: { color: tag.color } })))
+// The menu shows the choice at once and the saves go one after the other, so quick picks build on each other
+// and the last one wins on the server too.
 const savingLabels = ref<'roles' | 'tags' | null>(null)
-async function saveLabels(field: 'roles' | 'tags', ids: string[]) {
+let saving: Promise<unknown> = Promise.resolve()
+function saveLabels(field: 'roles' | 'tags', ids: string[]) {
   if (!person.value) return
+  person.value = { ...person.value, [field]: ids }
   savingLabels.value = field
-  try {
-    const url: string = `/api/admin/staff/${userId.value}/${field}`
-    await api(url, { method: 'PUT', body: { [field]: ids } })
-    person.value = { ...person.value, [field]: ids }
-  } catch (error) {
-    notifyError(error)
-    await refresh()
-  } finally {
-    savingLabels.value = null
-  }
+  const url: string = `/api/admin/staff/${userId.value}/${field}`
+  const save = saving
+    .then(() => api<{ ok: true }>(url, { method: 'PUT', body: { [field]: ids } }))
+    .catch(async error => {
+      notifyError(error)
+      await refresh()
+    })
+  saving = save
+  save.finally(() => {
+    if (saving === save) savingLabels.value = null
+  })
 }
 const labelsOpen = ref(false)
-async function labelsChanged() {
-  await Promise.all([refresh(), refreshLabels()])
-}
 
 // ─── Team: staff or v-team, chosen in the application ───
 const teamItems = computed(() => options('staffTeam').map(option => ({ label: option.label, value: option.value })))
@@ -389,7 +391,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
             </div>
           </div>
         </IcSection>
-        <StaffLabelsModal v-model:open="labelsOpen" @changed="labelsChanged" />
+        <StaffLabelsModal v-model:open="labelsOpen" @deleted="refresh" />
 
         <IcSection title="Contatti">
           <IcDataList :items="contacts" />

@@ -61,7 +61,7 @@ async function changeRole(c: SessionConvocation, role: string) {
   if (role === c.role) return
   try {
     await api(`/api/admin/convocations/${c.id}`, { method: 'PATCH', body: { role } })
-    notifySuccess('Ruolo aggiornato', `${fullName(c)}: ${roleName(role)}`)
+    notifySuccess('Ruolo aggiornato', fullName(c))
   } catch (error) {
     notifyError(error)
   }

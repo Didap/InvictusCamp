@@ -38,6 +38,11 @@ export type StaffStatus = (typeof STAFF_STATUSES)[number]
 export type StaffRole = string
 export const COORDINATOR_ROLE = 'coordinator'
 export const GROUP_LEAD_ROLE = 'group_lead'
+/** The roles the app knows cannot be deleted, only renamed: why, for the editor and the refusal. */
+export const PROTECTED_ROLES: Record<string, string> = {
+  [COORDINATOR_ROLE]: 'Serve alla base della sessione (un coordinatore per squadra)',
+  [GROUP_LEAD_ROLE]: 'Mette per primi i responsabili quando scegli chi guida un gruppo attività',
+}
 
 /** The colours a tag of the «Valutazione» can have: the tones of the theme, always next to its name. */
 export const STAFF_TAG_COLORS = ['neutral', 'info', 'success', 'warning', 'error', 'secondary'] as const
