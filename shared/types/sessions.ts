@@ -120,6 +120,7 @@ export interface SessionFamilyItem {
   /** The referent, i.e. the family's account. */
   referent: string
   email: string
+  /** The family's phone, the account's if the family has none. */
   phone: string | null
   city: string | null
   accountStatus: UserStatus

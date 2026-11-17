@@ -935,11 +935,12 @@ describe('the session itself', () => {
     expect(csv).not.toContain('DETTAGLIO-RISERVATO')
   })
 
-  it("shows the family's phone, the account's only when the family has none", async () => {
+  it("shows the family's phone, the account's only when the family has none (or an empty one)", async () => {
     const { session } = await setup({ status: 'inviting' })
     const withPhone = await join(session.id, 'slot', 'confirmed', { name: 'Famiglia Rossi' })
     const without = await join(session.id, 'slot', 'confirmed', { name: 'Famiglia Bianchi' })
     await db.update(t.families).set({ phone: '333 111' }).where(eq(t.families.id, withPhone.family.id))
+    await db.update(t.families).set({ phone: '' }).where(eq(t.families.id, without.family.id))
     await db
       .update(t.users)
       .set({ phone: '333 999' })
@@ -948,8 +949,10 @@ describe('the session itself', () => {
       (await sessionFamiliesOf(db, session.id)).participations.map(p => [p.familyName, p.phone]),
     )
     expect(phones).toEqual({ 'Famiglia Rossi': '333 111', 'Famiglia Bianchi': '333 999' })
-    const rossi = (await participantsCsv(db, session.id)).csv.split('\r\n').find(line => line.includes('Rossi'))
+    const lines = (await participantsCsv(db, session.id)).csv.split('\r\n')
+    const rossi = lines.find(line => line.includes('Rossi'))
     expect(rossi).toContain('333 111')
     expect(rossi).not.toContain('333 999')
+    expect(lines.find(line => line.includes('Bianchi'))).toContain('333 999')
   })
 })
