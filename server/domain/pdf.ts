@@ -1,6 +1,7 @@
 // Plain text PDFs: a title, paragraphs and headings that wrap, a footer, on as many A4 pages as they need. The
-// demo documents of the seed, the families' releases and the canteen sheet for the supplier; the WinAnsi and
-// wrapping helpers serve the signed copies too (signatures.ts). Explicit imports only.
+// demo documents of the seed, the families' releases and the sheets of a session (sessionPdf: canteen,
+// lodgings, groups, programme); the WinAnsi and wrapping helpers serve the signed copies too (signatures.ts).
+// Explicit imports only.
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib'
 import { todayIso, type DayRange } from '../../shared/utils/dates'
 import { formatDay, formatDayRange } from '../../shared/utils/format'
@@ -55,7 +56,10 @@ export function wrap(font: PDFFont, text: string, size: number, width: number): 
   return lines.length ? lines : ['']
 }
 
-/** A paragraph; a heading (13 pt, bold, space above); a bold label that stays with the paragraph after it. */
+/**
+ * A paragraph (a line break in it starts a new line); a heading (13 pt, bold, space above); a bold label that
+ * stays with the paragraph after it.
+ */
 export type PdfBlock = string | { heading: string } | { label: string }
 
 // `room`: the lowest line a block starts on. A heading keeps a label and a line under it on its page, a
@@ -89,7 +93,7 @@ export async function textPdf(title: string, blocks: PdfBlock[], footer: string)
     const style = STYLES[kind]
     const face = kind === 'paragraph' ? font : bold
     y -= style.before
-    for (const line of wrap(face, toWinAnsi(face, text), style.size, WIDTH)) {
+    for (const line of text.split('\n').flatMap(part => wrap(face, toWinAnsi(face, part), style.size, WIDTH))) {
       if (y < style.room) {
         drawFooter()
         page = pdf.addPage(PAGE)

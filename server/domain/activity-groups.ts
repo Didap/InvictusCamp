@@ -4,7 +4,7 @@
 // Explicit imports only, so the database tests can load this file (tests/db/activity-groups.test.ts).
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { SessionGroupFamily, SessionGroupStaff, SessionGroupsDto } from '../../shared/types/activity-groups'
-import { distributeFamilies } from '../../shared/utils/activity-groups'
+import { distributeFamilies, memberLabel, tallyGroups, tallyLabel } from '../../shared/utils/activity-groups'
 import { PROGRAMME_GROUPS, PROGRAMME_GROUP_LABELS, type ProgrammeGroup } from '../../shared/utils/constants'
 import { ageOn } from '../../shared/utils/dates'
 import { NO_CARDS, fullName, memberName } from '../../shared/utils/format'
@@ -14,6 +14,7 @@ import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
+import { sessionPdf, type PdfBlock } from './pdf'
 import {
   activeStaff,
   findSession,
@@ -224,4 +225,41 @@ export async function groupsCsv(db: DbOrTx, sessionId: string): Promise<{ filena
     ...PROGRAMME_GROUPS.flatMap(rowsOf),
     ...rowsOf(null),
   ])
+}
+
+/**
+ * The groups as a PDF to print, the CSV in pages: group by group its leader and size, then each family with
+ * its people; last the families still without a group.
+ */
+export function groupsPdfBlocks({ families: grouped, staff }: Omit<SessionGroupsDto, 'editable'>): PdfBlock[] {
+  const tally = tallyGroups(grouped)
+  const familiesIn = (group: ProgrammeGroup | null): PdfBlock[] =>
+    grouped
+      .filter(family => family.group === group)
+      .flatMap(family => [
+        { label: family.familyName },
+        family.members.length ? family.members.map(memberLabel).join(' · ') : NO_CARDS,
+      ])
+  const waiting = familiesIn(null)
+  return [
+    ...PROGRAMME_GROUPS.flatMap(group => {
+      const leader = staff.find(person => person.group === group)
+      return [
+        { heading: `Gruppo ${PROGRAMME_GROUP_LABELS[group]}` },
+        [leader ? `Responsabile: ${leader.name}` : 'Nessun responsabile', tallyLabel(tally[group])].join(' · '),
+        ...familiesIn(group),
+      ]
+    }),
+    ...(waiting.length ? [{ heading: 'Senza gruppo' }, ...waiting] : []),
+  ]
+}
+
+export async function groupsPdf(db: DbOrTx, sessionId: string): Promise<{ filename: string; data: Uint8Array }> {
+  const { session, ...groups } = await loadSession(db, sessionId)
+  return sessionPdf(session, {
+    prefix: 'gruppi',
+    title: 'Gruppi attività',
+    blocks: groupsPdfBlocks(groups),
+    notice: 'Contiene i nomi e l’età dei ragazzi: serve solo a organizzare le attività.',
+  })
 }

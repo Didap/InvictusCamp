@@ -6,7 +6,8 @@ import { PROGRAMME_GROUP_LABELS, PROGRAMME_GROUPS, enumLabel, type ProgrammeGrou
 import { plural } from '#shared/utils/format'
 
 // The Gruppi tab of a session (docs/spec.md 3.12): the families holding a place split among the groups of
-// the programme, Giallo, Rosso and Blu, each with its leader from the session staff. Saving sends no email.
+// the programme, Giallo, Rosso and Blu, each with its leader from the session staff. A family moves by
+// dragging it, or from its menu (keyboards and screen readers). Saving sends no email.
 const props = defineProps<{ sessionId: string }>()
 
 const api = useApi()
@@ -82,7 +83,10 @@ async function save<T extends SessionGroupsDto>(
 }
 
 function assign(family: SessionGroupFamily, group: ProgrammeGroup | null) {
-  if (group === family.group) return
+  if (group === family.group || !data.value) return
+  // The family moves at once; the server's answer, or a reload if the change fails, has the last word.
+  const moved = data.value.families.map(other => (other.id === family.id ? { ...other, group } : other))
+  data.value = { ...data.value, families: moved }
   return save(family.id, `/${family.id}`, { method: 'PUT', body: { group } }, 'Gruppo non salvato')
 }
 
@@ -105,6 +109,25 @@ async function distribute() {
       : 'Tutte le famiglie hanno già un gruppo',
   )
 }
+
+/** While families wait for a group, dividing them is the action of the tab; then the PDF to print. */
+const canDistribute = computed(() => !!data.value?.editable && waiting.value.length > 0)
+
+// A family moves by dragging it to another group, or back among those without one (data-group "").
+const waitingList = useTemplateRef<HTMLUListElement>('waitingList')
+const groupLists = useTemplateRef<HTMLUListElement[]>('groupLists')
+useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list => list !== null), {
+  group: 'activity-groups',
+  draggable: '.groups-card',
+  filter: '.groups-no-drag',
+  sort: false,
+  key: () => `${families.value.length > 0}-${waiting.value.length > 0}`,
+  disabled: () => !data.value?.editable || saving.value !== null,
+  onDrop: ({ item, to }) => {
+    const family = families.value.find(other => other.id === item.dataset.id)
+    if (family) assign(family, (to.dataset.group || null) as ProgrammeGroup | null)
+  },
+})
 </script>
 
 <template>
@@ -137,7 +160,17 @@ async function distribute() {
           variant="outline"
         />
         <UButton
-          v-if="data.editable && waiting.length"
+          class="pointer-coarse:min-h-11"
+          :to="`${base}/pdf`"
+          external
+          download
+          icon="i-lucide-file-down"
+          label="Genera PDF dei gruppi"
+          :color="canDistribute ? 'neutral' : 'primary'"
+          :variant="canDistribute ? 'outline' : 'solid'"
+        />
+        <UButton
+          v-if="canDistribute"
           class="pointer-coarse:min-h-11"
           icon="i-lucide-shuffle"
           label="Dividi le famiglie senza gruppo"
@@ -165,15 +198,24 @@ async function distribute() {
       />
 
       <template v-else>
+        <p v-if="data.editable" class="mb-6 text-sm text-muted">
+          Sposta una famiglia trascinandola in un altro gruppo (sul telefono tienila premuta un attimo), oppure dal menu
+          accanto al suo nome.
+        </p>
+
         <section v-if="waiting.length" aria-labelledby="groups-waiting" class="mb-8">
           <div class="mb-3">
             <h3 id="groups-waiting" class="font-semibold text-highlighted">Senza gruppo</h3>
             <p v-if="data.editable" class="text-sm text-muted">
-              Scegli il gruppo di ogni famiglia, oppure dividile tutte insieme: i gruppi restano pari per numero di
+              Mettile nei gruppi una per una, oppure dividile tutte insieme: i gruppi restano pari per numero di
               persone, e poi puoi spostare chi vuoi.
             </p>
           </div>
-          <ul class="divide-y divide-default rounded-lg border border-default bg-elevated">
+          <ul
+            ref="waitingList"
+            data-group=""
+            class="divide-y divide-default rounded-lg border border-default bg-elevated"
+          >
             <GroupsFamilyItem
               v-for="family in waiting"
               :key="family.id"
@@ -225,17 +267,25 @@ async function distribute() {
                 />
               </UFormField>
             </div>
-            <ul v-if="column.families.length" class="divide-y divide-default">
-              <GroupsFamilyItem
-                v-for="family in column.families"
-                :key="family.id"
-                :family="family"
-                :disabled="!data.editable || saving !== null"
-                :loading="saving === family.id"
-                @assign="group => assign(family, group)"
-              />
-            </ul>
-            <p v-else class="p-4 text-sm text-muted">Ancora nessuna famiglia.</p>
+            <!-- Always there, also empty: a group without families is where one is dropped. -->
+            <div class="relative">
+              <ul ref="groupLists" :data-group="column.group" class="min-h-20 divide-y divide-default">
+                <GroupsFamilyItem
+                  v-for="family in column.families"
+                  :key="family.id"
+                  :family="family"
+                  :disabled="!data.editable || saving !== null"
+                  :loading="saving === family.id"
+                  @assign="group => assign(family, group)"
+                />
+              </ul>
+              <p
+                v-if="!column.families.length"
+                class="pointer-events-none absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted"
+              >
+                {{ data.editable ? 'Trascina qui una famiglia.' : 'Nessuna famiglia.' }}
+              </p>
+            </div>
           </section>
         </div>
       </template>

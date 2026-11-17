@@ -10,11 +10,14 @@ import {
   familyProgramme,
   getYearProgramme,
   listYearProgrammes,
+  programmePdf,
   saveSessionProgramme,
   saveYearProgramme,
+  sessionProgrammeForFamilies,
   staffProgramme,
 } from '../../server/domain/programmes'
 import { transitionSession } from '../../server/domain/sessions'
+import { sniffMimeType } from '../../server/domain/storage'
 import { emptyWeek } from '../../shared/content/programme-template'
 import { makeAdmin, makeFamily, makeSession, makeStaff, t, useTestDb } from './helpers'
 
@@ -227,5 +230,28 @@ describe('who reads the programme of a session', () => {
     })
     const view = await familyProgramme(db, { familyId: family.family.id, sessionId: session.id })
     expect(view.content!.days.flatMap(day => day.blocks)).toEqual([])
+  })
+})
+
+describe('the programme to print', () => {
+  it('is what the families read, for the administration too, and there is none without a programme', async () => {
+    const session = await makeSession(db, { status: 'inviting' })
+    await expect(programmePdf(await sessionProgrammeForFamilies(db, session.id))).rejects.toMatchObject({
+      statusCode: 404,
+    })
+
+    await withYear()
+    const { id, content } = await getYearProgramme(db, 2027)
+    content.days[0]!.blocks[0]!.staffNote = 'Chiavi della sala in segreteria'
+    await db.update(t.programmes).set({ content }).where(eq(t.programmes.id, id))
+    const view = await sessionProgrammeForFamilies(db, session.id)
+    const blocks = view.content!.days.flatMap(day => day.blocks)
+    expect(blocks.length).toBeGreaterThan(0)
+    expect(blocks.some(block => block.kind === 'staff')).toBe(false)
+    expect(blocks.every(block => block.staffNote === '')).toBe(true)
+
+    const pdf = await programmePdf(view)
+    expect(pdf.filename).toBe('programma-sessione-di-prova-21-06-2027.pdf')
+    expect(sniffMimeType(pdf.data)).toBe('application/pdf')
   })
 })

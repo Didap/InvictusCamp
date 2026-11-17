@@ -1,6 +1,6 @@
 // The activity groups of a session (docs/spec.md 3.12): the families holding a place split among the
 // groups of the programme, Giallo, Rosso and Blu. Pure functions, shared by the Gruppi tab of a session
-// and the CSV of its groups.
+// and the CSV and PDF of its groups.
 import type { GroupMember } from '../types/activity-groups'
 import { PROGRAMME_GROUPS, type ProgrammeGroup } from './constants'
 import { formatAge, plural } from './format'

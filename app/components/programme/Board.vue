@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type Sortable from 'sortablejs'
 import type { ProgrammeBlock, ProgrammeContent, ProgrammeDay } from '#shared/types/domain'
 import { blockTime, dayCaptions, type BlockMove } from '#shared/utils/programme'
 
 // The week of the editor as a board: one column per day, side by side once there is room for five
 // (a container query: the page and the session tab are not equally wide), two or three columns on a
 // tablet, one under the other on a phone. A block is a card: a click or a tap opens it (`open`), a drag
-// moves it within its day or to another one (SortableJS; on touch screens after a short press, so a
+// moves it within its day or to another one (useDragLists; on touch screens after a short press, so a
 // swipe still scrolls). The drop is emitted as `move` and the data moves it, Vue keeps the DOM.
 // Keyboards and screen readers open and move a block from its menu (slot `block-actions`): the card
 // holds no other control, since Firefox does not start a drag on a button.
@@ -19,43 +18,14 @@ defineSlots<{
 const captions = computed(() => dayCaptions(props.content, props.dates))
 
 const lists = useTemplateRef<HTMLUListElement[]>('lists')
-let sortables: Sortable[] = []
-function detach() {
-  sortables.forEach(sortable => sortable.destroy())
-  sortables = []
-}
-// Again whenever the days change (another programme loaded): new lists need their own instance.
-async function attach() {
-  const { default: Sortable } = await import('sortablejs')
-  if (unmounted) return
-  detach()
-  sortables = (lists.value ?? []).map(list =>
-    Sortable.create(list, {
-      group: 'programme-week',
-      draggable: '.programme-card',
-      filter: '.programme-no-drag',
-      preventOnFilter: false,
-      delay: 200,
-      delayOnTouchOnly: true,
-      touchStartThreshold: 5,
-      animation: 150,
-      ghostClass: 'opacity-40',
-      onEnd: ({ item, from, to, oldIndex, newIndex }) => {
-        if (oldIndex === undefined || newIndex === undefined || (from === to && oldIndex === newIndex)) return
-        // Put the element back where Vue rendered it: the data moves the block, Vue moves the DOM.
-        to.removeChild(item)
-        from.insertBefore(item, from.children[oldIndex] ?? null)
-        emit('move', { from: from.dataset.day!, oldIndex, to: to.dataset.day!, newIndex })
-      },
-    }),
-  )
-}
-let unmounted = false
-onMounted(attach)
-watch(() => props.content.days.map(day => day.id).join(), attach, { flush: 'post' })
-onBeforeUnmount(() => {
-  unmounted = true
-  detach()
+useDragLists(() => lists.value ?? [], {
+  group: 'programme-week',
+  draggable: '.programme-card',
+  filter: '.programme-no-drag',
+  // Another programme loaded: new lists.
+  key: () => props.content.days.map(day => day.id).join(),
+  onDrop: ({ from, to, oldIndex, newIndex }) =>
+    emit('move', { from: from.dataset.day!, oldIndex, to: to.dataset.day!, newIndex }),
 })
 </script>
 
