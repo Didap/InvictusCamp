@@ -1,4 +1,4 @@
-import { familyDataSchema } from '#shared/schemas/families'
+import { familyDataSchema, GUEST_MISSING_MESSAGE, guestMissing } from '#shared/schemas/families'
 import type { FamilyDataResult } from '#shared/types/families'
 import { saveFamilyData, toFamilyProfile } from '../../../domain/families'
 
@@ -9,6 +9,7 @@ import { saveFamilyData, toFamilyProfile } from '../../../domain/families'
 export default defineEventHandler(async (event): Promise<FamilyDataResult> => {
   const { user, family } = await requireFamily(event)
   const data = await parseBody(event, familyDataSchema)
+  if (guestMissing(family, data.composition)) throw createError({ statusCode: 400, message: GUEST_MISSING_MESSAGE })
   const actor = { userId: user.id, ip: clientIp(event) }
   const { saved, emails } = await useDb().transaction(async tx => ({
     saved: await saveFamilyData(tx, { familyId: family.id, data, actor }),

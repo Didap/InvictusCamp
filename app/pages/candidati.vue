@@ -7,9 +7,9 @@ definePageMeta({ layout: 'auth' })
 
 // From «Vuoi far parte del v-team?» the account is born for the v-team; the application can still change it.
 const route = useRoute()
-const team: StaffTeam = route.query.squadra === V_TEAM_QUERY ? 'volunteer' : 'staff'
-const title = team === 'volunteer' ? 'Candidati per il v-team' : 'Candidati per lo staff'
-useHead({ title: `${title} · Invictus Camp` })
+const team = computed<StaffTeam>(() => (route.query.squadra === V_TEAM_QUERY ? 'volunteer' : 'staff'))
+const title = computed(() => (team.value === 'volunteer' ? 'Candidati per il v-team' : 'Candidati per lo staff'))
+useHead({ title: () => `${title.value} · Invictus Camp` })
 
 const state = reactive({ firstName: '', lastName: '', email: '', phone: '', password: '', privacy: false })
 const loading = ref(false)
@@ -20,7 +20,7 @@ async function onSubmit() {
   try {
     const result = await $fetch<{ email: string }>('/api/auth/register-staff', {
       method: 'POST',
-      body: { ...state, team, phone: state.phone || undefined },
+      body: { ...state, team: team.value, phone: state.phone || undefined },
     })
     sentTo.value = result.email
   } catch (error) {

@@ -153,7 +153,7 @@ export function guestAgeStatus(
   return fits ? 'in' : 'out'
 }
 
-/** A card the family still has to fill in: empty, an adult without the birth date, or without a relationship. */
+/** A card the family still has to fill in: empty, without the birth date, or without a relationship. */
 export function isCardToComplete(member: {
   firstName: string | null
   filledAt: Date | string | null
@@ -207,20 +207,15 @@ export function formatAge(age: number): string {
  * person with a condition has no relationship: only the age. `withDay` adds the birth date.
  */
 export function memberLine(
-  member: {
-    relationship: MemberRelationship | null
-    kind: MemberKind
-    birthDate: IsoDay | null
-    hasDisability?: boolean
-  },
+  member: { relationship: MemberRelationship | null; birthDate: IsoDay | null },
   withDay = false,
 ): string {
   const parts = member.relationship ? [enumLabel('memberRelationship', member.relationship)] : []
   if (member.birthDate) {
     const age = formatAge(ageOn(member.birthDate))
     parts.push(withDay ? `${age} (${formatDay(member.birthDate)})` : age)
-  } else if (missingBirthDate(member)) parts.push('manca la data di nascita')
-  return parts.join(' · ') || enumLabel('memberKind', member.kind)
+  } else parts.push('manca la data di nascita')
+  return parts.join(' · ')
 }
 
 /** "9 e 14 anni", "1 anno", "12 anni, un’età da indicare": ages, youngest first; '' for none. */

@@ -529,7 +529,7 @@ export async function addFamilyMember(
       familyId: family.id,
       firstName: input.member.firstName,
       lastName: input.member.lastName,
-      birthDate: input.member.birthDate ?? null,
+      birthDate: input.member.birthDate,
       relationship: relationshipOf(input.member, health.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
@@ -573,7 +573,7 @@ export async function updateFamilyMember(
     .set({
       firstName: input.member.firstName,
       lastName: input.member.lastName,
-      birthDate: input.member.birthDate ?? null,
+      birthDate: input.member.birthDate,
       relationship: relationshipOf(input.member, after.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,

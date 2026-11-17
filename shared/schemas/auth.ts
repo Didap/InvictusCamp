@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { STAFF_TEAMS } from '../utils/constants'
+import { ageOn } from '../utils/dates'
 import { zBirthDate, zEmail, zPassword, zPersonName, zPhone, zRequiredPhone, zRequiredText, zToken } from './common'
 
 /** A checkbox that must be ticked (boolean in the form, true on the server). */
@@ -18,8 +19,12 @@ export const registerFamilySchema = z.object({
   familyName: zRequiredText(120),
   firstName: zPersonName,
   lastName: zPersonName,
-  /** The referent's: their card is born with it (everyone's age is required). */
-  birthDate: zBirthDate,
+  /** The referent's, an adult: their card is born with it (everyone's age is required). */
+  birthDate: zBirthDate.refine(day => ageOn(day) >= 18, {
+    error: 'Il referente della famiglia è maggiorenne',
+    // Only on a valid date: a wrong one already says so.
+    when: payload => payload.issues.length === 0,
+  }),
   email: zEmail,
   phone: zRequiredPhone,
   password: zPassword,

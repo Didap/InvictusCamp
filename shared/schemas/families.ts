@@ -12,6 +12,7 @@ import {
   MEMBER_KINDS,
   MEMBER_RELATIONSHIPS,
   PERSONAL_DOCUMENT_CATEGORIES,
+  type FamilyFormStatus,
   type MemberKind,
   type PersonalDocumentCategory,
 } from '../utils/constants'
@@ -50,28 +51,34 @@ export type FamilyProfileInput = z.output<typeof familyProfileSchema>
 /** At most this many people of one kind: a guard against typing errors, not a rule of the camp. */
 export const MAX_MEMBERS_OF_A_KIND = 12
 
-const zCount = (min: number, below = min ? `Almeno ${min}` : 'Non può essere negativo') =>
+const zCount = (min: number) =>
   z
     .number({ error: 'Indica un numero' })
     .int({ error: 'Indica un numero intero' })
-    .min(min, { error: below })
+    .min(min, { error: min ? `Almeno ${min}` : 'Non può essere negativo' })
     .max(MAX_MEMBERS_OF_A_KIND, { error: `Al massimo ${MAX_MEMBERS_OF_A_KIND}` })
 
 /** How many people the family is made of. Confirming the data creates one card per person. */
 export const familyCompositionSchema = z.object({
   /** The account holder is one of them. */
   adults: zCount(1),
-  /**
-   * Young people with a severe or chronic illness, a neurodevelopmental disorder or a disability: at least one,
-   * the camp is for them.
-   */
-  youngWithCondition: zCount(
-    1,
-    'Il camp è per le famiglie con almeno un ragazzo o una ragazza in questa condizione: indica quanti sono',
-  ),
+  /** Young people with a severe or chronic illness, a neurodevelopmental disorder or a disability. */
+  youngWithCondition: zCount(0),
   youngWithoutCondition: zCount(0),
 })
 export type FamilyComposition = z.output<typeof familyCompositionSchema>
+
+export const GUEST_MISSING_MESSAGE =
+  'Il camp è per le famiglie con almeno un ragazzo o una ragazza in questa condizione: indica quanti sono'
+
+/**
+ * The first confirmation of the family data needs a young person with a condition: the camp is for them, a
+ * family without any does not register. Later a withdrawn consent can leave none, and the family can still
+ * edit its data.
+ */
+export function guestMissing(family: { formStatus: FamilyFormStatus }, composition: FamilyComposition): boolean {
+  return family.formStatus !== 'submitted' && composition.youngWithCondition < 1
+}
 
 /**
  * The three numbers of the composition: what a card of each group is, and how the form and the
@@ -358,8 +365,8 @@ export const FAMILY_LIST_SORTS = ['name', 'city', 'members', 'createdAt'] as con
 export type FamilyListSort = (typeof FAMILY_LIST_SORTS)[number]
 
 /**
- * The families filter by the number of young people with a condition: at least one, more than one. A family
- * without any cannot save its data, so «none» is not a choice.
+ * The families filter by the number of young people with a condition: at least one, more than one. No «none»
+ * (asked on 16/11): a family without any does not get past the first confirmation of its data.
  */
 export const DISABILITY_COUNT_FILTERS = [
   { value: 'yes', label: 'Almeno uno/a' },
@@ -387,7 +394,11 @@ export const adminFamilyListQuerySchema = zListQuery.extend({
   province: z.string().trim().toUpperCase().max(40).optional(),
   region: zRegion.optional(),
   /** How many young people with a condition (the list shows only their ages). */
-  disability: z.enum(DISABILITY_COUNT_FILTERS.map(filter => filter.value)).optional(),
+  // An unknown value (the «none» of an old link) reads as no filter.
+  disability: z
+    .enum(DISABILITY_COUNT_FILTERS.map(filter => filter.value))
+    .optional()
+    .catch(undefined),
   /** A type of condition («Tipologia»): health data, so the filter is audited and the list never shows it. */
   condition: zChoice(CONDITIONS).optional(),
   ageRange: z.enum(GUEST_AGE_FILTERS.map(filter => filter.value)).optional(),

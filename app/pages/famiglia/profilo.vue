@@ -39,6 +39,10 @@ const state = reactive({
   healthConsent: false,
 })
 
+/** The inputs stop at the cards filled in; before the first confirmation, at one young person with a condition. */
+const minOf = (key: keyof FamilyComposition) =>
+  key === 'youngWithCondition' && !submitted.value ? Math.max(1, filledCards.value[key]) : filledCards.value[key]
+
 /** The young people with a condition this save adds: the form asks their names now, their cards are born with them. */
 const newGuests = computed(() =>
   Math.max(0, (state.composition.youngWithCondition ?? 0) - (profile.value?.cards.youngWithCondition ?? 0)),
@@ -211,7 +215,7 @@ async function save() {
             >
               <UInputNumber
                 v-model="state.composition[field.key]"
-                :min="filledCards[field.key]"
+                :min="minOf(field.key)"
                 :max="MAX_MEMBERS_OF_A_KIND"
                 class="w-40"
               />

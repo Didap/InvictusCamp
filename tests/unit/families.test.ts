@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { registerFamilySchema } from '#shared/schemas/auth'
+import { registerFamilySchema, registerStaffSchema } from '#shared/schemas/auth'
 import { DISABILITY_CHOICES } from '#shared/content/member-form'
-import { memberSchema, normalizeHealth } from '#shared/schemas/families'
+import { adminFamilyListQuerySchema, guestMissing, memberSchema, normalizeHealth } from '#shared/schemas/families'
 import { familyNameOf, guestAgeStatus, isCardToComplete, surnameOf } from '#shared/utils/format'
 
 /** The names of the fields a parse refuses, as the form shows them. */
@@ -30,6 +30,37 @@ describe('family registration', () => {
   it('needs the birth date of the referent', () => {
     expect(refused(registerFamilySchema.safeParse({ ...valid, birthDate: '' }))).toEqual(['birthDate'])
     expect(refused(registerFamilySchema.safeParse({ ...valid, birthDate: '2999-01-01' }))).toEqual(['birthDate'])
+    // The referent is an adult.
+    expect(refused(registerFamilySchema.safeParse({ ...valid, birthDate: '2015-04-12' }))).toEqual(['birthDate'])
+  })
+
+  it('needs a young person with a condition at the first confirmation only', () => {
+    const none = { adults: 2, youngWithCondition: 0, youngWithoutCondition: 1 }
+    expect(guestMissing({ formStatus: 'draft' }, none)).toBe(true)
+    expect(guestMissing({ formStatus: 'draft' }, { ...none, youngWithCondition: 1 })).toBe(false)
+    // Once confirmed, a withdrawn consent can leave none: the family still edits its data.
+    expect(guestMissing({ formStatus: 'submitted' }, none)).toBe(false)
+  })
+
+  it('reads the «none» of an old link of the families list as no filter', () => {
+    expect(adminFamilyListQuerySchema.parse({ disability: 'no' }).disability).toBeUndefined()
+    expect(adminFamilyListQuerySchema.parse({ disability: 'many' }).disability).toBe('many')
+  })
+})
+
+describe('staff registration', () => {
+  const valid = {
+    firstName: 'Luca',
+    lastName: 'Neri',
+    email: 'luca@example.com',
+    password: 'una-password-lunga',
+    privacy: true,
+  }
+
+  it('applies for the staff unless the v-team link says otherwise', () => {
+    expect(registerStaffSchema.parse(valid).team).toBe('staff')
+    expect(registerStaffSchema.parse({ ...valid, team: 'volunteer' }).team).toBe('volunteer')
+    expect(registerStaffSchema.safeParse({ ...valid, team: 'boss' }).success).toBe(false)
   })
 })
 
