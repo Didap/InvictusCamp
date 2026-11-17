@@ -19,24 +19,22 @@ export const PUBLIC_PATHS = [
   '/privacy',
 ] as const
 
-/** `/candidati?squadra=v-team`: the application starts with the v-team chosen. */
-export const V_TEAM_QUERY = 'v-team'
-
 /**
- * Staff and v-team are two separate lists of the administration, `/admin/staff` and `/admin/v-team`, each
- * with the pages of its people (docs/spec.md 3.4): the segment of the path of each team. The two pages of
- * app/pages/admin/staff repeat them in their `:team(staff|v-team)` path.
+ * The name of each team in the addresses (docs/spec.md 3.4): the two lists of the administration,
+ * `/admin/staff` and `/admin/v-team` with the pages of their people, and the application link
+ * `/candidati?squadra=v-team`. The two pages of app/pages/admin/staff repeat them in their
+ * `:team(staff|v-team)` path.
  */
-export const TEAM_SEGMENT: Record<StaffTeam, string> = { staff: 'staff', volunteer: 'v-team' }
+export const TEAM_SLUG: Record<StaffTeam, string> = { staff: 'staff', volunteer: 'v-team' }
+
+/** The team of a slug (`staff` or `v-team`), the staff for anything else. */
+export function teamOfSlug(slug: unknown): StaffTeam {
+  return slug === TEAM_SLUG.volunteer ? 'volunteer' : 'staff'
+}
 
 /** The list of a team, or the page of one of its people. */
 export function teamPath(team: StaffTeam, userId?: string): string {
-  return `/admin/${TEAM_SEGMENT[team]}${userId ? `/${userId}` : ''}`
-}
-
-/** The team of a `:team` segment of the path (`staff` or `v-team`). */
-export function teamOfSegment(segment: unknown): StaffTeam {
-  return segment === TEAM_SEGMENT.volunteer ? 'volunteer' : 'staff'
+  return `/admin/${TEAM_SLUG[team]}${userId ? `/${userId}` : ''}`
 }
 
 export const GUEST_ONLY_PATHS = ['/accedi', '/registrati', '/candidati', '/password-dimenticata'] as const

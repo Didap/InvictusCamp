@@ -5,14 +5,14 @@ import { STAFF_AGE_FILTERS } from '#shared/schemas/staff'
 import type { StaffListItem } from '#shared/types/staff'
 import { ageOn, todayIso } from '#shared/utils/dates'
 import { formatAge, formatDayRange, fullName } from '#shared/utils/format'
-import { teamOfSegment, teamPath } from '#shared/utils/routes'
+import { teamOfSlug, teamPath } from '#shared/utils/routes'
 
 // The staff, or the v-team (/admin/v-team): two separate lists of the same page (spec 3.4). Applications to
 // review, approved people, everyone; tab in the query string. The table shows who people are (roles, city,
 // age) and the «Valutazione»; status, application date and availability are on the page of each person.
 definePageMeta({ path: '/admin/:team(staff|v-team)' })
 const route = useRoute()
-const team = computed(() => teamOfSegment(route.params.team))
+const team = computed(() => teamOfSlug(route.params.team))
 const { label } = useEnums()
 const router = useRouter()
 const api = useApi()
@@ -24,7 +24,7 @@ const SESSION_FREE = ['all', 'any', 'none']
 const sessionId = computed(() => (SESSION_FREE.includes(availability.value) ? null : availability.value))
 const [{ data, refresh }, { data: sessions }] = await Promise.all([
   useApiFetch<StaffListItem[]>('/api/admin/staff', {
-    query: computed(() => ({ team: team.value, ...(sessionId.value ? { sessionId: sessionId.value } : {}) })),
+    query: computed(() => ({ team: team.value, sessionId: sessionId.value ?? undefined })),
   }),
   useApiFetch<SessionListItem[]>('/api/admin/sessions', { query: { status: 'draft,inviting,confirmed' } }),
 ])

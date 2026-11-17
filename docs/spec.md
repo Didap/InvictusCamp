@@ -136,8 +136,8 @@ availability or receive convocations. The administration can move a person to th
   with the pages of its people (`/admin/staff/:userId`, `/admin/v-team/:userId`). A person's page opened under
   the other team (an old link, the users list, a change of team) moves to the list of their team. The
   application is one for both: the team comes from the link (`/candidati?squadra=v-team`) or the person's
-  choice. Roles and Valutazione are the same for both lists. The Panoramica counts the applications to
-  review of both and opens the list that has some, the staff first.
+  choice. Roles and Valutazione are the same for both lists. The Panoramica has a tile of applications to
+  review for each list.
 - Each list shows name, roles, city, age and Valutazione; status, application date and availability are on
   each person's page. Filters: search, role, age (ranges of years at today), availability (at least one
   session, none, or a session not started yet).
@@ -281,7 +281,7 @@ availability or receive convocations. The administration can move a person to th
 ### 3.9 Panoramica (administration home)
 
 Numbers that lead to action: the next session (dates, countdown, places confirmed/total, staff
-confirmed/needed), applications to review, families with the family data to confirm, signatures
+confirmed/needed), applications to review (staff, v-team), families with the family data to confirm, signatures
 waiting, emails failed in the last 30 days; the upcoming sessions with their progress; a "Da fare" list
 (each item links to where it is done).
 

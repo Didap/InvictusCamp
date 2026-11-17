@@ -4,7 +4,7 @@ import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
 import { OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
 import { formatAge, formatDateTime, formatDay, formatDayRange, fullName } from '#shared/utils/format'
-import { TEAM_SEGMENT, teamOfSegment, teamPath } from '#shared/utils/routes'
+import { teamOfSlug, teamPath } from '#shared/utils/routes'
 
 // One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, application,
 // review with internal notes, the outcome email sent only from "Comunica l’esito", availability,
@@ -19,12 +19,14 @@ const { label, options } = useEnums()
 // Started before the await, so the menus of roles and tags fill with the page.
 const { roleItems, tags } = useStaffLabels()
 const { data: person, refresh } = await useApiFetch<StaffDetail>(() => `/api/admin/staff/${userId.value}`)
-// The list of the team in the path; an old link, or a change of team, moves to the list of the person.
-const list = computed(() => teamPath(person.value?.team ?? teamOfSegment(route.params.team)))
+// The team of the person (of the path, until it is loaded): an old link, or a change of team, moves to the
+// list of the person.
+const team = computed(() => person.value?.team ?? teamOfSlug(route.params.team))
+const list = computed(() => teamPath(team.value))
 watch(
-  () => person.value?.team,
-  team => {
-    if (team && TEAM_SEGMENT[team] !== route.params.team) navigateTo(teamPath(team, userId.value), { replace: true })
+  team,
+  value => {
+    if (value !== teamOfSlug(route.params.team)) navigateTo(teamPath(value, userId.value), { replace: true })
   },
   { immediate: true },
 )
@@ -84,14 +86,14 @@ const labelsOpen = ref(false)
 // ─── Team: staff or v-team, chosen in the application ───
 const teamItems = computed(() => options('staffTeam').map(option => ({ label: option.label, value: option.value })))
 const savingTeam = ref(false)
-async function changeTeam(team: StaffTeam) {
-  if (!person.value || team === person.value.team) return
+async function changeTeam(to: StaffTeam) {
+  if (!person.value || to === person.value.team) return
   savingTeam.value = true
   try {
     const url: string = `/api/admin/staff/${userId.value}/team`
-    await api(url, { method: 'PUT', body: { team } })
-    if (person.value) person.value = { ...person.value, team }
-    notifySuccess('Squadra cambiata', `${name.value} ora è nell’elenco ${OF_TEAM[team]}.`)
+    await api(url, { method: 'PUT', body: { team: to } })
+    if (person.value) person.value = { ...person.value, team: to }
+    notifySuccess('Squadra cambiata', `${name.value} ora è nell’elenco ${OF_TEAM[to]}.`)
   } catch (error) {
     notifyError(error)
     await refresh()
@@ -228,7 +230,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
 </script>
 
 <template>
-  <IcPage :title="person ? name : label('staffTeam', teamOfSegment(route.params.team))" :back="list" width="wide">
+  <IcPage :title="person ? name : label('staffTeam', team)" :back="list" width="wide">
     <template #actions>
       <UButton
         class="pointer-coarse:min-h-11"

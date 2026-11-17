@@ -38,6 +38,11 @@ const toSend = computed(() =>
 function select(ids: string[], value: boolean) {
   selected.value = value ? [...new Set([...selected.value, ...ids])] : selected.value.filter(id => !ids.includes(id))
 }
+/** The box «select all» of a list: ticked, unticked or in between. */
+function allSelected(ids: string[]): boolean | 'indeterminate' {
+  const ticked = ids.filter(id => selected.value.includes(id)).length
+  return !ticked ? false : ticked === ids.length ? true : 'indeterminate'
+}
 
 const addOpen = ref(false)
 const addTeam = ref<StaffTeam>('staff')
@@ -56,8 +61,6 @@ async function afterChange() {
   await refresh()
 }
 
-/** The roles of the application. */
-const describe = (c: SessionConvocation) => roleList(c.staffRoles, 'Ruoli non indicati')
 const roleEditable = (c: SessionConvocation) => editable.value && OPEN_CONVOCATIONS.includes(c.status)
 
 async function changeRole(c: SessionConvocation, role: string) {
@@ -162,10 +165,10 @@ function summaryOf(list: SessionConvocation[]): string {
   const count = (status: SessionConvocation['status']) => list.filter(c => c.status === status).length
   const [accepted, waiting, draft, declined] = [count('accepted'), count('sent'), count('draft'), count('declined')]
   return [
-    accepted && `${accepted} ${accepted === 1 ? 'accettata' : 'accettate'}`,
+    accepted && plural(accepted, 'accettata', 'accettate'),
     waiting && `${waiting} in attesa di risposta`,
     draft && `${draft} da inviare`,
-    declined && `${declined} ${declined === 1 ? 'rifiutata' : 'rifiutate'}`,
+    declined && plural(declined, 'rifiutata', 'rifiutate'),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -186,24 +189,22 @@ const teams = computed(() =>
   STAFF_TEAMS.map(team => {
     const list = convocations.value.filter(c => c.team === team)
     const draftIds = drafts.value.filter(c => c.team === team).map(c => c.id)
-    const ticked = draftIds.filter(id => selected.value.includes(id)).length
-    // Confirmed in the slot of the team: the coordinator is counted apart.
+    // Confirmed in the slot of the team: the coordinator is counted apart. Only the staff has a target.
     const confirmed = list.filter(c => c.confirmed && staffSlot(c) === team).length
+    const needed = team === 'staff' ? (session.value?.staffNeeded ?? 0) : 0
     return {
       team,
       list,
       confirmed,
+      needed,
       draftIds,
-      allSelected: (!ticked ? false : ticked === draftIds.length ? true : 'indeterminate') as boolean | 'indeterminate',
       columns: editable.value && draftIds.length ? [{ id: 'select' }, ...COLUMNS] : COLUMNS,
       coordinators: list
         .filter(c => staffSlot(c) === 'coordinator' && OPEN_CONVOCATIONS.includes(c.status))
         .map(c => (c.confirmed ? fullName(c) : `${fullName(c)} (non ancora confermato)`)),
-      // The staff against `staffNeeded` (coordinator aside), the v-team as it is.
-      description:
-        team === 'staff'
-          ? `${plural(confirmed, 'confermato', 'confermati')} su ${plural(session.value?.staffNeeded ?? 0, 'necessario', 'necessari')}, coordinatore a parte`
-          : plural(confirmed, 'confermato', 'confermati'),
+      description: needed
+        ? `${plural(confirmed, 'confermato', 'confermati')} su ${plural(needed, 'necessario', 'necessari')}, coordinatore a parte`
+        : plural(confirmed, 'confermato', 'confermati'),
       summary: summaryOf(list),
     }
   }),
@@ -269,7 +270,7 @@ const teams = computed(() =>
       </div>
 
       <IcSection
-        v-for="{ team, list, confirmed, draftIds, allSelected, columns, coordinators, description, summary } in teams"
+        v-for="{ team, list, confirmed, needed, draftIds, columns, coordinators, description, summary } in teams"
         :key="team"
         :title="label('staffTeam', team)"
         :description="description"
@@ -287,11 +288,11 @@ const teams = computed(() =>
 
         <div class="mb-5 space-y-3">
           <UProgress
-            v-if="team === 'staff' && session.staffNeeded > 0"
-            :model-value="Math.min(confirmed, session.staffNeeded)"
-            :max="session.staffNeeded"
+            v-if="needed"
+            :model-value="Math.min(confirmed, needed)"
+            :max="needed"
             size="sm"
-            :aria-label="`Staff confermato: ${confirmed} su ${session.staffNeeded}`"
+            :aria-label="`Staff confermato: ${confirmed} su ${needed}`"
             class="max-w-md"
           />
           <p class="flex items-start gap-2 text-sm">
@@ -320,7 +321,7 @@ const teams = computed(() =>
           <UTable :data="list" :columns="columns" :get-row-id="row => row.id" class="hidden md:block">
             <template #select-header>
               <UCheckbox
-                :model-value="allSelected"
+                :model-value="allSelected(draftIds)"
                 :aria-label="`Seleziona tutte le convocazioni ${OF_TEAM[team]} da inviare`"
                 @update:model-value="value => select(draftIds, value === true)"
               />
@@ -337,7 +338,7 @@ const teams = computed(() =>
               <ULink :to="teamPath(team, row.original.userId)" class="font-semibold text-primary hover:underline">
                 {{ fullName(row.original) }}
               </ULink>
-              <p class="text-sm text-muted">{{ describe(row.original) }}</p>
+              <p class="text-sm text-muted">{{ roleList(row.original.staffRoles, 'Ruoli non indicati') }}</p>
             </template>
             <template #role-cell="{ row }">
               <USelect
@@ -390,7 +391,7 @@ const teams = computed(() =>
                   <ULink :to="teamPath(team, c.userId)" class="font-semibold text-primary hover:underline">
                     {{ fullName(c) }}
                   </ULink>
-                  <p class="text-sm text-muted">{{ describe(c) }}</p>
+                  <p class="text-sm text-muted">{{ roleList(c.staffRoles, 'Ruoli non indicati') }}</p>
                   <p v-if="statusNote(c)" class="text-sm text-muted">{{ statusNote(c) }}</p>
                 </div>
                 <UDropdownMenu :items="rowActions(c)" :content="{ align: 'end' }">
