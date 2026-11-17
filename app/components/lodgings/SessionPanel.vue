@@ -2,7 +2,7 @@
 import type { SelectMenuItem } from '@nuxt/ui'
 import type { SessionLodgingFamily, SessionLodgingStaff, SessionLodgingsDto } from '#shared/types/lodgings'
 import { NO_CARDS, plural } from '#shared/utils/format'
-import { groupByLocation, lodgingLine, placeGuests } from '#shared/utils/lodgings'
+import { featureLabels, groupByLocation, lodgingLine, lodgingName, placeGuests } from '#shared/utils/lodgings'
 
 // The Alloggi tab of a session (docs/spec.md 3.11): each titolare holding a place gets a lodging of the
 // layout, chosen by its size and needs, and so does each member of the staff and v-team (several in one
@@ -48,7 +48,9 @@ function menu(choice: (item: Placed) => { taken?: string; line?: string }): Sele
     { type: 'label', label: group.label },
     ...group.items.map(item => {
       const { taken, line } = choice(item)
-      return { label: item.name, value: item.id, description: taken ?? line ?? lodgingLine(item), disabled: !!taken }
+      // With the location, so that the chosen one reads unambiguously in the closed select.
+      const label = lodgingName(item)
+      return { label, value: item.id, description: taken ?? line ?? lodgingLine(item), disabled: !!taken }
     }),
   ])
 }

@@ -37,9 +37,6 @@ export interface SessionLodgingFamily {
   /** The answer "Esigenze per l'alloggio" of the family data. */
   needs: LodgingFeature[]
   lodgingId: string | null
-  /** Who to call: the person of the account and the family's phone (theirs if the family has none). */
-  referent: string
-  phone: string | null
 }
 
 /** A person of the session staff or v-team (an open convocation), with the lodging they sleep in. */

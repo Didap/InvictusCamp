@@ -10,12 +10,14 @@ import {
   lodgingsCsv,
   lodgingsPdf,
   lodgingsPdfBlocks,
+  sessionLayout,
   sessionLodgingsOf,
   updateLodging,
 } from '../../server/domain/lodgings'
 import { answerInvitation, cancelParticipation } from '../../server/domain/sessions'
 import { lodgingSchema, type LodgingInput } from '../../shared/schemas/lodgings'
 import type { ParticipationKind, ParticipationStatus, SessionStatus } from '../../shared/utils/constants'
+import { formatDayRange } from '../../shared/utils/format'
 import { sniffMimeType } from '../../server/domain/storage'
 import { makeAdmin, makeFamily, makeSession, makeStaff, t, useTestDb } from './helpers'
 
@@ -139,7 +141,7 @@ describe('a session', () => {
 
     await expect(place(bianchi.participation, villetta)).rejects.toMatchObject({
       statusCode: 409,
-      message: '«Villetta 1» è già assegnato a Famiglia Rossi',
+      message: '«Villetta 1 (Alloggi Invictus Camp)» è già assegnato a Famiglia Rossi',
     })
 
     await place(rossi.participation, null)
@@ -224,7 +226,7 @@ describe('a session', () => {
     await db.update(t.campSessions).set({ status: 'completed' }).where(eq(t.campSessions.id, session.id))
     await expect(deleteLodging(db, camera, actor)).rejects.toMatchObject({
       statusCode: 409,
-      message: '«Camera 1» è nello schema di una sessione conclusa: non si può eliminare',
+      message: '«Camera 1 (Alloggi Invictus Camp)» è nello schema di una sessione conclusa: non si può eliminare',
     })
     expect(await lodgingOf(rossi.participation.id)).toBe(camera)
   })
@@ -282,7 +284,7 @@ describe('a session', () => {
       needs: ['Bagno senza barriere architettoniche'],
       phone: '333 1234567',
     })
-    await join(session.id, 'Famiglia Bianchi', { people: 3 })
+    const bianchi = await join(session.id, 'Famiglia Bianchi', { people: 3 })
     await join(session.id, 'Famiglia Verdi')
     const villetta = await lodging({ features: ['kitchen'], doubleBeds: 1, singleBeds: 2 })
     await lodging({ name: 'Camera 1', location: 'melina', beds: 3, accessible: true })
@@ -298,21 +300,29 @@ describe('a session', () => {
       ';;;;;;Famiglia Verdi;Prova Utente;;;;Componenti non ancora indicati. Senza alloggio',
     ])
 
-    // The PDF: by location, each lodging with who sleeps in it and who to call, then who has no lodging.
-    const blocks = lodgingsPdfBlocks(session, await sessionLodgingsOf(db, session.id))
-    expect(blocks).toEqual(
-      expect.arrayContaining([
-        { heading: 'B&B Melina' },
-        { label: 'Camera 1' },
-        'Libero.',
-        '3 posti letto · Accessibile',
-        { heading: 'Alloggi Invictus Camp' },
-        'Famiglia Rossi, 5 persone. Referente: Prova Utente, 333 1234567. Da controllare: 5 persone e 4 posti letto. Manca: Bagno senza barriere.',
-        '4 posti letto (1 letto matrimoniale, 2 letti singoli) · Cucina',
-        { heading: 'Senza alloggio' },
-        'Famiglia Verdi, componenti non ancora indicati. Referente: Prova Utente, telefono non indicato.',
-      ]),
-    )
+    // The PDF: by location in the order of the list, each lodging with who sleeps in it and who to call
+    // (the account's phone when the family has none), how it is made; then who has no lodging. What does
+    // not fit is not in it: next to a name and a phone it would tell what the family needs.
+    await db.update(t.users).set({ phone: '080 1234567' }).where(eq(t.users.id, bianchi.family.userId))
+    const { user: anna } = await makeStaff(db)
+    await db.insert(t.sessionStaff).values({ sessionId: session.id, userId: anna.id, status: 'accepted' })
+    expect(lodgingsPdfBlocks(await sessionLayout(db, session.id))).toEqual([
+      `Sessione di prova, ${formatDayRange(session.startDate, session.endDate, 'long')}.`,
+      { heading: 'B&B Melina' },
+      { label: 'Camera 1' },
+      'Libero.',
+      '3 posti letto · Accessibile',
+      { heading: 'Alloggi Invictus Camp' },
+      { label: 'Villetta 1' },
+      'Famiglia Rossi, 5 persone. Referente: Prova Utente, 333 1234567.',
+      '4 posti letto (1 letto matrimoniale, 2 letti singoli) · Cucina',
+      { heading: 'Senza alloggio' },
+      'Famiglia Bianchi, 3 persone. Referente: Prova Utente, 080 1234567.',
+      'Famiglia Verdi, componenti non ancora indicati. Referente: Prova Utente, telefono non indicato.',
+      'Staff: Prova Utente (Staff).',
+    ])
+    // The tab gets the families without their contacts.
+    expect((await sessionLodgingsOf(db, session.id)).families[0]).not.toHaveProperty('phone')
     const pdf = await lodgingsPdf(db, session.id)
     expect(pdf.filename).toBe('alloggi-sessione-di-prova-21-06-2027.pdf')
     expect(sniffMimeType(pdf.data)).toBe('application/pdf')

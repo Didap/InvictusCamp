@@ -1,5 +1,5 @@
 {
-  "id": "af84264b-ecf0-4d61-880c-fcfa27aeb990",
+  "id": "f333e19e-2c9a-4b50-930f-bf95ab38ecd9",
   "prevId": "92b5afc0-a97a-4d3d-9d95-fb9df0923ca4",
   "version": "7",
   "dialect": "postgresql",
@@ -1573,6 +1573,10 @@
         "lodgings_bed_kinds": {
           "name": "lodgings_bed_kinds",
           "value": "\"lodgings\".\"single_beds\" >= 0 and \"lodgings\".\"double_beds\" >= 0 and \"lodgings\".\"sofa_beds\" >= 0"
+        },
+        "lodgings_location": {
+          "name": "lodgings_location",
+          "value": "\"lodgings\".\"location\" in ('melina', 'nu_suennu', 'torricella', 'invictus_camp')"
         }
       },
       "isRLSEnabled": false

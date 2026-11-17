@@ -29,6 +29,7 @@ import {
 } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
 import { formatDateTime, fullName, plural } from '../../shared/utils/format'
+import { lodgingName } from '../../shared/utils/lodgings'
 import {
   SESSION_TRANSITIONS,
   SESSION_TRANSITION_ACTIONS,
@@ -647,8 +648,7 @@ export async function familySessions(db: DbOrTx, familyId: string): Promise<Fami
           ? {
               group,
               groupLead: leadFirstName ? fullName({ firstName: leadFirstName, lastName: leadLastName }) : null,
-              lodging:
-                lodging && lodgingLocation ? `${lodging} (${enumLabel('lodgingLocation', lodgingLocation)})` : null,
+              lodging: lodging && lodgingLocation ? lodgingName({ name: lodging, location: lodgingLocation }) : null,
               hasProgramme,
             }
           : null,

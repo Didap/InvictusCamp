@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { lodgingSchema, type LodgingInput } from '#shared/schemas/lodgings'
+import type { FormSubmitEvent } from '@nuxt/ui'
+import { lodgingSchema, type LodgingValues } from '#shared/schemas/lodgings'
 import type { Lodging } from '#shared/types/lodgings'
 
 // A lodging of the layout (docs/spec.md 3.11): location, name, beds and their kinds, accessibility, what it
@@ -36,12 +37,11 @@ const BED_KINDS = [
 ] as const
 
 const saving = ref(false)
-async function onSubmit() {
+async function onSubmit(event: FormSubmitEvent<LodgingValues>) {
   saving.value = true
   try {
     const url: string = props.lodging ? `/api/admin/lodgings/${props.lodging.id}` : '/api/admin/lodgings'
-    const body = state as LodgingInput
-    await api(url, { method: props.lodging ? 'PUT' : 'POST', body })
+    await api(url, { method: props.lodging ? 'PUT' : 'POST', body: event.data })
     notifySuccess('Alloggio salvato')
     emit('saved')
     open.value = false

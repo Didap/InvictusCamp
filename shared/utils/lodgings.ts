@@ -23,6 +23,11 @@ export function bedsLabel(beds: number): string {
   return plural(beds, 'posto letto', 'posti letto')
 }
 
+/** «Camera 1 (B&B Melina)»: told apart from a lodging with the same name in another location. */
+export function lodgingName(lodging: { name: string; location: LodgingLocation }): string {
+  return `${lodging.name} (${enumLabel('lodgingLocation', lodging.location)})`
+}
+
 /** "1 letto matrimoniale, 2 letti singoli, 1 divano letto": only the kinds there are. */
 export function bedKindsLabel(lodging: { singleBeds: number; doubleBeds: number; sofaBeds: number }): string {
   return [

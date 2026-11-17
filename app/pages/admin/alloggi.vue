@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { LodgingListItem } from '#shared/types/lodgings'
 import { plural } from '#shared/utils/format'
-import { bedsLabel, groupByLocation, lodgingLine } from '#shared/utils/lodgings'
+import { bedsLabel, groupByLocation, lodgingLine, lodgingName } from '#shared/utils/lodgings'
 
 // Alloggi (docs/spec.md 3.11): the bed layout of the camp, entered once and used by every session,
 // where the Alloggi tab places each family in a lodging.
@@ -18,7 +18,7 @@ function edit(lodging: LodgingListItem | null) {
 
 async function remove(lodging: LodgingListItem) {
   const ok = await confirm({
-    title: `Elimini «${lodging.name}»?`,
+    title: `Elimini «${lodgingName(lodging)}»?`,
     description: [
       lodging.sessions
         ? `È assegnato a una famiglia in ${plural(lodging.sessions, 'sessione', 'sessioni')}: nelle sessioni aperte la famiglia resta senza alloggio; se una è conclusa, non si può eliminare.`
@@ -98,14 +98,14 @@ const groups = computed(() => groupByLocation(data.value ?? []))
             <div class="flex shrink-0 flex-wrap gap-2">
               <UButton
                 label="Modifica"
-                :aria-label="`Modifica «${lodging.name}»`"
+                :aria-label="`Modifica «${lodgingName(lodging)}»`"
                 icon="i-lucide-pencil"
                 color="neutral"
                 variant="outline"
                 @click="edit(lodging)"
               />
               <UButton
-                :aria-label="`Elimina «${lodging.name}»`"
+                :aria-label="`Elimina «${lodgingName(lodging)}»`"
                 icon="i-lucide-trash-2"
                 color="error"
                 variant="ghost"

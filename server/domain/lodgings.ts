@@ -12,7 +12,7 @@ import type {
   SessionLodgingsDto,
 } from '../../shared/types/lodgings'
 import { enumLabel } from '../../shared/utils/constants'
-import { todayIso, type DayRange } from '../../shared/utils/dates'
+import { todayIso } from '../../shared/utils/dates'
 import { NO_CARDS, formatDay, formatDayRange, fullName, plural } from '../../shared/utils/format'
 import {
   accommodationNeeds,
@@ -20,6 +20,7 @@ import {
   featureLabels,
   groupByLocation,
   lodgingLine,
+  lodgingName,
   placeGuests,
   sortLodgings,
 } from '../../shared/utils/lodgings'
@@ -109,7 +110,7 @@ export async function deleteLodging(db: DbOrTx, id: string, actor: Actor): Promi
   if (closed) {
     throw new DomainError(
       409,
-      `«${lodging.name}» è nello schema di ${closed === 1 ? 'una sessione conclusa' : `${closed} sessioni concluse`}: non si può eliminare`,
+      `«${lodgingName(lodging)}» è nello schema di ${closed === 1 ? 'una sessione conclusa' : `${closed} sessioni concluse`}: non si può eliminare`,
     )
   }
   await db.delete(lodgings).where(eq(lodgings.id, id))
@@ -129,8 +130,15 @@ export async function deleteLodging(db: DbOrTx, id: string, actor: Actor): Promi
 
 // ─── A session ─────────────────────────────────────────────────────────────────────────────────────
 
-/** The titolari holding a place in the session, by name, with their size and needs. */
-async function lodgingFamilies(db: DbOrTx, sessionId: string): Promise<SessionLodgingFamily[]> {
+/** A family placed in the session with who to call: for the CSV and the PDF, never sent to the tab. */
+export type LodgingFamilyContact = SessionLodgingFamily & {
+  /** The person of the account, and the family's phone (the account's if the family has none). */
+  referent: string
+  phone: string | null
+}
+
+/** The titolari holding a place in the session, by name, with their size, needs and who to call. */
+async function lodgingFamilies(db: DbOrTx, sessionId: string): Promise<LodgingFamilyContact[]> {
   const rows = await db
     .select({
       id: sessionFamilies.id,
@@ -182,8 +190,8 @@ async function lodgingStaff(db: DbOrTx, sessionId: string): Promise<SessionLodgi
     .sort((a, b) => a.name.localeCompare(b.name, 'it'))
 }
 
-/** The session, its layout, its families and its staff, read together. */
-async function loadSession(db: DbOrTx, sessionId: string) {
+/** The session, its layout, its families with who to call and its staff, read together. */
+export async function sessionLayout(db: DbOrTx, sessionId: string) {
   const [session, layout, placed, staff] = await Promise.all([
     findSession(db, sessionId),
     db.select(columns).from(lodgings),
@@ -195,8 +203,12 @@ async function loadSession(db: DbOrTx, sessionId: string) {
 
 /** GET /api/admin/sessions/:id/lodgings: the layout and the families to place in it. */
 export async function sessionLodgingsOf(db: DbOrTx, sessionId: string): Promise<SessionLodgingsDto> {
-  const { session, ...rest } = await loadSession(db, sessionId)
-  return { editable: isSessionEditable(session.status), ...rest }
+  const { session, families: placed, ...rest } = await sessionLayout(db, sessionId)
+  return {
+    editable: isSessionEditable(session.status),
+    ...rest,
+    families: placed.map(({ referent: _referent, phone: _phone, ...family }) => family),
+  }
 }
 
 /**
@@ -226,8 +238,8 @@ async function requireLodgingFor(db: DbOrTx, sessionId: string, lodgingId: strin
       : [],
   ])
   if (!lodging) throw notFound()
-  if (holder) throw new DomainError(409, `«${lodging.name}» è già assegnato a ${holder.familyName}`)
-  if (staff?.total) throw new DomainError(409, `In «${lodging.name}» dorme già lo staff`)
+  if (holder) throw new DomainError(409, `«${lodgingName(lodging)}» è già assegnato a ${holder.familyName}`)
+  if (staff?.total) throw new DomainError(409, `In «${lodgingName(lodging)}» dorme già lo staff`)
   return lodging
 }
 
@@ -281,7 +293,7 @@ export async function assignStaffLodging(
   })
 }
 
-/** «Anna Rossi, Marco Bianchi (V-team)». */
+/** «Anna Rossi (Staff), Marco Bianchi (V-team)». */
 const staffNames = (people: SessionLodgingStaff[]) =>
   people.map(person => `${person.name} (${enumLabel('staffTeam', person.team)})`).join(', ')
 
@@ -290,9 +302,9 @@ const staffNames = (people: SessionLodgingStaff[]) =>
  * families and the staff still without one. Needs come from "Esigenze per l'alloggio", never from the health details.
  */
 export async function lodgingsCsv(db: DbOrTx, sessionId: string): Promise<{ filename: string; csv: string }> {
-  const { session, lodgings: layout, families: placed, staff } = await loadSession(db, sessionId)
+  const { session, lodgings: layout, families: placed, staff } = await sessionLayout(db, sessionId)
   /** Family, who to call, people, needs, what to check. */
-  const familyCells = (family: SessionLodgingFamily, warnings: string[]) => [
+  const familyCells = (family: LodgingFamilyContact, warnings: string[]) => [
     family.familyName,
     family.referent,
     family.phone,
@@ -348,19 +360,22 @@ export async function lodgingsCsv(db: DbOrTx, sessionId: string): Promise<{ file
 }
 
 /** «Famiglia Rossi, 4 persone. Referente: Anna Rossi, 333 123 4567.» */
-function familyText(family: SessionLodgingFamily): string {
-  const people = family.people ? plural(family.people, 'persona', 'persone') : 'componenti non ancora indicati'
+function familyText(family: LodgingFamilyContact): string {
+  const people = family.people ? plural(family.people, 'persona', 'persone') : NO_CARDS.toLowerCase()
   return `${family.familyName}, ${people}. Referente: ${family.referent}, ${family.phone ?? 'telefono non indicato'}.`
 }
 
 /**
  * The layout of the session as a PDF to print or send: by location, each lodging with who sleeps in it (a
- * family with who to call, or the staff), what to check and how it is made; then who has no lodging yet.
+ * family with who to call, or the staff) and how it is made; then who has no lodging yet. What does not fit
+ * stays in the tab and the CSV: next to a name and a phone, a missing need would tell what the family needs.
  */
-export function lodgingsPdfBlocks(
-  session: DayRange & { title: string },
-  { lodgings: layout, families: placed, staff }: Omit<SessionLodgingsDto, 'editable'>,
-): PdfBlock[] {
+export function lodgingsPdfBlocks({
+  session,
+  lodgings: layout,
+  families: placed,
+  staff,
+}: Awaited<ReturnType<typeof sessionLayout>>): PdfBlock[] {
   const withoutFamily = placed.filter(family => !family.lodgingId)
   const withoutStaff = staff.filter(person => !person.lodgingId)
   return [
@@ -369,10 +384,7 @@ export function lodgingsPdfBlocks(
       { heading: group.label },
       ...group.items.flatMap(item => [
         { label: item.name },
-        [
-          item.family ? familyText(item.family) : item.staff.length ? `Staff: ${staffNames(item.staff)}.` : 'Libero.',
-          ...(item.warnings.length ? [`Da controllare: ${item.warnings.join('. ')}.`] : []),
-        ].join(' '),
+        item.family ? familyText(item.family) : item.staff.length ? `Staff: ${staffNames(item.staff)}.` : 'Libero.',
         [lodgingLine(item), item.description].filter(Boolean).join('. '),
       ]),
     ]),
@@ -387,12 +399,12 @@ export function lodgingsPdfBlocks(
 }
 
 export async function lodgingsPdf(db: DbOrTx, sessionId: string): Promise<{ filename: string; data: Uint8Array }> {
-  const { session, ...layout } = await loadSession(db, sessionId)
+  const layout = await sessionLayout(db, sessionId)
   return {
-    filename: sessionFileName(session, 'alloggi', 'pdf'),
+    filename: sessionFileName(layout.session, 'alloggi', 'pdf'),
     data: await textPdf(
       'Schema degli alloggi',
-      lodgingsPdfBlocks(session, layout),
+      lodgingsPdfBlocks(layout),
       `Contiene i recapiti delle famiglie: serve solo a organizzare gli alloggi. Aggiornato al ${formatDay(todayIso(), 'numeric')}.`,
     ),
   }

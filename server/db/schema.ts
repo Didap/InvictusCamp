@@ -43,7 +43,7 @@ import type {
   UserRole,
   UserStatus,
 } from '../../shared/utils/constants'
-import { OPEN_CONVOCATIONS } from '../../shared/utils/constants'
+import { LODGING_LOCATIONS, OPEN_CONVOCATIONS } from '../../shared/utils/constants'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 
 const tz = { withTimezone: true } as const
@@ -278,6 +278,9 @@ export const campSessions = pgTable(
   ],
 )
 
+/** A list of constants for `in (…)`. */
+const sqlList = (values: readonly string[]) => sql.raw(values.map(value => `'${value}'`).join(', '))
+
 /**
  * A lodging of the camp (alloggio, docs/spec.md 3.11): the bed layout the administration enters once and
  * every session uses. A family in a session gets one (session_families.lodgingId).
@@ -307,11 +310,9 @@ export const lodgings = pgTable(
   t => [
     check('lodgings_beds', sql`${t.beds} > 0`),
     check('lodgings_bed_kinds', sql`${t.singleBeds} >= 0 and ${t.doubleBeds} >= 0 and ${t.sofaBeds} >= 0`),
+    check('lodgings_location', sql`${t.location} in (${sqlList(LODGING_LOCATIONS)})`),
   ],
 )
-
-/** A list of constants for `in (…)`. */
-const sqlList = (values: readonly string[]) => sql.raw(values.map(value => `'${value}'`).join(', '))
 
 /**
  * A titolare holding a place (shared/utils/slots.ts, holdsSlot): only it has a lodging and a group. Used by
