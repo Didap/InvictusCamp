@@ -688,10 +688,8 @@ export async function seedDemo(
           // The young person with a condition has no relationship: the others' is to them.
           relationship: m.relationship ?? null,
           kind,
-          // An adult's birth date is required by the form: one per demo adult, between 1972 and 1986.
-          birthDate:
-            m.birthDate ??
-            (kind === 'adult' ? `${1972 + ((index * 3 + position) % 15)}-0${(position % 9) + 1}-15` : null),
+          // Everyone's birth date is required: the young ones have theirs above, the adults one between 1972 and 1986.
+          birthDate: m.birthDate ?? `${1972 + ((index * 3 + position) % 15)}-0${(position % 9) + 1}-15`,
           isReferent: position === 0,
           hasDisability: Boolean(m.disability),
           disability: m.disability

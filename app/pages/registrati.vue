@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { registerFamilySchema } from '#shared/schemas/auth'
+import { todayIso } from '#shared/utils/dates'
 
 definePageMeta({ layout: 'auth' })
 useHead({ title: 'Registra la tua famiglia · Invictus Camp' })
@@ -8,11 +9,13 @@ const state = reactive({
   familyName: '',
   firstName: '',
   lastName: '',
+  birthDate: '',
   email: '',
   phone: '',
   password: '',
   privacy: false,
 })
+const today = todayIso()
 const loading = ref(false)
 const sentTo = ref<string | null>(null)
 
@@ -55,6 +58,17 @@ const contact = useContact(true)
           <UInput v-model="state.lastName" autocomplete="family-name" size="lg" class="w-full" />
         </UFormField>
       </div>
+      <UFormField label="Data di nascita del referente" name="birthDate" required>
+        <UInput
+          v-model="state.birthDate"
+          type="date"
+          :max="today"
+          min="1900-01-01"
+          autocomplete="bday"
+          size="lg"
+          class="w-full sm:w-60"
+        />
+      </UFormField>
       <UFormField label="Email" name="email" help="La useremo per gli inviti e le comunicazioni del camp." required>
         <UInput v-model="state.email" type="email" autocomplete="email" size="lg" class="w-full" />
       </UFormField>

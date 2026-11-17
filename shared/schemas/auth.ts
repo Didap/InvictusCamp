@@ -1,5 +1,7 @@
 import { z } from 'zod'
-import { zEmail, zPassword, zPersonName, zPhone, zRequiredPhone, zRequiredText, zToken } from './common'
+import { STAFF_TEAMS } from '../utils/constants'
+import { ageOn } from '../utils/dates'
+import { zBirthDate, zEmail, zPassword, zPersonName, zPhone, zRequiredPhone, zRequiredText, zToken } from './common'
 
 /** A checkbox that must be ticked (boolean in the form, true on the server). */
 export const zPrivacy = z
@@ -17,6 +19,12 @@ export const registerFamilySchema = z.object({
   familyName: zRequiredText(120),
   firstName: zPersonName,
   lastName: zPersonName,
+  /** The referent's, an adult: their card is born with it (everyone's age is required). */
+  birthDate: zBirthDate.refine(day => ageOn(day) >= 18, {
+    error: 'Il referente della famiglia è maggiorenne',
+    // Only on a valid date: a wrong one already says so.
+    when: payload => payload.issues.length === 0,
+  }),
   email: zEmail,
   phone: zRequiredPhone,
   password: zPassword,
@@ -26,6 +34,8 @@ export type RegisterFamilyInput = z.infer<typeof registerFamilySchema>
 
 /** A person applies to join the staff: the account first, the application inside the platform. */
 export const registerStaffSchema = z.object({
+  /** The team the person applies for (the link they came from); the application can still change it. */
+  team: z.enum(STAFF_TEAMS).default('staff'),
   firstName: zPersonName,
   lastName: zPersonName,
   email: zEmail,

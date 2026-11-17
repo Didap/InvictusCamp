@@ -94,9 +94,9 @@ const allOf = (items: readonly { value: string; label: string }[], all = 'Tutte'
 const asItems = (values: string[] = []) => values.map(value => ({ value, label: value }))
 const provinceItems = computed(() => allOf(asItems(data.value?.provinces)))
 const regionItems = computed(() => allOf(asItems(data.value?.regions)))
-const disabilityItems = allOf(DISABILITY_COUNT_FILTERS)
+const disabilityItems = allOf(DISABILITY_COUNT_FILTERS, 'Tutti/e')
 const conditionItems = allOf(CONDITIONS)
-const ageItems = allOf(GUEST_AGE_FILTERS)
+const ageItems = allOf(GUEST_AGE_FILTERS, 'Tutti/e')
 const membersItems = allOf(
   Array.from({ length: MEMBERS_FILTER_MAX }, (_, i) => ({
     value: String(i + 1),

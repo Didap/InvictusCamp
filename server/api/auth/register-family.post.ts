@@ -44,6 +44,7 @@ export default defineEventHandler(async event => {
         familyId: family!.id,
         firstName: input.firstName,
         lastName: input.lastName,
+        birthDate: input.birthDate,
         relationship: 'parent',
         isReferent: true,
       })

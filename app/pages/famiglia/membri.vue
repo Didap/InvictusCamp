@@ -65,9 +65,7 @@ async function idUploaded() {
 const title = (member: OwnFamilyMember) => memberName(member, members.value)
 
 function summary(member: OwnFamilyMember): string {
-  return isEmptyCard(member)
-    ? 'Scheda da compilare: nome, parentela, data di nascita'
-    : memberLine({ ...member, hasDisability: member.health?.hasDisability })
+  return isEmptyCard(member) ? 'Scheda da compilare: nome, parentela, data di nascita' : memberLine(member)
 }
 
 async function remove(member: OwnFamilyMember) {

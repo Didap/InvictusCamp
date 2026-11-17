@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { registerStaffSchema } from '#shared/schemas/auth'
+import type { StaffTeam } from '#shared/utils/constants'
+import { V_TEAM_QUERY } from '#shared/utils/routes'
 
 definePageMeta({ layout: 'auth' })
-useHead({ title: 'Candidati per lo staff · Invictus Camp' })
+
+// From «Vuoi far parte del v-team?» the account is born for the v-team; the application can still change it.
+const route = useRoute()
+const team = computed<StaffTeam>(() => (route.query.squadra === V_TEAM_QUERY ? 'volunteer' : 'staff'))
+const title = computed(() => (team.value === 'volunteer' ? 'Candidati per il v-team' : 'Candidati per lo staff'))
+useHead({ title: () => `${title.value} · Invictus Camp` })
 
 const state = reactive({ firstName: '', lastName: '', email: '', phone: '', password: '', privacy: false })
 const loading = ref(false)
@@ -13,7 +20,7 @@ async function onSubmit() {
   try {
     const result = await $fetch<{ email: string }>('/api/auth/register-staff', {
       method: 'POST',
-      body: { ...state, phone: state.phone || undefined },
+      body: { ...state, team: team.value, phone: state.phone || undefined },
     })
     sentTo.value = result.email
   } catch (error) {
@@ -27,7 +34,7 @@ async function onSubmit() {
 <template>
   <IcEmailSent v-if="sentTo" :email="sentTo" />
   <div v-else>
-    <h1 class="text-2xl font-bold text-highlighted">Candidati per lo staff</h1>
+    <h1 class="text-2xl font-bold text-highlighted">{{ title }}</h1>
     <p class="mt-2 text-muted">
       Crea il tuo account. Nel gestionale completerai la candidatura con le tue esperienze e il curriculum: dopo la
       valutazione ti scriveremo noi.

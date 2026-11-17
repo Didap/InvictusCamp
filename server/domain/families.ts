@@ -68,7 +68,6 @@ import {
   guestAgeStatus,
   isCardToComplete,
   isYoungWithCondition,
-  missingBirthDate,
   plural,
   surnameOf,
 } from '../../shared/utils/format'
@@ -497,14 +496,8 @@ async function requireAnotherReferent(db: DbOrTx, familyId: string, memberId: st
   if (!other) throw createError({ statusCode: 409, message })
 }
 
-/**
- * The relationship stored: none for the young person with a condition, required for everyone else. Checks
- * the birth date too, which that young person needs: the flag is known here even without `health`.
- */
+/** The relationship stored: none for the young person with a condition, required for everyone else. */
 function relationshipOf(member: MemberInput, hasDisability: boolean): MemberRelationship | null {
-  if (missingBirthDate({ kind: member.kind, birthDate: member.birthDate, hasDisability })) {
-    throw createError({ statusCode: 400, message: 'Indica la data di nascita' })
-  }
   if (isYoungWithCondition({ kind: member.kind, hasDisability })) return null
   if (!member.relationship) throw createError({ statusCode: 400, message: 'Scegli il legame di parentela' })
   return member.relationship
@@ -536,7 +529,7 @@ export async function addFamilyMember(
       familyId: family.id,
       firstName: input.member.firstName,
       lastName: input.member.lastName,
-      birthDate: input.member.birthDate ?? null,
+      birthDate: input.member.birthDate,
       relationship: relationshipOf(input.member, health.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
@@ -580,7 +573,7 @@ export async function updateFamilyMember(
     .set({
       firstName: input.member.firstName,
       lastName: input.member.lastName,
-      birthDate: input.member.birthDate ?? null,
+      birthDate: input.member.birthDate,
       relationship: relationshipOf(input.member, after.hasDisability),
       kind: input.member.kind,
       isReferent: input.member.isReferent,
@@ -937,7 +930,6 @@ function familyListWhere(query: AdminFamilyListQuery): SQL | undefined {
   const guest = (where: SQL = sql`true`) =>
     sql`exists (select 1 from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability} and ${where})`
   if (query.disability === 'yes') conditions.push(guest())
-  if (query.disability === 'no') conditions.push(not(guest()))
   if (query.disability === 'many') {
     conditions.push(
       sql`(select count(*) from ${familyMembers} where ${familyMembers.familyId} = ${families.id} and ${familyMembers.hasDisability}) > 1`,

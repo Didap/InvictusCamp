@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { registerFamilySchema } from '#shared/schemas/auth'
+import { registerFamilySchema, registerStaffSchema } from '#shared/schemas/auth'
 import { DISABILITY_CHOICES } from '#shared/content/member-form'
-import { memberSchema, normalizeHealth } from '#shared/schemas/families'
+import { adminFamilyListQuerySchema, guestsMin, memberSchema, normalizeHealth } from '#shared/schemas/families'
 import { familyNameOf, guestAgeStatus, isCardToComplete, surnameOf } from '#shared/utils/format'
 
 /** The names of the fields a parse refuses, as the form shows them. */
@@ -14,6 +14,7 @@ describe('family registration', () => {
     familyName: 'Famiglia Rossi',
     firstName: 'Anna',
     lastName: 'Rossi',
+    birthDate: '1985-03-02',
     email: 'anna@example.com',
     phone: '+39 333 1234567',
     password: 'una-password-lunga',
@@ -25,6 +26,35 @@ describe('family registration', () => {
     expect(refused(registerFamilySchema.safeParse({ ...valid, phone: '  ' }))).toEqual(['phone'])
     expect(refused(registerFamilySchema.safeParse({ ...valid, phone: undefined }))).toEqual(['phone'])
   })
+
+  it('needs the birth date of the referent', () => {
+    expect(refused(registerFamilySchema.safeParse({ ...valid, birthDate: '' }))).toEqual(['birthDate'])
+    expect(refused(registerFamilySchema.safeParse({ ...valid, birthDate: '2999-01-01' }))).toEqual(['birthDate'])
+    // The referent is an adult.
+    expect(refused(registerFamilySchema.safeParse({ ...valid, birthDate: '2015-04-12' }))).toEqual(['birthDate'])
+  })
+
+  it('needs a young person with a condition at the first confirmation only', () => {
+    expect(guestsMin('draft')).toBe(1)
+    // Once confirmed, a withdrawn consent can leave none: the family still edits its data.
+    expect(guestsMin('submitted')).toBe(0)
+  })
+})
+
+describe('staff registration', () => {
+  const valid = {
+    firstName: 'Luca',
+    lastName: 'Neri',
+    email: 'luca@example.com',
+    password: 'una-password-lunga',
+    privacy: true,
+  }
+
+  it('applies for the staff unless the v-team link says otherwise', () => {
+    expect(registerStaffSchema.parse(valid).team).toBe('staff')
+    expect(registerStaffSchema.parse({ ...valid, team: 'volunteer' }).team).toBe('volunteer')
+    expect(registerStaffSchema.safeParse({ ...valid, team: 'boss' }).success).toBe(false)
+  })
 })
 
 describe('family member', () => {
@@ -32,11 +62,10 @@ describe('family member', () => {
   const young = { ...adult, firstName: 'Luca', relationship: 'sibling', kind: 'young', birthDate: '2015-04-12' }
   const details = Object.fromEntries(DISABILITY_CHOICES.map(field => [field.key, [field.options[0].value]]))
 
-  it('needs the birth date of an adult, not of a young person', () => {
+  it('needs the birth date of everyone', () => {
     expect(memberSchema.safeParse(adult).success).toBe(true)
     expect(refused(memberSchema.safeParse({ ...adult, birthDate: '' }))).toEqual(['birthDate'])
-    expect(memberSchema.safeParse({ ...young, birthDate: '' }).success).toBe(true)
-    // The young person with a condition needs it: the camp takes 5 to 21 year olds.
+    expect(refused(memberSchema.safeParse({ ...young, birthDate: null }))).toEqual(['birthDate'])
     const health = { hasDisability: true, disability: details }
     expect(refused(memberSchema.safeParse({ ...young, birthDate: '', health }))).toEqual(['birthDate'])
   })

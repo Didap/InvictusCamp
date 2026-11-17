@@ -12,12 +12,22 @@ import {
   MEMBER_KINDS,
   MEMBER_RELATIONSHIPS,
   PERSONAL_DOCUMENT_CATEGORIES,
+  type FamilyFormStatus,
   type MemberKind,
   type PersonalDocumentCategory,
 } from '../utils/constants'
-import { isIsoDay, todayIso } from '../utils/dates'
-import { missingBirthDate, missingRelationship } from '../utils/format'
-import { zListQuery, zPersonName, zPhone, zRequiredPhone, zRequiredText, zText, zUuid } from './common'
+import { missingRelationship } from '../utils/format'
+import {
+  blankAsMissing,
+  zBirthDate,
+  zListQuery,
+  zPersonName,
+  zPhone,
+  zRequiredPhone,
+  zRequiredText,
+  zText,
+  zUuid,
+} from './common'
 
 /** An Italian province as its two-letter code ("TA"); empty is allowed. */
 const zProvince = z
@@ -68,6 +78,18 @@ export const familyCompositionSchema = z.object({
 })
 export type FamilyComposition = z.output<typeof familyCompositionSchema>
 
+export const GUEST_MISSING_MESSAGE =
+  'Il camp è per le famiglie con almeno un ragazzo o una ragazza in questa condizione: indica quanti sono'
+
+/**
+ * The fewest young people with a condition the family data takes: one until the first confirmation (the camp
+ * is for them, a family without any does not register), none after it (a withdrawn consent can leave none, and
+ * the family still edits its data).
+ */
+export function guestsMin(formStatus: FamilyFormStatus): number {
+  return formStatus === 'submitted' ? 0 : 1
+}
+
 /**
  * The three numbers of the composition: what a card of each group is, and how the form and the
  * messages name the group.
@@ -79,6 +101,7 @@ export const COMPOSITION_GROUPS = [
     kind: 'young',
     hasDisability: true,
     label: 'Ragazzi e ragazze con patologie gravi o croniche, disturbi del neurosviluppo o disabilità',
+    help: 'Almeno uno/a: il camp è pensato per loro.',
   },
   {
     key: 'youngWithoutCondition',
@@ -222,27 +245,20 @@ export const memberHealthSchema = z
     }
   })
 
-const zBirthDate = z
-  .string()
-  .refine(isIsoDay, { error: 'Data non valida' })
-  .refine(day => day >= '1900-01-01', { error: 'Data non valida' })
-  .refine(day => day <= todayIso(), { error: 'La data di nascita non può essere nel futuro' })
-
 /**
- * A member of the family; an adult's birth date is required. `health` is accepted only with the consent;
+ * A member of the family; everyone's birth date is required. `health` is accepted only with the consent;
  * when absent it stays as it is.
  */
 const memberFields = z.object({
   firstName: zPersonName,
   lastName: zPersonName,
-  birthDate: z.preprocess(value => (value === '' ? null : value), zBirthDate.nullable()).optional(),
+  birthDate: zBirthDate,
   /** Null for the young person with a condition: everyone else's relationship is to them. */
   relationship: z.enum(MEMBER_RELATIONSHIPS, { error: 'Scegli il legame di parentela' }).nullable().optional(),
   kind: z.enum(MEMBER_KINDS, { error: 'Indica se è un adulto o un ragazzo o ragazza' }),
   isReferent: z.boolean().default(false),
   health: memberHealthSchema.optional(),
 })
-const birthDateFields = memberFields.pick({ kind: true, birthDate: true, health: true })
 const relationshipFields = memberFields.pick({ kind: true, relationship: true, health: true })
 
 // Whenever the fields a check reads are valid, also while another field is wrong: every missing field at once.
@@ -251,11 +267,6 @@ export const memberSchema = memberFields
   .refine(member => !member.health?.hasDisability || member.kind === 'young', {
     path: ['kind'],
     error: 'Solo un ragazzo o una ragazza può avere una patologia o disabilità indicata',
-  })
-  .refine(member => !missingBirthDate({ ...member, hasDisability: member.health?.hasDisability }), {
-    path: ['birthDate'],
-    error: 'Campo obbligatorio',
-    when: ({ value }) => birthDateFields.safeParse(value).success,
   })
   .refine(
     // Without `health` (no consent) the server knows whether a young person's card is the one with a condition.
@@ -347,7 +358,7 @@ export const healthConsentSchema = z.object({ given: z.boolean() })
 export const personalDocumentSchema = z.object({
   category: z.enum(PERSONAL_DOCUMENT_CATEGORIES, { error: 'Scegli il tipo di documento' }),
   title: zRequiredText(150),
-  familyMemberId: z.preprocess(value => (value === '' || value === null ? undefined : value), zUuid.optional()),
+  familyMemberId: z.preprocess(blankAsMissing, zUuid.optional()),
 })
 export type PersonalDocumentInput = z.output<typeof personalDocumentSchema>
 
@@ -363,11 +374,13 @@ export function isHealthDocument(category: PersonalDocumentCategory): boolean {
 export const FAMILY_LIST_SORTS = ['name', 'city', 'members', 'createdAt'] as const
 export type FamilyListSort = (typeof FAMILY_LIST_SORTS)[number]
 
-/** The families filter by the number of young people with a condition: at least one, more than one, none. */
+/**
+ * The families filter by the number of young people with a condition: at least one, more than one. No «none»
+ * (asked on 16/11): a family without any does not get past the first confirmation of its data.
+ */
 export const DISABILITY_COUNT_FILTERS = [
-  { value: 'yes', label: 'Almeno uno' },
-  { value: 'many', label: 'Più di uno' },
-  { value: 'no', label: 'Nessuno' },
+  { value: 'yes', label: 'Almeno uno/a' },
+  { value: 'many', label: 'Più di uno/a' },
 ] as const
 
 /** The families filter by the age of the young people with a condition; `out` is outside GUEST_AGE. */
