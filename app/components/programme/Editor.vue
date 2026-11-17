@@ -3,8 +3,8 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import { MAX_ACTIVITIES, type ProgrammeSaveInput } from '#shared/schemas/programmes'
 import type { ProgrammeBlock, ProgrammeDay } from '#shared/types/domain'
 import type { ProgrammeDto } from '#shared/types/programmes'
-import { formatDateTime } from '#shared/utils/format'
-import { copyOf, moveBlock, newBlockId, openPoints, placeBlock, sameContent } from '#shared/utils/programme'
+import { copyOf, newId, sameContent } from '#shared/utils/plain'
+import { moveBlock, openPoints, placeBlock } from '#shared/utils/programme'
 
 // The week editor of the administration (docs/spec.md 3.10). Changes stay on this page until Salva,
 // which sends the whole week with the revision it was loaded at: if someone saved in between, the
@@ -16,7 +16,6 @@ const props = defineProps<{
   save: (body: ProgrammeSaveInput) => Promise<void>
 }>()
 
-const confirm = useConfirm()
 const toast = useToast()
 
 const draft = ref(copyOf(props.programme.content))
@@ -39,34 +38,7 @@ async function onSave() {
   }
 }
 
-async function discard() {
-  const ok = await confirm({
-    title: 'Annullare le modifiche?',
-    description: 'Il programma torna com’era all’ultimo salvataggio.',
-    confirmLabel: 'Annulla le modifiche',
-    cancelLabel: 'Continua a modificare',
-    danger: true,
-  })
-  if (ok) draft.value = copyOf(props.programme.content)
-}
-
-async function canLeave() {
-  if (!dirty.value) return true
-  return confirm({
-    title: 'Uscire senza salvare?',
-    description: 'Le modifiche al programma non ancora salvate andranno perse.',
-    confirmLabel: 'Esci senza salvare',
-    cancelLabel: 'Resta qui',
-    danger: true,
-  })
-}
-onBeforeRouteLeave(canLeave)
-onBeforeRouteUpdate(canLeave)
-function onBeforeUnload(event: BeforeUnloadEvent) {
-  if (dirty.value) event.preventDefault()
-}
-onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
-onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
+useLeaveGuard(dirty, 'al programma')
 
 // ─── Blocks ────────────────────────────────────────────────────────────────────────────────────────
 
@@ -124,7 +96,7 @@ function blockItems(day: ProgrammeDay, block: ProgrammeBlock, index: number): Dr
       {
         label: 'Duplica',
         icon: 'i-lucide-copy',
-        onSelect: () => day.blocks.splice(index + 1, 0, { ...copyOf(block), id: newBlockId() }),
+        onSelect: () => day.blocks.splice(index + 1, 0, { ...copyOf(block), id: newId('b') }),
       },
       { label: 'Sposta su', icon: 'i-lucide-arrow-up', disabled: index === 0, onSelect: () => move(day, index, -1) },
       {
@@ -153,41 +125,15 @@ function showBlock(blockId: string) {
 
 <template>
   <div>
-    <!-- Negative top = the body padding of IcPage (p-4 sm:p-6 lg:p-8): the bar sits flush under the navbar. -->
-    <div
-      class="sticky -top-4 z-10 mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-default bg-default py-3 sm:-top-6 lg:-top-8"
-    >
-      <p class="flex items-center gap-2 text-sm" role="status">
-        <template v-if="dirty">
-          <UIcon name="i-lucide-circle-dot" class="size-4 shrink-0 text-warning" aria-hidden="true" />
-          Modifiche non salvate
-        </template>
-        <template v-else>
-          <UIcon name="i-lucide-circle-check" class="size-4 shrink-0 text-success" aria-hidden="true" />
-          Salvato il {{ formatDateTime(programme.updatedAt)
-          }}<template v-if="programme.updatedByName"> da {{ programme.updatedByName }}</template>
-        </template>
-      </p>
-      <div class="flex flex-wrap gap-2">
-        <UButton
-          v-if="dirty"
-          color="neutral"
-          variant="outline"
-          label="Annulla le modifiche"
-          class="pointer-coarse:min-h-11"
-          :disabled="saving"
-          @click="discard"
-        />
-        <UButton
-          icon="i-lucide-save"
-          label="Salva"
-          class="pointer-coarse:min-h-11"
-          :disabled="!dirty"
-          :loading="saving"
-          @click="onSave"
-        />
-      </div>
-    </div>
+    <IcSaveBar
+      :dirty="dirty"
+      :saving="saving"
+      :updated-at="programme.updatedAt"
+      :updated-by-name="programme.updatedByName"
+      discard-description="Il programma torna com’era all’ultimo salvataggio."
+      @save="onSave"
+      @discard="draft = copyOf(programme.content)"
+    />
 
     <ProgrammeBoard :content="draft" :dates="dates" @move="moveBlock(draft, $event)" @open="openBlock">
       <template #block-actions="{ day, block, index }">

@@ -32,6 +32,7 @@ import {
   missingRequiredQuestions,
   NO_HEALTH,
   normalizeFormAnswers,
+  questionsToAnswer,
   normalizeHealth,
   type AdminFamilyListQuery,
   type FamilyComposition,
@@ -40,7 +41,9 @@ import {
   type MemberInput,
   type PersonalDocumentInput,
 } from '../../shared/schemas/families'
+import { formQuestions, type FormQuestion } from '../../shared/content/family-form'
 import type { FileDto } from '../../shared/types/api'
+import type { FormAnswers } from '../../shared/types/domain'
 import type {
   AdminFamilyDetail,
   AdminFamilyHealth,
@@ -89,6 +92,7 @@ import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { FEEDBACK_REMINDER_DAYS, ownResponse, questionnaireOpen } from './feedback'
+import { getFamilyForm } from './questionnaires'
 import { deleteStoredFile } from './storage'
 import { createError } from './errors'
 
@@ -236,6 +240,13 @@ export async function updateFamilyDataByAdmin(
   return after!
 }
 
+/** The stored answers to the questions taken out of the form, which the administration still sees. */
+function retiredAnswers(answers: FormAnswers, retired: readonly FormQuestion[]): FormAnswers {
+  return Object.fromEntries(
+    retired.flatMap(question => (Object.hasOwn(answers, question.id) ? [[question.id, answers[question.id]!]] : [])),
+  )
+}
+
 /**
  * Confirms the family data (docs/spec.md, 3.8): residence, composition, answers. Every save needs the
  * whole form; the first one marks the data confirmed. Then the family gets one card per person
@@ -250,13 +261,23 @@ export async function saveFamilyData(
   db: DbOrTx,
   input: { familyId: string; data: FamilyDataInput; actor: Actor },
 ): Promise<{ family: FamilyRow; cards: CardRow[]; cardsCreated: number; cardsRemoved: number }> {
+  // The form first, then the family: the administration's save takes them in the same order.
+  const form = await getFamilyForm(db, 'share')
+  if (input.data.formRevision !== undefined && input.data.formRevision !== form.revision) {
+    throw createError({
+      statusCode: 409,
+      message: 'Nel frattempo abbiamo cambiato qualche domanda: ricontrolla le risposte e salva di nuovo.',
+      data: { reason: 'form_changed' },
+    })
+  }
   // Locked: two saves at once (two tabs, a retry) would both count the same cards and both add the missing ones.
   const family = await requireFamilyRow(db, input.familyId, true)
-  const { answers, invalid } = normalizeFormAnswers(input.data.answers)
+  const questions = formQuestions(form.content.sections)
+  const { answers, invalid } = normalizeFormAnswers(input.data.answers, questions)
   if (invalid.length) {
     throw createError({ statusCode: 400, message: `Risposta non valida alla domanda «${invalid[0]!.label}»` })
   }
-  const missing = missingRequiredQuestions(answers)
+  const missing = missingRequiredQuestions(answers, questions)
   if (missing.length) {
     throw createError({
       statusCode: 400,
@@ -304,7 +325,8 @@ export async function saveFamilyData(
     .update(families)
     .set({
       ...familyDataColumns(input.data),
-      formAnswers: answers,
+      // The answers to questions taken out of the form stay: the administration still sees them.
+      formAnswers: { ...retiredAnswers(family.formAnswers, form.content.retired), ...answers },
       formStatus: 'submitted',
       formSubmittedAt: family.formSubmittedAt ?? new Date(),
     })
@@ -840,7 +862,7 @@ export async function familyHome(
 ): Promise<FamilyHomeDto> {
   const family = await requireFamilyRow(db, input.familyId)
   const today = input.today ?? todayIso()
-  const [cards, [signatures], [next], [feedback]] = await Promise.all([
+  const [cards, [signatures], [next], [feedback], form] = await Promise.all([
     cardChecks(db, family.id),
     db
       .select({ total: count() })
@@ -884,11 +906,14 @@ export async function familyHome(
       )
       .orderBy(desc(campSessions.startDate))
       .limit(1),
+    // Only a family that confirmed its data can have questions left after a change of the form.
+    family.formStatus === 'submitted' ? getFamilyForm(db) : null,
   ])
   return {
     firstName: input.firstName,
     familyName: family.name,
     formStatus: family.formStatus,
+    questionsToAnswer: form ? questionsToAnswer(family.formAnswers, formQuestions(form.content.sections)) : 0,
     memberCount: cards.length,
     cardsToComplete: cards.filter(isCardToComplete).length,
     healthConsent: Boolean(family.healthDataConsentAt),
@@ -1135,6 +1160,7 @@ export async function adminFamilyDetail(db: DbOrTx, familyId: string): Promise<A
     members: members.map(toMember),
     documents: await listPersonalDocuments(db, family.userId),
     activeSessionIds: active.map(item => item.sessionId),
+    form: (await getFamilyForm(db)).content,
   }
 }
 

@@ -128,6 +128,10 @@ export const PROGRAMME_BLOCK_KINDS = [
 ] as const
 export type ProgrammeBlockKind = (typeof PROGRAMME_BLOCK_KINDS)[number]
 
+/** The kinds of question of the questionnaire «Dati della famiglia» (shared/content/family-form.ts). */
+export const FORM_QUESTION_TYPES = ['text', 'textarea', 'select', 'multiselect', 'boolean'] as const
+export type FormQuestionType = (typeof FORM_QUESTION_TYPES)[number]
+
 /**
  * The activity groups: the families of a session are split among them (docs/spec.md 3.12) and they rotate
  * through the activities of `groups` blocks.
@@ -373,6 +377,24 @@ const programmeBlockKind: Record<ProgrammeBlockKind, EnumMeta> = {
   departure: { label: 'Partenza', icon: 'i-lucide-car-front', color: 'neutral' },
 }
 
+const formQuestionType: Record<FormQuestionType, EnumMeta> = {
+  text: { label: 'Testo breve', icon: 'i-lucide-text-cursor-input', color: 'neutral', description: 'Una riga.' },
+  textarea: { label: 'Testo lungo', icon: 'i-lucide-text', color: 'neutral', description: 'Più righe.' },
+  select: {
+    label: 'Scelta singola',
+    icon: 'i-lucide-circle-dot',
+    color: 'neutral',
+    description: 'Una sola opzione tra quelle che scrivi.',
+  },
+  multiselect: {
+    label: 'Scelta multipla',
+    icon: 'i-lucide-list-checks',
+    color: 'neutral',
+    description: 'Una o più opzioni tra quelle che scrivi.',
+  },
+  boolean: { label: 'Sì o no', icon: 'i-lucide-toggle-left', color: 'neutral', description: 'Due risposte: Sì, No.' },
+}
+
 const lodgingFeature: Record<LodgingFeature, EnumMeta> = {
   kitchen: { label: 'Cucina', icon: 'i-lucide-cooking-pot', color: 'neutral' },
   accessible_bathroom: { label: 'Bagno senza barriere', icon: 'i-lucide-accessibility', color: 'neutral' },
@@ -381,6 +403,7 @@ const lodgingFeature: Record<LodgingFeature, EnumMeta> = {
 
 export const ENUM_META = {
   programmeBlockKind,
+  formQuestionType,
   userRole,
   userStatus,
   sessionStatus,

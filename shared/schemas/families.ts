@@ -1,7 +1,7 @@
 // Schemas of the families area (A3), shared by the forms (UForm) and the API (parseBody, parseQuery),
 // plus the pure rules of the questionnaire and of the health details, used on both sides.
 import { z } from 'zod'
-import { FAMILY_FORM_QUESTIONS, type FormQuestion } from '../content/family-form'
+import type { FormQuestion } from '../content/family-form'
 import { ALLERGIES, DIETS, DISABILITY_CHOICES, type Choice, type DisabilityChoiceKey } from '../content/member-form'
 import type { MemberHealth } from '../types/families'
 import type { DisabilityInfo, FormAnswers, UsefulInfo } from '../types/domain'
@@ -154,6 +154,8 @@ const zAnswer = z.union([z.string().max(5000), z.array(z.string().max(300)).max(
 /** PUT /api/family/profile: the family data with the answers to the questions. */
 export const familyDataSchema = familyDataFieldsSchema.extend({
   answers: z.record(z.string().max(80), zAnswer),
+  /** The revision of the questionnaire the answers are for: another one means it changed meanwhile (409). */
+  formRevision: z.number().int().min(0).optional(),
 })
 export type FamilyDataInput = z.output<typeof familyDataSchema>
 
@@ -168,13 +170,16 @@ export function isAnswered(value: FormAnswers[string] | undefined): boolean {
 }
 
 /**
- * The answers worth keeping: questions of the current questionnaire only, values checked against
- * their type and options, empty answers dropped. `invalid` lists the questions with a wrong value.
+ * The answers worth keeping: questions of the current questionnaire (`questions`) only, values checked
+ * against their type and options, empty answers dropped. `invalid` lists the questions with a wrong value.
  */
-export function normalizeFormAnswers(answers: FormAnswers): { answers: FormAnswers; invalid: FormQuestion[] } {
+export function normalizeFormAnswers(
+  answers: FormAnswers,
+  questions: readonly FormQuestion[],
+): { answers: FormAnswers; invalid: FormQuestion[] } {
   const clean: FormAnswers = {}
   const invalid: FormQuestion[] = []
-  for (const question of FAMILY_FORM_QUESTIONS) {
+  for (const question of questions) {
     const value = answers[question.id]
     if (value === undefined || value === null) continue
     if (question.type === 'text' || question.type === 'textarea') {
@@ -198,8 +203,36 @@ export function normalizeFormAnswers(answers: FormAnswers): { answers: FormAnswe
 }
 
 /** Required questions still without an answer. */
-export function missingRequiredQuestions(answers: FormAnswers): FormQuestion[] {
-  return FAMILY_FORM_QUESTIONS.filter(question => question.required && !isAnswered(answers[question.id]))
+export function missingRequiredQuestions(answers: FormAnswers, questions: readonly FormQuestion[]): FormQuestion[] {
+  return questions.filter(question => question.required && !isAnswered(answers[question.id]))
+}
+
+/**
+ * The stored answers that still fit the questions, as the family's form shows them: a choice taken out of
+ * the options goes (from a multiple choice, the others stay), and so does an answer of another kind.
+ */
+export function fitAnswers(answers: FormAnswers, questions: readonly FormQuestion[]): FormAnswers {
+  const fit: FormAnswers = {}
+  for (const question of questions) {
+    const value = Object.hasOwn(answers, question.id) ? answers[question.id] : undefined
+    const options = question.options ?? []
+    if (question.type === 'multiselect') {
+      if (Array.isArray(value)) fit[question.id] = value.filter(option => options.includes(option))
+    } else if (question.type === 'boolean') {
+      if (typeof value === 'boolean') fit[question.id] = value
+    } else if (typeof value === 'string' && (question.type !== 'select' || options.includes(value))) {
+      fit[question.id] = value
+    }
+  }
+  return fit
+}
+
+/**
+ * The required questions a family that confirmed its data must still answer, after the administration
+ * changed the form: new ones, ones made required, ones whose chosen option was taken out.
+ */
+export function questionsToAnswer(answers: FormAnswers, questions: readonly FormQuestion[]): number {
+  return missingRequiredQuestions(fitAnswers(answers, questions), questions).length
 }
 
 // ─── Members and health details ─────────────────────────────────────────────────────────────────────

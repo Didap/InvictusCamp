@@ -50,6 +50,7 @@ const TABLES = [
   'lodgings',
   'documents',
   'programmes',
+  'questionnaires',
   'session_availability',
   'camp_sessions',
   'staff_profiles',

@@ -21,17 +21,21 @@ const steps = computed<Step[]>(() => {
   const h = home.value
   if (!h) return []
   const confirmed = h.formStatus === 'submitted'
+  const familyData = h.questionsToAnswer
+    ? {
+        title: `Rispondi a ${plural(h.questionsToAnswer, 'domanda', 'domande')} dei dati della famiglia`,
+        description: 'Abbiamo cambiato qualche domanda dopo che hai confermato i tuoi dati.',
+        action: 'Rispondi',
+      }
+    : confirmed
+      ? { title: 'Dati della famiglia confermati', description: 'Puoi cambiarli quando vuoi.', action: 'Compila' }
+      : {
+          title: 'Compila i dati della famiglia',
+          description: 'Dove abiti, chi fa parte della tua famiglia, le sessioni che preferisci.',
+          action: 'Compila',
+        }
   return [
-    {
-      id: 'familyData',
-      done: confirmed,
-      title: confirmed ? 'Dati della famiglia confermati' : 'Compila i dati della famiglia',
-      description: confirmed
-        ? 'Puoi cambiarli quando vuoi.'
-        : 'Dove abiti, chi fa parte della tua famiglia, le sessioni che preferisci.',
-      to: '/famiglia/profilo',
-      action: 'Compila',
-    },
+    { id: 'familyData', done: confirmed && !h.questionsToAnswer, to: '/famiglia/profilo', ...familyData },
     {
       id: 'cards',
       done: confirmed && h.cardsToComplete === 0,

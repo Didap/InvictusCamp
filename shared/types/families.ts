@@ -1,5 +1,6 @@
 // DTOs of the families area (A3). Health details (MemberHealth) travel only in the family's own
 // endpoints and in the reserved endpoint of the administration, never in lists.
+import type { FamilyFormContent } from '../content/family-form'
 import type { FileDto, Paginated } from './api'
 import type { DisabilityInfo, FormAnswers, UsefulInfo } from './domain'
 import type { FamilyComposition } from '../schemas/families'
@@ -156,6 +157,8 @@ export interface FamilyHomeDto {
   firstName: string
   familyName: string
   formStatus: FamilyFormStatus
+  /** Required questions to answer after the form changed (shared/schemas/families.ts, questionsToAnswer). */
+  questionsToAnswer: number
   memberCount: number
   /** Cards created from the family data and not filled in yet. */
   cardsToComplete: number
@@ -202,6 +205,8 @@ export interface AdminFamilyDetail {
   documents: PersonalDocumentDto[]
   /** Sessions where the family already holds a participation (selected, invited or confirmed). */
   activeSessionIds: string[]
+  /** The questionnaire as it is now: the questions of `formAnswers`, and those taken out (`retired`). */
+  form: FamilyFormContent
 }
 
 /** GET /api/admin/families/:id/health: the reserved section of the admin record. */
@@ -209,3 +214,21 @@ export interface AdminFamilyHealth {
   healthDataConsentAt: string | null
   members: (Pick<FamilyMemberDto, 'id' | 'firstName' | 'lastName' | 'kind'> & MemberHealth)[]
 }
+
+/** The questionnaire «Dati della famiglia» as it is now (GET /api/admin/family-form, /api/family/form). */
+export interface FamilyFormDto {
+  content: FamilyFormContent
+  /** 0 while the form is still the starting one of the code (shared/content/family-form.ts). */
+  revision: number
+  updatedAt: string | null
+  updatedByName: string | null
+}
+
+export interface FamilyFormSaveResult {
+  form: FamilyFormDto
+  /** Families whose answers changed because an option they chose was renamed. */
+  answersUpdated: number
+}
+
+/** GET /api/family/form: the questions the family answers, with the revision they come from. */
+export type FamilyFormView = Pick<FamilyFormContent, 'sections'> & Pick<FamilyFormDto, 'revision'>

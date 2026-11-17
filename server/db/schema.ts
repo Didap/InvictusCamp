@@ -18,6 +18,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import type { Audience, DisabilityInfo, UsefulInfo, FormAnswers, ProgrammeContent } from '../../shared/types/domain'
 import type { FeedbackArchive } from '../../shared/types/feedback'
+import type { FamilyFormContent } from '../../shared/content/family-form'
 import type {
   ConvocationStatus,
   DocumentCategory,
@@ -139,7 +140,7 @@ export const families = pgTable(
     province: text(),
     region: text().$type<ItalianRegion>(),
     phone: text(),
-    /** The questions of the family data (shared/content/family-form.ts), by question id. */
+    /** The answers to the questionnaire (`questionnaires`, key 'family'), by question id. */
     formAnswers: jsonb().$type<FormAnswers>().notNull().default({}),
     formStatus: text().$type<FamilyFormStatus>().notNull().default('draft'),
     formSubmittedAt: timestamp(tz),
@@ -156,6 +157,20 @@ export const families = pgTable(
   },
   t => [uniqueIndex('families_user_key').on(t.userId)],
 )
+
+/**
+ * A questionnaire the administration edits, one row per key: 'family' is «Dati della famiglia»
+ * (server/domain/questionnaires.ts). No row: the form of the code (shared/content/family-form.ts).
+ * `revision` grows at every save: a save carrying an older one is refused (two people editing).
+ */
+export const questionnaires = pgTable('questionnaires', {
+  key: text().primaryKey(),
+  content: jsonb().$type<FamilyFormContent>().notNull(),
+  revision: integer().notNull().default(1),
+  updatedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+})
 
 export const familyMembers = pgTable(
   'family_members',

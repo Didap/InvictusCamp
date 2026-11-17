@@ -173,7 +173,7 @@ async function saveNotes() {
         <template #actions>
           <IcStatusBadge kind="familyFormStatus" :value="family.formStatus" />
         </template>
-        <FamiliesQuestionnaireAnswers :answers="family.formAnswers" />
+        <FamiliesQuestionnaireAnswers :answers="family.formAnswers" :form="family.form" />
       </IcSection>
 
       <IcSection title="Documenti personali" description="Caricati dalla famiglia: certificati, diagnosi, documenti.">

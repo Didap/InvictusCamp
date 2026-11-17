@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { FAMILY_FORM_QUESTIONS } from '../../shared/content/family-form'
+import { DEFAULT_FAMILY_FORM, formQuestions } from '../../shared/content/family-form'
 import { accommodationNeeds, groupByArea, lodgingWarnings, sortLodgings } from '../../shared/utils/lodgings'
 
 describe('accommodation needs', () => {
   it('keeps the options the families answered with: answers are stored as labels', () => {
-    const question = FAMILY_FORM_QUESTIONS.find(item => item.id === 'accommodationNeeds')
+    const question = formQuestions(DEFAULT_FAMILY_FORM.sections).find(item => item.id === 'accommodationNeeds')
     expect(question?.options).toEqual(['Cucina', 'Bagno senza barriere architettoniche', 'Microonde'])
   })
 

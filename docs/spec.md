@@ -183,11 +183,33 @@ availability or receive convocations. The administration can move a person to th
   surname, stored as «Famiglia Rossi» (the lists show it so), and phone (required); residence (street and number, city, CAP and region required, province optional); the
   composition, i.e. how many adults (the account holder included), how many young people with a severe or
   chronic illness, a neurodevelopmental disorder or a disability (at least one: the camp is for them, a family
-  without any cannot confirm its data), how many without; and the questions of
-  `shared/content/family-form.ts` (how they found the camp, association, preferred sessions: weekend with 2
-  nights and/or summer week with 4 nights, accommodation needs: kitchen, bathroom without architectural
-  barriers, microwave; whether a dog comes along, with the notice that dogs cannot stay in the apartments and
-  kennels nearby are at the family's expense). Answers in `families.formAnswers` by question id. Every save needs the whole form.
+  without any cannot confirm its data), how many without; and the questions of the questionnaire, which the
+  administration edits (below). The starting ones, in
+  `shared/content/family-form.ts`: how they found the camp, association, preferred sessions (weekend with 2
+  nights and/or summer week with 4 nights), accommodation needs (kitchen, bathroom without architectural
+  barriers, microwave), whether a dog comes along (with the notice that dogs cannot stay in the apartments and
+  kennels nearby are at the family's expense), the two consents of the release. Answers in
+  `families.formAnswers` by question id, a choice as the text of its option. Every save needs the whole form.
+- **The questionnaire** (`/admin/famiglie/modulo`, from the Famiglie list): the administration adds, removes,
+  orders and edits sections and questions (text, help, kind of answer: short text, long text, single
+  choice, multiple choice, yes/no; options; required), with a preview as the family sees it. Stored in
+  `questionnaires` (key `family`; no row: the form of the code), saved whole with its revision (two people
+  editing: the later save is refused, 409), audited `family_form.update` with the previous version of
+  every question changed. The rules that keep the answers right:
+  - the questions the code reads (`LOCKED_QUESTIONS`: accommodation needs, read by the lodgings; the two
+    consents, read by the release) change only in text, help and place: type, options and requirement
+    always come from the code, also when the code changes them after a save;
+  - the kind of answer of a question already in the form only widens (short text to long text): another
+    kind is a new question;
+  - renaming an option rewrites the answers that chose it; an option taken out leaves its answers, which the
+    family's form no longer ticks;
+  - a question taken out goes to `retired`: its answers stay, the admin record shows them under «Domande non
+    più nel modulo», the family's saves keep them (answers to ids neither in the form nor retired go);
+  - a required question a confirmed family must answer after a change (new, made required, its option
+    taken out) leaves the family confirmed: its home and its form say so, and its next save needs the answer;
+  - a family's save carries the revision of the form it answered: if the form changed meanwhile, 409 and
+    the page loads the new questions, keeping what was typed. The two saves never cross (a lock on the form).
+  The editor warns that health data does not belong here (it goes in the member cards, with the consent).
 - **Confirming** it (`formStatus` `draft` → `submitted`, `formSubmittedAt` the first time) creates one
   **card** (`family_members` row) per person declared: the cards already there count, so the account
   holder is the first adult, and the missing ones are created empty (no name, no relationship), with their
