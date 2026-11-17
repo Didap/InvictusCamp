@@ -63,6 +63,11 @@ const STYLES = {
   label: { size: SIZE, before: 0, after: 0, room: 100 },
 }
 
+function blockOf(block: PdfBlock): [keyof typeof STYLES, string] {
+  if (typeof block === 'string') return ['paragraph', block]
+  return 'heading' in block ? ['heading', block.heading] : ['label', block.label]
+}
+
 export async function textPdf(title: string, blocks: PdfBlock[], footer: string): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
   pdf.setTitle(title)
@@ -77,12 +82,7 @@ export async function textPdf(title: string, blocks: PdfBlock[], footer: string)
   page.drawText(toWinAnsi(bold, title), { x: MARGIN, y: 748, size: 17, font: bold, color: rgb(0.12, 0.11, 0.1) })
   let y = 712
   for (const block of blocks) {
-    const [kind, text] =
-      typeof block === 'string'
-        ? (['paragraph', block] as const)
-        : 'heading' in block
-          ? (['heading', block.heading] as const)
-          : (['label', block.label] as const)
+    const [kind, text] = blockOf(block)
     const style = STYLES[kind]
     const face = kind === 'paragraph' ? font : bold
     y -= style.before

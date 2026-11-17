@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { canteenCsv, canteenOf, canteenPdf, canteenPdfBlocks } from '../../server/domain/canteen'
 import { saveStaffUsefulInfo } from '../../server/domain/staff'
+import { sniffMimeType } from '../../server/domain/storage'
 import { makeFamily, makeSession, makeStaff, t, useTestDb } from './helpers'
 
 const db = useTestDb()
@@ -79,7 +80,7 @@ describe('canteen', () => {
     )
     const pdf = await canteenPdf(db, session.id)
     expect(pdf.filename).toBe('mensa-sessione-di-prova-21-06-2027.pdf')
-    expect(Buffer.from(pdf.data.subarray(0, 5)).toString()).toBe('%PDF-')
+    expect(sniffMimeType(pdf.data)).toBe('application/pdf')
 
     // Saving nothing clears the details and the consent.
     expect(await saveStaffUsefulInfo(db, { userId: staff.id, value: { info: {}, consent: false }, actor })).toEqual({

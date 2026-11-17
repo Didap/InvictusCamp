@@ -1,6 +1,7 @@
 // The canteen summary of a session (docs/spec.md 3.14): how many eat at each meal and who needs what, with
 // names, as the camp sends it to the supplier. Pure functions, shared by the Mensa tab, its CSV and its PDF.
 import { ALLERGIES, DIETS, HEALTH_LABELS } from '../content/member-form'
+import type { CanteenDto } from '../types/canteen'
 import type { UsefulInfo } from '../types/domain'
 import { andList, formatDayRange, plural } from './format'
 
@@ -70,14 +71,8 @@ export function canteenNotCounted(groups: CanteenGroups): string | null {
     : `${count} famiglie non hanno ancora indicato i componenti e non sono nel totale.`
 }
 
-export interface CanteenSession {
-  title: string
-  startDate: string
-  endDate: string
-}
-
 /** The text for the supplier: «Totale pasti 72 di cui: 5 senza lattosio (…)». */
-export function canteenText(summary: CanteenSummary & CanteenGroups & { session: CanteenSession }): string {
+export function canteenText(summary: CanteenDto): string {
   const { session } = summary
   const notCounted = canteenNotCounted(summary)
   return [

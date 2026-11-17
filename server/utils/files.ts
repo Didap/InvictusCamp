@@ -11,6 +11,7 @@ import {
   type FileRow,
   type StoreFileInput,
 } from '../domain/storage'
+import { setFileHeaders } from './download'
 
 export function uploadsDir(): string {
   return useRuntimeConfig().uploadsDir || './.data/uploads'
@@ -91,14 +92,8 @@ export async function sendFile(
   options: { download?: boolean; filename?: string } = {},
 ): Promise<Buffer> {
   const data = await loadFile(file)
-  const name = cleanName(options.filename ?? file.originalName)
-  const ascii = name.replace(/[^\x20-\x7e]/g, '_')
-  setResponseHeaders(event, {
-    'Content-Type': file.mimeType,
-    'Content-Length': String(data.byteLength),
-    'Content-Disposition': `${options.download ? 'attachment' : 'inline'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`,
-    'Cache-Control': 'private, no-store',
-  })
+  const filename = options.filename ?? file.originalName
+  setFileHeaders(event, { filename, type: file.mimeType, length: data.byteLength, download: options.download })
   return data
 }
 
