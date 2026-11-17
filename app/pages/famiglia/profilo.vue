@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import type { FormError, FormErrorEvent } from '@nuxt/ui'
-import { formQuestions, type FormSection } from '#shared/content/family-form'
+import { formQuestions } from '#shared/content/family-form'
 import {
   COMPOSITION_GROUPS,
   familyDataFieldsSchema,
   MAX_MEMBERS_OF_A_KIND,
   missingRequiredQuestions,
+  questionsToAnswer,
   type FamilyComposition,
 } from '#shared/schemas/families'
-import type { FamilyDataResult, FamilyProfileDto } from '#shared/types/families'
+import type { FamilyDataResult, FamilyFormView, FamilyProfileDto } from '#shared/types/families'
 import type { ItalianRegion } from '#shared/utils/constants'
 import { formatDateTime, plural, surnameOf } from '#shared/utils/format'
 import { answerFields, fieldAnswers, type AnswerFields } from '~/utils/family-form'
@@ -18,12 +19,13 @@ import { answerFields, fieldAnswers, type AnswerFields } from '~/utils/family-fo
 // composition never goes below the cards filled in (the inputs stop at them): that person leaves by
 // removing their card.
 const api = useApi()
-const [{ data: profile }, { data: sections }] = await Promise.all([
+const [{ data: profile }, { data: form, error: formError, refresh: refreshForm }] = await Promise.all([
   useApiFetch<FamilyProfileDto>('/api/family/profile'),
-  useApiFetch<FormSection[]>('/api/family/form'),
+  // The questions as the administration set them (/admin/famiglie/modulo), with their revision.
+  useApiFetch<FamilyFormView>('/api/family/form'),
 ])
-// The questions as the administration set them (/admin/famiglie/modulo).
-const questions = computed(() => formQuestions({ sections: sections.value ?? [] }))
+const sections = computed(() => form.value?.sections ?? [])
+const questions = computed(() => formQuestions({ sections: sections.value }))
 
 const submitted = computed(() => profile.value?.formStatus === 'submitted')
 const filledCards = computed<FamilyComposition>(
@@ -53,9 +55,9 @@ const guestLabel = (i: number) =>
 
 // The answers to the questions (app/utils/family-form.ts).
 const fields = reactive<AnswerFields>(answerFields(questions.value, profile.value?.formAnswers))
-/** Required questions added after the family confirmed its data and still without an answer. */
-const newQuestions = computed(() =>
-  submitted.value ? missingRequiredQuestions(profile.value?.formAnswers ?? {}, questions.value).length : 0,
+/** Required questions to answer because the form changed after the family confirmed its data. */
+const toAnswer = computed(() =>
+  submitted.value ? questionsToAnswer(profile.value?.formAnswers ?? {}, questions.value) : 0,
 )
 
 // Loaded once: a save updates `profile` without overwriting what is being typed.
@@ -75,6 +77,13 @@ if (profile.value) {
 }
 
 const answers = () => fieldAnswers(questions.value, fields)
+
+/** The administration changed the form meanwhile: the new questions, keeping what was typed where it fits. */
+async function reloadQuestions() {
+  const typed = answers()
+  await refreshForm()
+  Object.assign(fields, answerFields(questions.value, typed))
+}
 
 /** Under a number that cannot go lower: a person whose card is filled in leaves from the Componenti page. */
 function fieldHelp(field: (typeof COMPOSITION_GROUPS)[number]): string | undefined {
@@ -121,7 +130,12 @@ async function save() {
   try {
     const result = await api<FamilyDataResult>('/api/family/profile', {
       method: 'PUT',
-      body: { ...state, guestNames: state.guestNames.slice(0, newGuests.value), answers: answers() },
+      body: {
+        ...state,
+        guestNames: state.guestNames.slice(0, newGuests.value),
+        answers: answers(),
+        formRevision: form.value?.revision,
+      },
     })
     profile.value = result.profile
     state.guestNames = []
@@ -139,6 +153,7 @@ async function save() {
     } else notifySuccess(title, removed || (firstTime ? undefined : 'L’amministrazione vede già i dati nuovi.'))
   } catch (error) {
     notifyError(error, 'Dati non salvati')
+    if (apiErrorData(error)?.formChanged) await reloadQuestions()
   } finally {
     saving.value = false
   }
@@ -157,13 +172,13 @@ async function save() {
       description="Quando confermi questi dati, creiamo una scheda per ogni persona della tua famiglia: poi la completi con il nome e la data di nascita."
     />
     <UAlert
-      v-else-if="newQuestions"
+      v-else-if="toAnswer"
       class="mb-8"
       color="warning"
       variant="subtle"
       icon="i-lucide-message-circle-question"
-      :title="newQuestions === 1 ? 'C’è una domanda nuova' : `Ci sono ${newQuestions} domande nuove`"
-      description="Le abbiamo aggiunte dopo che hai confermato i tuoi dati: le trovi qui sotto con le altre. Rispondi e salva."
+      :title="toAnswer === 1 ? 'C’è una domanda a cui rispondere' : `Ci sono ${toAnswer} domande a cui rispondere`"
+      description="Abbiamo cambiato qualche domanda dopo che hai confermato i tuoi dati: le trovi qui sotto, segnate in rosso quando salvi. Rispondi e salva."
     />
     <UAlert
       v-else-if="profile?.formSubmittedAt"
@@ -175,7 +190,15 @@ async function save() {
       description="Puoi cambiarli quando vuoi: quando salvi, l’amministrazione vede quelli nuovi."
     />
 
-    <UForm :schema="familyDataFieldsSchema" :state="state" :validate="validate" @submit="save" @error="onError">
+    <UAlert
+      v-if="formError"
+      color="error"
+      variant="subtle"
+      icon="i-lucide-circle-alert"
+      title="Le domande non si sono caricate"
+      :description="`${apiErrorMessage(formError)}. Ricarica la pagina.`"
+    />
+    <UForm v-else :schema="familyDataFieldsSchema" :state="state" :validate="validate" @submit="save" @error="onError">
       <IcSection title="La famiglia">
         <div class="space-y-5">
           <UFormField
@@ -248,7 +271,7 @@ async function save() {
         </div>
       </IcSection>
 
-      <FamiliesFormQuestions :sections="sections ?? []" :fields="fields" />
+      <FamiliesFormQuestions :sections="sections" :fields="fields" />
 
       <div class="flex justify-end pt-6">
         <UButton

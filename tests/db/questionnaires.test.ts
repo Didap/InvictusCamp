@@ -75,9 +75,10 @@ describe('family form', () => {
 
     const audit = await db.select().from(t.auditLog).where(eq(t.auditLog.action, 'family_form.update'))
     expect(audit.map(row => row.data?.revision).sort()).toEqual([1, 2])
-    expect(audit.find(row => row.data?.revision === 1)!.data).toMatchObject({
-      changed: [{ id: 'dog', before: { label: 'Avete un cane che viaggia con voi?' } }],
-    })
+    // The audit keeps the form before each save.
+    const first = audit.find(row => row.data?.revision === 1)!.data!
+    expect(first).toMatchObject({ changed: ['dog'], added: [], removed: [] })
+    expect(question(first.previous as FormSection[], 'dog').label).toBe('Avete un cane che viaggia con voi?')
   })
 
   it('keeps the questions the code reads: only their text, help and place change', async () => {
@@ -97,6 +98,19 @@ describe('family form', () => {
     const consent = moved[2]!.questions.shift()!
     moved[0]!.questions.push({ ...consent, label: 'Possiamo fotografarvi?', help: 'Per il sito.' })
     expect((await save(moved, 0)).form.revision).toBe(1)
+
+    // Type, options and requirement come from the code even when the saved copy is older: a change in the
+    // code (a new lodging feature) reaches the families, and the next save is not refused.
+    const [row] = await db.select().from(t.questionnaires)
+    const stale = structuredClone(row!.content)
+    question(stale.sections, 'accommodationNeeds').options = ['Cucina']
+    await db.update(t.questionnaires).set({ content: stale })
+    const read = await getFamilyForm(db)
+    expect(question(read.content.sections, 'accommodationNeeds').options).toEqual(
+      question(sections(), 'accommodationNeeds').options,
+    )
+    expect(question(read.content.sections, 'photoConsent').label).toBe('Possiamo fotografarvi?')
+    expect((await save(read.content.sections, 1)).form.revision).toBe(2)
   })
 
   it('keeps the type of a question already in the form, text and long text excepted', async () => {
@@ -107,6 +121,15 @@ describe('family form', () => {
     const longer = sections()
     question(longer, 'association').type = 'textarea'
     expect((await save(longer, 0)).form.revision).toBe(1)
+
+    // Back to short text would refuse the long answers already given.
+    await expect(save(sections(), 1)).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('refuses ids objects already have', () => {
+    const form = sections()
+    form[0]!.questions.push({ id: 'constructor', label: 'Domanda', type: 'text' })
+    expect(familyFormSaveSchema.safeParse({ revision: 0, sections: form }).success).toBe(false)
   })
 
   it('rewrites the answers that chose a renamed option', async () => {
@@ -142,12 +165,16 @@ describe('family form', () => {
     const { form: saved } = await save(form, 0)
     expect(saved.content.retired.map(item => item.id)).toEqual(['association'])
 
+    // An answer to an id the form never had (an old version of the code) does not survive the save.
+    await db
+      .update(t.families)
+      .set({ formAnswers: { ...(await answersOf(family.id)), dietaryNeeds: 'Senza glutine' } })
+      .where(eq(t.families.id, family.id))
     const { association: _, ...rest } = ANSWERS
     await saveFamilyData(db, { familyId: family.id, data: familyData(rest), actor: { userId: user.id, ip: null } })
-    expect(await answersOf(family.id)).toMatchObject({
-      association: 'Associazione Insieme',
-      howDidYouHear: 'Passaparola',
-    })
+    const stored = await answersOf(family.id)
+    expect(stored).toMatchObject({ association: 'Associazione Insieme', howDidYouHear: 'Passaparola' })
+    expect(stored).not.toHaveProperty('dietaryNeeds')
 
     // Back in the form, it keeps its type (its answers are still there) and leaves `retired`.
     const back = sections()
@@ -163,13 +190,29 @@ describe('family form', () => {
     await save(form, 0)
 
     const home = () => familyHome(db, { userId: user.id, firstName: 'Anna', familyId: family.id })
-    expect(await home()).toMatchObject({ formStatus: 'submitted', newQuestions: 1 })
+    expect(await home()).toMatchObject({ formStatus: 'submitted', questionsToAnswer: 1 })
 
     const actor = { userId: user.id, ip: null }
     await expect(saveFamilyData(db, { familyId: family.id, data: familyData(), actor })).rejects.toMatchObject({
       statusCode: 400,
     })
     await saveFamilyData(db, { familyId: family.id, data: familyData({ ...ANSWERS, arrival: 'In auto' }), actor })
-    expect(await home()).toMatchObject({ newQuestions: 0 })
+    expect(await home()).toMatchObject({ questionsToAnswer: 0 })
+
+    // An option taken out leaves the families that chose it with a question to answer again.
+    const fewer = structuredClone(form)
+    question(fewer, 'howDidYouHear').options = ['Social network', 'Altro']
+    await save(fewer, 1)
+    expect(await home()).toMatchObject({ formStatus: 'submitted', questionsToAnswer: 1 })
+  })
+
+  it('refuses a family save made against an older form', async () => {
+    const { user, family } = await confirmedFamily()
+    const { form } = await save(sections(), 0)
+    const actor = { userId: user.id, ip: null }
+    await expect(
+      saveFamilyData(db, { familyId: family.id, data: { ...familyData(), formRevision: 0 }, actor }),
+    ).rejects.toMatchObject({ statusCode: 409, data: { formChanged: true } })
+    await saveFamilyData(db, { familyId: family.id, data: { ...familyData(), formRevision: form.revision }, actor })
   })
 })

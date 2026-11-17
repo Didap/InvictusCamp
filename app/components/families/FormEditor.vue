@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { formQuestions, LOCKED_QUESTIONS, type FormQuestion, type FormSection } from '#shared/content/family-form'
+import { formQuestions, lockedReason, type FormQuestion, type FormSection } from '#shared/content/family-form'
 import {
   familyFormSaveSchema,
   hasOptions,
@@ -139,23 +139,7 @@ async function discard() {
   if (ok) reset()
 }
 
-async function canLeave() {
-  if (!dirty.value) return true
-  return confirm({
-    title: 'Uscire senza salvare?',
-    description: 'Le modifiche al modulo non ancora salvate andranno perse.',
-    confirmLabel: 'Esci senza salvare',
-    cancelLabel: 'Resta qui',
-    danger: true,
-  })
-}
-onBeforeRouteLeave(canLeave)
-onBeforeRouteUpdate(canLeave)
-function onBeforeUnload(event: BeforeUnloadEvent) {
-  if (dirty.value) event.preventDefault()
-}
-onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
-onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
+useLeaveGuard(dirty, 'al modulo')
 
 // ─── Sections ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -168,7 +152,7 @@ function moveSection(index: number, by: number) {
   draft.value.splice(index + by, 0, section!)
 }
 
-const hasLocked = (section: FormSection) => section.questions.some(question => question.id in LOCKED_QUESTIONS)
+const hasLocked = (section: FormSection) => section.questions.some(question => lockedReason(question.id))
 
 async function removeSection(index: number) {
   const section = draft.value[index]!
@@ -265,7 +249,7 @@ function removeQuestion(section: FormSection, index: number) {
 function questionItems(sectionIndex: number, index: number): DropdownMenuItem[][] {
   const section = draft.value[sectionIndex]!
   const question = section.questions[index]!
-  const locked = question.id in LOCKED_QUESTIONS
+  const locked = !!lockedReason(question.id)
   return [
     [{ label: 'Modifica', icon: 'i-lucide-pencil', onSelect: () => openQuestion(section.id, question) }],
     [
@@ -407,7 +391,7 @@ watch(tab, value => {
                 {{ question.label }}
               </button>
               <p class="mt-0.5 text-sm text-muted">{{ summary(question) }}</p>
-              <p v-if="question.id in LOCKED_QUESTIONS" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
+              <p v-if="lockedReason(question.id)" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
                 <UIcon name="i-lucide-lock" class="size-3.5 shrink-0" aria-hidden="true" />
                 Il gestionale la usa: si cambiano solo il testo e l’aiuto.
               </p>

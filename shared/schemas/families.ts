@@ -131,6 +131,8 @@ const zAnswer = z.union([z.string().max(5000), z.array(z.string().max(300)).max(
 /** PUT /api/family/profile: the family data with the answers to the questions. */
 export const familyDataSchema = familyDataFieldsSchema.extend({
   answers: z.record(z.string().max(80), zAnswer),
+  /** The revision of the questionnaire the answers are for: another one means it changed meanwhile (409). */
+  formRevision: z.number().int().min(0).optional(),
 })
 export type FamilyDataInput = z.output<typeof familyDataSchema>
 
@@ -180,6 +182,14 @@ export function normalizeFormAnswers(
 /** Required questions still without an answer. */
 export function missingRequiredQuestions(answers: FormAnswers, questions: readonly FormQuestion[]): FormQuestion[] {
   return questions.filter(question => question.required && !isAnswered(answers[question.id]))
+}
+
+/**
+ * The required questions a family that confirmed its data must still answer, after the administration
+ * changed the form: new ones, ones made required, ones whose chosen option was taken out.
+ */
+export function questionsToAnswer(answers: FormAnswers, questions: readonly FormQuestion[]): number {
+  return missingRequiredQuestions(normalizeFormAnswers(answers, questions).answers, questions).length
 }
 
 // ─── Members and health details ─────────────────────────────────────────────────────────────────────

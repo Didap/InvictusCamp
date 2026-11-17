@@ -126,6 +126,11 @@ export const LOCKED_QUESTIONS: Readonly<Record<string, string>> = {
   publicationConsent: 'La legge la liberatoria da firmare, che riporta questo consenso con una formula sua.',
 }
 
+/** Why the code needs the question `id`, when it does. */
+export function lockedReason(id: string): string | undefined {
+  return Object.hasOwn(LOCKED_QUESTIONS, id) ? LOCKED_QUESTIONS[id] : undefined
+}
+
 export function formQuestions(form: Pick<FamilyFormContent, 'sections'>): FormQuestion[] {
   return form.sections.flatMap(section => section.questions)
 }

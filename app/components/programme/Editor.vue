@@ -50,23 +50,7 @@ async function discard() {
   if (ok) draft.value = copyOf(props.programme.content)
 }
 
-async function canLeave() {
-  if (!dirty.value) return true
-  return confirm({
-    title: 'Uscire senza salvare?',
-    description: 'Le modifiche al programma non ancora salvate andranno perse.',
-    confirmLabel: 'Esci senza salvare',
-    cancelLabel: 'Resta qui',
-    danger: true,
-  })
-}
-onBeforeRouteLeave(canLeave)
-onBeforeRouteUpdate(canLeave)
-function onBeforeUnload(event: BeforeUnloadEvent) {
-  if (dirty.value) event.preventDefault()
-}
-onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
-onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
+useLeaveGuard(dirty, 'al programma')
 
 // ─── Blocks ────────────────────────────────────────────────────────────────────────────────────────
 

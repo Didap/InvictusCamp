@@ -3,7 +3,8 @@ import type { ApiIssue } from '#shared/types/api'
 interface ApiErrorBody {
   message?: string
   statusMessage?: string
-  data?: { issues?: ApiIssue[]; reason?: string }
+  /** `formChanged`: the questionnaire «Dati della famiglia» changed while the family was answering it. */
+  data?: { issues?: ApiIssue[]; reason?: string; formChanged?: boolean }
 }
 
 interface FetchErrorLike {

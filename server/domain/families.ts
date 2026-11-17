@@ -32,6 +32,7 @@ import {
   missingRequiredQuestions,
   NO_HEALTH,
   normalizeFormAnswers,
+  questionsToAnswer,
   normalizeHealth,
   type AdminFamilyListQuery,
   type FamilyComposition,
@@ -240,10 +241,11 @@ export async function updateFamilyDataByAdmin(
   return after!
 }
 
-/** The stored answers to questions no longer in the form. */
-function answersOutside(answers: FormAnswers, questions: readonly FormQuestion[]): FormAnswers {
-  const ids = new Set(questions.map(question => question.id))
-  return Object.fromEntries(Object.entries(answers).filter(([id]) => !ids.has(id)))
+/** The stored answers to the questions taken out of the form, which the administration still sees. */
+function retiredAnswers(answers: FormAnswers, retired: readonly FormQuestion[]): FormAnswers {
+  return Object.fromEntries(
+    retired.flatMap(question => (Object.hasOwn(answers, question.id) ? [[question.id, answers[question.id]!]] : [])),
+  )
 }
 
 /**
@@ -261,8 +263,17 @@ export async function saveFamilyData(
   input: { familyId: string; data: FamilyDataInput; actor: Actor },
 ): Promise<{ family: FamilyRow; cards: CardRow[]; cardsCreated: number; cardsRemoved: number }> {
   // Locked: two saves at once (two tabs, a retry) would both count the same cards and both add the missing ones.
+  // The form first, then the family: the administration's save takes them in the same order.
+  const form = await getFamilyForm(db, 'share')
   const family = await requireFamilyRow(db, input.familyId, true)
-  const questions = formQuestions((await getFamilyForm(db)).content)
+  if (input.data.formRevision !== undefined && input.data.formRevision !== form.revision) {
+    throw createError({
+      statusCode: 409,
+      message: 'Nel frattempo abbiamo cambiato qualche domanda: ricontrolla le risposte e salva di nuovo.',
+      data: { formChanged: true },
+    })
+  }
+  const questions = formQuestions(form.content)
   const { answers, invalid } = normalizeFormAnswers(input.data.answers, questions)
   if (invalid.length) {
     throw createError({ statusCode: 400, message: `Risposta non valida alla domanda «${invalid[0]!.label}»` })
@@ -316,7 +327,7 @@ export async function saveFamilyData(
     .set({
       ...familyDataColumns(input.data),
       // The answers to questions taken out of the form stay: the administration still sees them.
-      formAnswers: { ...answersOutside(family.formAnswers, questions), ...answers },
+      formAnswers: { ...retiredAnswers(family.formAnswers, form.content.retired), ...answers },
       formStatus: 'submitted',
       formSubmittedAt: family.formSubmittedAt ?? new Date(),
     })
@@ -908,10 +919,8 @@ export async function familyHome(
     firstName: input.firstName,
     familyName: family.name,
     formStatus: family.formStatus,
-    newQuestions:
-      family.formStatus === 'submitted'
-        ? missingRequiredQuestions(family.formAnswers, formQuestions(form.content)).length
-        : 0,
+    questionsToAnswer:
+      family.formStatus === 'submitted' ? questionsToAnswer(family.formAnswers, formQuestions(form.content)) : 0,
     memberCount: cards.length,
     cardsToComplete: cards.filter(isCardToComplete).length,
     healthConsent: Boolean(family.healthDataConsentAt),

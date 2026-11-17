@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import type { FormError } from '@nuxt/ui'
-import { LOCKED_QUESTIONS, type FormQuestion } from '#shared/content/family-form'
-import { formQuestionSchema, hasOptions, MAX_QUESTION_OPTIONS, newFormId } from '#shared/schemas/questionnaires'
+import { lockedReason as reasonOf, type FormQuestion } from '#shared/content/family-form'
+import {
+  formQuestionSchema,
+  hasOptions,
+  MAX_QUESTION_OPTIONS,
+  newFormId,
+  typesFor,
+} from '#shared/schemas/questionnaires'
 import type { FormQuestionType } from '#shared/utils/constants'
 
 // Adds a question (`question` null) or edits one of the questionnaire «Dati della famiglia». Every option
@@ -57,17 +63,12 @@ watch(open, value => {
 })
 
 const enums = useEnums()
-const lockedReason = computed(() => LOCKED_QUESTIONS[state.id])
-const TEXT_TYPES: FormQuestionType[] = ['text', 'textarea']
-/** The types this question can take: all for a new one, the same kind of answer for one already saved. */
-const typeItems = computed(() => {
-  const saved = props.saved
-  const only = !saved ? undefined : TEXT_TYPES.includes(saved.type) ? TEXT_TYPES : [saved.type]
-  return enums.options('formQuestionType', only)
-})
+const lockedReason = computed(() => reasonOf(state.id))
+/** The kinds of answer this question can take: all for a new one, its own (or long text) for a saved one. */
+const typeItems = computed(() => enums.options('formQuestionType', typesFor(props.saved?.type ?? null)))
 const typeHelp = computed(() => {
   if (lockedReason.value) return undefined
-  if (props.saved && !TEXT_TYPES.includes(props.saved.type)) {
+  if (props.saved && typeItems.value.length < 2) {
     return 'Il tipo non si cambia: le famiglie potrebbero aver già risposto. Per un tipo diverso, togli la domanda e creane una nuova.'
   }
   return enums.meta('formQuestionType', state.type).description

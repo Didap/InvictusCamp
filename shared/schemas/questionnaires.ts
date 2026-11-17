@@ -16,8 +16,23 @@ export function hasOptions(type: FormQuestionType): boolean {
   return type === 'select' || type === 'multiselect'
 }
 
-/** Ids of sections and questions: made by the editor, never shown; answers are stored under them. */
-const zFormId = z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/, { error: 'Identificativo non valido' })
+/**
+ * The kinds of answer a question saved as `saved` can take (all, for a new one): its own, or long text for
+ * short text. Any other change would leave the answers given wrong (long text holds more than short).
+ */
+export function typesFor(saved: FormQuestionType | null): readonly FormQuestionType[] {
+  if (!saved) return FORM_QUESTION_TYPES
+  return saved === 'text' ? ['text', 'textarea'] : [saved]
+}
+
+/**
+ * Ids of sections and questions: made by the editor, never shown; answers are stored under them, so never
+ * a name objects already have ("constructor").
+ */
+const zFormId = z
+  .string()
+  .regex(/^[A-Za-z][A-Za-z0-9_]{0,39}$/, { error: 'Identificativo non valido' })
+  .refine(id => !(id in Object.prototype), { error: 'Identificativo non valido' })
 
 /** A new id for a section or a question, never one used before (answers stay under the old ones). */
 export function newFormId(prefix: 'q' | 's'): string {
