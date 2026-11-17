@@ -34,6 +34,16 @@ const TABS = [
   { value: 'documenti', label: 'Documenti', icon: 'i-lucide-files', slot: 'documenti' as const },
   { value: 'comunicazioni', label: 'Comunicazioni', icon: 'i-lucide-mail', slot: 'comunicazioni' as const },
 ]
+// Nine tabs: they wrap on narrow screens instead of scrolling, so none hides past the edge (on a phone a
+// scrolling bar showed three and gave no sign of the others). The sliding indicator cannot follow a wrap:
+// the active tab draws its own line.
+const TABS_UI = {
+  root: 'gap-8',
+  list: 'flex-wrap',
+  indicator: 'hidden',
+  trigger:
+    "data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-px data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-primary data-[state=active]:after:content-['']",
+}
 const tab = computed<string>({
   get: () => {
     const value = route.query.tab
@@ -426,13 +436,7 @@ const staffHint = computed(() => {
         </div>
       </div>
 
-      <UTabs
-        v-model="tab"
-        :items="TABS"
-        variant="link"
-        :unmount-on-hide="true"
-        :ui="{ root: 'gap-8', list: 'overflow-x-auto overflow-y-hidden', trigger: 'shrink-0' }"
-      >
+      <UTabs v-model="tab" :items="TABS" variant="link" :unmount-on-hide="true" :ui="TABS_UI">
         <template #panoramica>
           <UAlert
             v-if="nextStep"

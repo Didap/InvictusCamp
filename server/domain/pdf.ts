@@ -1,6 +1,6 @@
-// Plain text PDFs: a title, paragraphs that wrap, a footer, on as many A4 pages as they need. The demo
-// documents of the seed and the families' releases; the WinAnsi and wrapping helpers serve the signed copies
-// too (signatures.ts). Explicit imports only.
+// Plain text PDFs: a title, paragraphs and headings that wrap, a footer, on as many A4 pages as they need. The
+// demo documents of the seed, the families' releases and the canteen sheet for the supplier; the WinAnsi and
+// wrapping helpers serve the signed copies too (signatures.ts). Explicit imports only.
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib'
 
 const PAGE: [number, number] = [595.28, 841.89]
@@ -51,7 +51,13 @@ export function wrap(font: PDFFont, text: string, size: number, width: number): 
   return lines.length ? lines : ['']
 }
 
-export async function textPdf(title: string, paragraphs: string[], footer: string): Promise<Uint8Array> {
+/**
+ * A paragraph; a heading (13 pt, bold, space above); a bold label that stays with the paragraph after it.
+ * Headings and labels never end a page.
+ */
+export type PdfBlock = string | { heading: string } | { label: string }
+
+export async function textPdf(title: string, blocks: PdfBlock[], footer: string): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
   pdf.setTitle(title)
   pdf.setAuthor('Invictus Camp')
@@ -64,17 +70,26 @@ export async function textPdf(title: string, paragraphs: string[], footer: strin
   page.drawText('Invictus Camp', { x: MARGIN, y: TOP, size: SIZE, font: bold, color: rgb(0.114, 0.373, 0.69) })
   page.drawText(toWinAnsi(bold, title), { x: MARGIN, y: 748, size: 17, font: bold, color: rgb(0.12, 0.11, 0.1) })
   let y = 712
-  for (const text of paragraphs) {
-    for (const line of wrap(font, toWinAnsi(font, text), SIZE, WIDTH)) {
-      if (y < 80) {
+  for (const block of blocks) {
+    const [text, face, size, after] =
+      typeof block === 'string'
+        ? [block, font, SIZE, 10]
+        : 'heading' in block
+          ? [block.heading, bold, 13, 4]
+          : [block.label, bold, SIZE, 0]
+    if (typeof block !== 'string' && 'heading' in block) y -= 8
+    // A heading or a label keeps two lines of what follows on its page.
+    const room = typeof block === 'string' ? 80 : 120
+    for (const line of wrap(face, toWinAnsi(face, text), size, WIDTH)) {
+      if (y < room) {
         drawFooter()
         page = pdf.addPage(PAGE)
         y = TOP
       }
-      page.drawText(line, { x: MARGIN, y, size: SIZE, font })
-      y -= 16
+      page.drawText(line, { x: MARGIN, y, size, font: face })
+      y -= size + 5
     }
-    y -= 10
+    y -= after
   }
   drawFooter()
   return pdf.save()

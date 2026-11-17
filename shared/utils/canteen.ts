@@ -1,8 +1,8 @@
 // The canteen summary of a session (docs/spec.md 3.14): how many eat at each meal and who needs what, with
-// names, as the camp sends it to the supplier. Pure functions, shared by the Mensa tab and its CSV.
+// names, as the camp sends it to the supplier. Pure functions, shared by the Mensa tab, its CSV and its PDF.
 import { ALLERGIES, DIETS, HEALTH_LABELS } from '../content/member-form'
 import type { UsefulInfo } from '../types/domain'
-import { formatDayRange, plural } from './format'
+import { andList, formatDayRange, plural } from './format'
 
 /** Someone who eats at the camp in the session: a member of a family holding a place, or of the staff. */
 export interface CanteenPerson {
@@ -39,15 +39,40 @@ export function canteenSummary(people: CanteenPerson[]): CanteenSummary {
   }
 }
 
+/** Who eats, by group: everyone in the session, families, staff and v-team. */
+export interface CanteenGroups {
+  /** Families holding a place with their members indicated, and those members. */
+  families: number
+  familyPeople: number
+  /** The staff and the v-team still in play. */
+  staff: number
+  volunteers: number
+}
+
+/** «60 di 12 famiglie, 10 dello staff e 2 del v-team». */
+export function canteenWho(groups: CanteenGroups): string {
+  return andList([
+    groups.families
+      ? `${groups.familyPeople} di ${plural(groups.families, 'famiglia', 'famiglie')}`
+      : 'nessuna famiglia',
+    `${groups.staff} dello staff`,
+    `${groups.volunteers} del v-team`,
+  ])
+}
+
+export interface CanteenSession {
+  title: string
+  startDate: string
+  endDate: string
+}
+
 /** The text for the supplier: «Totale pasti 72 di cui: 5 senza lattosio (…)». */
-export function canteenText(
-  summary: CanteenSummary & { session: { title: string; startDate: string; endDate: string } },
-): string {
+export function canteenText(summary: CanteenSummary & CanteenGroups & { session: CanteenSession }): string {
   const { session } = summary
   return [
     `${session.title}, ${formatDayRange(session.startDate, session.endDate)}`,
     '',
-    `Totale pasti ${summary.total} (${plural(summary.total, 'persona', 'persone')} a ogni pasto)${summary.needs.length ? ' di cui:' : ''}`,
+    `Totale pasti ${summary.total} (persone a ogni pasto: ${canteenWho(summary)})${summary.needs.length ? ' di cui:' : ''}`,
     ...summary.needs.map(need => `${need.people.length} ${need.label} (${need.people.join(', ')})`),
     ...(summary.notes.length ? ['', 'Da sapere:', ...summary.notes.map(note => `${note.name}: ${note.text}`)] : []),
   ].join('\n')

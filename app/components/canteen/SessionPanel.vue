@@ -1,19 +1,13 @@
 <script setup lang="ts">
 import type { CanteenDto } from '#shared/types/canteen'
-import { canteenText } from '#shared/utils/canteen'
+import { canteenText, canteenWho } from '#shared/utils/canteen'
 import { plural } from '#shared/utils/format'
 
-// The Mensa tab of a session (docs/spec.md 3.14): how many eat at each meal, families and staff, and who
-// needs what, with names, to send to the supplier as text or CSV. Health data: administration only.
+// The Mensa tab of a session (docs/spec.md 3.14): how many eat at each meal, families, staff and v-team, and
+// who needs what, with names, to send to the supplier as a PDF, text or CSV. Health data: administration only.
 const props = defineProps<{ sessionId: string }>()
 
 const { data, status, refresh } = useApiFetch<CanteenDto>(() => `/api/admin/sessions/${props.sessionId}/canteen`)
-
-const description = computed(() =>
-  data.value
-    ? `${plural(data.value.families, 'famiglia', 'famiglie')} e ${plural(data.value.staff, 'persona', 'persone')} dello staff`
-    : '',
-)
 
 async function copy() {
   if (!data.value) return
@@ -44,7 +38,7 @@ async function copy() {
     />
 
     <template v-else>
-      <IcSection :title="`Totale pasti: ${data.total}`" :description="`Persone a ogni pasto: ${description}.`">
+      <IcSection :title="`Totale pasti: ${data.total}`" :description="`Persone a ogni pasto: ${canteenWho(data)}.`">
         <template #actions>
           <UButton
             class="pointer-coarse:min-h-11"
@@ -59,8 +53,18 @@ async function copy() {
           <UButton
             class="pointer-coarse:min-h-11"
             icon="i-lucide-copy"
-            label="Copia il testo per il fornitore"
+            label="Copia il testo"
+            color="neutral"
+            variant="outline"
             @click="copy"
+          />
+          <UButton
+            class="pointer-coarse:min-h-11"
+            :to="`/api/admin/sessions/${sessionId}/canteen/pdf`"
+            external
+            download
+            icon="i-lucide-file-down"
+            label="Genera PDF per il fornitore"
           />
         </template>
 
@@ -78,7 +82,7 @@ async function copy() {
           v-if="!data.needs.length"
           icon="i-lucide-utensils"
           title="Nessuna esigenza alimentare indicata"
-          description="Allergie, intolleranze e preferenze di famiglie e staff compaiono qui quando le indicano."
+          description="Allergie, intolleranze e preferenze di famiglie, staff e v-team compaiono qui quando le indicano."
         />
         <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
           <li v-for="need in data.needs" :key="need.label" class="p-4">

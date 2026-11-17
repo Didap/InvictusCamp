@@ -1,7 +1,7 @@
 // The canteen summary of a session (docs/spec.md 3.14): totals, needs with names, the text for the supplier.
 import { describe, expect, it } from 'vitest'
 import { staffUsefulInfoSchema } from '../../shared/schemas/staff'
-import { canteenSummary, canteenText } from '../../shared/utils/canteen'
+import { canteenSummary, canteenText, canteenWho } from '../../shared/utils/canteen'
 
 describe('canteen', () => {
   const people = [
@@ -29,12 +29,27 @@ describe('canteen', () => {
     ])
   })
 
+  it('says who eats, by group', () => {
+    expect(canteenWho({ families: 12, familyPeople: 60, staff: 10, volunteers: 2 })).toBe(
+      '60 di 12 famiglie, 10 dello staff e 2 del v-team',
+    )
+    expect(canteenWho({ families: 0, familyPeople: 0, staff: 1, volunteers: 0 })).toBe(
+      'nessuna famiglia, 1 dello staff e 0 del v-team',
+    )
+  })
+
   it('writes the text for the supplier', () => {
     const text = canteenText({
       session: { title: 'Sessione 9', startDate: '2027-06-21', endDate: '2027-06-25' },
       ...canteenSummary(people),
+      families: 1,
+      familyPeople: 3,
+      staff: 0,
+      volunteers: 1,
     })
-    expect(text).toContain('Totale pasti 4 (4 persone a ogni pasto) di cui:')
+    expect(text).toContain(
+      'Totale pasti 4 (persone a ogni pasto: 3 di 1 famiglia, 0 dello staff e 1 del v-team) di cui:',
+    )
     expect(text).toContain('2 senza lattosio (Anna Rossi, Sara Bianchi)')
     expect(text).toContain('Matteo Rossi: Selettività alimentare: Solo cibi frullati')
   })
