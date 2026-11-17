@@ -112,8 +112,12 @@ async function distribute() {
 
 /** While families wait for a group, dividing them is the action of the tab; then the PDF to print. */
 const canDistribute = computed(() => !!data.value?.editable && waiting.value.length > 0)
+const pdfIsMain = computed(() => families.value.length > 0 && !canDistribute.value)
+/** «Senza gruppo»: its families, or the place to drag one out of its group while groups can change. */
+const showWaiting = computed(() => !!data.value?.editable || waiting.value.length > 0)
 
-// A family moves by dragging it to another group, or back among those without one (data-group "").
+// A family moves by dragging it to another group, or back among those without one (data-group ""). Let
+// go away from every list, it goes back where it was (revertOnSpill): only a list chooses a group.
 const waitingList = useTemplateRef<HTMLUListElement>('waitingList')
 const groupLists = useTemplateRef<HTMLUListElement[]>('groupLists')
 useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list => list !== null), {
@@ -121,7 +125,9 @@ useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list 
   draggable: '.groups-card',
   filter: '.groups-no-drag',
   sort: false,
-  key: () => `${families.value.length > 0}-${waiting.value.length > 0}`,
+  revertOnSpill: true,
+  // The lists of the template: shown with the families (v-else of UEmpty) and showWaiting.
+  key: () => families.value.length > 0 && showWaiting.value,
   disabled: () => !data.value?.editable || saving.value !== null,
   onDrop: ({ item, to }) => {
     const family = families.value.find(other => other.id === item.dataset.id)
@@ -158,6 +164,7 @@ useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list 
           label="Scarica i gruppi (CSV)"
           color="neutral"
           variant="outline"
+          :disabled="saving !== null"
         />
         <UButton
           class="pointer-coarse:min-h-11"
@@ -166,8 +173,9 @@ useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list 
           download
           icon="i-lucide-file-down"
           label="Genera PDF dei gruppi"
-          :color="canDistribute ? 'neutral' : 'primary'"
-          :variant="canDistribute ? 'outline' : 'solid'"
+          :color="pdfIsMain ? 'primary' : 'neutral'"
+          :variant="pdfIsMain ? 'solid' : 'outline'"
+          :disabled="saving !== null"
         />
         <UButton
           v-if="canDistribute"
@@ -203,28 +211,37 @@ useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list 
           accanto al suo nome.
         </p>
 
-        <section v-if="waiting.length" aria-labelledby="groups-waiting" class="mb-8">
+        <section v-if="showWaiting" aria-labelledby="groups-waiting" class="mb-8">
           <div class="mb-3">
             <h3 id="groups-waiting" class="font-semibold text-highlighted">Senza gruppo</h3>
-            <p v-if="data.editable" class="text-sm text-muted">
+            <p v-if="data.editable && waiting.length" class="text-sm text-muted">
               Mettile nei gruppi una per una, oppure dividile tutte insieme: i gruppi restano pari per numero di
               persone, e poi puoi spostare chi vuoi.
             </p>
           </div>
-          <ul
-            ref="waitingList"
-            data-group=""
-            class="divide-y divide-default rounded-lg border border-default bg-elevated"
-          >
-            <GroupsFamilyItem
-              v-for="family in waiting"
-              :key="family.id"
-              :family="family"
-              :disabled="!data.editable || saving !== null"
-              :loading="saving === family.id"
-              @assign="group => assign(family, group)"
-            />
-          </ul>
+          <!-- The hint shows while the list has no family, also the one held over it during a drag. -->
+          <div class="group/drop relative">
+            <ul
+              ref="waitingList"
+              data-group=""
+              class="min-h-14 divide-y divide-default rounded-lg border bg-elevated"
+              :class="waiting.length ? 'border-default' : 'border-dashed border-accented'"
+            >
+              <GroupsFamilyItem
+                v-for="family in waiting"
+                :key="family.id"
+                :family="family"
+                :disabled="!data.editable || saving !== null"
+                :loading="saving === family.id"
+                @assign="group => assign(family, group)"
+              />
+            </ul>
+            <p
+              class="pointer-events-none absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted group-has-[li]/drop:hidden"
+            >
+              Trascina qui una famiglia per toglierla dal suo gruppo.
+            </p>
+          </div>
         </section>
 
         <div class="grid gap-4 lg:grid-cols-3">
@@ -268,7 +285,7 @@ useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list 
               </UFormField>
             </div>
             <!-- Always there, also empty: a group without families is where one is dropped. -->
-            <div class="relative">
+            <div class="group/drop relative">
               <ul ref="groupLists" :data-group="column.group" class="min-h-20 divide-y divide-default">
                 <GroupsFamilyItem
                   v-for="family in column.families"
@@ -280,8 +297,7 @@ useDragLists(() => [waitingList.value, ...(groupLists.value ?? [])].filter(list 
                 />
               </ul>
               <p
-                v-if="!column.families.length"
-                class="pointer-events-none absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted"
+                class="pointer-events-none absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted group-has-[li]/drop:hidden"
               >
                 {{ data.editable ? 'Trascina qui una famiglia.' : 'Nessuna famiglia.' }}
               </p>

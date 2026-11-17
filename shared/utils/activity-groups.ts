@@ -3,7 +3,7 @@
 // and the CSV and PDF of its groups.
 import type { GroupMember } from '../types/activity-groups'
 import { PROGRAMME_GROUPS, type ProgrammeGroup } from './constants'
-import { formatAge, plural } from './format'
+import { NO_CARDS, formatAge, plural } from './format'
 
 export interface GroupTally {
   families: number
@@ -69,4 +69,9 @@ export function distributeFamilies<T extends Groupable & { id: string; familyNam
 /** "Marco, 9 anni" for the young, "Grazia" for adults. */
 export function memberLabel(member: GroupMember): string {
   return member.age === null ? member.name : `${member.name}, ${formatAge(member.age)}`
+}
+
+/** A family's people on one line, "Marco, 9 anni · Grazia", or that they are still to be given. */
+export function membersLabel(members: readonly GroupMember[]): string {
+  return members.length ? members.map(memberLabel).join(' · ') : NO_CARDS
 }

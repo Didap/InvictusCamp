@@ -18,7 +18,7 @@ export interface ListDrop {
  */
 export function useDragLists(
   lists: () => HTMLElement[],
-  options: Pick<Sortable.Options, 'group' | 'draggable' | 'filter' | 'sort'> & {
+  options: Pick<Sortable.Options, 'group' | 'draggable' | 'filter' | 'sort' | 'revertOnSpill'> & {
     key: () => unknown
     disabled?: () => boolean
     onDrop: (drop: ListDrop) => void

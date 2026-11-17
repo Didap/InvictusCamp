@@ -344,8 +344,9 @@ rotate through the activities together.
 - **"Dividi le famiglie senza gruppo"** puts every family without a group into one, the largest family first
   into the group with the fewest people, so the groups stay even; the families already in a group stay.
   Moving a family by hand is always possible: dragging it to another group, or back among those without one
-  (on a touch screen after a short press), or from the menu next to its name. The family moves at once and
-  the change is saved: every page that shows the group (the history of the session, the feedback by group,
+  (on a touch screen after a short press; let go away from every list, it stays where it was), or from the
+  menu next to its name. "Senza gruppo" stays as the place to drop it while the groups can change. The
+  family moves at once and the change is saved: every page that shows the group (the history of the session, the feedback by group,
   the exports) reads the saved one.
 - "Scarica i gruppi (CSV)" downloads one row per person, group by group with its leader, then the families
   without a group; "Genera PDF dei gruppi" has the same on paper, each group with its leader and size, then

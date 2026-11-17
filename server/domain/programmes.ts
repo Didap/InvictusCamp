@@ -163,7 +163,7 @@ async function viewerProgramme(
   db: DbOrTx,
   sessionId: string,
   viewer: 'family' | 'staff',
-  allowed: (session: SessionStatus) => boolean = () => true,
+  allowed: (session: SessionStatus) => boolean,
 ): Promise<ProgrammeView> {
   const session = await requireSession(db, sessionId)
   if (!allowed(session.status)) throw new DomainError(404, NOT_AVAILABLE)
@@ -173,7 +173,7 @@ async function viewerProgramme(
 
 /** The programme of a session as its families read it: what the administration prints for them. */
 export function sessionProgrammeForFamilies(db: DbOrTx, sessionId: string): Promise<ProgrammeView> {
-  return viewerProgramme(db, sessionId, 'family')
+  return viewerProgramme(db, sessionId, 'family', () => true)
 }
 
 /** A family reads the programme of a session it is invited to or confirmed in (not cancelled). */
