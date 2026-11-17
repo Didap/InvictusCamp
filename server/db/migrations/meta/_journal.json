@@ -148,6 +148,20 @@
       "when": 1794906093203,
       "tag": "0020_questionnaires",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794909911297,
+      "tag": "0021_lodging_location",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794909919261,
+      "tag": "0022_lodging_drop_area",
+      "breakpoints": true
     }
   ]
 }

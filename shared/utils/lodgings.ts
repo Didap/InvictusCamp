@@ -1,14 +1,10 @@
 // The lodgings of the camp and the families placed in them (docs/spec.md 3.11). Pure functions, shared
-// by the Alloggi page, the Alloggi tab of a session and the CSV of its layout.
+// by the Alloggi page, the Alloggi tab of a session and the CSV and PDF of its layout.
 import { ACCOMMODATION_NEED_LABELS } from '../content/family-form'
 import type { FormAnswers } from '../types/domain'
-import { LODGING_FEATURES, enumLabel, type LodgingFeature } from './constants'
+import { LODGING_FEATURES, LODGING_LOCATIONS, enumLabel, type LodgingFeature, type LodgingLocation } from './constants'
 import { plural } from './format'
 
-/** The heading of the lodgings without an area. */
-const NO_AREA = 'Altri alloggi'
-
-const byArea = new Intl.Collator('it', { numeric: true })
 const byName = new Intl.Collator('it', { numeric: true, sensitivity: 'base' })
 
 /** The features asked for in the answer "Esigenze per l'alloggio" (stored as labels). */
@@ -27,29 +23,53 @@ export function bedsLabel(beds: number): string {
   return plural(beds, 'posto letto', 'posti letto')
 }
 
-/**
- * Lodgings in the order of the layout: by area (those without one last), then by name, "Casa 2" before
- * "Casa 10". Areas compare exactly, so that each one stays together under its heading (groupByArea).
- */
-export function sortLodgings<T extends { name: string; area: string | null }>(lodgings: T[]): T[] {
+/** "1 letto matrimoniale, 2 letti singoli, 1 divano letto": only the kinds there are. */
+export function bedKindsLabel(lodging: { singleBeds: number; doubleBeds: number; sofaBeds: number }): string {
+  return [
+    lodging.doubleBeds && plural(lodging.doubleBeds, 'letto matrimoniale', 'letti matrimoniali'),
+    lodging.singleBeds && plural(lodging.singleBeds, 'letto singolo', 'letti singoli'),
+    lodging.sofaBeds && plural(lodging.sofaBeds, 'divano letto', 'divani letto'),
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
+/** "4 posti letto (1 letto matrimoniale, 2 letti singoli) · Accessibile · Cucina, Microonde". */
+export function lodgingLine(lodging: {
+  beds: number
+  singleBeds: number
+  doubleBeds: number
+  sofaBeds: number
+  accessible: boolean
+  features: readonly LodgingFeature[]
+}): string {
+  const kinds = bedKindsLabel(lodging)
+  return [
+    kinds ? `${bedsLabel(lodging.beds)} (${kinds})` : bedsLabel(lodging.beds),
+    lodging.accessible && 'Accessibile',
+    featureLabels(lodging.features),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/** Lodgings in the order of the layout: by location, in the order of the list, then by name, "Casa 2" before "Casa 10". */
+export function sortLodgings<T extends { name: string; location: LodgingLocation }>(lodgings: T[]): T[] {
   return [...lodgings].sort(
     (a, b) =>
-      (a.area === null ? 1 : 0) - (b.area === null ? 1 : 0) ||
-      byArea.compare(a.area ?? '', b.area ?? '') ||
-      byName.compare(a.name, b.name),
+      LODGING_LOCATIONS.indexOf(a.location) - LODGING_LOCATIONS.indexOf(b.location) || byName.compare(a.name, b.name),
   )
 }
 
-/** Sorted lodgings under their area, in order. */
-export function groupByArea<T extends { area: string | null }>(lodgings: T[]): { area: string; items: T[] }[] {
-  const groups = new Map<string, T[]>()
-  for (const lodging of lodgings) {
-    const area = lodging.area ?? NO_AREA
-    const items = groups.get(area)
-    if (items) items.push(lodging)
-    else groups.set(area, [lodging])
-  }
-  return [...groups.entries()].map(([area, items]) => ({ area, items }))
+/** Sorted lodgings under their location, in order; locations without lodgings are left out. */
+export function groupByLocation<T extends { location: LodgingLocation }>(
+  lodgings: T[],
+): { location: LodgingLocation; label: string; items: T[] }[] {
+  return LODGING_LOCATIONS.map(location => ({
+    location,
+    label: enumLabel('lodgingLocation', location),
+    items: lodgings.filter(lodging => lodging.location === location),
+  })).filter(group => group.items.length)
 }
 
 /**

@@ -12,15 +12,25 @@ import type {
   SessionLodgingsDto,
 } from '../../shared/types/lodgings'
 import { enumLabel } from '../../shared/utils/constants'
-import { NO_CARDS, fullName } from '../../shared/utils/format'
-import { accommodationNeeds, featureLabels, placeGuests, sortLodgings } from '../../shared/utils/lodgings'
+import { todayIso, type DayRange } from '../../shared/utils/dates'
+import { NO_CARDS, formatDay, formatDayRange, fullName, plural } from '../../shared/utils/format'
+import {
+  accommodationNeeds,
+  bedKindsLabel,
+  featureLabels,
+  groupByLocation,
+  lodgingLine,
+  placeGuests,
+  sortLodgings,
+} from '../../shared/utils/lodgings'
 import { isSessionEditable } from '../../shared/utils/session-status'
 import { campSessions, families, lodgings, sessionFamilies, sessionStaff, staffProfiles, users } from '../db/schema'
 import { writeAudit } from './audit'
-import { sessionCsv } from './csv'
+import { sessionCsv, sessionFileName } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
 import { memberCountSql } from './families'
+import { textPdf, type PdfBlock } from './pdf'
 import {
   activeStaff,
   findSession,
@@ -34,8 +44,12 @@ import {
 const columns = {
   id: lodgings.id,
   name: lodgings.name,
-  area: lodgings.area,
+  location: lodgings.location,
   beds: lodgings.beds,
+  singleBeds: lodgings.singleBeds,
+  doubleBeds: lodgings.doubleBeds,
+  sofaBeds: lodgings.sofaBeds,
+  accessible: lodgings.accessible,
   features: lodgings.features,
   description: lodgings.description,
 }
@@ -127,13 +141,21 @@ async function lodgingFamilies(db: DbOrTx, sessionId: string): Promise<SessionLo
       // Only this answer of the family data, not the whole questionnaire.
       needs: sql<FormAnswers[string]>`${families.formAnswers} -> 'accommodationNeeds'`,
       lodgingId: sessionFamilies.lodgingId,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      phone: sql<string | null>`coalesce(${families.phone}, ${users.phone})`,
     })
     .from(sessionFamilies)
     .innerJoin(families, eq(families.id, sessionFamilies.familyId))
+    .innerJoin(users, eq(users.id, families.userId))
     .where(holdingPlace(sessionId))
   return rows
     .sort((a, b) => a.familyName.localeCompare(b.familyName, 'it'))
-    .map(row => ({ ...row, needs: accommodationNeeds(row.needs) }))
+    .map(({ firstName, lastName, ...row }) => ({
+      ...row,
+      needs: accommodationNeeds(row.needs),
+      referent: fullName({ firstName, lastName }),
+    }))
 }
 
 /** The staff and v-team of the session still in play (activeStaff), by name. */
@@ -259,44 +281,119 @@ export async function assignStaffLodging(
   })
 }
 
+/** «Anna Rossi, Marco Bianchi (V-team)». */
+const staffNames = (people: SessionLodgingStaff[]) =>
+  people.map(person => `${person.name} (${enumLabel('staffTeam', person.team)})`).join(', ')
+
 /**
  * The layout of the session as CSV: every lodging with the family or the staff placed in it, then the
  * families and the staff still without one. Needs come from "Esigenze per l'alloggio", never from the health details.
  */
 export async function lodgingsCsv(db: DbOrTx, sessionId: string): Promise<{ filename: string; csv: string }> {
   const { session, lodgings: layout, families: placed, staff } = await loadSession(db, sessionId)
-  /** Family, people, needs, what to check. */
+  /** Family, who to call, people, needs, what to check. */
   const familyCells = (family: SessionLodgingFamily, warnings: string[]) => [
     family.familyName,
+    family.referent,
+    family.phone,
     family.people || null,
     featureLabels(family.needs),
     [family.people ? null : NO_CARDS, ...warnings].filter(Boolean).join('. ') || null,
   ]
-  /** The staff members, «Anna Rossi (V-team)», how many, no needs, what to check. */
+  /** The staff members, how many, what to check. */
   const staffCells = (people: SessionLodgingStaff[], warnings: string[]) => [
-    people.map(person => `${person.name} (${enumLabel('staffTeam', person.team)})`).join(', '),
+    staffNames(people),
+    null,
+    null,
     people.length,
     null,
     warnings.join('. ') || null,
   ]
+  const noLodging = [null, null, null, null, null, null]
   return sessionCsv(session, 'alloggi', [
-    ['Zona', 'Alloggio', 'Posti letto', 'Dotazioni', 'Chi ci dorme', 'Persone', 'Esigenze', 'Da controllare'],
+    [
+      'Località',
+      'Alloggio',
+      'Posti letto',
+      'Letti',
+      'Accessibile',
+      'Dotazioni',
+      'Chi ci dorme',
+      'Referente',
+      'Telefono',
+      'Persone',
+      'Esigenze',
+      'Da controllare',
+    ],
     ...placeGuests(layout, placed, staff).map(lodging => [
-      lodging.area,
+      enumLabel('lodgingLocation', lodging.location),
       lodging.name,
       lodging.beds,
+      bedKindsLabel(lodging) || null,
+      lodging.accessible ? 'Sì' : 'No',
       featureLabels(lodging.features),
       ...(lodging.family
         ? familyCells(lodging.family, lodging.warnings)
         : lodging.staff.length
           ? staffCells(lodging.staff, lodging.warnings)
-          : [null, null, null, null]),
+          : noLodging),
     ]),
     ...placed
       .filter(family => !family.lodgingId)
-      .map(family => [null, null, null, null, ...familyCells(family, ['Senza alloggio'])]),
+      .map(family => [...noLodging, ...familyCells(family, ['Senza alloggio'])]),
     ...staff
       .filter(person => !person.lodgingId)
-      .map(person => [null, null, null, null, ...staffCells([person], ['Senza alloggio'])]),
+      .map(person => [...noLodging, ...staffCells([person], ['Senza alloggio'])]),
   ])
+}
+
+/** «Famiglia Rossi, 4 persone. Referente: Anna Rossi, 333 123 4567.» */
+function familyText(family: SessionLodgingFamily): string {
+  const people = family.people ? plural(family.people, 'persona', 'persone') : 'componenti non ancora indicati'
+  return `${family.familyName}, ${people}. Referente: ${family.referent}, ${family.phone ?? 'telefono non indicato'}.`
+}
+
+/**
+ * The layout of the session as a PDF to print or send: by location, each lodging with who sleeps in it (a
+ * family with who to call, or the staff), what to check and how it is made; then who has no lodging yet.
+ */
+export function lodgingsPdfBlocks(
+  session: DayRange & { title: string },
+  { lodgings: layout, families: placed, staff }: Omit<SessionLodgingsDto, 'editable'>,
+): PdfBlock[] {
+  const withoutFamily = placed.filter(family => !family.lodgingId)
+  const withoutStaff = staff.filter(person => !person.lodgingId)
+  return [
+    `${session.title}, ${formatDayRange(session.startDate, session.endDate, 'long')}.`,
+    ...groupByLocation(placeGuests(layout, placed, staff)).flatMap(group => [
+      { heading: group.label },
+      ...group.items.flatMap(item => [
+        { label: item.name },
+        [
+          item.family ? familyText(item.family) : item.staff.length ? `Staff: ${staffNames(item.staff)}.` : 'Libero.',
+          ...(item.warnings.length ? [`Da controllare: ${item.warnings.join('. ')}.`] : []),
+        ].join(' '),
+        [lodgingLine(item), item.description].filter(Boolean).join('. '),
+      ]),
+    ]),
+    ...(withoutFamily.length || withoutStaff.length
+      ? [
+          { heading: 'Senza alloggio' },
+          ...withoutFamily.map(familyText),
+          ...(withoutStaff.length ? [`Staff: ${staffNames(withoutStaff)}.`] : []),
+        ]
+      : []),
+  ]
+}
+
+export async function lodgingsPdf(db: DbOrTx, sessionId: string): Promise<{ filename: string; data: Uint8Array }> {
+  const { session, ...layout } = await loadSession(db, sessionId)
+  return {
+    filename: sessionFileName(session, 'alloggi', 'pdf'),
+    data: await textPdf(
+      'Schema degli alloggi',
+      lodgingsPdfBlocks(session, layout),
+      `Contiene i recapiti delle famiglie: serve solo a organizzare gli alloggi. Aggiornato al ${formatDay(todayIso(), 'numeric')}.`,
+    ),
+  }
 }

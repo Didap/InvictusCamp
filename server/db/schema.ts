@@ -27,6 +27,7 @@ import type {
   FilePurpose,
   ItalianRegion,
   LodgingFeature,
+  LodgingLocation,
   MemberKind,
   MemberRelationship,
   ParticipationKind,
@@ -285,17 +286,28 @@ export const lodgings = pgTable(
   'lodgings',
   {
     id: pk(),
+    /** The room or the apartment, e.g. "Camera 3". */
     name: text().notNull(),
-    /** Where it is, to group the layout: "Corte A", "Primo piano". */
-    area: text(),
+    /** Where it is: one of the camp's places, which also groups the layout. */
+    location: text().$type<LodgingLocation>().notNull(),
+    /** The people who can sleep in it. */
     beds: integer().notNull(),
+    /** How the beds are made. */
+    singleBeds: integer().notNull().default(0),
+    doubleBeds: integer().notNull().default(0),
+    sofaBeds: integer().notNull().default(0),
+    /** Without architectural barriers. */
+    accessible: boolean().notNull().default(false),
     features: jsonb().$type<LodgingFeature[]>().notNull().default([]),
-    /** How the beds are made, e.g. "1 matrimoniale e 2 singoli". */
+    /** Anything else worth knowing: floor, keys, who to call. */
     description: text(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  t => [check('lodgings_beds', sql`${t.beds} > 0`)],
+  t => [
+    check('lodgings_beds', sql`${t.beds} > 0`),
+    check('lodgings_bed_kinds', sql`${t.singleBeds} >= 0 and ${t.doubleBeds} >= 0 and ${t.sofaBeds} >= 0`),
+  ],
 )
 
 /** A list of constants for `in (…)`. */

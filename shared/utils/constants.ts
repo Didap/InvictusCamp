@@ -151,6 +151,10 @@ export const PROGRAMME_GROUP_LABELS: Record<ProgrammeGroup, string> = {
 export const LODGING_FEATURES = ['kitchen', 'accessible_bathroom', 'microwave'] as const
 export type LodgingFeature = (typeof LODGING_FEATURES)[number]
 
+/** Where a lodging is: the places the camp uses, in the order of the layout (docs/spec.md 3.11). */
+export const LODGING_LOCATIONS = ['melina', 'nu_suennu', 'torricella', 'invictus_camp'] as const
+export type LodgingLocation = (typeof LODGING_LOCATIONS)[number]
+
 /** Uploads: 15 MB, PDF or images. Documents to sign are PDF only. */
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 export const UPLOAD_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'] as const
@@ -395,6 +399,13 @@ const formQuestionType: Record<FormQuestionType, EnumMeta> = {
   boolean: { label: 'Sì o no', icon: 'i-lucide-toggle-left', color: 'neutral', description: 'Due risposte: Sì, No.' },
 }
 
+const lodgingLocation: Record<LodgingLocation, EnumMeta> = {
+  melina: { label: 'B&B Melina', icon: 'i-lucide-map-pin', color: 'neutral' },
+  nu_suennu: { label: 'B&B Nu Suennu', icon: 'i-lucide-map-pin', color: 'neutral' },
+  torricella: { label: 'Appartamenti Torricella', icon: 'i-lucide-map-pin', color: 'neutral' },
+  invictus_camp: { label: 'Alloggi Invictus Camp', icon: 'i-lucide-map-pin', color: 'neutral' },
+}
+
 const lodgingFeature: Record<LodgingFeature, EnumMeta> = {
   kitchen: { label: 'Cucina', icon: 'i-lucide-cooking-pot', color: 'neutral' },
   accessible_bathroom: { label: 'Bagno senza barriere', icon: 'i-lucide-accessibility', color: 'neutral' },
@@ -423,6 +434,7 @@ export const ENUM_META = {
   personalDocumentCategory,
   emailStatus,
   lodgingFeature,
+  lodgingLocation,
 } as const
 
 export type EnumName = keyof typeof ENUM_META

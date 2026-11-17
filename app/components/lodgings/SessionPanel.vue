@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { SelectMenuItem } from '@nuxt/ui'
-import type { Lodging, SessionLodgingFamily, SessionLodgingStaff, SessionLodgingsDto } from '#shared/types/lodgings'
+import type { SessionLodgingFamily, SessionLodgingStaff, SessionLodgingsDto } from '#shared/types/lodgings'
 import { NO_CARDS, plural } from '#shared/utils/format'
-import { bedsLabel, featureLabels, groupByArea, placeGuests } from '#shared/utils/lodgings'
+import { groupByLocation, lodgingLine, placeGuests } from '#shared/utils/lodgings'
 
 // The Alloggi tab of a session (docs/spec.md 3.11): each titolare holding a place gets a lodging of the
 // layout, chosen by its size and needs, and so does each member of the staff and v-team (several in one
@@ -19,8 +19,8 @@ const { data, status, refresh } = useApiFetch<SessionLodgingsDto>(
 const placed = computed(() =>
   data.value ? placeGuests(data.value.lodgings, data.value.families, data.value.staff) : [],
 )
-/** The layout of the session, by area. */
-const layout = computed(() => groupByArea(placed.value))
+/** The layout of the session, by location. */
+const layout = computed(() => groupByLocation(placed.value))
 const warningsOf = computed(
   () => new Map(placed.value.flatMap(item => (item.family ? [[item.family.id, item.warnings] as const] : []))),
 )
@@ -36,19 +36,16 @@ const summary = computed(() => {
     .join(' · ')
 })
 
-/** "4 posti letto · Cucina, Microonde". */
-const lodgingLine = (lodging: Lodging) =>
-  [bedsLabel(lodging.beds), featureLabels(lodging.features)].filter(Boolean).join(' · ')
 const people = (family: SessionLodgingFamily) =>
   family.people ? plural(family.people, 'persona', 'persone') : NO_CARDS
 
 type Placed = (typeof placed.value)[number]
 const staffLine = (item: Placed) => plural(item.staff.length, 'persona', 'persone')
 
-/** The lodgings by area as choices: `taken` says why one cannot be chosen, `line` what it is. */
+/** The lodgings by location as choices: `taken` says why one cannot be chosen, `line` what it is. */
 function menu(choice: (item: Placed) => { taken?: string; line?: string }): SelectMenuItem[][] {
   return layout.value.map(group => [
-    { type: 'label', label: group.area },
+    { type: 'label', label: group.label },
     ...group.items.map(item => {
       const { taken, line } = choice(item)
       return { label: item.name, value: item.id, description: taken ?? line ?? lodgingLine(item), disabled: !!taken }
@@ -145,9 +142,17 @@ const assignStaff = (person: SessionLodgingStaff, value: string | null | undefin
             external
             download
             icon="i-lucide-download"
-            label="Scarica lo schema (CSV)"
+            label="Scarica CSV"
             color="neutral"
             variant="outline"
+          />
+          <UButton
+            class="pointer-coarse:min-h-11"
+            :to="`/api/admin/sessions/${sessionId}/lodgings/pdf`"
+            external
+            download
+            icon="i-lucide-file-down"
+            label="Genera PDF dello schema"
           />
         </template>
 
@@ -258,10 +263,10 @@ const assignStaff = (person: SessionLodgingStaff, value: string | null | undefin
 
       <IcSection
         title="Schema della sessione"
-        description="Alloggio per alloggio, chi ci dorme: è lo schema che scarichi in CSV."
+        description="Località per località, chi dorme in ogni alloggio: è lo schema del PDF, con il telefono del referente di ogni famiglia."
       >
-        <div v-for="group in layout" :key="group.area" class="mb-8 last:mb-0">
-          <h3 class="mb-3 font-semibold text-highlighted">{{ group.area }}</h3>
+        <div v-for="group in layout" :key="group.location" class="mb-8 last:mb-0">
+          <h3 class="mb-3 font-semibold text-highlighted">{{ group.label }}</h3>
           <ul class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <li
               v-for="item in group.items"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { LodgingListItem } from '#shared/types/lodgings'
 import { plural } from '#shared/utils/format'
-import { bedsLabel, featureLabels, groupByArea } from '#shared/utils/lodgings'
+import { bedsLabel, groupByLocation, lodgingLine } from '#shared/utils/lodgings'
 
 // Alloggi (docs/spec.md 3.11): the bed layout of the camp, entered once and used by every session,
 // where the Alloggi tab places each family in a lodging.
@@ -45,7 +45,7 @@ const totals = computed(() => {
   return `${plural(list.length, 'alloggio', 'alloggi')} · ${bedsLabel(beds)}`
 })
 
-const groups = computed(() => groupByArea(data.value ?? []))
+const groups = computed(() => groupByLocation(data.value ?? []))
 </script>
 
 <template>
@@ -76,14 +76,14 @@ const groups = computed(() => groupByArea(data.value ?? []))
       v-else-if="!data.length"
       icon="i-lucide-bed-double"
       title="Ancora nessun alloggio"
-      description="Aggiungi le villette, le camere o le case del camp con i loro posti letto e le dotazioni (cucina, bagno senza barriere, microonde)."
+      description="Aggiungi le camere e gli appartamenti di ogni località con i posti letto, i letti, l’accessibilità e le dotazioni (cucina, bagno senza barriere, microonde)."
       :actions="[{ label: 'Nuovo alloggio', icon: 'i-lucide-plus', onClick: () => edit(null) }]"
     />
 
     <template v-else>
       <p class="mb-6 text-sm text-muted">{{ totals }}</p>
-      <section v-for="group in groups" :key="group.area" class="mb-8 last:mb-0" :aria-label="group.area">
-        <h2 class="mb-3 text-lg font-bold text-highlighted">{{ group.area }}</h2>
+      <section v-for="group in groups" :key="group.location" class="mb-8 last:mb-0" :aria-label="group.label">
+        <h2 class="mb-3 text-lg font-bold text-highlighted">{{ group.label }}</h2>
         <ul class="divide-y divide-default rounded-lg border border-default bg-elevated">
           <li
             v-for="lodging in group.items"
@@ -92,13 +92,8 @@ const groups = computed(() => groupByArea(data.value ?? []))
           >
             <div class="min-w-0 flex-1">
               <p class="font-semibold text-highlighted">{{ lodging.name }}</p>
-              <p class="mt-1 text-sm text-default">
-                {{ bedsLabel(lodging.beds)
-                }}<template v-if="lodging.description"> · {{ lodging.description }}</template>
-              </p>
-              <p v-if="lodging.features.length" class="mt-1 text-sm text-muted">
-                {{ featureLabels(lodging.features) }}
-              </p>
+              <p class="mt-1 text-sm text-default">{{ lodgingLine(lodging) }}</p>
+              <p v-if="lodging.description" class="mt-1 text-sm text-muted">{{ lodging.description }}</p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
               <UButton
