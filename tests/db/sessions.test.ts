@@ -934,4 +934,22 @@ describe('the session itself', () => {
     expect(row).toContain('"Motivo; con ""virgolette"""')
     expect(csv).not.toContain('DETTAGLIO-RISERVATO')
   })
+
+  it("shows the family's phone, the account's only when the family has none", async () => {
+    const { session } = await setup({ status: 'inviting' })
+    const withPhone = await join(session.id, 'slot', 'confirmed', { name: 'Famiglia Rossi' })
+    const without = await join(session.id, 'slot', 'confirmed', { name: 'Famiglia Bianchi' })
+    await db.update(t.families).set({ phone: '333 111' }).where(eq(t.families.id, withPhone.family.id))
+    await db
+      .update(t.users)
+      .set({ phone: '333 999' })
+      .where(inArray(t.users.id, [withPhone.user.id, without.user.id]))
+    const phones = Object.fromEntries(
+      (await sessionFamiliesOf(db, session.id)).participations.map(p => [p.familyName, p.phone]),
+    )
+    expect(phones).toEqual({ 'Famiglia Rossi': '333 111', 'Famiglia Bianchi': '333 999' })
+    const rossi = (await participantsCsv(db, session.id)).csv.split('\r\n').find(line => line.includes('Rossi'))
+    expect(rossi).toContain('333 111')
+    expect(rossi).not.toContain('333 999')
+  })
 })
