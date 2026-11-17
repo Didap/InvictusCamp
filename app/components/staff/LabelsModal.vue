@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PROTECTED_ROLES, type StaffTagColor } from '#shared/utils/constants'
-import { plural } from '#shared/utils/format'
+import { andList, plural } from '#shared/utils/format'
 
 // The roles of staff and v-team and the tags of the «Valutazione» (spec 3.4): the administration creates,
 // renames and deletes them here. A name is saved when the field is left; deleting takes the role or the
@@ -20,9 +20,7 @@ const kindItems = [
   { label: 'Ruoli', value: 'role' },
   { label: 'Valutazione', value: 'tag' },
 ]
-const colorItems = computed(() =>
-  options('staffTagColor').map(option => ({ label: option.label, value: option.value })),
-)
+const colorItems = options('staffTagColor').map(option => ({ label: option.label, value: option.value }))
 const base = (k: Kind): string => (k === 'role' ? '/api/admin/staff/roles' : '/api/admin/staff/tags')
 /** What the server takes for a role (a name) or a tag (a name and a colour). */
 const bodyOf = (k: Kind, name: string, color?: StaffTagColor): Record<string, string> =>
@@ -70,12 +68,7 @@ function save(k: Kind, item: { id: string; name: string; color?: StaffTagColor }
 }
 
 async function remove(k: Kind, item: { id: string; name: string; people: number; convocations?: number }) {
-  const who = [
-    item.people && plural(item.people, 'persona', 'persone'),
-    item.convocations && plural(item.convocations, 'convocazione', 'convocazioni'),
-  ]
-    .filter(Boolean)
-    .join(' e ')
+  const who = andList(holders(item))
   const ok = await confirm({
     title: `Elimini «${item.name}»?`,
     description: who
@@ -108,13 +101,13 @@ async function add() {
   if (added) fresh.name = ''
 }
 
-const usage = (item: { people: number; convocations?: number }) =>
+/** Who has a role or a tag: "2 persone", "3 convocazioni"; nothing when nobody. */
+const holders = (item: { people: number; convocations?: number }) =>
   [
-    plural(item.people, 'persona', 'persone'),
+    item.people ? plural(item.people, 'persona', 'persone') : '',
     item.convocations ? plural(item.convocations, 'convocazione', 'convocazioni') : '',
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  ].filter(Boolean)
+const usage = (item: { people: number; convocations?: number }) => holders(item).join(' · ') || 'Nessuno'
 </script>
 
 <template>
@@ -140,7 +133,7 @@ const usage = (item: { people: number; convocations?: number }) =>
             />
             <span class="text-sm text-muted tabular-nums">{{ usage(role) }}</span>
             <UButton
-              v-if="!PROTECTED_ROLES[role.id]"
+              v-if="!PROTECTED_ROLES.has(role.id)"
               icon="i-lucide-trash-2"
               color="neutral"
               variant="ghost"
@@ -149,7 +142,7 @@ const usage = (item: { people: number; convocations?: number }) =>
               @click="remove('role', role)"
             />
             <p v-else class="w-full text-sm text-muted">
-              {{ PROTECTED_ROLES[role.id] }}: puoi rinominarlo, non eliminarlo.
+              {{ PROTECTED_ROLES.get(role.id) }}: puoi rinominarlo, non eliminarlo.
             </p>
           </li>
         </template>

@@ -4,7 +4,7 @@ import type { SessionListItem } from '#shared/types/sessions'
 import { STAFF_AGE_FILTERS } from '#shared/schemas/staff'
 import type { StaffListItem } from '#shared/types/staff'
 import { ageOn, todayIso } from '#shared/utils/dates'
-import { formatDayRange, fullName } from '#shared/utils/format'
+import { formatAge, formatDayRange, fullName } from '#shared/utils/format'
 
 // Staff of the camp: applications to review, approved staff, everyone (spec 3.4). Tab in the query string.
 // The table shows who people are (roles, city, age) and the «Valutazione»; status, application date and
@@ -13,7 +13,7 @@ const route = useRoute()
 const router = useRouter()
 const api = useApi()
 const confirm = useConfirm()
-const { roleItems: roleChoices, roleList, tagsOf } = useStaffLabels()
+const { roleFilterItems, roleList, tagsOf } = useStaffLabels()
 // Availability (P1): anyone, at least one session not started yet, none, or a session (who can come to it).
 const availability = ref('all')
 const SESSION_FREE = ['all', 'any', 'none']
@@ -63,7 +63,6 @@ const tabItems = computed(() => [
 const q = ref('')
 const role = ref('all')
 const age = ref('all')
-const roleItems = computed(() => [{ label: 'Tutti i ruoli', value: 'all' }, ...roleChoices.value])
 const ageItems = [
   { label: 'Tutte le età', value: 'all' },
   ...STAFF_AGE_FILTERS.map(filter => ({ label: filter.label, value: filter.value })),
@@ -215,7 +214,7 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
           <UInput v-model="q" icon="i-lucide-search" placeholder="Nome, email o città" class="w-full" />
         </UFormField>
         <UFormField label="Ruolo" class="w-full sm:w-60">
-          <USelect v-model="role" :items="roleItems" class="w-full" />
+          <USelect v-model="role" :items="roleFilterItems" class="w-full" />
         </UFormField>
         <UFormField label="Età" class="w-full sm:w-44">
           <USelect v-model="age" :items="ageItems" class="w-full" />
@@ -315,7 +314,7 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
               </div>
               <p class="text-sm">
                 {{ rolesOf(person) }}<span v-if="person.city" class="text-muted"> · {{ person.city }}</span
-                ><span v-if="person.birthDate" class="text-muted"> · {{ ageOf(person) }} anni</span>
+                ><span v-if="person.birthDate" class="text-muted"> · {{ formatAge(ageOf(person)!) }}</span>
               </p>
               <StaffTags :tags="tagsOf(person.tags)" />
             </div>

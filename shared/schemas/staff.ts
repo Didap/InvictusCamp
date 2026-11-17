@@ -18,8 +18,8 @@ import { zIsoDay, zRequiredText, zText, zUuid } from './common'
 /** The id of a role of `staff_roles` (the server checks it exists). */
 export const zStaffRole = z.string().trim().min(1).max(64)
 export const zStaffTeam = z.enum(STAFF_TEAMS)
-/** The most roles or tags a person can have, and the most of each the administration can create. */
-export const STAFF_LABELS_MAX = 40
+/** The most roles or tags a person can have. */
+const STAFF_LABELS_MAX = 40
 const zRoles = z.array(zStaffRole).max(STAFF_LABELS_MAX)
 
 const zBirthDate = zIsoDay.refine(day => day >= '1920-01-01' && day < todayIso(), {

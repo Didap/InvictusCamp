@@ -12,8 +12,9 @@ const userId = computed(() => String(route.params.userId))
 const api = useApi()
 const confirm = useConfirm()
 const { label, options } = useEnums()
-const { data: person, refresh } = await useApiFetch<StaffDetail>(() => `/api/admin/staff/${userId.value}`)
+// Started before the await, so the menus of roles and tags fill with the page.
 const { roleItems, tags } = useStaffLabels()
+const { data: person, refresh } = await useApiFetch<StaffDetail>(() => `/api/admin/staff/${userId.value}`)
 
 const name = computed(() => (person.value ? fullName(person.value) : ''))
 const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')

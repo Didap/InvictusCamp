@@ -87,7 +87,7 @@ describe('roles', () => {
     const [convocation] = await db.select().from(t.sessionStaff).where(eq(t.sessionStaff.userId, user.id))
     expect(convocation!.role).toBeNull()
     const [audit] = await db.select().from(t.auditLog).where(eq(t.auditLog.action, 'staff_role.delete'))
-    expect(audit).toMatchObject({ entityId: id, data: { people: 1, convocations: [convocation!.id] } })
+    expect(audit).toMatchObject({ entityId: null, data: { id, people: 1, convocations: [convocation!.id] } })
   })
 
   it('the coordinator and the group lead cannot be deleted, only renamed', async () => {

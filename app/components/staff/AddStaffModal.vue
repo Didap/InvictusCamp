@@ -13,7 +13,7 @@ const emit = defineEmits<{ added: [count: number] }>()
 
 const api = useApi()
 const { label, options } = useEnums()
-const { roleItems, roleList, tagsOf } = useStaffLabels()
+const { roleItems, roleFilterItems, roleList, tagsOf } = useStaffLabels()
 
 const roleFilter = ref('all')
 const teamFilter = ref<StaffTeam | 'all'>('all')
@@ -28,7 +28,6 @@ watch(open, value => {
   teamFilter.value = 'all'
 })
 
-const roleFilterItems = computed(() => [{ label: 'Tutti i ruoli', value: 'all' }, ...roleItems.value])
 const teamItems = computed(() => [
   { label: 'Staff e v-team', value: 'all' },
   ...options('staffTeam').map(option => ({ label: option.label, value: option.value })),

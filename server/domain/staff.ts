@@ -68,7 +68,7 @@ import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { requestSignatures, signatureRequestEmails } from './signature-requests'
-import { checkLabels } from './staff-labels'
+import { checkLabels, staffRoleOptions } from './staff-labels'
 import { createError } from './errors'
 
 /** What a convocation declined or withdrawn lets go: its activity group and its lodging. */
@@ -1227,18 +1227,17 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
 
 /** The application of the signed-in person. */
 export async function myApplication(db: DbOrTx, userId: string): Promise<StaffApplicationDto> {
-  const [row] = await db
-    .select({ profile: staffProfiles, cv: files })
-    .from(staffProfiles)
-    .leftJoin(files, eq(files.id, staffProfiles.cvFileId))
-    .where(eq(staffProfiles.userId, userId))
-    .limit(1)
+  const [[row], roleOptions] = await Promise.all([
+    db
+      .select({ profile: staffProfiles, cv: files })
+      .from(staffProfiles)
+      .leftJoin(files, eq(files.id, staffProfiles.cvFileId))
+      .where(eq(staffProfiles.userId, userId))
+      .limit(1),
+    staffRoleOptions(db),
+  ])
   if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
   const { profile, cv } = row
-  const roleOptions = await db
-    .select({ id: staffRoles.id, name: staffRoles.name })
-    .from(staffRoles)
-    .orderBy(asc(staffRoles.position), asc(staffRoles.name))
   return {
     status: profile.status,
     editable: profile.status === 'registered',

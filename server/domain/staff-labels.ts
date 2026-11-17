@@ -12,21 +12,38 @@ import { isUniqueViolation, type DbOrTx } from './db'
 import { httpError, type Actor } from './users'
 
 const KINDS = {
-  role: { table: staffRoles, column: staffProfiles.roles, noun: 'ruolo', notFound: 'Ruolo non trovato' },
-  tag: { table: staffTags, column: staffProfiles.tags, noun: 'tag', notFound: 'Tag non trovato' },
+  role: {
+    table: staffRoles,
+    field: 'roles',
+    noun: 'ruolo',
+    notFound: 'Ruolo non trovato',
+    missing: 'Un ruolo scelto non esiste più',
+  },
+  tag: {
+    table: staffTags,
+    field: 'tags',
+    noun: 'tag',
+    notFound: 'Tag non trovato',
+    missing: 'Un tag scelto non esiste più',
+  },
 } as const
 type Kind = keyof typeof KINDS
 
 /** Profiles whose list (roles or tags) holds `id`. */
-const holds = (kind: Kind, id: string) => sql`${KINDS[kind].column} @> jsonb_build_array(${id}::text)`
+const holds = (kind: Kind, id: string) => sql`${staffProfiles[KINDS[kind].field]} @> jsonb_build_array(${id}::text)`
+
+/** The roles in their order: the choices of the application and of the admin pages. */
+export function staffRoleOptions(db: DbOrTx) {
+  return db
+    .select({ id: staffRoles.id, name: staffRoles.name })
+    .from(staffRoles)
+    .orderBy(asc(staffRoles.position), asc(staffRoles.name))
+}
 
 /** Both lists in their order, with how many people (and, for roles, convocations) have each. */
 export async function staffLabels(db: DbOrTx): Promise<StaffLabels> {
   const [roles, tags, profiles, convocations] = await Promise.all([
-    db
-      .select({ id: staffRoles.id, name: staffRoles.name })
-      .from(staffRoles)
-      .orderBy(asc(staffRoles.position), asc(staffRoles.name)),
+    staffRoleOptions(db),
     db
       .select({ id: staffTags.id, name: staffTags.name, color: staffTags.color })
       .from(staffTags)
@@ -60,36 +77,20 @@ export async function checkLabels(
 ): Promise<string[]> {
   const unique = [...new Set(ids)]
   if (!unique.length) return unique
-  const { table } = KINDS[kind]
+  const { table, missing } = KINDS[kind]
   const found = new Set(
     (await db.select({ id: table.id }).from(table).where(inArray(table.id, unique)).for('share')).map(row => row.id),
   )
-  if (found.size !== unique.length && !options.dropMissing) {
-    throw httpError(409, kind === 'role' ? 'Un ruolo scelto non esiste più' : 'Un tag scelto non esiste più')
-  }
+  if (found.size !== unique.length && !options.dropMissing) throw httpError(409, missing)
   return unique.filter(id => found.has(id))
 }
 
-const nameTakenError = (kind: Kind) => httpError(409, `C’è già un ${KINDS[kind].noun} con questo nome`)
-
-async function nameTaken(db: DbOrTx, kind: Kind, name: string, except?: string): Promise<void> {
-  const { table } = KINDS[kind]
-  const [row] = await db
-    .select({ id: table.id })
-    .from(table)
-    .where(sql`lower(${table.name}) = lower(${name}) and ${table.id}::text <> ${except ?? ''}`)
-  if (row) throw nameTakenError(kind)
-}
-
-/**
- * Writes a name in a savepoint: two requests with the same name at once both pass nameTaken, and the unique
- * index refuses the second, which gets the same 409 instead of a server error.
- */
-async function writeName<T>(db: DbOrTx, kind: Kind, write: (db: DbOrTx) => Promise<T>): Promise<T> {
+/** A name is unique whatever the case (the index on lower(name)): the same name twice is a 409. */
+async function writeName<T>(kind: Kind, write: Promise<T>): Promise<T> {
   try {
-    return await db.transaction(write)
+    return await write
   } catch (error) {
-    throw isUniqueViolation(error) ? nameTakenError(kind) : error
+    throw isUniqueViolation(error) ? httpError(409, `C’è già un ${KINDS[kind].noun} con questo nome`) : error
   }
 }
 
@@ -100,47 +101,45 @@ async function nextPosition(db: DbOrTx, kind: Kind): Promise<number> {
 }
 
 export async function createStaffRole(db: DbOrTx, input: StaffRoleInput, actor: Actor): Promise<string> {
-  await nameTaken(db, 'role', input.name)
   const position = await nextPosition(db, 'role')
-  const [row] = await writeName(db, 'role', tx =>
-    tx.insert(staffRoles).values({ name: input.name, position }).returning({ id: staffRoles.id }),
+  const [row] = await writeName(
+    'role',
+    db.insert(staffRoles).values({ name: input.name, position }).returning({ id: staffRoles.id }),
   )
-  await audit(db, 'staff_role.create', row!.id, { name: input.name }, actor)
+  await audit(db, 'role', 'create', row!.id, { name: input.name }, actor)
   return row!.id
 }
 
 export async function renameStaffRole(db: DbOrTx, id: string, input: StaffRoleInput, actor: Actor): Promise<void> {
-  await nameTaken(db, 'role', input.name, id)
   const [before] = await db.select({ name: staffRoles.name }).from(staffRoles).where(eq(staffRoles.id, id))
   if (!before) throw httpError(404, KINDS.role.notFound)
   if (before.name === input.name) return
-  await writeName(db, 'role', tx => tx.update(staffRoles).set({ name: input.name }).where(eq(staffRoles.id, id)))
-  await audit(db, 'staff_role.update', id, { from: before.name, to: input.name }, actor)
+  await writeName('role', db.update(staffRoles).set({ name: input.name }).where(eq(staffRoles.id, id)))
+  await audit(db, 'role', 'update', id, { from: before.name, to: input.name }, actor)
 }
 
 export async function createStaffTag(db: DbOrTx, input: StaffTagInput, actor: Actor): Promise<string> {
-  await nameTaken(db, 'tag', input.name)
   const position = await nextPosition(db, 'tag')
-  const [row] = await writeName(db, 'tag', tx =>
-    tx
+  const [row] = await writeName(
+    'tag',
+    db
       .insert(staffTags)
       .values({ ...input, position })
       .returning({ id: staffTags.id }),
   )
-  await audit(db, 'staff_tag.create', row!.id, { ...input }, actor)
+  await audit(db, 'tag', 'create', row!.id, { ...input }, actor)
   return row!.id
 }
 
 export async function updateStaffTag(db: DbOrTx, id: string, input: StaffTagInput, actor: Actor): Promise<void> {
-  await nameTaken(db, 'tag', input.name, id)
   const [before] = await db
     .select({ name: staffTags.name, color: staffTags.color })
     .from(staffTags)
     .where(eq(staffTags.id, id))
   if (!before) throw httpError(404, KINDS.tag.notFound)
   if (before.name === input.name && before.color === input.color) return
-  await writeName(db, 'tag', tx => tx.update(staffTags).set(input).where(eq(staffTags.id, id)))
-  await audit(db, 'staff_tag.update', id, { from: before, to: input }, actor)
+  await writeName('tag', db.update(staffTags).set(input).where(eq(staffTags.id, id)))
+  await audit(db, 'tag', 'update', id, { from: before, to: input }, actor)
 }
 
 /**
@@ -149,9 +148,9 @@ export async function updateStaffTag(db: DbOrTx, id: string, input: StaffTagInpu
  * knows (PROTECTED_ROLES) stay.
  */
 export async function deleteStaffLabel(db: DbOrTx, kind: Kind, id: string, actor: Actor): Promise<void> {
-  const reason = kind === 'role' ? PROTECTED_ROLES[id] : undefined
+  const reason = kind === 'role' ? PROTECTED_ROLES.get(id) : undefined
   if (reason) throw httpError(409, `${reason}: puoi rinominarlo, non eliminarlo`)
-  const { table, column, notFound } = KINDS[kind]
+  const { table, field, notFound } = KINDS[kind]
   const convocations =
     kind === 'role'
       ? (await db.select({ id: sessionStaff.id }).from(sessionStaff).where(eq(sessionStaff.role, id))).map(
@@ -162,22 +161,28 @@ export async function deleteStaffLabel(db: DbOrTx, kind: Kind, id: string, actor
   if (!row) throw httpError(404, notFound)
   const stripped = await db
     .update(staffProfiles)
-    .set({ [kind === 'role' ? 'roles' : 'tags']: sql`${column} - ${id}::text` })
+    .set({ [field]: sql`${staffProfiles[field]} - ${id}::text` })
     .where(holds(kind, id))
     .returning({ id: staffProfiles.id })
   const data = { name: row.name, people: stripped.length, ...(kind === 'role' ? { convocations } : {}) }
-  await audit(db, `staff_${kind}.delete`, id, data, actor)
+  await audit(db, kind, 'delete', id, data, actor)
 }
 
-/** The first roles have text ids (`coordinator`): `entity_id` is a uuid, so the id goes in the data. */
-function audit(db: DbOrTx, action: string, id: string, data: Record<string, unknown>, actor: Actor) {
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+/** Tags have uuid ids, as `audit_log.entity_id`; the roles' are text (`coordinator`), so theirs goes in the data. */
+function audit(
+  db: DbOrTx,
+  kind: Kind,
+  change: 'create' | 'update' | 'delete',
+  id: string,
+  data: Record<string, unknown>,
+  actor: Actor,
+) {
   return writeAudit(db, {
     actorUserId: actor.userId,
-    action,
-    entityType: action.split('.')[0]!,
-    entityId: uuid ? id : null,
-    data: uuid ? data : { id, ...data },
+    action: `staff_${kind}.${change}`,
+    entityType: `staff_${kind}`,
+    entityId: kind === 'tag' ? id : null,
+    data: kind === 'tag' ? data : { id, ...data },
     ip: actor.ip ?? null,
   })
 }
