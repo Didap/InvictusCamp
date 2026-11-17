@@ -100,7 +100,6 @@ const today = todayIso()
 const withCondition = computed(() =>
   isYoungWithCondition({ kind: state.kind ?? 'adult', hasDisability: state.health.hasDisability }),
 )
-const birthDateRequired = computed(() => state.kind === 'adult' || withCondition.value)
 const relationshipLabel = computed(
   () =>
     `Legame di parentela rispetto ${props.reference ? `a ${props.reference}` : 'al ragazzo o alla ragazza con patologia o disabilità'}`,
@@ -181,12 +180,7 @@ async function save() {
           <UFormField label="Cognome" name="lastName" required>
             <UInput v-model="state.lastName" autocomplete="off" class="w-full" />
           </UFormField>
-          <UFormField
-            label="Data di nascita"
-            name="birthDate"
-            :required="birthDateRequired"
-            :hint="birthDateRequired ? undefined : 'Facoltativo'"
-          >
+          <UFormField label="Data di nascita" name="birthDate" required>
             <UInput v-model="state.birthDate" type="date" :max="today" min="1900-01-01" class="w-full" />
           </UFormField>
           <UFormField v-if="!withCondition" :label="relationshipLabel" name="relationship" required>

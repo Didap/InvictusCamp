@@ -116,16 +116,9 @@ export function isEmptyCard(member: { filledAt: Date | string | null }): boolean
   return member.filledAt === null
 }
 
-/**
- * A birth date the card requires and lacks: an adult's, and the young person with a condition's (the camp
- * takes 5 to 21 year olds). A sibling's is optional.
- */
-export function missingBirthDate(member: {
-  kind: MemberKind
-  birthDate?: string | null
-  hasDisability?: boolean
-}): boolean {
-  return !member.birthDate && (member.kind === 'adult' || Boolean(member.hasDisability))
+/** A card without the birth date: everyone's is required (the age is among the data of the registration). */
+export function missingBirthDate(member: { birthDate?: string | null }): boolean {
+  return !member.birthDate
 }
 
 /** The young person with a condition, the one the camp is for: the others' relationship is to them. */

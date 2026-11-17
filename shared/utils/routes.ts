@@ -19,6 +19,9 @@ export const PUBLIC_PATHS = [
   '/privacy',
 ] as const
 
+/** `/candidati?squadra=v-team`: the application starts with the v-team chosen. */
+export const V_TEAM_QUERY = 'v-team'
+
 export const GUEST_ONLY_PATHS = ['/accedi', '/registrati', '/candidati', '/password-dimenticata'] as const
 
 /** The role whose area contains `path`, if the path belongs to a role area. */

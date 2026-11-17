@@ -14,6 +14,7 @@ describe('family registration', () => {
     familyName: 'Famiglia Rossi',
     firstName: 'Anna',
     lastName: 'Rossi',
+    birthDate: '1985-03-02',
     email: 'anna@example.com',
     phone: '+39 333 1234567',
     password: 'una-password-lunga',
@@ -25,6 +26,11 @@ describe('family registration', () => {
     expect(refused(registerFamilySchema.safeParse({ ...valid, phone: '  ' }))).toEqual(['phone'])
     expect(refused(registerFamilySchema.safeParse({ ...valid, phone: undefined }))).toEqual(['phone'])
   })
+
+  it('needs the birth date of the referent', () => {
+    expect(refused(registerFamilySchema.safeParse({ ...valid, birthDate: '' }))).toEqual(['birthDate'])
+    expect(refused(registerFamilySchema.safeParse({ ...valid, birthDate: '2999-01-01' }))).toEqual(['birthDate'])
+  })
 })
 
 describe('family member', () => {
@@ -32,11 +38,10 @@ describe('family member', () => {
   const young = { ...adult, firstName: 'Luca', relationship: 'sibling', kind: 'young', birthDate: '2015-04-12' }
   const details = Object.fromEntries(DISABILITY_CHOICES.map(field => [field.key, [field.options[0].value]]))
 
-  it('needs the birth date of an adult, not of a young person', () => {
+  it('needs the birth date of everyone', () => {
     expect(memberSchema.safeParse(adult).success).toBe(true)
     expect(refused(memberSchema.safeParse({ ...adult, birthDate: '' }))).toEqual(['birthDate'])
-    expect(memberSchema.safeParse({ ...young, birthDate: '' }).success).toBe(true)
-    // The young person with a condition needs it: the camp takes 5 to 21 year olds.
+    expect(refused(memberSchema.safeParse({ ...young, birthDate: null }))).toEqual(['birthDate'])
     const health = { hasDisability: true, disability: details }
     expect(refused(memberSchema.safeParse({ ...young, birthDate: '', health }))).toEqual(['birthDate'])
   })

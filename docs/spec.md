@@ -51,12 +51,14 @@ Everyone: `/account`, `/firma/:requestId`.
 
 ### 3.1 Accounts (foundation, done)
 
-- A family registers at `/registrati` (family name, referent, email, phone, password, privacy): user `family`,
-  a `families` row and the referent as first member (an adult); an email confirms the address (48 h).
+- A family registers at `/registrati` (family name, referent with birth date, email, phone, password, privacy):
+  user `family`, a `families` row and the referent as first member (an adult, born with the birth date); an
+  email confirms the address (48 h).
   Sign-in is refused until the address is confirmed. The "Partecipa" or "Iscriviti" button of the camp's
   website links here. Once in, the first thing to do is the family data (3.8).
 - A staff member registers at `/candidati`: user `staff` and a `staff_profiles` row `registered`; same
-  confirmation. The application itself is completed inside the platform (3.4).
+  confirmation. `/candidati?squadra=v-team` (the v-team link of «Accedi») gives the row the v-team, which the
+  application can still change. The application itself is completed inside the platform (3.4).
 - The administration invites any role (`/admin/utenti`): user `invited` without password and an
   invitation email (7 days). Choosing the password activates the account. For a family the invitation also
   creates the `families` row; for staff the profile (`registered`, or `approved` when the administration
@@ -180,7 +182,8 @@ availability or receive convocations. The administration can move a person to th
 - **Family data** (`/famiglia/profilo`, "Dati della famiglia"), the first form of the family: the family's
   surname, stored as «Famiglia Rossi» (the lists show it so), and phone (required); residence (street and number, city, CAP and region required, province optional); the
   composition, i.e. how many adults (the account holder included), how many young people with a severe or
-  chronic illness, a neurodevelopmental disorder or a disability, how many without; and the questions of
+  chronic illness, a neurodevelopmental disorder or a disability (at least one: the camp is for them, a family
+  without any cannot confirm its data), how many without; and the questions of
   `shared/content/family-form.ts` (how they found the camp, association, preferred sessions: weekend with 2
   nights and/or summer week with 4 nights, accommodation needs: kitchen, bathroom without architectural
   barriers, microwave; whether a dog comes along, with the notice that dogs cannot stay in the apartments and
@@ -209,8 +212,7 @@ availability or receive convocations. The administration can move a person to th
   `family_members.useful_info`): allergies and intolerances (the 14 EU allergens), one food preference,
   other notes. Food allergies are health data: the same consent covers them, withdrawing it deletes them
   too. An empty card reads "Adulto 2", "Ragazzo o ragazza 1" with "Da compilare"; filling it in
-  requires name, surname, relationship (but for the young person with a condition) and the birth date of an
-  adult and of the young person with a condition (a sibling's is optional).
+  requires name, surname, relationship (but for the young person with a condition) and everyone's birth date.
 - **Release** (liberatoria): when the family data is confirmed, the two answers of its «Liberatoria» section are
   given (photos and videos during the stay, their publication) and every card is complete, the camp prepares the
   release with the members (name, birth date, relationship; never health data) as a PDF document of the family

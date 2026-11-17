@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isIsoDay } from '../utils/dates'
+import { isIsoDay, todayIso } from '../utils/dates'
 
 // Italian messages for every schema, on the client (UForm) and on the server (parseBody).
 z.config(z.locales.it())
@@ -21,6 +21,16 @@ export const zPersonName = z
   .trim()
   .min(1, { error: 'Campo obbligatorio' })
   .max(100, { error: 'Al massimo 100 caratteri' })
+
+/** A person's birth date, required: an empty field ('' or null) reads as missing. */
+export const zBirthDate = z.preprocess(
+  value => (value === '' || value === null ? undefined : value),
+  z
+    .string({ error: 'Campo obbligatorio' })
+    .refine(isIsoDay, { error: 'Data non valida' })
+    .refine(day => day >= '1900-01-01', { error: 'Data non valida' })
+    .refine(day => day <= todayIso(), { error: 'La data di nascita non può essere nel futuro' }),
+)
 
 export const zPhone = z
   .string()

@@ -29,7 +29,7 @@ export default defineEventHandler(async event => {
           phone: input.phone || null,
         })
         .returning()
-      await tx.insert(tables.staffProfiles).values({ userId: user!.id, status: 'registered' })
+      await tx.insert(tables.staffProfiles).values({ userId: user!.id, status: 'registered', team: input.team })
       return { user: user!, token: await issueToken(tx, user!.id, 'verify_email') }
     })
     .catch(error => {

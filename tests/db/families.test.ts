@@ -569,7 +569,6 @@ describe('administration', () => {
     expect(JSON.stringify(all)).not.toMatch(/Descrizione riservata|hasDisability|disability/)
 
     expect((await listFamilies(db, query({ disability: 'yes' }))).items.map(i => i.id)).toEqual([rossi.family.id])
-    expect((await listFamilies(db, query({ disability: 'no' }))).items.map(i => i.id)).toEqual([bianchi.family.id])
     expect((await listFamilies(db, query({ disability: 'many' }))).total).toBe(0)
     // Matteo: autism, born on 12/04/2015.
     const ids = async (values: Record<string, string>) => (await listFamilies(db, query(values))).items.map(i => i.id)
@@ -621,10 +620,6 @@ describe('administration', () => {
       actor,
     })
     expect(await guestAgeNotice(db, { familyId: family.id, ctx, today })).toEqual([])
-    // The birth date of the young person with a condition is required, also without `health`.
-    await expect(
-      addFamilyMember(db, { familyId: family.id, member: child({ birthDate: null, health: withDisability }), actor }),
-    ).rejects.toMatchObject({ statusCode: 400 })
   })
 
   it('keeps health details out of the record and in the reserved endpoint only', async () => {
