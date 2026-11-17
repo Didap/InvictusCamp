@@ -930,6 +930,9 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, char => `\\${char}`)
 }
 
+/** The family's phone, the account's if the family has none: needs `users` joined to the family. */
+export const familyPhoneSql = sql<string | null>`coalesce(${families.phone}, ${users.phone})`
+
 /** How many cards (family_members) a family has. */
 export const memberCountSql = sql<number>`(select count(*)::int from ${familyMembers} where ${familyMembers.familyId} = ${families.id})`
 
@@ -1102,7 +1105,7 @@ export async function familiesForExport(db: DbOrTx, query: AdminFamilyListQuery)
       firstName: users.firstName,
       lastName: users.lastName,
       email: users.email,
-      phone: sql<string | null>`coalesce(${families.phone}, ${users.phone})`,
+      phone: familyPhoneSql,
       address: families.address,
       postalCode: families.postalCode,
       city: families.city,

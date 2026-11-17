@@ -9,15 +9,14 @@ import {
   listLodgings,
   lodgingsCsv,
   lodgingsPdf,
+  layoutWithContacts,
   lodgingsPdfBlocks,
-  sessionLayout,
   sessionLodgingsOf,
   updateLodging,
 } from '../../server/domain/lodgings'
 import { answerInvitation, cancelParticipation } from '../../server/domain/sessions'
 import { lodgingSchema, type LodgingInput } from '../../shared/schemas/lodgings'
 import type { ParticipationKind, ParticipationStatus, SessionStatus } from '../../shared/utils/constants'
-import { formatDayRange } from '../../shared/utils/format'
 import { sniffMimeType } from '../../server/domain/storage'
 import { makeAdmin, makeFamily, makeSession, makeStaff, t, useTestDb } from './helpers'
 
@@ -306,8 +305,7 @@ describe('a session', () => {
     await db.update(t.users).set({ phone: '080 1234567' }).where(eq(t.users.id, bianchi.family.userId))
     const { user: anna } = await makeStaff(db)
     await db.insert(t.sessionStaff).values({ sessionId: session.id, userId: anna.id, status: 'accepted' })
-    expect(lodgingsPdfBlocks(await sessionLayout(db, session.id))).toEqual([
-      `Sessione di prova, ${formatDayRange(session.startDate, session.endDate, 'long')}.`,
+    expect(lodgingsPdfBlocks(await layoutWithContacts(db, session.id))).toEqual([
       { heading: 'B&B Melina' },
       { label: 'Camera 1' },
       'Libero.',

@@ -6,12 +6,11 @@ import { eq, sql } from 'drizzle-orm'
 import type { CanteenDto } from '../../shared/types/canteen'
 import { canteenNotCounted, canteenSummary, canteenWho, type CanteenPerson } from '../../shared/utils/canteen'
 import { ENUM_META } from '../../shared/utils/constants'
-import { todayIso } from '../../shared/utils/dates'
-import { NO_CARDS, formatDay, formatDayRange, fullName } from '../../shared/utils/format'
+import { NO_CARDS, fullName } from '../../shared/utils/format'
 import { familyMembers, families, sessionFamilies, sessionStaff, staffProfiles, users } from '../db/schema'
-import { sessionCsv, sessionFileName } from './csv'
+import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
-import { textPdf, type PdfBlock } from './pdf'
+import { sessionPdf, type PdfBlock } from './pdf'
 import { activeStaff, findSession, holdingPlace } from './sessions'
 
 /** GET /api/admin/sessions/:id/canteen */
@@ -89,10 +88,8 @@ export async function canteenCsv(db: DbOrTx, sessionId: string): Promise<{ filen
 
 /** The PDF for the supplier: the total, who eats, then each need with how many and who, then what to know. */
 export function canteenPdfBlocks(summary: CanteenDto): PdfBlock[] {
-  const { session } = summary
   const notCounted = canteenNotCounted(summary)
   return [
-    `${session.title}, ${formatDayRange(session.startDate, session.endDate, 'long')}.`,
     { heading: `Totale pasti: ${summary.total}` },
     `Persone a ogni pasto: ${canteenWho(summary)}.`,
     ...(notCounted ? [notCounted] : []),
@@ -108,12 +105,10 @@ export function canteenPdfBlocks(summary: CanteenDto): PdfBlock[] {
 
 export async function canteenPdf(db: DbOrTx, sessionId: string): Promise<{ filename: string; data: Uint8Array }> {
   const summary = await canteenOf(db, sessionId)
-  return {
-    filename: sessionFileName(summary.session, 'mensa', 'pdf'),
-    data: await textPdf(
-      'Pasti per il fornitore',
-      canteenPdfBlocks(summary),
-      `Dati riservati: servono solo a preparare i pasti. Aggiornato al ${formatDay(todayIso(), 'numeric')}.`,
-    ),
-  }
+  return sessionPdf(summary.session, {
+    prefix: 'mensa',
+    title: 'Pasti per il fornitore',
+    blocks: canteenPdfBlocks(summary),
+    notice: 'Dati riservati: servono solo a preparare i pasti.',
+  })
 }

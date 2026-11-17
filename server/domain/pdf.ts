@@ -2,6 +2,9 @@
 // demo documents of the seed, the families' releases and the canteen sheet for the supplier; the WinAnsi and
 // wrapping helpers serve the signed copies too (signatures.ts). Explicit imports only.
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib'
+import { todayIso, type DayRange } from '../../shared/utils/dates'
+import { formatDay, formatDayRange } from '../../shared/utils/format'
+import { sessionFileName } from './csv'
 
 const PAGE: [number, number] = [595.28, 841.89]
 const MARGIN = 56
@@ -99,4 +102,22 @@ export async function textPdf(title: string, blocks: PdfBlock[], footer: string)
   }
   drawFooter()
   return pdf.save()
+}
+
+/**
+ * A PDF about a session, the twin of sessionCsv: its title and dates first, then the blocks; at the foot
+ * what the reader should know and the day it was made.
+ */
+export async function sessionPdf(
+  session: DayRange & { title: string },
+  file: { prefix: string; title: string; blocks: PdfBlock[]; notice: string },
+): Promise<{ filename: string; data: Uint8Array }> {
+  return {
+    filename: sessionFileName(session, file.prefix, 'pdf'),
+    data: await textPdf(
+      file.title,
+      [`${session.title}, ${formatDayRange(session.startDate, session.endDate, 'long')}.`, ...file.blocks],
+      `${file.notice} Aggiornato al ${formatDay(todayIso(), 'numeric')}.`,
+    ),
+  }
 }

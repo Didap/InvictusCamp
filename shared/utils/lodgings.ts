@@ -28,26 +28,25 @@ export function lodgingName(lodging: { name: string; location: LodgingLocation }
   return `${lodging.name} (${enumLabel('lodgingLocation', lodging.location)})`
 }
 
+/** The kinds of bed a lodging counts, in the order they are told; `many` is also the label of the field. */
+export const BED_KINDS = [
+  { key: 'doubleBeds', one: 'letto matrimoniale', many: 'letti matrimoniali' },
+  { key: 'singleBeds', one: 'letto singolo', many: 'letti singoli' },
+  { key: 'sofaBeds', one: 'divano letto', many: 'divani letto' },
+] as const
+export type BedKind = (typeof BED_KINDS)[number]['key']
+
 /** "1 letto matrimoniale, 2 letti singoli, 1 divano letto": only the kinds there are. */
-export function bedKindsLabel(lodging: { singleBeds: number; doubleBeds: number; sofaBeds: number }): string {
-  return [
-    lodging.doubleBeds && plural(lodging.doubleBeds, 'letto matrimoniale', 'letti matrimoniali'),
-    lodging.singleBeds && plural(lodging.singleBeds, 'letto singolo', 'letti singoli'),
-    lodging.sofaBeds && plural(lodging.sofaBeds, 'divano letto', 'divani letto'),
-  ]
-    .filter(Boolean)
+export function bedKindsLabel(lodging: Record<BedKind, number>): string {
+  return BED_KINDS.filter(kind => lodging[kind.key])
+    .map(kind => plural(lodging[kind.key], kind.one, kind.many))
     .join(', ')
 }
 
 /** "4 posti letto (1 letto matrimoniale, 2 letti singoli) · Accessibile · Cucina, Microonde". */
-export function lodgingLine(lodging: {
-  beds: number
-  singleBeds: number
-  doubleBeds: number
-  sofaBeds: number
-  accessible: boolean
-  features: readonly LodgingFeature[]
-}): string {
+export function lodgingLine(
+  lodging: Record<BedKind, number> & { beds: number; accessible: boolean; features: readonly LodgingFeature[] },
+): string {
   const kinds = bedKindsLabel(lodging)
   return [
     kinds ? `${bedsLabel(lodging.beds)} (${kinds})` : bedsLabel(lodging.beds),

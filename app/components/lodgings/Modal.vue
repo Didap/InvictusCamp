@@ -2,6 +2,7 @@
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { lodgingSchema, type LodgingValues } from '#shared/schemas/lodgings'
 import type { Lodging } from '#shared/types/lodgings'
+import { BED_KINDS } from '#shared/utils/lodgings'
 
 // A lodging of the layout (docs/spec.md 3.11): location, name, beds and their kinds, accessibility, what it
 // offers. A new one when `lodging` is null.
@@ -30,11 +31,7 @@ watch(open, value => {
 const enums = useEnums()
 const featureItems = enums.options('lodgingFeature')
 const locationItems = enums.options('lodgingLocation')
-const BED_KINDS = [
-  { name: 'doubleBeds', label: 'Letti matrimoniali' },
-  { name: 'singleBeds', label: 'Letti singoli' },
-  { name: 'sofaBeds', label: 'Divani letto' },
-] as const
+const bedFields = BED_KINDS.map(kind => ({ name: kind.key, label: kind.many[0]!.toUpperCase() + kind.many.slice(1) }))
 
 const saving = ref(false)
 async function onSubmit(event: FormSubmitEvent<LodgingValues>) {
@@ -77,8 +74,8 @@ async function onSubmit(event: FormSubmitEvent<LodgingValues>) {
         </UFormField>
         <fieldset class="grid gap-4 sm:grid-cols-3">
           <legend class="mb-2 text-sm font-medium text-default">Letti</legend>
-          <UFormField v-for="kind in BED_KINDS" :key="kind.name" :label="kind.label" :name="kind.name">
-            <UInputNumber v-model="state[kind.name]" :min="0" :max="20" class="w-full" />
+          <UFormField v-for="field in bedFields" :key="field.name" :label="field.label" :name="field.name">
+            <UInputNumber v-model="state[field.name]" :min="0" :max="20" class="w-full" />
           </UFormField>
         </fieldset>
         <UFormField name="accessible">
