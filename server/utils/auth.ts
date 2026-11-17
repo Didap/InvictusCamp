@@ -94,6 +94,14 @@ export function requireUuidParam(event: H3Event, name: string): string {
   return value
 }
 
+/** The `id` of a role of staff and v-team: a uuid, or one of the keys the first roles kept (`coordinator`). */
+export function requireLabelParam(event: H3Event): string {
+  const value = getRouterParam(event, 'id')
+  if (!value || !/^[a-z_]{1,32}$|^[0-9a-f-]{36}$/i.test(value))
+    throw createError({ statusCode: 404, message: 'Non trovato' })
+  return value
+}
+
 /** The address of the client: the entry the Coolify proxy appended to X-Forwarded-For, or the socket. */
 export function clientIp(event: H3Event): string | null {
   return forwardedClientIp(getRequestHeader(event, 'x-forwarded-for'), getRequestIP(event))

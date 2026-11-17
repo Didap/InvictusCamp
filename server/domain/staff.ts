@@ -54,6 +54,7 @@ import {
   sessionAvailability,
   signatureRequests,
   staffProfiles,
+  staffRoles,
   users,
 } from '../db/schema'
 import {
@@ -67,6 +68,7 @@ import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { requestSignatures, signatureRequestEmails } from './signature-requests'
+import { checkLabels } from './staff-labels'
 import { createError } from './errors'
 
 /** What a convocation declined or withdrawn lets go: its activity group and its lodging. */
@@ -213,7 +215,7 @@ export async function saveApplicationDraft(db: DbOrTx, userId: string, input: St
   if (input.team !== undefined) values.team = input.team
   if (input.birthDate !== undefined) values.birthDate = input.birthDate
   if (input.city !== undefined) values.city = input.city || null
-  if (input.roles !== undefined) values.roles = [...new Set(input.roles)]
+  if (input.roles !== undefined) values.roles = await checkLabels(db, 'role', input.roles)
   if (input.qualifications !== undefined) values.qualifications = input.qualifications || null
   if (input.experience !== undefined) values.experience = input.experience || null
   if (input.motivation !== undefined) values.motivation = input.motivation || null
@@ -242,7 +244,7 @@ export async function submitApplication(
   }
   await db
     .update(staffProfiles)
-    .set({ ...input, roles: [...new Set(input.roles)], status: 'applied', appliedAt: new Date() })
+    .set({ ...input, roles: await checkLabels(db, 'role', input.roles), status: 'applied', appliedAt: new Date() })
     .where(eq(staffProfiles.id, profile.id))
   await writeAudit(db, {
     actorUserId: userId,
@@ -360,6 +362,44 @@ export async function setStaffTeam(
   })
 }
 
+/**
+ * The roles the administration gives a person (docs/spec.md 3.4); while the application is a draft they are
+ * the person's choice, in the form. Convocations keep the role they have.
+ */
+export async function setStaffRoles(
+  db: DbOrTx,
+  input: { userId: string; roles: string[]; actor: Actor },
+): Promise<void> {
+  const profile = await profileOf(db, input.userId, { lock: true })
+  if (profile.status === 'registered') {
+    throw createError({ statusCode: 409, message: 'I ruoli li sceglie la persona, finché non invia la candidatura' })
+  }
+  await saveLabels(db, profile, 'roles', await checkLabels(db, 'role', input.roles), input.actor)
+}
+
+/** The «Valutazione»: tags of the administration, never shown to the person. */
+export async function setStaffTags(db: DbOrTx, input: { userId: string; tags: string[]; actor: Actor }): Promise<void> {
+  const profile = await profileOf(db, input.userId, { lock: true })
+  await saveLabels(db, profile, 'tags', await checkLabels(db, 'tag', input.tags), input.actor)
+}
+
+async function saveLabels(db: DbOrTx, profile: ProfileRow, field: 'roles' | 'tags', next: string[], actor: Actor) {
+  const before = profile[field]
+  if (before.length === next.length && before.every(id => next.includes(id))) return
+  await db
+    .update(staffProfiles)
+    .set({ [field]: next })
+    .where(eq(staffProfiles.id, profile.id))
+  await writeAudit(db, {
+    actorUserId: actor.userId,
+    action: `staff.${field}`,
+    entityType: 'user',
+    entityId: profile.userId,
+    data: { from: before, to: next },
+    ip: actor.ip ?? null,
+  })
+}
+
 /** Internal notes of the review, never shown to the person. */
 export async function saveReviewNotes(db: DbOrTx, userId: string, notes: string): Promise<void> {
   const profile = await profileOf(db, userId)
@@ -471,6 +511,11 @@ export async function addConvocations(
 ): Promise<{ added: number; kept: number }> {
   await sessionFor(db, input.sessionId, { editable: true })
   const people = [...new Map(input.people.map(person => [person.userId, person])).values()]
+  await checkLabels(
+    db,
+    'role',
+    people.flatMap(person => (person.role ? [person.role] : [])),
+  )
   const userIds = people.map(person => person.userId)
   const eligible = await db
     .select({ userId: staffProfiles.userId })
@@ -538,7 +583,7 @@ export async function sendConvocations(
     .select({
       id: sessionStaff.id,
       status: sessionStaff.status,
-      role: sessionStaff.role,
+      roleName: staffRoles.name,
       userId: users.id,
       email: users.email,
       firstName: users.firstName,
@@ -548,6 +593,7 @@ export async function sendConvocations(
     .from(sessionStaff)
     .innerJoin(users, eq(users.id, sessionStaff.userId))
     .innerJoin(staffProfiles, eq(staffProfiles.userId, sessionStaff.userId))
+    .leftJoin(staffRoles, eq(staffRoles.id, sessionStaff.role))
     .where(and(eq(sessionStaff.sessionId, session.id), inArray(sessionStaff.id, ids)))
     .for('update', { of: sessionStaff })
   if (rows.length !== ids.length) throw createError({ statusCode: 404, message: 'Convocazione non trovata' })
@@ -585,7 +631,7 @@ export async function sendConvocations(
       toUserId: row.userId,
       firstName: row.firstName,
       session,
-      role: row.role,
+      roleName: row.roleName,
       message,
     }),
   )
@@ -608,6 +654,7 @@ export async function setConvocationRole(
   if (row.status === 'declined' || row.status === 'cancelled') {
     throw createError({ statusCode: 409, message: 'La convocazione è chiusa: aggiungi di nuovo la persona' })
   }
+  await checkLabels(db, 'role', [input.role])
   await db.update(sessionStaff).set({ role: input.role }).where(eq(sessionStaff.id, row.id))
   await writeAudit(db, {
     actorUserId: input.actor.userId,
@@ -675,10 +722,12 @@ export async function cancelConvocation(
       email: users.email,
       firstName: users.firstName,
       accountStatus: users.status,
+      roleName: staffRoles.name,
     })
     .from(sessionStaff)
     .innerJoin(campSessions, eq(campSessions.id, sessionStaff.sessionId))
     .innerJoin(users, eq(users.id, sessionStaff.userId))
+    .leftJoin(staffRoles, eq(staffRoles.id, sessionStaff.role))
     .where(eq(sessionStaff.id, input.id))
     .limit(1)
     .for('update', { of: sessionStaff })
@@ -716,7 +765,7 @@ export async function cancelConvocation(
         toUserId: convocation.userId,
         firstName: row.firstName,
         session,
-        role: convocation.role,
+        roleName: row.roleName,
         sessionCancelled: input.sessionCancelled,
       }),
     ],
@@ -873,7 +922,9 @@ export async function staffList(
       status: staffProfiles.status,
       team: staffProfiles.team,
       roles: staffProfiles.roles,
+      tags: staffProfiles.tags,
       city: staffProfiles.city,
+      birthDate: staffProfiles.birthDate,
       appliedAt: staffProfiles.appliedAt,
     })
     .from(staffProfiles)
@@ -963,9 +1014,11 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
         endDate: campSessions.endDate,
         contractDocumentId: campSessions.contractDocumentId,
       },
+      roleName: staffRoles.name,
     })
     .from(sessionStaff)
     .innerJoin(campSessions, eq(campSessions.id, sessionStaff.sessionId))
+    .leftJoin(staffRoles, eq(staffRoles.id, sessionStaff.role))
     .where(eq(sessionStaff.userId, userId))
     .orderBy(desc(campSessions.startDate))
   const requests = await contractRequests(
@@ -974,7 +1027,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
       session.contractDocumentId ? [{ documentId: session.contractDocumentId, userId }] : [],
     ),
   )
-  const convocations: StaffConvocationSummary[] = convocationRows.map(({ convocation, session }) => {
+  const convocations: StaffConvocationSummary[] = convocationRows.map(({ convocation, session, roleName }) => {
     const contract = contractState(session.contractDocumentId, requests.get(`${session.contractDocumentId}:${userId}`))
     return {
       id: convocation.id,
@@ -983,7 +1036,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
       sessionStatus: session.status,
       startDate: session.startDate,
       endDate: session.endDate,
-      role: convocation.role,
+      roleName,
       status: convocation.status,
       sentAt: iso(convocation.sentAt),
       respondedAt: iso(convocation.respondedAt),
@@ -1016,6 +1069,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     birthDate: profile.birthDate,
     city: profile.city,
     roles: profile.roles,
+    tags: profile.tags,
     qualifications: profile.qualifications,
     experience: profile.experience,
     motivation: profile.motivation,
@@ -1079,7 +1133,9 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
         lastName: users.lastName,
         team: staffProfiles.team,
         roles: staffProfiles.roles,
+        tags: staffProfiles.tags,
         city: staffProfiles.city,
+        birthDate: staffProfiles.birthDate,
       })
       .from(staffProfiles)
       .innerJoin(users, eq(users.id, staffProfiles.userId))
@@ -1176,6 +1232,10 @@ export async function myApplication(db: DbOrTx, userId: string): Promise<StaffAp
     .limit(1)
   if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
   const { profile, cv } = row
+  const roleOptions = await db
+    .select({ id: staffRoles.id, name: staffRoles.name })
+    .from(staffRoles)
+    .orderBy(asc(staffRoles.position), asc(staffRoles.name))
   return {
     status: profile.status,
     editable: profile.status === 'registered',
@@ -1183,6 +1243,7 @@ export async function myApplication(db: DbOrTx, userId: string): Promise<StaffAp
     birthDate: profile.birthDate,
     city: profile.city,
     roles: profile.roles,
+    roleOptions,
     qualifications: profile.qualifications,
     experience: profile.experience,
     motivation: profile.motivation,
@@ -1245,10 +1306,12 @@ export async function myConvocations(
         contractDocumentId: campSessions.contractDocumentId,
       },
       contractTitle: documents.title,
+      roleName: staffRoles.name,
     })
     .from(sessionStaff)
     .innerJoin(campSessions, eq(campSessions.id, sessionStaff.sessionId))
     .leftJoin(documents, eq(documents.id, campSessions.contractDocumentId))
+    .leftJoin(staffRoles, eq(staffRoles.id, sessionStaff.role))
     .where(and(eq(sessionStaff.userId, userId), ne(sessionStaff.status, 'draft')))
     .orderBy(asc(campSessions.startDate))
   const requests = await contractRequests(
@@ -1257,14 +1320,14 @@ export async function myConvocations(
       session.contractDocumentId ? [{ documentId: session.contractDocumentId, userId }] : [],
     ),
   )
-  return rows.map(({ convocation, session, contractTitle }) => {
+  return rows.map(({ convocation, session, contractTitle, roleName }) => {
     const { contractDocumentId, ...sessionFields } = session
     const request = contractDocumentId ? requests.get(`${contractDocumentId}:${userId}`) : undefined
     const contract = contractState(contractDocumentId, request)
     return {
       id: convocation.id,
       session: sessionFields,
-      role: convocation.role,
+      roleName,
       status: convocation.status,
       message: convocation.message,
       sentAt: iso(convocation.sentAt),

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { StaffDetail } from '#shared/types/staff'
+import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
 import type { StaffStatus, StaffTeam } from '#shared/utils/constants'
-import { todayIso } from '#shared/utils/dates'
-import { formatDateTime, formatDay, formatDayRange, fullName } from '#shared/utils/format'
+import { ageOn, todayIso } from '#shared/utils/dates'
+import { formatAge, formatDateTime, formatDay, formatDayRange, fullName } from '#shared/utils/format'
 
 // One staff member (spec 3.4): contacts, application, review with internal notes, the outcome email sent
 // only from "Comunica l’esito", availability, convocations, personal documents, signatures.
@@ -11,8 +11,9 @@ const route = useRoute()
 const userId = computed(() => String(route.params.userId))
 const api = useApi()
 const confirm = useConfirm()
-const { label, meta, options } = useEnums()
+const { label, options } = useEnums()
 const { data: person, refresh } = await useApiFetch<StaffDetail>(() => `/api/admin/staff/${userId.value}`)
+const { roleItems, tags, refresh: refreshLabels } = useStaffLabels()
 
 const name = computed(() => (person.value ? fullName(person.value) : ''))
 const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
@@ -40,6 +41,28 @@ async function saveNotes() {
   } finally {
     savingNotes.value = false
   }
+}
+
+// ─── Roles and «Valutazione»: saved at every change ───
+const tagItems = computed(() => tags.value.map(tag => ({ label: tag.name, value: tag.id, chip: { color: tag.color } })))
+const savingLabels = ref<'roles' | 'tags' | null>(null)
+async function saveLabels(field: 'roles' | 'tags', ids: string[]) {
+  if (!person.value) return
+  savingLabels.value = field
+  try {
+    const url: string = `/api/admin/staff/${userId.value}/${field}`
+    await api(url, { method: 'PUT', body: { [field]: ids } })
+    person.value = { ...person.value, [field]: ids }
+  } catch (error) {
+    notifyError(error)
+    await refresh()
+  } finally {
+    savingLabels.value = null
+  }
+}
+const labelsOpen = ref(false)
+async function labelsChanged() {
+  await Promise.all([refresh(), refreshLabels()])
 }
 
 // ─── Team: staff or v-team, chosen in the application ───
@@ -155,7 +178,10 @@ const contacts = computed(() => {
     { label: 'Email', value: p.email },
     { label: 'Telefono', value: p.phone },
     { label: 'Città', value: p.city },
-    { label: 'Data di nascita', value: formatDay(p.birthDate, 'long') },
+    {
+      label: 'Data di nascita',
+      value: p.birthDate && `${formatDay(p.birthDate, 'long')} (${formatAge(ageOn(p.birthDate, today))})`,
+    },
     { label: 'Account creato il', value: dayOf(p.createdAt) },
   ]
 })
@@ -217,7 +243,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
 
     <div v-else class="grid gap-x-12 lg:grid-cols-[minmax(0,1fr)_21rem]">
       <aside class="lg:order-2" aria-label="Stato e contatti">
-        <IcSection title="Valutazione">
+        <IcSection title="Stato">
           <div class="space-y-5">
             <div class="flex flex-wrap items-center gap-2">
               <IcStatusBadge kind="staffStatus" :value="person.status" size="lg" />
@@ -239,6 +265,26 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
                 :disabled="person.status === 'registered'"
                 class="w-full"
                 @update:model-value="value => changeTeam(value as StaffTeam)"
+              />
+            </UFormField>
+            <UFormField
+              label="Ruoli"
+              :help="
+                person.status === 'registered'
+                  ? 'Li sceglie la persona nella candidatura, finché non la invia.'
+                  : 'Scelti nella candidatura: li cambi tu quando vuoi.'
+              "
+            >
+              <USelectMenu
+                :model-value="person.roles"
+                :items="roleItems"
+                value-key="value"
+                multiple
+                placeholder="Nessun ruolo"
+                :loading="savingLabels === 'roles'"
+                :disabled="person.status === 'registered'"
+                class="w-full"
+                @update:model-value="value => saveLabels('roles', value as string[])"
               />
             </UFormField>
 
@@ -303,25 +349,47 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
                 @click="move('approved')"
               />
             </div>
-
-            <UFormField
-              label="Note interne"
-              help="Non le vede la persona. Si salvano anche quando approvi o non selezioni."
-            >
-              <UTextarea v-model="notes" :rows="4" autoresize :maxlength="4000" class="w-full" />
-            </UFormField>
-            <UButton
-              class="pointer-coarse:min-h-11"
-              v-if="notesChanged"
-              label="Salva le note"
-              icon="i-lucide-save"
-              color="neutral"
-              variant="outline"
-              :loading="savingNotes"
-              @click="saveNotes"
-            />
           </div>
         </IcSection>
+
+        <IcSection title="Valutazione" description="La vedi solo tu: la persona non la vede mai.">
+          <div class="space-y-5">
+            <UFormField label="Tag">
+              <USelectMenu
+                :model-value="person.tags"
+                :items="tagItems"
+                value-key="value"
+                multiple
+                placeholder="Nessun tag"
+                :loading="savingLabels === 'tags'"
+                class="w-full"
+                @update:model-value="value => saveLabels('tags', value as string[])"
+              />
+            </UFormField>
+            <UFormField label="Note interne" help="Si salvano anche quando approvi o non selezioni.">
+              <UTextarea v-model="notes" :rows="4" autoresize :maxlength="4000" class="w-full" />
+            </UFormField>
+            <div class="flex flex-wrap gap-2">
+              <UButton
+                v-if="notesChanged"
+                label="Salva le note"
+                icon="i-lucide-save"
+                color="neutral"
+                variant="outline"
+                :loading="savingNotes"
+                @click="saveNotes"
+              />
+              <UButton
+                label="Gestisci ruoli e tag"
+                icon="i-lucide-tags"
+                color="neutral"
+                variant="ghost"
+                @click="labelsOpen = true"
+              />
+            </div>
+          </div>
+        </IcSection>
+        <StaffLabelsModal v-model:open="labelsOpen" @changed="labelsChanged" />
 
         <IcSection title="Contatti">
           <IcDataList :items="contacts" />
@@ -334,21 +402,6 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           :description="person.appliedAt ? `Inviata il ${dayOf(person.appliedAt)}` : 'Non ancora inviata'"
         >
           <div class="space-y-6">
-            <div>
-              <h3 class="text-sm font-semibold text-muted">Ruoli</h3>
-              <ul v-if="person.roles.length" class="mt-2 flex flex-wrap gap-2">
-                <li v-for="role in person.roles" :key="role">
-                  <UBadge
-                    :icon="meta('staffRole', role).icon"
-                    :label="label('staffRole', role)"
-                    color="neutral"
-                    variant="outline"
-                    size="lg"
-                  />
-                </li>
-              </ul>
-              <p v-else class="mt-1 text-dimmed">Non indicati</p>
-            </div>
             <dl class="space-y-5">
               <div v-for="item in texts" :key="item.label">
                 <dt class="text-sm font-semibold text-muted">{{ item.label }}</dt>
@@ -409,7 +462,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
                   </ULink>
                   <p class="text-sm text-muted">
                     {{ formatDayRange(c.startDate, c.endDate)
-                    }}<template v-if="c.role"> · {{ label('staffRole', c.role) }}</template>
+                    }}<template v-if="c.roleName"> · {{ c.roleName }}</template>
                   </p>
                 </div>
                 <div class="flex flex-wrap gap-1.5">

@@ -734,6 +734,11 @@ export async function seedDemo(
 
   // Staff
   const staff: { userId: string; email: string; firstName: string; status: StaffStatus; sessions: DemoSession[] }[] = []
+  // The «Valutazione» of the approved, with the tags of migration 0023 that the administration kept.
+  const tagIds = new Map((await db.select().from(t.staffTags)).map(tag => [tag.name, tag.id]))
+  const DEMO_TAGS = [['Leader', 'Top'], ['In training'], ['Animatore', 'Energia moderata'], ['Staff tecnico'], []]
+  const demoTags = (index: number) =>
+    (DEMO_TAGS[index % DEMO_TAGS.length] ?? []).flatMap(name => tagIds.get(name) ?? [])
   for (const [index, s] of STAFF.entries()) {
     const user = await createUser({
       email: s.email ?? `${slug(`${s.first} ${s.last}`)}@demo.invictuscamp.local`,
@@ -751,8 +756,10 @@ export async function seedDemo(
       status: s.status,
       team: s.team ?? 'staff',
       city: s.city,
-      birthDate: `199${index % 10}-0${(index % 9) + 1}-1${index % 9}`,
+      // From 22 to about 60 years old, for the age filter of /admin/staff.
+      birthDate: `${2004 - index * 3}-0${(index % 9) + 1}-1${index % 9}`,
       roles: s.roles,
+      tags: s.status === 'approved' ? demoTags(index) : [],
       qualifications: applied ? 'Laurea e attestati del settore (esempio).' : null,
       experience: applied
         ? 'Esperienze con bambini e ragazzi con disabilità in centri estivi e associazioni (esempio).'

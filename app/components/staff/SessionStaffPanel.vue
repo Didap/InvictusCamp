@@ -2,7 +2,7 @@
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { SessionConvocation, SessionStaffData } from '#shared/types/staff'
 import { staffSlot } from '#shared/schemas/staff'
-import { OPEN_CONVOCATIONS, STAFF_TEAMS, type StaffRole, type StaffTeam } from '#shared/utils/constants'
+import { OPEN_CONVOCATIONS, STAFF_TEAMS, type StaffTeam } from '#shared/utils/constants'
 import { formatDateTime, fullName, plural } from '#shared/utils/format'
 
 // CONTRACT (docs/BUILD.md): owned by A2 Staff. Admin session page, tab "Staff": the convocations of the
@@ -13,7 +13,8 @@ const props = defineProps<{ sessionId: string }>()
 
 const api = useApi()
 const confirm = useConfirm()
-const { label, options } = useEnums()
+const { label } = useEnums()
+const { roleItems, roleName, roleList } = useStaffLabels()
 const { data, status, refresh } = useApiFetch<SessionStaffData>('/api/admin/convocations', {
   query: computed(() => ({ sessionId: props.sessionId })),
 })
@@ -53,16 +54,14 @@ async function afterChange() {
 
 /** Team and roles of the application: "V-team · Altro". */
 const describe = (c: SessionConvocation) =>
-  `${label('staffTeam', c.team)} · ${c.staffRoles.map(role => label('staffRole', role)).join(', ') || 'Ruoli non indicati'}`
-
-const roleItems = computed(() => options('staffRole').map(option => ({ label: option.label, value: option.value })))
+  `${label('staffTeam', c.team)} · ${roleList(c.staffRoles, 'Ruoli non indicati')}`
 const roleEditable = (c: SessionConvocation) => editable.value && OPEN_CONVOCATIONS.includes(c.status)
 
-async function changeRole(c: SessionConvocation, role: StaffRole) {
+async function changeRole(c: SessionConvocation, role: string) {
   if (role === c.role) return
   try {
     await api(`/api/admin/convocations/${c.id}`, { method: 'PATCH', body: { role } })
-    notifySuccess('Ruolo aggiornato', `${fullName(c)}: ${label('staffRole', role)}`)
+    notifySuccess('Ruolo aggiornato', `${fullName(c)}: ${roleName(role)}`)
   } catch (error) {
     notifyError(error)
   }
@@ -326,9 +325,9 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
               size="sm"
               class="w-44"
               :aria-label="`Ruolo di ${fullName(row.original)} nella sessione`"
-              @update:model-value="value => changeRole(row.original, value as StaffRole)"
+              @update:model-value="value => changeRole(row.original, value as string)"
             />
-            <span v-else>{{ row.original.role ? label('staffRole', row.original.role) : 'Non indicato' }}</span>
+            <span v-else>{{ roleName(row.original.role) ?? 'Non indicato' }}</span>
           </template>
           <template #available-cell="{ row }">
             <IcStatusBadge kind="staffAvailability" :value="row.original.available ? 'available' : 'missing'" />
@@ -394,11 +393,11 @@ const columns = computed<TableColumn<SessionConvocation>[]>(() => [
                 :items="roleItems"
                 placeholder="Scegli il ruolo"
                 class="w-full"
-                @update:model-value="value => changeRole(c, value as StaffRole)"
+                @update:model-value="value => changeRole(c, value as string)"
               />
             </UFormField>
             <p v-else class="text-sm">
-              <span class="text-muted">Ruolo:</span> {{ c.role ? label('staffRole', c.role) : 'Non indicato' }}
+              <span class="text-muted">Ruolo:</span> {{ roleName(c.role) ?? 'Non indicato' }}
             </p>
             <UCheckbox
               v-if="editable && c.status === 'draft' && c.sendable"

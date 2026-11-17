@@ -11,7 +11,6 @@ const emit = defineEmits<{ changed: [] }>()
 
 const api = useApi()
 const confirm = useConfirm()
-const { label } = useEnums()
 const titleId = useId()
 
 const c = computed(() => props.convocation)
@@ -99,7 +98,7 @@ async function decline() {
       </div>
       <div>
         <dt class="text-sm font-semibold text-muted">Ruolo</dt>
-        <dd>{{ c.role ? label('staffRole', c.role) : 'Da definire' }}</dd>
+        <dd>{{ c.roleName ?? 'Da definire' }}</dd>
       </div>
     </dl>
 

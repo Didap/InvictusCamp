@@ -5,11 +5,16 @@
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { SessionGroupFamily, SessionGroupStaff, SessionGroupsDto } from '../../shared/types/activity-groups'
 import { distributeFamilies, membersLabel, tallyGroups, tallyLabel } from '../../shared/utils/activity-groups'
-import { PROGRAMME_GROUPS, PROGRAMME_GROUP_LABELS, type ProgrammeGroup } from '../../shared/utils/constants'
+import {
+  GROUP_LEAD_ROLE,
+  PROGRAMME_GROUPS,
+  PROGRAMME_GROUP_LABELS,
+  type ProgrammeGroup,
+} from '../../shared/utils/constants'
 import { ageOn } from '../../shared/utils/dates'
 import { NO_CARDS, fullName, memberName } from '../../shared/utils/format'
 import { isSessionEditable } from '../../shared/utils/session-status'
-import { familyMembers, families, sessionFamilies, sessionStaff, users } from '../db/schema'
+import { familyMembers, families, sessionFamilies, sessionStaff, staffRoles, users } from '../db/schema'
 import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
@@ -87,16 +92,19 @@ async function groupStaff(db: DbOrTx, sessionId: string): Promise<SessionGroupSt
       firstName: users.firstName,
       lastName: users.lastName,
       role: sessionStaff.role,
+      roleName: staffRoles.name,
       status: sessionStaff.status,
       group: sessionStaff.activityGroup,
     })
     .from(sessionStaff)
     .innerJoin(users, eq(users.id, sessionStaff.userId))
+    .leftJoin(staffRoles, eq(staffRoles.id, sessionStaff.role))
     .where(activeStaff(sessionId))
-  const lead = (person: { role: SessionGroupStaff['role'] }) => Number(person.role === 'group_lead')
+  const lead = (person: { role: string | null }) => Number(person.role === GROUP_LEAD_ROLE)
   return rows
     .map(({ firstName, lastName, ...row }) => ({ ...row, name: fullName({ firstName, lastName }) }))
     .sort((a, b) => lead(b) - lead(a) || a.name.localeCompare(b.name, 'it'))
+    .map(({ role: _role, ...person }) => person)
 }
 
 async function loadSession(db: DbOrTx, sessionId: string) {

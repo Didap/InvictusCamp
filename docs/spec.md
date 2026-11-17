@@ -122,6 +122,19 @@ from the dashboard when it chooses, with a message it can edit. Until approved, 
 availability or receive convocations. The administration can move a person to the other team from their page
 (audited).
 
+- **Roles** are a list the administration keeps ("Ruoli e valutazione" in `/admin/staff`, table `staff_roles`):
+  it creates, renames and deletes them. The application offers them; once it is sent, the administration
+  changes a person's roles from their page (audited, `staff.roles`). Deleting a role takes it away from every
+  person and convocation that has it. Migration 0023 keeps the four roles of the old fixed list with their keys:
+  `coordinator` is the coordinator of the base of a session (3.5), so it can be renamed but not deleted;
+  `group_lead` comes first among the staff who can lead an activity group (3.12).
+- **Valutazione**: tags the administration creates in the same place (name and colour, table `staff_tags`;
+  0023 brings the camp's examples: Staff tecnico, Leader, Animatore, Top, Energia moderata, Da guidare, In
+  training) and gives to people from their page (audited, `staff.tags`). Never shown to the person.
+- The `/admin/staff` table shows name, roles, city, age and Valutazione; status, application date and
+  availability are on each person's page. Filters: search, role, age (ranges of years at today), availability
+  (at least one session, none, or a session not started yet).
+
 ### 3.5 Availability, convocations, contract
 
 - `/staff/disponibilita` lists the sessions not started yet (neither concluded nor cancelled), by date: approved
@@ -129,7 +142,8 @@ availability or receive convocations. The administration can move a person to th
   Taking it back keeps the convocations already received; the administration sees it on them.
 - In a session's Staff tab the administration adds people as convocations `draft` with a role for the session,
   choosing only among the approved staff and v-team who said they are available for that session (the server
-  does not refuse the others: the rule is about what is offered). The base of a session is `staffNeeded`
+  does not refuse the others: the rule is about what is offered); the list shows team, roles, age and
+  Valutazione of each. The base of a session is `staffNeeded`
   people of the staff (10 by default) plus a **coordinator** of the staff and one of the v-team (role
   `coordinator`); the tab shows both coordinators, or "da scegliere".
 - **Invia la convocazione** (one or many, optional message) → `sent` + `staff.convocation` email. Sending

@@ -66,7 +66,8 @@ describe('application', () => {
     expect(staffApplicationSchema.safeParse({ ...valid, birthDate: addDays(todayIso(), 1) }).success).toBe(false)
     expect(staffApplicationSchema.safeParse({ ...valid, birthDate: '1995-02-30' }).success).toBe(false)
     expect(staffApplicationSchema.safeParse({ ...valid, roles: [] }).success).toBe(false)
-    expect(staffApplicationSchema.safeParse({ ...valid, roles: ['chef'] }).success).toBe(false)
+    // Any role id passes the schema: the server checks it exists (staff_roles, tests/db/staff-labels.test.ts).
+    expect(staffApplicationSchema.safeParse({ ...valid, roles: [''] }).success).toBe(false)
     expect(staffApplicationSchema.safeParse({ ...valid, team: 'cucina' }).success).toBe(false)
     const { team: _team, ...withoutTeam } = valid
     expect(staffApplicationSchema.safeParse(withoutTeam).success).toBe(false)
@@ -183,7 +184,7 @@ describe('emails', () => {
       toUserId: 'u2',
       firstName: 'Chiara',
       session,
-      role: 'group_lead',
+      roleName: 'Responsabile di gruppo',
       message: 'Ti aspettiamo.',
     })
     expect(email).toMatchObject({ template: 'staff.convocation', sessionId: 's1' })

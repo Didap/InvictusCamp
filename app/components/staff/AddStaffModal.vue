@@ -1,22 +1,24 @@
 <script setup lang="ts">
 import type { AvailableStaff } from '#shared/types/staff'
-import type { StaffRole, StaffTeam } from '#shared/utils/constants'
-import { fullName } from '#shared/utils/format'
+import { COORDINATOR_ROLE, type StaffTeam } from '#shared/utils/constants'
+import { ageOn } from '#shared/utils/dates'
+import { formatAge, fullName } from '#shared/utils/format'
 
 // Picks people for a session among the approved staff and v-team who said they can come to it (spec 3.5):
-// their team, their roles, the role they will have. They are added as convocations to send (drafts):
-// nothing is emailed here.
+// their team, roles, age and «Valutazione», the role they will have. They are added as convocations to send
+// (drafts): nothing is emailed here.
 const props = defineProps<{ sessionId: string; available: AvailableStaff[] }>()
 const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ added: [count: number] }>()
 
 const api = useApi()
 const { label, options } = useEnums()
+const { roleItems, roleList, tagsOf } = useStaffLabels()
 
-const roleFilter = ref<StaffRole | 'all'>('all')
+const roleFilter = ref('all')
 const teamFilter = ref<StaffTeam | 'all'>('all')
-/** userId → role in the session, for the people ticked. */
-const chosen = ref<Record<string, StaffRole>>({})
+/** userId → role in the session (null: to decide later), for the people ticked. */
+const chosen = ref<Record<string, string | null>>({})
 const saving = ref(false)
 
 watch(open, value => {
@@ -26,7 +28,6 @@ watch(open, value => {
   teamFilter.value = 'all'
 })
 
-const roleItems = computed(() => options('staffRole').map(option => ({ label: option.label, value: option.value })))
 const roleFilterItems = computed(() => [{ label: 'Tutti i ruoli', value: 'all' }, ...roleItems.value])
 const teamItems = computed(() => [
   { label: 'Staff e v-team', value: 'all' },
@@ -41,13 +42,14 @@ const visible = computed(() =>
   ),
 )
 const count = computed(() => Object.keys(chosen.value).length)
+const ticked = (person: AvailableStaff) => person.userId in chosen.value
 
 function toggle(person: AvailableStaff, value: boolean) {
   const next = { ...chosen.value }
   if (value) {
     // The role filtered on, else the first role of the application that is not the coordinator (one per team).
     const filtered = roleFilter.value !== 'all' && person.roles.includes(roleFilter.value) ? roleFilter.value : null
-    next[person.userId] = filtered ?? person.roles.find(role => role !== 'coordinator') ?? person.roles[0] ?? 'other'
+    next[person.userId] = filtered ?? person.roles.find(role => role !== COORDINATOR_ROLE) ?? person.roles[0] ?? null
   } else {
     delete next[person.userId]
   }
@@ -55,8 +57,10 @@ function toggle(person: AvailableStaff, value: boolean) {
 }
 
 function describe(person: AvailableStaff): string {
-  const roles = person.roles.map(role => label('staffRole', role)).join(', ') || 'Ruolo non indicato'
-  return [label('staffTeam', person.team), roles, person.city].filter(Boolean).join(' · ')
+  const age = person.birthDate && formatAge(ageOn(person.birthDate))
+  return [label('staffTeam', person.team), roleList(person.roles, 'Ruolo non indicato'), age, person.city]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 const PREVIOUS = { declined: 'Aveva rifiutato la convocazione', cancelled: 'La convocazione era stata annullata' }
@@ -116,16 +120,23 @@ async function add() {
         <ul v-else class="divide-y divide-default rounded-lg border border-default">
           <li v-for="person in visible" :key="person.userId" class="space-y-3 p-3 sm:p-4">
             <UCheckbox
-              :model-value="Boolean(chosen[person.userId])"
+              :model-value="ticked(person)"
               :label="fullName(person)"
               :description="describe(person)"
               class="py-1"
               :ui="{ label: 'font-semibold text-highlighted', description: 'text-sm text-muted' }"
               @update:model-value="value => toggle(person, value === true)"
             />
+            <StaffTags :tags="tagsOf(person.tags)" class="ps-6" />
             <p v-if="person.previousStatus" class="ps-6 text-sm text-muted">{{ PREVIOUS[person.previousStatus] }}</p>
-            <UFormField v-if="chosen[person.userId]" label="Ruolo nella sessione" class="ps-6 sm:max-w-xs">
-              <USelect v-model="chosen[person.userId]" :items="roleItems" class="w-full" />
+            <UFormField v-if="ticked(person)" label="Ruolo nella sessione" class="ps-6 sm:max-w-xs">
+              <USelect
+                :model-value="chosen[person.userId] ?? undefined"
+                :items="roleItems"
+                placeholder="Da decidere"
+                class="w-full"
+                @update:model-value="value => (chosen[person.userId] = value as string)"
+              />
             </UFormField>
           </li>
         </ul>

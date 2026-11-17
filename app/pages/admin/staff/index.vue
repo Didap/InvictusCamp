@@ -1,27 +1,33 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui'
 import type { SessionListItem } from '#shared/types/sessions'
+import { STAFF_AGE_FILTERS } from '#shared/schemas/staff'
 import type { StaffListItem } from '#shared/types/staff'
-import type { StaffRole, StaffTeam } from '#shared/utils/constants'
-import { todayIso } from '#shared/utils/dates'
-import { formatDay, formatDayRange, fullName, plural } from '#shared/utils/format'
+import { ageOn, todayIso } from '#shared/utils/dates'
+import { formatDayRange, fullName } from '#shared/utils/format'
 
 // Staff of the camp: applications to review, approved staff, everyone (spec 3.4). Tab in the query string.
+// The table shows who people are (roles, city, age) and the «Valutazione»; status, application date and
+// availability are on the page of each person.
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
 const confirm = useConfirm()
-const { label, options } = useEnums()
-// Availability for a session (P1): with a session chosen, only the people who can come to it.
-const sessionId = ref('none')
+const { roleItems: roleChoices, roleList, tagsOf, refresh: refreshLabels } = useStaffLabels()
+// Availability (P1): anyone, at least one session not started yet, none, or a session (who can come to it).
+const availability = ref('all')
+const SESSION_FREE = ['all', 'any', 'none']
+const sessionId = computed(() => (SESSION_FREE.includes(availability.value) ? null : availability.value))
 const [{ data, refresh }, { data: sessions }] = await Promise.all([
   useApiFetch<StaffListItem[]>('/api/admin/staff', {
-    query: computed(() => (sessionId.value === 'none' ? {} : { sessionId: sessionId.value })),
+    query: computed(() => (sessionId.value ? { sessionId: sessionId.value } : {})),
   }),
   useApiFetch<SessionListItem[]>('/api/admin/sessions', { query: { status: 'draft,inviting,confirmed' } }),
 ])
 const staff = computed(() => data.value ?? [])
-const sessionItems = computed(() => [
+const availabilityItems = computed(() => [
+  { label: 'Tutte le persone', value: 'all' },
+  { label: 'Almeno una sessione', value: 'any' },
   { label: 'Nessuna sessione', value: 'none' },
   ...(sessions.value ?? []).map(session => ({
     label: `${session.title} (${formatDayRange(session.startDate, session.endDate)})`,
@@ -29,7 +35,7 @@ const sessionItems = computed(() => [
   })),
 ])
 // Applications to review have no availability yet: the filter applies to the other tabs.
-const bySession = computed(() => sessionId.value !== 'none' && tab.value !== 'review')
+const byAvailability = computed(() => availability.value !== 'all' && tab.value !== 'review')
 
 const TABS = ['review', 'approved', 'all'] as const
 type Tab = (typeof TABS)[number]
@@ -55,24 +61,35 @@ const tabItems = computed(() => [
 ])
 
 const q = ref('')
-const role = ref<StaffRole | 'all'>('all')
-const team = ref<StaffTeam | 'all'>('all')
-const teamItems = computed(() => [
-  { label: 'Staff e v-team', value: 'all' },
-  ...options('staffTeam').map(option => ({ label: option.label, value: option.value })),
-])
-const roleItems = computed(() => [
-  { label: 'Tutti i ruoli', value: 'all' },
-  ...options('staffRole').map(option => ({ label: option.label, value: option.value })),
-])
+const role = ref('all')
+const age = ref('all')
+const roleItems = computed(() => [{ label: 'Tutti i ruoli', value: 'all' }, ...roleChoices.value])
+const ageItems = [
+  { label: 'Tutte le età', value: 'all' },
+  ...STAFF_AGE_FILTERS.map(filter => ({ label: filter.label, value: filter.value })),
+]
 const filtered = computed(
-  () => Boolean(q.value.trim()) || role.value !== 'all' || team.value !== 'all' || bySession.value,
+  () => Boolean(q.value.trim()) || role.value !== 'all' || age.value !== 'all' || byAvailability.value,
 )
 function resetFilters() {
   q.value = ''
   role.value = 'all'
-  team.value = 'all'
-  sessionId.value = 'none'
+  age.value = 'all'
+  availability.value = 'all'
+}
+
+const today = todayIso()
+const ageOf = (person: StaffListItem) => (person.birthDate ? ageOn(person.birthDate, today) : null)
+function inAgeRange(person: StaffListItem): boolean {
+  const range = STAFF_AGE_FILTERS.find(filter => filter.value === age.value)
+  const years = ageOf(person)
+  return !range || (years !== null && years >= range.min && years <= range.max)
+}
+function hasAvailability(person: StaffListItem): boolean {
+  if (!byAvailability.value) return true
+  if (availability.value === 'any') return person.availableSessions > 0
+  if (availability.value === 'none') return person.availableSessions === 0
+  return Boolean(person.available)
 }
 
 const plain = (value: string) =>
@@ -86,8 +103,7 @@ const rows = computed(() => {
     if (tab.value === 'review' && person.status !== 'applied') return false
     if (tab.value === 'approved' && person.status !== 'approved') return false
     if (role.value !== 'all' && !person.roles.includes(role.value)) return false
-    if (team.value !== 'all' && person.team !== team.value) return false
-    if (bySession.value && !person.available) return false
+    if (!inAgeRange(person) || !hasAvailability(person)) return false
     return !term || plain(`${person.firstName} ${person.lastName} ${person.email} ${person.city ?? ''}`).includes(term)
   })
   // Applications wait in the order they arrived.
@@ -95,11 +111,11 @@ const rows = computed(() => {
   return list
 })
 
-const rolesOf = (person: StaffListItem) => person.roles.map(r => label('staffRole', r)).join(', ') || 'Non indicati'
-/** The day (in Italy) an application was sent. */
-const appliedOn = (person: StaffListItem) => (person.appliedAt ? formatDay(todayIso(new Date(person.appliedAt))) : '')
-const availabilityOf = (person: StaffListItem) =>
-  person.availableSessions ? plural(person.availableSessions, 'sessione', 'sessioni') : 'Nessuna sessione'
+const rolesOf = (person: StaffListItem) => roleList(person.roles, 'Non indicati')
+const labelsOpen = ref(false)
+async function labelsChanged() {
+  await Promise.all([refresh(), refreshLabels()])
+}
 
 // Bulk approval (Da valutare): no email leaves, the outcome is communicated person by person.
 const selection = ref<Record<string, boolean>>({})
@@ -174,17 +190,26 @@ function sortable(title: string) {
 const columns = computed<TableColumn<StaffListItem>[]>(() => [
   ...(tab.value === 'review' && rows.value.length ? [{ id: 'select' }] : []),
   { id: 'name', accessorFn: row => `${row.lastName} ${row.firstName}`, header: sortable('Nome') },
-  { id: 'team', accessorKey: 'team', header: sortable('Squadra') },
   { id: 'roles', header: 'Ruoli' },
   { accessorKey: 'city', header: sortable('Città') },
-  { id: 'status', header: 'Stato' },
-  ...(bySession.value ? [] : [{ accessorKey: 'appliedAt', header: sortable('Candidatura') }]),
-  { id: 'availability', accessorKey: 'availableSessions', header: sortable('Disponibilità') },
+  { id: 'age', accessorFn: row => ageOf(row) ?? -1, header: sortable('Età') },
+  { id: 'tags', header: 'Valutazione' },
 ])
 </script>
 
 <template>
   <IcPage title="Staff" width="wide">
+    <template #actions>
+      <UButton
+        icon="i-lucide-tags"
+        label="Ruoli e valutazione"
+        color="neutral"
+        variant="outline"
+        @click="labelsOpen = true"
+      />
+    </template>
+    <StaffLabelsModal v-model:open="labelsOpen" @changed="labelsChanged" />
+
     <div class="space-y-5">
       <UTabs v-model="tab" :items="tabItems" :content="false" variant="link" class="w-full overflow-x-auto" />
 
@@ -195,11 +220,11 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
         <UFormField label="Ruolo" class="w-full sm:w-60">
           <USelect v-model="role" :items="roleItems" class="w-full" />
         </UFormField>
-        <UFormField label="Squadra" class="w-full sm:w-44">
-          <USelect v-model="team" :items="teamItems" class="w-full" />
+        <UFormField label="Età" class="w-full sm:w-44">
+          <USelect v-model="age" :items="ageItems" class="w-full" />
         </UFormField>
-        <UFormField v-if="tab !== 'review'" label="Disponibili per la sessione" class="w-full sm:w-80">
-          <USelect v-model="sessionId" :items="sessionItems" class="w-full" />
+        <UFormField v-if="tab !== 'review'" label="Disponibilità" class="w-full sm:w-80">
+          <USelect v-model="availability" :items="availabilityItems" class="w-full" />
         </UFormField>
         <UButton
           class="pointer-coarse:min-h-11"
@@ -224,7 +249,7 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
         v-if="!rows.length && filtered"
         icon="i-lucide-search-x"
         title="Nessuna persona corrisponde alla ricerca"
-        description="Cambia le parole cercate o il ruolo."
+        description="Cambia le parole cercate o i filtri."
         :actions="[{ label: 'Azzera i filtri', color: 'neutral', variant: 'outline', onClick: resetFilters }]"
       />
       <UEmpty
@@ -261,31 +286,18 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
               {{ fullName(row.original) }}
             </ULink>
           </template>
-          <template #team-cell="{ row }">{{ label('staffTeam', row.original.team) }}</template>
           <template #roles-cell="{ row }">
             <span class="whitespace-normal">{{ rolesOf(row.original) }}</span>
           </template>
           <template #city-cell="{ row }">
             <span :class="row.original.city ? '' : 'text-dimmed'">{{ row.original.city ?? 'Non indicata' }}</span>
           </template>
-          <template #status-cell="{ row }">
-            <div class="flex flex-wrap gap-1.5">
-              <IcStatusBadge kind="staffStatus" :value="row.original.status" />
-              <IcStatusBadge
-                v-if="row.original.accountStatus !== 'active'"
-                kind="userStatus"
-                :value="row.original.accountStatus"
-              />
-            </div>
+          <template #age-cell="{ row }">
+            <span v-if="row.original.birthDate" class="tabular-nums">{{ ageOf(row.original) }}</span>
+            <span v-else class="text-dimmed">Non indicata</span>
           </template>
-          <template #appliedAt-cell="{ row }">
-            <span v-if="row.original.appliedAt" class="tabular-nums">{{ appliedOn(row.original) }}</span>
-            <span v-else class="text-dimmed">Non inviata</span>
-          </template>
-          <template #availability-cell="{ row }">
-            <span :class="row.original.availableSessions ? 'tabular-nums' : 'text-dimmed'">
-              {{ availabilityOf(row.original) }}
-            </span>
+          <template #tags-cell="{ row }">
+            <StaffTags :tags="tagsOf(row.original.tags)" empty="Nessuna" />
           </template>
         </UTable>
 
@@ -303,18 +315,12 @@ const columns = computed<TableColumn<StaffListItem>[]>(() => [
                 <ULink :to="`/admin/staff/${person.userId}`" class="font-semibold text-primary hover:underline">
                   {{ fullName(person) }}
                 </ULink>
-                <div class="flex flex-wrap gap-1.5">
-                  <IcStatusBadge kind="staffStatus" :value="person.status" />
-                </div>
               </div>
               <p class="text-sm">
-                {{ label('staffTeam', person.team) }} · {{ rolesOf(person)
-                }}<span v-if="person.city" class="text-muted"> · {{ person.city }}</span>
+                {{ rolesOf(person) }}<span v-if="person.city" class="text-muted"> · {{ person.city }}</span
+                ><span v-if="person.birthDate" class="text-muted"> · {{ ageOf(person) }} anni</span>
               </p>
-              <p class="text-sm text-muted">
-                <template v-if="tab === 'review' && person.appliedAt">Inviata il {{ appliedOn(person) }}</template>
-                <template v-else>Disponibile per: {{ availabilityOf(person) }}</template>
-              </p>
+              <StaffTags :tags="tagsOf(person.tags)" />
             </div>
           </li>
         </ul>
