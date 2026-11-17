@@ -1,6 +1,6 @@
-// Plain text PDFs: a title, paragraphs that wrap, a footer, on as many A4 pages as they need. The demo
-// documents of the seed and the families' releases; the WinAnsi and wrapping helpers serve the signed copies
-// too (signatures.ts). Explicit imports only.
+// Plain text PDFs: a title, paragraphs and headings that wrap, a footer, on as many A4 pages as they need. The
+// demo documents of the seed, the families' releases and the canteen sheet for the supplier; the WinAnsi and
+// wrapping helpers serve the signed copies too (signatures.ts). Explicit imports only.
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib'
 
 const PAGE: [number, number] = [595.28, 841.89]
@@ -11,12 +11,13 @@ const SIZE = 11
 
 /**
  * Text the standard fonts can draw (WinAnsi): accented letters outside it lose the accent ("ł" stays
- * "?", "ș" becomes "s"), control characters become spaces, anything else becomes "?".
+ * "?", "ș" becomes "s"), control characters and every kind of space become spaces (Intl puts thin spaces
+ * around the dash of "28 giugno – 2 luglio"), anything else becomes "?".
  */
 export function toWinAnsi(font: PDFFont, text: string): string {
   const supported = new Set(font.getCharacterSet())
   let out = ''
-  for (const char of text.normalize('NFC').replace(/[\u0000-\u001f\u007f]/g, ' ')) {
+  for (const char of text.normalize('NFC').replace(/[\u0000-\u001f\u007f\p{Zs}]/gu, ' ')) {
     if (supported.has(char.codePointAt(0)!)) {
       out += char
       continue
@@ -51,7 +52,23 @@ export function wrap(font: PDFFont, text: string, size: number, width: number): 
   return lines.length ? lines : ['']
 }
 
-export async function textPdf(title: string, paragraphs: string[], footer: string): Promise<Uint8Array> {
+/** A paragraph; a heading (13 pt, bold, space above); a bold label that stays with the paragraph after it. */
+export type PdfBlock = string | { heading: string } | { label: string }
+
+// `room`: the lowest line a block starts on. A heading keeps a label and a line under it on its page, a
+// label a line: neither ends a page.
+const STYLES = {
+  paragraph: { size: SIZE, before: 0, after: 10, room: 80 },
+  heading: { size: 13, before: 8, after: 4, room: 130 },
+  label: { size: SIZE, before: 0, after: 0, room: 100 },
+}
+
+function blockOf(block: PdfBlock): [keyof typeof STYLES, string] {
+  if (typeof block === 'string') return ['paragraph', block]
+  return 'heading' in block ? ['heading', block.heading] : ['label', block.label]
+}
+
+export async function textPdf(title: string, blocks: PdfBlock[], footer: string): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
   pdf.setTitle(title)
   pdf.setAuthor('Invictus Camp')
@@ -64,17 +81,21 @@ export async function textPdf(title: string, paragraphs: string[], footer: strin
   page.drawText('Invictus Camp', { x: MARGIN, y: TOP, size: SIZE, font: bold, color: rgb(0.114, 0.373, 0.69) })
   page.drawText(toWinAnsi(bold, title), { x: MARGIN, y: 748, size: 17, font: bold, color: rgb(0.12, 0.11, 0.1) })
   let y = 712
-  for (const text of paragraphs) {
-    for (const line of wrap(font, toWinAnsi(font, text), SIZE, WIDTH)) {
-      if (y < 80) {
+  for (const block of blocks) {
+    const [kind, text] = blockOf(block)
+    const style = STYLES[kind]
+    const face = kind === 'paragraph' ? font : bold
+    y -= style.before
+    for (const line of wrap(face, toWinAnsi(face, text), style.size, WIDTH)) {
+      if (y < style.room) {
         drawFooter()
         page = pdf.addPage(PAGE)
         y = TOP
       }
-      page.drawText(line, { x: MARGIN, y, size: SIZE, font })
-      y -= 16
+      page.drawText(line, { x: MARGIN, y, size: style.size, font: face })
+      y -= style.size + 5
     }
-    y -= 10
+    y -= style.after
   }
   drawFooter()
   return pdf.save()

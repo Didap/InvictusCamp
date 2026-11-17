@@ -1,13 +1,17 @@
 // The canteen summary of a session (docs/spec.md 3.14): everyone who eats at the camp, the members of the
-// families holding a place and the staff still in play, with their allergies, diet and notes. Health data:
-// the administration only, audited by the handlers. Explicit imports only, so the database tests can load it.
+// families holding a place, the staff and the v-team still in play, with their allergies, diet and notes.
+// Health data: the administration only, audited by the handlers. Explicit imports only, so the database
+// tests can load it.
 import { eq, sql } from 'drizzle-orm'
 import type { CanteenDto } from '../../shared/types/canteen'
-import { canteenSummary, type CanteenPerson } from '../../shared/utils/canteen'
-import { NO_CARDS, fullName } from '../../shared/utils/format'
+import { canteenNotCounted, canteenSummary, canteenWho, type CanteenPerson } from '../../shared/utils/canteen'
+import { ENUM_META } from '../../shared/utils/constants'
+import { todayIso } from '../../shared/utils/dates'
+import { NO_CARDS, formatDay, formatDayRange, fullName } from '../../shared/utils/format'
 import { familyMembers, families, sessionFamilies, sessionStaff, staffProfiles, users } from '../db/schema'
-import { sessionCsv } from './csv'
+import { sessionCsv, sessionFileName } from './csv'
 import type { DbOrTx } from './db'
+import { textPdf, type PdfBlock } from './pdf'
 import { activeStaff, findSession, holdingPlace } from './sessions'
 
 /** GET /api/admin/sessions/:id/canteen */
@@ -30,7 +34,12 @@ export async function canteenOf(db: DbOrTx, sessionId: string): Promise<CanteenD
       .leftJoin(familyMembers, eq(familyMembers.familyId, families.id))
       .where(holdingPlace(sessionId)),
     db
-      .select({ firstName: users.firstName, lastName: users.lastName, info: staffProfiles.usefulInfo })
+      .select({
+        firstName: users.firstName,
+        lastName: users.lastName,
+        info: staffProfiles.usefulInfo,
+        team: staffProfiles.team,
+      })
       .from(sessionStaff)
       .innerJoin(users, eq(users.id, sessionStaff.userId))
       .leftJoin(staffProfiles, eq(staffProfiles.userId, users.id))
@@ -51,11 +60,14 @@ export async function canteenOf(db: DbOrTx, sessionId: string): Promise<CanteenD
     ),
     ...staff.map(row => ({ name: fullName(row), info: row.info, foodSelectivity: null })),
   ]
+  const volunteers = staff.filter(row => row.team === 'volunteer').length
   return {
     session: { title: session.title, startDate: session.startDate, endDate: session.endDate },
     ...canteenSummary(people),
-    families: new Set(members.map(row => row.familyId)).size,
-    staff: staff.length,
+    families: new Set(members.filter(row => row.cardId).map(row => row.familyId)).size,
+    familyPeople: people.length - staff.length,
+    staff: staff.length - volunteers,
+    volunteers,
     withoutCards: members.filter(row => !row.cardId).map(row => row.familyName),
   }
 }
@@ -66,8 +78,42 @@ export async function canteenCsv(db: DbOrTx, sessionId: string): Promise<{ filen
   return sessionCsv(summary.session, 'mensa', [
     ['Voce', 'Persone', 'Chi'],
     ['Totale pasti (persone a ogni pasto)', summary.total, null],
+    ['Persone delle famiglie', summary.familyPeople, null],
+    [ENUM_META.staffTeam.staff.label, summary.staff, null],
+    [ENUM_META.staffTeam.volunteer.label, summary.volunteers, null],
     ...summary.needs.map(need => [need.label, need.people.length, need.people.join(', ')]),
     ...summary.notes.map(note => ['Da sapere', null, `${note.name}: ${note.text}`]),
     ...summary.withoutCards.map(name => [NO_CARDS, null, name]),
   ])
+}
+
+/** The PDF for the supplier: the total, who eats, then each need with how many and who, then what to know. */
+export function canteenPdfBlocks(summary: CanteenDto): PdfBlock[] {
+  const { session } = summary
+  const notCounted = canteenNotCounted(summary)
+  return [
+    `${session.title}, ${formatDayRange(session.startDate, session.endDate, 'long')}.`,
+    { heading: `Totale pasti: ${summary.total}` },
+    `Persone a ogni pasto: ${canteenWho(summary)}.`,
+    ...(notCounted ? [notCounted] : []),
+    { heading: 'Esigenze alimentari' },
+    ...(summary.needs.length
+      ? summary.needs.flatMap(need => [{ label: `${need.people.length} ${need.label}` }, need.people.join(', ')])
+      : ['Nessuna esigenza alimentare indicata.']),
+    ...(summary.notes.length
+      ? [{ heading: 'Da sapere' }, ...summary.notes.map(note => `${note.name}: ${note.text}`)]
+      : []),
+  ]
+}
+
+export async function canteenPdf(db: DbOrTx, sessionId: string): Promise<{ filename: string; data: Uint8Array }> {
+  const summary = await canteenOf(db, sessionId)
+  return {
+    filename: sessionFileName(summary.session, 'mensa', 'pdf'),
+    data: await textPdf(
+      'Pasti per il fornitore',
+      canteenPdfBlocks(summary),
+      `Dati riservati: servono solo a preparare i pasti. Aggiornato al ${formatDay(todayIso(), 'numeric')}.`,
+    ),
+  }
 }

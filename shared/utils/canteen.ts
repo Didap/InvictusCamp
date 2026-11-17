@@ -1,8 +1,9 @@
 // The canteen summary of a session (docs/spec.md 3.14): how many eat at each meal and who needs what, with
-// names, as the camp sends it to the supplier. Pure functions, shared by the Mensa tab and its CSV.
+// names, as the camp sends it to the supplier. Pure functions, shared by the Mensa tab, its CSV and its PDF.
 import { ALLERGIES, DIETS, HEALTH_LABELS } from '../content/member-form'
+import type { CanteenDto } from '../types/canteen'
 import type { UsefulInfo } from '../types/domain'
-import { formatDayRange, plural } from './format'
+import { andList, formatDayRange, plural } from './format'
 
 /** Someone who eats at the camp in the session: a member of a family holding a place, or of the staff. */
 export interface CanteenPerson {
@@ -39,16 +40,47 @@ export function canteenSummary(people: CanteenPerson[]): CanteenSummary {
   }
 }
 
+/** Who eats, by group: everyone in the session, families, staff and v-team. */
+export interface CanteenGroups {
+  /** Families holding a place with their members indicated, and those members. */
+  families: number
+  familyPeople: number
+  /** The staff and the v-team still in play. */
+  staff: number
+  volunteers: number
+  /** Families holding a place without cards: their people are not counted yet. */
+  withoutCards: string[]
+}
+
+/** «60 di 12 famiglie, 10 dello staff e 2 del v-team»: only the groups with someone. */
+export function canteenWho(groups: CanteenGroups): string {
+  const parts = [
+    ...(groups.families ? [`${groups.familyPeople} di ${plural(groups.families, 'famiglia', 'famiglie')}`] : []),
+    ...(groups.staff ? [`${groups.staff} dello staff`] : []),
+    ...(groups.volunteers ? [`${groups.volunteers} del v-team`] : []),
+  ]
+  return parts.length ? andList(parts) : 'nessuno'
+}
+
+/** For the supplier, how many families are not in the total yet (not who), or null. */
+export function canteenNotCounted(groups: CanteenGroups): string | null {
+  const count = groups.withoutCards.length
+  if (!count) return null
+  return count === 1
+    ? '1 famiglia non ha ancora indicato i componenti e non è nel totale.'
+    : `${count} famiglie non hanno ancora indicato i componenti e non sono nel totale.`
+}
+
 /** The text for the supplier: «Totale pasti 72 di cui: 5 senza lattosio (…)». */
-export function canteenText(
-  summary: CanteenSummary & { session: { title: string; startDate: string; endDate: string } },
-): string {
+export function canteenText(summary: CanteenDto): string {
   const { session } = summary
+  const notCounted = canteenNotCounted(summary)
   return [
     `${session.title}, ${formatDayRange(session.startDate, session.endDate)}`,
     '',
-    `Totale pasti ${summary.total} (${plural(summary.total, 'persona', 'persone')} a ogni pasto)${summary.needs.length ? ' di cui:' : ''}`,
+    `Totale pasti ${summary.total} (persone a ogni pasto: ${canteenWho(summary)})${summary.needs.length ? ' di cui:' : ''}`,
     ...summary.needs.map(need => `${need.people.length} ${need.label} (${need.people.join(', ')})`),
+    ...(notCounted ? ['', notCounted] : []),
     ...(summary.notes.length ? ['', 'Da sapere:', ...summary.notes.map(note => `${note.name}: ${note.text}`)] : []),
   ].join('\n')
 }

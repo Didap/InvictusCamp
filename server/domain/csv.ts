@@ -16,20 +16,26 @@ export function toCsv(rows: CsvValue[][]): string {
   return `﻿${rows.map(row => row.map(csvCell).join(';')).join('\r\n')}\r\n`
 }
 
-/** A CSV file about a session, named "<prefix>-<title>-<start day>.csv". */
-export function sessionCsv(
+/** The name of a file about a session: "<prefix>-<title>-<start day>.<extension>". */
+export function sessionFileName(
   session: { title: string; startDate: string },
   prefix: string,
-  rows: CsvValue[][],
-): { filename: string; csv: string } {
+  extension: string,
+): string {
   const slug = session.title
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
-  return {
-    filename: `${prefix}-${slug || 'sessione'}-${formatDay(session.startDate, 'numeric').replaceAll('/', '-')}.csv`,
-    csv: toCsv(rows),
-  }
+  return `${prefix}-${slug || 'sessione'}-${formatDay(session.startDate, 'numeric').replaceAll('/', '-')}.${extension}`
+}
+
+/** A CSV file about a session, named "<prefix>-<title>-<start day>.csv". */
+export function sessionCsv(
+  session: { title: string; startDate: string },
+  prefix: string,
+  rows: CsvValue[][],
+): { filename: string; csv: string } {
+  return { filename: sessionFileName(session, prefix, 'csv'), csv: toCsv(rows) }
 }
