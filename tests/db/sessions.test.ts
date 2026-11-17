@@ -45,9 +45,12 @@ async function join(
   sessionId: string,
   kind: ParticipationKind,
   status: ParticipationStatus,
-  options: { rank?: number; name?: string; disabled?: boolean } = {},
+  options: { rank?: number; name?: string; phone?: string; disabled?: boolean } = {},
 ) {
-  const { user, family } = await makeFamily(db, { name: options.name ?? `Famiglia ${kind} ${status}` })
+  const { user, family } = await makeFamily(db, {
+    name: options.name ?? `Famiglia ${kind} ${status}`,
+    phone: options.phone,
+  })
   if (options.disabled) await db.update(t.users).set({ status: 'disabled' }).where(eq(t.users.id, user.id))
   const [participation] = await db
     .insert(t.sessionFamilies)
@@ -933,5 +936,22 @@ describe('the session itself', () => {
     expect(row).toContain("'=Famiglia Rossi")
     expect(row).toContain('"Motivo; con ""virgolette"""')
     expect(csv).not.toContain('DETTAGLIO-RISERVATO')
+  })
+
+  it("shows the family's phone, the account's only when the family has none", async () => {
+    const { session } = await setup({ status: 'inviting' })
+    const withPhone = await join(session.id, 'slot', 'confirmed', { name: 'Famiglia Rossi', phone: '333 111' })
+    const without = await join(session.id, 'slot', 'confirmed', { name: 'Famiglia Bianchi' })
+    await db
+      .update(t.users)
+      .set({ phone: '333 999' })
+      .where(inArray(t.users.id, [withPhone.user.id, without.user.id]))
+    const phones = Object.fromEntries(
+      (await sessionFamiliesOf(db, session.id)).participations.map(p => [p.familyName, p.phone]),
+    )
+    expect(phones).toEqual({ 'Famiglia Rossi': '333 111', 'Famiglia Bianchi': '333 999' })
+    const lines = (await participantsCsv(db, session.id)).csv.split('\r\n')
+    expect(lines.find(line => line.includes('Rossi'))).toContain(';333 111;')
+    expect(lines.find(line => line.includes('Bianchi'))).toContain(';333 999;')
   })
 })

@@ -77,6 +77,7 @@ import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
+import { familyPhoneSql } from './families'
 import { isYearArchived, ownResponse, questionnaireOpen } from './feedback'
 import { freezeSessionProgramme, sessionHasProgramme } from './programmes'
 import { cancelSessionConvocations, sessionConvocationNotices } from './staff'
@@ -113,12 +114,11 @@ interface ParticipationRow {
   createdAt: Date
   familyName: string
   city: string | null
-  familyPhone: string | null
+  phone: string | null
   userId: string
   email: string
   firstName: string
   lastName: string
-  userPhone: string | null
   userStatus: UserStatus
 }
 
@@ -137,12 +137,11 @@ function participationsOf(db: DbOrTx, sessionId: string): Promise<ParticipationR
       createdAt: sessionFamilies.createdAt,
       familyName: families.name,
       city: families.city,
-      familyPhone: families.phone,
+      phone: familyPhoneSql,
       userId: users.id,
       email: users.email,
       firstName: users.firstName,
       lastName: users.lastName,
-      userPhone: users.phone,
       userStatus: users.status,
     })
     .from(sessionFamilies)
@@ -463,7 +462,7 @@ function toFamilyItem(row: ParticipationRow, deadline: string | null): SessionFa
     userId: row.userId,
     referent: `${row.firstName} ${row.lastName}`.trim(),
     email: row.email,
-    phone: row.userPhone ?? row.familyPhone,
+    phone: row.phone,
     city: row.city,
     accountStatus: row.userStatus,
     kind: row.kind,

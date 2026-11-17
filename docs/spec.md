@@ -103,6 +103,8 @@ sessione avviene al cambio di stato": the status change is the moment invitation
   session is `inviting` or `confirmed`; after the answer deadline the button still works and the
   administration sees the date.
 - The administration can also record an answer received by phone (same effect, audit `participation.answer_by_admin`).
+- «Scarica le famiglie (CSV)» downloads the families of the session: referent, email, phone (the family's, else the
+  account's), city, place, status, answer; no health details (audit `session.export`).
 - **Storico** on `/famiglia/sessioni`: the past sessions, the declined and the cancelled ones. For a session
   the family was confirmed in that is over (completed, or past its last day): its activity group and who led it
   (an accepted convocation), its lodging with its area, and the programme when there is one.
