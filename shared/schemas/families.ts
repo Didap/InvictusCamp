@@ -1,7 +1,7 @@
 // Schemas of the families area (A3), shared by the forms (UForm) and the API (parseBody, parseQuery),
 // plus the pure rules of the questionnaire and of the health details, used on both sides.
 import { z } from 'zod'
-import { FAMILY_FORM_QUESTIONS, type FormQuestion } from '../content/family-form'
+import type { FormQuestion } from '../content/family-form'
 import { ALLERGIES, DIETS, DISABILITY_CHOICES, type Choice, type DisabilityChoiceKey } from '../content/member-form'
 import type { MemberHealth } from '../types/families'
 import type { DisabilityInfo, FormAnswers, UsefulInfo } from '../types/domain'
@@ -145,13 +145,16 @@ export function isAnswered(value: FormAnswers[string] | undefined): boolean {
 }
 
 /**
- * The answers worth keeping: questions of the current questionnaire only, values checked against
- * their type and options, empty answers dropped. `invalid` lists the questions with a wrong value.
+ * The answers worth keeping: questions of the current questionnaire (`questions`) only, values checked
+ * against their type and options, empty answers dropped. `invalid` lists the questions with a wrong value.
  */
-export function normalizeFormAnswers(answers: FormAnswers): { answers: FormAnswers; invalid: FormQuestion[] } {
+export function normalizeFormAnswers(
+  answers: FormAnswers,
+  questions: readonly FormQuestion[],
+): { answers: FormAnswers; invalid: FormQuestion[] } {
   const clean: FormAnswers = {}
   const invalid: FormQuestion[] = []
-  for (const question of FAMILY_FORM_QUESTIONS) {
+  for (const question of questions) {
     const value = answers[question.id]
     if (value === undefined || value === null) continue
     if (question.type === 'text' || question.type === 'textarea') {
@@ -175,8 +178,8 @@ export function normalizeFormAnswers(answers: FormAnswers): { answers: FormAnswe
 }
 
 /** Required questions still without an answer. */
-export function missingRequiredQuestions(answers: FormAnswers): FormQuestion[] {
-  return FAMILY_FORM_QUESTIONS.filter(question => question.required && !isAnswered(answers[question.id]))
+export function missingRequiredQuestions(answers: FormAnswers, questions: readonly FormQuestion[]): FormQuestion[] {
+  return questions.filter(question => question.required && !isAnswered(answers[question.id]))
 }
 
 // ─── Members and health details ─────────────────────────────────────────────────────────────────────

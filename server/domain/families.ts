@@ -40,7 +40,9 @@ import {
   type MemberInput,
   type PersonalDocumentInput,
 } from '../../shared/schemas/families'
+import { formQuestions, type FormQuestion } from '../../shared/content/family-form'
 import type { FileDto } from '../../shared/types/api'
+import type { FormAnswers } from '../../shared/types/domain'
 import type {
   AdminFamilyDetail,
   AdminFamilyHealth,
@@ -90,6 +92,7 @@ import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { FEEDBACK_REMINDER_DAYS, ownResponse, questionnaireOpen } from './feedback'
+import { getFamilyForm } from './questionnaires'
 import { deleteStoredFile } from './storage'
 import { createError } from './errors'
 
@@ -237,6 +240,12 @@ export async function updateFamilyDataByAdmin(
   return after!
 }
 
+/** The stored answers to questions no longer in the form. */
+function answersOutside(answers: FormAnswers, questions: readonly FormQuestion[]): FormAnswers {
+  const ids = new Set(questions.map(question => question.id))
+  return Object.fromEntries(Object.entries(answers).filter(([id]) => !ids.has(id)))
+}
+
 /**
  * Confirms the family data (docs/spec.md, 3.8): residence, composition, answers. Every save needs the
  * whole form; the first one marks the data confirmed. Then the family gets one card per person
@@ -253,11 +262,12 @@ export async function saveFamilyData(
 ): Promise<{ family: FamilyRow; cards: CardRow[]; cardsCreated: number; cardsRemoved: number }> {
   // Locked: two saves at once (two tabs, a retry) would both count the same cards and both add the missing ones.
   const family = await requireFamilyRow(db, input.familyId, true)
-  const { answers, invalid } = normalizeFormAnswers(input.data.answers)
+  const questions = formQuestions((await getFamilyForm(db)).content)
+  const { answers, invalid } = normalizeFormAnswers(input.data.answers, questions)
   if (invalid.length) {
     throw createError({ statusCode: 400, message: `Risposta non valida alla domanda «${invalid[0]!.label}»` })
   }
-  const missing = missingRequiredQuestions(answers)
+  const missing = missingRequiredQuestions(answers, questions)
   if (missing.length) {
     throw createError({
       statusCode: 400,
@@ -305,7 +315,8 @@ export async function saveFamilyData(
     .update(families)
     .set({
       ...familyDataColumns(input.data),
-      formAnswers: answers,
+      // The answers to questions taken out of the form stay: the administration still sees them.
+      formAnswers: { ...answersOutside(family.formAnswers, questions), ...answers },
       formStatus: 'submitted',
       formSubmittedAt: family.formSubmittedAt ?? new Date(),
     })
@@ -847,7 +858,7 @@ export async function familyHome(
 ): Promise<FamilyHomeDto> {
   const family = await requireFamilyRow(db, input.familyId)
   const today = input.today ?? todayIso()
-  const [cards, [signatures], [next], [feedback]] = await Promise.all([
+  const [cards, [signatures], [next], [feedback], form] = await Promise.all([
     cardChecks(db, family.id),
     db
       .select({ total: count() })
@@ -891,11 +902,16 @@ export async function familyHome(
       )
       .orderBy(desc(campSessions.startDate))
       .limit(1),
+    getFamilyForm(db),
   ])
   return {
     firstName: input.firstName,
     familyName: family.name,
     formStatus: family.formStatus,
+    newQuestions:
+      family.formStatus === 'submitted'
+        ? missingRequiredQuestions(family.formAnswers, formQuestions(form.content)).length
+        : 0,
     memberCount: cards.length,
     cardsToComplete: cards.filter(isCardToComplete).length,
     healthConsent: Boolean(family.healthDataConsentAt),

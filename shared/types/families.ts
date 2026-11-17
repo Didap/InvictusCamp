@@ -1,5 +1,6 @@
 // DTOs of the families area (A3). Health details (MemberHealth) travel only in the family's own
 // endpoints and in the reserved endpoint of the administration, never in lists.
+import type { FamilyFormContent } from '../content/family-form'
 import type { FileDto, Paginated } from './api'
 import type { DisabilityInfo, FormAnswers, UsefulInfo } from './domain'
 import type { FamilyComposition } from '../schemas/families'
@@ -156,6 +157,8 @@ export interface FamilyHomeDto {
   firstName: string
   familyName: string
   formStatus: FamilyFormStatus
+  /** Required questions added to the form after the family confirmed its data, still without an answer. */
+  newQuestions: number
   memberCount: number
   /** Cards created from the family data and not filled in yet. */
   cardsToComplete: number
@@ -208,4 +211,19 @@ export interface AdminFamilyDetail {
 export interface AdminFamilyHealth {
   healthDataConsentAt: string | null
   members: (Pick<FamilyMemberDto, 'id' | 'firstName' | 'lastName' | 'kind'> & MemberHealth)[]
+}
+
+/** The questionnaire «Dati della famiglia» as it is now (GET /api/admin/family-form, /api/family/form). */
+export interface FamilyFormDto {
+  content: FamilyFormContent
+  /** 0 while the form is still the starting one of the code (shared/content/family-form.ts). */
+  revision: number
+  updatedAt: string | null
+  updatedByName: string | null
+}
+
+export interface FamilyFormSaveResult {
+  form: FamilyFormDto
+  /** Families whose answers changed because an option they chose was renamed. */
+  answersUpdated: number
 }

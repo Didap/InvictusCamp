@@ -30,8 +30,8 @@ export function copyOf<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
 }
 
-/** Same week, whatever the order of the keys (jsonb reorders them, a form does not). */
-export function sameContent(a: ProgrammeContent, b: ProgrammeContent): boolean {
+/** Same content (a week, a questionnaire), whatever the order of the keys (jsonb reorders them, a form does not). */
+export function sameContent<T>(a: T, b: T): boolean {
   return canonical(a) === canonical(b)
 }
 

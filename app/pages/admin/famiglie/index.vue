@@ -160,6 +160,15 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
   <IcPage title="Famiglie" width="wide">
     <template #actions>
       <UButton
+        to="/admin/famiglie/modulo"
+        icon="i-lucide-clipboard-pen"
+        color="neutral"
+        variant="outline"
+        aria-label="Modifica il modulo «Dati della famiglia»"
+      >
+        <span class="hidden sm:inline">Modulo dati famiglia</span>
+      </UButton>
+      <UButton
         :href="exportUrl"
         external
         icon="i-lucide-download"

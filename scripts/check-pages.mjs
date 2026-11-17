@@ -20,6 +20,7 @@ export const PAGES = {
     '/admin/feedback?vista=staff',
     '/admin/famiglie',
     '/admin/famiglie/{family}',
+    '/admin/famiglie/modulo',
     '/admin/staff',
     '/admin/staff/{staff}',
     '/admin/staff/{candidate}',

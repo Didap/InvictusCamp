@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FormError, FormErrorEvent } from '@nuxt/ui'
-import { FAMILY_FORM_QUESTIONS, FAMILY_FORM_SECTIONS } from '#shared/content/family-form'
+import { formQuestions, type FormSection } from '#shared/content/family-form'
 import {
   COMPOSITION_GROUPS,
   familyDataFieldsSchema,
@@ -8,17 +8,22 @@ import {
   missingRequiredQuestions,
   type FamilyComposition,
 } from '#shared/schemas/families'
-import type { FormAnswers } from '#shared/types/domain'
 import type { FamilyDataResult, FamilyProfileDto } from '#shared/types/families'
-import { YES_NO_ITEMS, type ItalianRegion } from '#shared/utils/constants'
+import type { ItalianRegion } from '#shared/utils/constants'
 import { formatDateTime, plural, surnameOf } from '#shared/utils/format'
+import { answerFields, fieldAnswers, type AnswerFields } from '~/utils/family-form'
 
 // The family data (docs/spec.md, 3.8): the first form of the family, editable afterwards. Confirming it
 // creates one card per person declared, filled in on /famiglia/membri; the «-» removes an empty card. The
 // composition never goes below the cards filled in (the inputs stop at them): that person leaves by
 // removing their card.
 const api = useApi()
-const { data: profile } = await useApiFetch<FamilyProfileDto>('/api/family/profile')
+const [{ data: profile }, { data: sections }] = await Promise.all([
+  useApiFetch<FamilyProfileDto>('/api/family/profile'),
+  useApiFetch<FormSection[]>('/api/family/form'),
+])
+// The questions as the administration set them (/admin/famiglie/modulo).
+const questions = computed(() => formQuestions({ sections: sections.value ?? [] }))
 
 const submitted = computed(() => profile.value?.formStatus === 'submitted')
 const filledCards = computed<FamilyComposition>(
@@ -46,10 +51,12 @@ const newGuests = computed(() =>
 const guestLabel = (i: number) =>
   newGuests.value > 1 ? `Nome del ragazzo o della ragazza ${i + 1}` : 'Nome del ragazzo o della ragazza'
 
-// The answers to the questions: one record per kind of field, so every input gets a value of its own type.
-const texts = reactive<Record<string, string>>({})
-const choices = reactive<Record<string, string[]>>({})
-const yesNo = reactive<Record<string, boolean | undefined>>({})
+// The answers to the questions (app/utils/family-form.ts).
+const fields = reactive<AnswerFields>(answerFields(questions.value, profile.value?.formAnswers))
+/** Required questions added after the family confirmed its data and still without an answer. */
+const newQuestions = computed(() =>
+  submitted.value ? missingRequiredQuestions(profile.value?.formAnswers ?? {}, questions.value).length : 0,
+)
 
 // Loaded once: a save updates `profile` without overwriting what is being typed.
 if (profile.value) {
@@ -65,24 +72,9 @@ if (profile.value) {
     // Once confirmed, the composition is the cards; the first time the family says it.
     composition: value.formStatus === 'submitted' ? { ...value.cards } : {},
   })
-  for (const question of FAMILY_FORM_QUESTIONS) {
-    const answer = value.formAnswers[question.id]
-    if (question.type === 'multiselect') choices[question.id] = Array.isArray(answer) ? [...answer] : []
-    else if (question.type === 'boolean') yesNo[question.id] = typeof answer === 'boolean' ? answer : undefined
-    else texts[question.id] = typeof answer === 'string' ? answer : ''
-  }
 }
 
-function answers(): FormAnswers {
-  const result: FormAnswers = {}
-  for (const question of FAMILY_FORM_QUESTIONS) {
-    if (question.type === 'multiselect') result[question.id] = [...(choices[question.id] ?? [])]
-    else if (question.type === 'boolean') {
-      result[question.id] = yesNo[question.id] ?? null
-    } else result[question.id] = texts[question.id] ?? ''
-  }
-  return result
-}
+const answers = () => fieldAnswers(questions.value, fields)
 
 /** Under a number that cannot go lower: a person whose card is filled in leaves from the Componenti page. */
 function fieldHelp(field: (typeof COMPOSITION_GROUPS)[number]): string | undefined {
@@ -99,7 +91,7 @@ const needsConsent = computed(
 )
 
 function validate(): FormError[] {
-  const errors: FormError[] = missingRequiredQuestions(answers()).map(question => ({
+  const errors: FormError[] = missingRequiredQuestions(answers(), questions.value).map(question => ({
     name: question.id,
     message: 'Rispondi a questa domanda',
   }))
@@ -163,6 +155,15 @@ async function save() {
       icon="i-lucide-info"
       title="Il primo passo per partecipare al camp"
       description="Quando confermi questi dati, creiamo una scheda per ogni persona della tua famiglia: poi la completi con il nome e la data di nascita."
+    />
+    <UAlert
+      v-else-if="newQuestions"
+      class="mb-8"
+      color="warning"
+      variant="subtle"
+      icon="i-lucide-message-circle-question"
+      :title="newQuestions === 1 ? 'C’è una domanda nuova' : `Ci sono ${newQuestions} domande nuove`"
+      description="Le abbiamo aggiunte dopo che hai confermato i tuoi dati: le trovi qui sotto con le altre. Rispondi e salva."
     />
     <UAlert
       v-else-if="profile?.formSubmittedAt"
@@ -247,57 +248,7 @@ async function save() {
         </div>
       </IcSection>
 
-      <IcSection
-        v-for="section in FAMILY_FORM_SECTIONS"
-        :key="section.id"
-        :title="section.title"
-        :description="section.description"
-      >
-        <div class="space-y-6">
-          <UFormField
-            v-for="question in section.questions"
-            :key="question.id"
-            :name="question.id"
-            :data-field="question.id"
-            :label="question.label"
-            :help="question.help"
-            :required="question.required"
-            :hint="question.required ? undefined : 'Facoltativo'"
-          >
-            <UInput v-if="question.type === 'text'" v-model="texts[question.id]" class="w-full" />
-            <UTextarea
-              v-else-if="question.type === 'textarea'"
-              v-model="texts[question.id]"
-              autoresize
-              :rows="3"
-              class="w-full"
-            />
-            <!-- A group is named by its legend: the label above does not reach the options. -->
-            <URadioGroup
-              v-else-if="question.type === 'select'"
-              v-model="texts[question.id]"
-              :items="question.options"
-              :legend="question.label"
-              :ui="{ legend: 'sr-only' }"
-            />
-            <UCheckboxGroup
-              v-else-if="question.type === 'multiselect'"
-              v-model="choices[question.id]"
-              :items="question.options"
-              :legend="question.label"
-              :ui="{ legend: 'sr-only' }"
-            />
-            <URadioGroup
-              v-else
-              v-model="yesNo[question.id]"
-              :items="YES_NO_ITEMS"
-              orientation="horizontal"
-              :legend="question.label"
-              :ui="{ legend: 'sr-only' }"
-            />
-          </UFormField>
-        </div>
-      </IcSection>
+      <FamiliesFormQuestions :sections="sections ?? []" :fields="fields" />
 
       <div class="flex justify-end pt-6">
         <UButton

@@ -59,7 +59,7 @@ shared/
                   session-status, slots, routes
   schemas/        zod schemas shared by UForm and parseBody
   types/          DTOs of the API, jsonb shapes, the session user
-  content/        family-form.ts (placeholder questionnaire, sprint 1)
+  content/        family-form.ts (the starting family questionnaire: the admin edits it, table questionnaires)
                   programme-template.ts (the model week: Nicola's 2027 draft)
 tests/unit, tests/db   vitest projects `unit` and `db`
 ```

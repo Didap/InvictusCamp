@@ -1,10 +1,9 @@
 // The questions of the family data (/famiglia/profilo), after the residence and the composition of the
-// family, which have columns of their own (families, family_members). Answers are stored in
-// families.form_answers keyed by question id (shared/types/domain.ts, FormAnswers): keep the ids stable,
-// and remember that a choice is stored as its label, so renaming an option leaves old answers behind.
-import { LODGING_FEATURES, type LodgingFeature } from '../utils/constants'
-
-export type FormQuestionType = 'text' | 'textarea' | 'select' | 'multiselect' | 'boolean'
+// family, which have columns of their own (families, family_members). The administration changes them from
+// /admin/famiglie/modulo (table `questionnaires`, server/domain/questionnaires.ts): what is here is only the
+// starting form, used until the first save there. Answers are stored in families.form_answers keyed by
+// question id (shared/types/domain.ts, FormAnswers), a choice as the text of its option.
+import { LODGING_FEATURES, type FormQuestionType, type LodgingFeature } from '../utils/constants'
 
 export interface FormQuestion {
   id: string
@@ -15,6 +14,22 @@ export interface FormQuestion {
   help?: string
 }
 
+export interface FormSection {
+  id: string
+  title: string
+  description?: string
+  questions: FormQuestion[]
+}
+
+/**
+ * The questionnaire as the administration last saved it. `retired` keeps the questions taken out of it, so
+ * the record of a family still shows what it answered to them.
+ */
+export interface FamilyFormContent {
+  sections: FormSection[]
+  retired: FormQuestion[]
+}
+
 /**
  * The answers of `accommodationNeeds`, one per lodging feature: the Alloggi tab of a session flags a family
  * placed in a lodging without what it asked for (shared/utils/lodgings.ts, accommodationNeeds).
@@ -23,13 +38,6 @@ export const ACCOMMODATION_NEED_LABELS: Readonly<Record<LodgingFeature, string>>
   kitchen: 'Cucina',
   accessible_bathroom: 'Bagno senza barriere architettoniche',
   microwave: 'Microonde',
-}
-
-export interface FormSection {
-  id: string
-  title: string
-  description?: string
-  questions: FormQuestion[]
 }
 
 export const FAMILY_FORM_SECTIONS: FormSection[] = [
@@ -104,4 +112,20 @@ export const FAMILY_FORM_SECTIONS: FormSection[] = [
   },
 ]
 
-export const FAMILY_FORM_QUESTIONS: FormQuestion[] = FAMILY_FORM_SECTIONS.flatMap(section => section.questions)
+/** The form used until the administration saves one. */
+export const DEFAULT_FAMILY_FORM: FamilyFormContent = { sections: FAMILY_FORM_SECTIONS, retired: [] }
+
+/**
+ * The questions the code reads, with what reads them: the administration changes their text and their
+ * place, never their id, type, options or whether they are required, and cannot take them out.
+ */
+export const LOCKED_QUESTIONS: Readonly<Record<string, string>> = {
+  accommodationNeeds:
+    'La legge la pagina Alloggi, che segnala le famiglie messe in un alloggio senza quello che hanno chiesto.',
+  photoConsent: 'La legge la liberatoria da firmare, che riporta questo consenso con una formula sua.',
+  publicationConsent: 'La legge la liberatoria da firmare, che riporta questo consenso con una formula sua.',
+}
+
+export function formQuestions(form: Pick<FamilyFormContent, 'sections'>): FormQuestion[] {
+  return form.sections.flatMap(section => section.questions)
+}
