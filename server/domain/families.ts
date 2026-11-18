@@ -823,7 +823,6 @@ export const CARD_CHECK_COLUMNS = {
   birthDate: familyMembers.birthDate,
   relationship: familyMembers.relationship,
   hasDisability: familyMembers.hasDisability,
-  isReferent: familyMembers.isReferent,
 }
 
 /** The cards of a family as CARD_CHECK_COLUMNS, in order. */

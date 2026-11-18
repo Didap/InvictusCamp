@@ -30,11 +30,20 @@ describe('release text', () => {
     ])
   })
 
-  it('refuses a field it cannot fill', () => {
-    expect(releaseFieldIssue('Il {referente} della {famiglia}')).toBeNull()
-    expect(releaseFieldIssue('Codice fiscale: {codice_fiscale}')).toMatch(/^\{codice_fiscale\} non si compila da solo/)
-    const check = releaseTextSaveSchema.safeParse({ revision: 0, body: 'Nato a {luogo}' })
-    expect(check.success).toBe(false)
+  it('refuses a field it cannot fill, a lone brace, a text without what the family signs for', () => {
+    const fields = '{componenti}: foto {foto}, pubblicazione {pubblicazione}.'
+    expect(releaseFieldIssue(DEFAULT_RELEASE_TEXT)).toBeNull()
+    expect(releaseFieldIssue(`Il {referente} della {famiglia}. ${fields}`)).toBeNull()
+    expect(releaseFieldIssue(`Codice fiscale: {codice_fiscale}. ${fields}`)).toMatch(
+      /^\{codice_fiscale\} non si compila da solo/,
+    )
+    expect(releaseFieldIssue(`Foto: { foto }. ${fields}`)).toMatch(/^\{ foto \} non si compila da solo/)
+    expect(releaseFieldIssue(`Firma {referente. ${fields}`)).toMatch(/parentesi graffa/)
+    expect(releaseFieldIssue('Per {componenti}.')).toBe(
+      'Mancano {foto} e {pubblicazione}: la famiglia firma anche per questo.',
+    )
+    expect(releaseTextSaveSchema.safeParse({ revision: 0, body: `Nato a {luogo}. ${fields}` }).success).toBe(false)
     expect(releaseTextSaveSchema.safeParse({ revision: 0, body: '   ' }).success).toBe(false)
+    expect(releaseTextSaveSchema.safeParse({ revision: 0, body: fields }).success).toBe(true)
   })
 })

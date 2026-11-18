@@ -23,7 +23,14 @@ const toast = useToast()
 
 const body = ref(props.release.body)
 const reset = () => (body.value = props.release.body)
-watch(() => props.release, reset)
+// A new saved text replaces the draft only where nothing was typed since the last one: what was written
+// while a save was on its way stays.
+watch(
+  () => props.release.body,
+  (saved, before) => {
+    if (body.value.trim() === before) body.value = saved
+  },
+)
 const dirty = computed(() => body.value.trim() !== props.release.body)
 const fieldIssue = computed(() => releaseFieldIssue(body.value) ?? undefined)
 const preview = computed(() => releaseText(body.value, SAMPLE_RELEASE_INPUT))
@@ -66,7 +73,7 @@ async function renew() {
     : ' La liberatoria di prima viene archiviata.'
   const ok = await confirm({
     title: 'Chiedere di nuovo la firma?',
-    description: `${plural(outdated, 'famiglia riceve', 'famiglie ricevono')} la liberatoria con questo testo e un’email per firmarla: partono ${plural(outdated, 'email', 'email')}.${signed}`,
+    description: `${plural(outdated, 'famiglia riceve', 'famiglie ricevono')} la liberatoria con questo testo e un’email per firmarla: partono ${outdated} email.${signed}`,
     confirmLabel: 'Chiedi la firma',
     cancelLabel: 'Annulla',
   })

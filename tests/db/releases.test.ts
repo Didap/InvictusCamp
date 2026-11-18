@@ -111,11 +111,16 @@ describe('release', () => {
     expect(await releaseTextDto(db)).toMatchObject({ revision: 0, inForce: 1, outdated: 0 })
 
     const saved = await saveReleaseText(db, {
-      values: { revision: 0, body: '{referente} firma per {componenti}.\n\nFoto: {foto}.' },
+      values: {
+        revision: 0,
+        body: '{referente} firma per {componenti}.\n\nFoto: {foto}. Pubblicazione: {pubblicazione}.',
+      },
       actor,
     })
-    // The release in force stays until it is renewed: written with the draft, already signed.
+    // The release in force stays until it is renewed: written with the draft, already signed. A save of the
+    // family that changes nothing does not redo it either.
     expect(saved).toMatchObject({ revision: 1, inForce: 1, outdated: 1, outdatedSigned: 1 })
+    expect(await familyRelease(db, { familyId: family.id, ctx, uploadsDir, actor })).toEqual([])
     await expect(saveReleaseText(db, { values: { revision: 0, body: 'Un altro testo' }, actor })).rejects.toMatchObject(
       { statusCode: 409 },
     )

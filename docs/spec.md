@@ -262,19 +262,21 @@ availability or receive convocations. The administration can move a person to th
 - **Release** (liberatoria): when the family data is confirmed, the two answers of its «Liberatoria» section are
   given (photos and videos during the stay, their publication) and every card is complete, the camp prepares the
   release with the members (name, birth date, relationship; never health data) as a PDF document of the family
-  (category consent, `documents.familyId`, with the digest of its data in `sourceDigest`) to sign in Documenti (audited `family.release`). When those data
-  change (the family's or the administration's edits), a new release replaces it: the old one is archived and
-  its pending signature cancelled; cards no longer complete archive it until they are. A release is never
-  assigned to anyone else nor restored once archived.
+  (category consent, `documents.familyId`, `sourceDigest` = digest of its data, a dot, digest of its text) for the
+  account holder to sign in Documenti (audited `family.release`). When those data change (the family's or the
+  administration's edits), a new release with the text in force replaces it: the old one is archived and its
+  pending signature cancelled; cards no longer complete archive it until they are. A release is never assigned
+  to anyone else nor restored once archived.
 - **The release text** (`/admin/famiglie/liberatoria`, from the Famiglie list; table `release_texts`, audited
   `release_text.update` with the text before): the administration writes it, with the fields {famiglia},
-  {referente} (the referent's card), {componenti} (alone in a paragraph, a line per member with birth date and
-  relationship; inside a sentence, the names), {foto} and {pubblicazione} («autorizza» / «non autorizza»); a
-  field it cannot fill is refused, blank lines separate paragraphs, a preview fills it with an example family.
-  Until the first save the families sign the draft of the code (shared/content/release.ts), and the PDF says so.
-  Two people editing: a save carrying an older revision is refused. Saving does not touch the releases in force:
-  one written with another text is redone at the family's next change, or for every family at once with «Chiedi
-  la firma sul nuovo testo» (signed ones too: the confirm says how many emails leave and how many were signed).
+  {referente} (who signs: the account holder), {componenti} (alone in a paragraph, a line per member with birth
+  date and relationship; inside a sentence, the names), {foto} and {pubblicazione} («autorizza» / «non
+  autorizza»). {componenti}, {foto} and {pubblicazione} are required; a field it cannot fill or a lone brace is
+  refused; blank lines separate paragraphs; a preview fills it with an example family. Until the first save the
+  families sign the draft of the code (shared/content/release.ts), and the PDF says so. Two people editing: a
+  save carrying an older revision is refused. A new text alone redoes nothing: the releases written with another
+  one stay until the family's data changes, or until «Chiedi la firma sul nuovo testo» redoes them all (signed
+  ones too: the confirm says how many emails leave and how many were signed).
 - **Ages**: the camp takes young people with a condition from 5 to 21 (`GUEST_AGE`), counted today, as the
   admin list shows and filters them. One of them within the ages is enough. When
   every card is complete (after a save or a removal) and none is, the family gets one email (`family.age_notice`, never naming a
