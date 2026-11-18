@@ -177,6 +177,21 @@ export const questionnaires = pgTable('questionnaires', {
   updatedAt: updatedAt(),
 })
 
+/**
+ * The text of a release the administration edits, one row per key: 'family' is the release every family
+ * signs (server/domain/releases.ts). No row: the draft of the code (shared/content/release.ts). `revision`
+ * grows at every save, as for the questionnaires.
+ */
+export const releaseTexts = pgTable('release_texts', {
+  key: text().primaryKey(),
+  /** Plain text with the fields in braces; blank lines separate paragraphs. */
+  body: text().notNull(),
+  revision: integer().notNull().default(1),
+  updatedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+})
+
 export const familyMembers = pgTable(
   'family_members',
   {

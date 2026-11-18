@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq, isNull } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { familyRelease } from '../../server/domain/releases'
+import { familyRelease, releaseTextDto, renewReleases, saveReleaseText } from '../../server/domain/releases'
 import { assignDocument, setDocumentArchived } from '../../server/domain/signatures'
 import { makeFamily, t, useTestDb } from './helpers'
 
@@ -85,5 +85,51 @@ describe('release', () => {
       .set({ formAnswers: { photoConsent: false, publicationConsent: false } })
       .where(eq(t.families.id, family.id))
     expect(await familyRelease(db, input)).toHaveLength(1)
+  })
+
+  it('takes the text of the camp, and renews on request the releases written with another one', async () => {
+    const { user, family } = await makeFamily(db, {
+      name: 'Famiglia Bianchi',
+      formStatus: 'submitted',
+      formAnswers: { photoConsent: true, publicationConsent: false },
+    })
+    await db.insert(t.familyMembers).values({
+      familyId: family.id,
+      firstName: 'Sara',
+      lastName: 'Bianchi',
+      relationship: 'parent',
+      birthDate: '1982-03-04',
+      isReferent: true,
+    })
+    const actor = { userId: user.id, ip: null }
+    expect(await familyRelease(db, { familyId: family.id, ctx, uploadsDir, actor })).toHaveLength(1)
+    const [draft] = await db.select().from(t.documents).where(eq(t.documents.familyId, family.id))
+    await db
+      .update(t.signatureRequests)
+      .set({ status: 'signed', signedAt: new Date() })
+      .where(eq(t.signatureRequests.documentId, draft!.id))
+    expect(await releaseTextDto(db)).toMatchObject({ revision: 0, inForce: 1, outdated: 0 })
+
+    const saved = await saveReleaseText(db, {
+      values: { revision: 0, body: '{referente} firma per {componenti}.\n\nFoto: {foto}.' },
+      actor,
+    })
+    // The release in force stays until it is renewed: written with the draft, already signed.
+    expect(saved).toMatchObject({ revision: 1, inForce: 1, outdated: 1, outdatedSigned: 1 })
+    await expect(saveReleaseText(db, { values: { revision: 0, body: 'Un altro testo' }, actor })).rejects.toMatchObject(
+      { statusCode: 409 },
+    )
+    await expect(renewReleases(db, { revision: 0, ctx, uploadsDir, actor })).rejects.toMatchObject({
+      statusCode: 409,
+    })
+
+    const { renewed, emails } = await renewReleases(db, { revision: 1, ctx, uploadsDir, actor })
+    expect(renewed).toBe(1)
+    expect(emails).toEqual([expect.objectContaining({ template: 'signature.request', to: user.email })])
+    const [old] = await db.select().from(t.documents).where(eq(t.documents.id, draft!.id))
+    expect(old!.archivedAt).not.toBeNull()
+    expect(await releaseTextDto(db)).toMatchObject({ revision: 1, inForce: 1, outdated: 0 })
+    // In force with the text of the camp: nothing to redo.
+    expect(await familyRelease(db, { familyId: family.id, ctx, uploadsDir, actor })).toEqual([])
   })
 })

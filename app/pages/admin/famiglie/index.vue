@@ -169,6 +169,15 @@ function openRow(event: Event, row: TableRow<FamilyListItem>) {
         <span class="hidden sm:inline">Modulo dati famiglia</span>
       </UButton>
       <UButton
+        to="/admin/famiglie/liberatoria"
+        icon="i-lucide-file-pen-line"
+        color="neutral"
+        variant="outline"
+        aria-label="Modifica il testo della liberatoria"
+      >
+        <span class="hidden sm:inline">Liberatoria</span>
+      </UButton>
+      <UButton
         :href="exportUrl"
         external
         icon="i-lucide-download"

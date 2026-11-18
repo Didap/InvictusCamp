@@ -169,6 +169,13 @@
       "when": 1794916252129,
       "tag": "0023_staff_roles_tags",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794993896125,
+      "tag": "0024_release_texts",
+      "breakpoints": true
     }
   ]
 }
