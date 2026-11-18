@@ -200,6 +200,11 @@ availability or receive convocations. The administration can move a person to th
   accounts never receive emails.
 - The log lists every email the platform sent, automatic or written, with status (sent, failed,
   simulated) and, for non-sensitive emails, the content. Access emails and codes are never stored.
+- **WhatsApp**: where the administration sees a family's phone (the family record; the families of a session,
+  as "Scrivi su WhatsApp" in a row's menu) or a staff member's (the staff record), a button opens the chat with
+  that number (`https://wa.me/…`) in a new tab, from the WhatsApp of the device in use. Only for numbers that
+  can have WhatsApp: an Italian mobile (3…, +39 added when missing) or a foreign number with its prefix;
+  Italian landlines get no button (`whatsappUrl` in `app/utils/whatsapp.ts`). Nothing is sent or logged.
 
 ### 3.8 The family: family data, member cards, documents
 
@@ -214,11 +219,6 @@ availability or receive convocations. The administration can move a person to th
   barriers, microwave), whether a dog comes along (with the notice that dogs cannot stay in the apartments and
   kennels nearby are at the family's expense), the two consents of the release. Answers in
   `families.formAnswers` by question id, a choice as the text of its option. Every save needs the whole form.
-- **WhatsApp**: where the administration sees a family's phone (the family record, the families of a session,
-  as "Scrivi su WhatsApp" in a row's menu) and a staff member's (the staff record), a button opens the chat
-  with that number (`https://wa.me/…`) in a new tab, from the WhatsApp of the device in use. Only for numbers
-  that can have WhatsApp: an Italian mobile (3…, +39 added when missing) or a foreign number with its prefix;
-  landlines get no button (`whatsappUrl` in `shared/utils/format.ts`).
 - **The questionnaire** (`/admin/famiglie/modulo`, from the Famiglie list): the administration adds, removes,
   orders and edits sections and questions (text, help, kind of answer: short text, long text, single
   choice, multiple choice, yes/no; options; required), with a preview as the family sees it. Stored in

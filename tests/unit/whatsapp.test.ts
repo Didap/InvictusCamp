@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { whatsappUrl } from '#shared/utils/format'
+import { whatsappUrl } from '~~/app/utils/whatsapp'
 
 describe('whatsappUrl', () => {
   it('reads an Italian mobile in every way families write it', () => {
@@ -25,6 +25,12 @@ describe('whatsappUrl', () => {
   it('keeps a foreign number with its prefix', () => {
     expect(whatsappUrl('+41 79 123 45 67')).toBe('https://wa.me/41791234567')
     expect(whatsappUrl('0049 151 23456789')).toBe('https://wa.me/4915123456789')
+    expect(whatsappUrl('(+41) 79 123 45 67')).toBe('https://wa.me/41791234567')
+  })
+
+  it('drops the trunk zero written as (0) after the prefix', () => {
+    expect(whatsappUrl('+41 (0)79 123 45 67')).toBe('https://wa.me/41791234567')
+    expect(whatsappUrl('+39 (0)333 1234567')).toBe('https://wa.me/393331234567')
   })
 
   it('gives no chat for landlines, empty or broken numbers', () => {

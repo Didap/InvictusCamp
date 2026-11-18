@@ -239,25 +239,3 @@ export function formatBytes(bytes: number): string {
     return `${new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 0 }).format(bytes / 1024)} KB`
   return `${new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`
 }
-
-/**
- * The WhatsApp chat with a phone number ("https://wa.me/393331234567"), or null when the number cannot have
- * WhatsApp as far as we can tell: an Italian landline, or a number too short or too long. Without a prefix
- * (+, 00, or 39 before a full number) the number is Italian.
- */
-export function whatsappUrl(phone: string | null | undefined): string | null {
-  const text = phone?.trim() ?? ''
-  const digits = text.replace(/\D/g, '')
-  const international = text.startsWith('+')
-    ? digits
-    : digits.startsWith('00')
-      ? digits.slice(2)
-      : digits.startsWith('39') && digits.length > 10
-        ? digits
-        : `39${digits}`
-  // In Italy only mobiles (3…, 9 or 10 digits) have WhatsApp; elsewhere any number of a valid length.
-  const valid = international.startsWith('39')
-    ? /^393\d{8,9}$/.test(international)
-    : /^[1-9]\d{7,14}$/.test(international)
-  return valid ? `https://wa.me/${international}` : null
-}
