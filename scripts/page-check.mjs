@@ -1,20 +1,24 @@
 #!/usr/bin/env node
-// Opens one page of the running dev server in headless Chromium, signed in as a demo account, and
-// reports what went wrong. Prints a few lines and exits 1 when the page has errors.
+// Opens one page of the running dev server (or INVICTUS_BASE_URL) in headless Chromium, signed in as a demo
+// or a real account, and reports what went wrong. Prints a few lines and exits 1 when the page has errors.
 //
 //   node scripts/page-check.mjs <path> [options]
 //
 // <path> tokens (GET /api/dev/ids): {session} {sessionDraft} {sessionPast} {family} {staff} {candidate} {volunteer}
 //   {document} {communication} {signature} (a pending signature of the signed-in account)
+// A deployed app has no demo admin and no tokens: sign in with a real account and put the ids in the path,
+// with INVICTUS_BASE_URL and INVICTUS_PASSWORD in a git-ignored file (the cookie stays in .checks/auth):
+//   node --env-file=.env.prod scripts/page-check.mjs /admin/famiglie --as <email>
+// There the screenshot is taken only with --shot: real pages can show health data.
 // Options:
-//   --as <who>       admin (default), famiglia, staff, candidato, guest (signed out)
+//   --as <who>       admin (default), famiglia, staff, candidato, guest (signed out), or an account's email
 //   --mobile         390x844, touch (default desktop 1280x800)
-//   --shot <file>    screenshot path (default .checks/<who>-<slug>-<viewport>.png)
+//   --shot <file>    screenshot path (default .checks/<who>-<slug>-<viewport>.png on the dev server)
 //   --full           full-page screenshot        --no-shot   skip it
 //   --wait <ms>      extra wait after load (default 400)
 //   --action <a>     repeatable, in order: click:<sel> fill:<sel>=<text> press:<key> hover:<sel>
 //                    wait:<ms> waitfor:<sel> type:<text> goto:<path>
-import { launch, newContext, resolvePath, signIn, slugOf, visit } from './lib/browser.mjs'
+import { LOCAL, launch, newContext, resolvePath, signIn, slugOf, visit } from './lib/browser.mjs'
 
 const args = process.argv.slice(2)
 const VALUE_OPTIONS = ['--as', '--shot', '--wait', '--action']
@@ -40,7 +44,7 @@ try {
   const path = await resolvePath(context, rawPath)
   const shot = flag('no-shot')
     ? undefined
-    : option('shot', `.checks/${who}-${slugOf(rawPath)}-${mobile ? 'mobile' : 'desktop'}.png`)
+    : option('shot', LOCAL ? `.checks/${who}-${slugOf(rawPath)}-${mobile ? 'mobile' : 'desktop'}.png` : undefined)
   const result = await visit(context, path, {
     actions: options('action'),
     wait: Number(option('wait', '400')),

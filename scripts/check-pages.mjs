@@ -3,7 +3,7 @@
 // problems, then a summary; screenshots in .checks/pages/. Exit 1 when any page has errors.
 //
 //   node scripts/check-pages.mjs [--only admin|famiglia|staff|candidato|guest] [--desktop|--mobile]
-import { launch, newContext, resolvePath, signIn, slugOf, visit } from './lib/browser.mjs'
+import { BASE, LOCAL, launch, newContext, resolvePath, signIn, slugOf, visit } from './lib/browser.mjs'
 
 export const PAGES = {
   guest: ['/accedi', '/registrati', '/candidati', '/password-dimenticata', '/privacy'],
@@ -55,6 +55,11 @@ export const PAGES = {
     '/firma/{signature}',
   ],
   candidato: ['/staff', '/staff/candidatura'],
+}
+
+if (!LOCAL) {
+  console.log(`check-pages: dev server only (demo accounts and ids); for ${BASE} use page-check.mjs --as <email>`)
+  process.exit(2)
 }
 
 const args = process.argv.slice(2)

@@ -1,9 +1,12 @@
-// Shared by page-check.mjs and check-pages.mjs: a signed-in headless Chromium against the dev server.
+// Shared by page-check.mjs and check-pages.mjs: a signed-in headless Chromium against the dev server, or the
+// deployed app named by INVICTUS_BASE_URL.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { chromium } from 'playwright'
 
 export const BASE = (process.env.INVICTUS_BASE_URL ?? 'http://localhost:3080').replace(/\/$/, '')
+/** A dev server on this machine: demo data, /api/dev/ids, `pnpm db:seed`. Anything else is a deployed app. */
+export const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(BASE)
 export const PASSWORD = 'invictus-demo'
 export const ACCOUNTS = {
   admin: 'admin@invictuscamp.local',
@@ -29,24 +32,35 @@ export function newContext(browser, { mobile = false } = {}) {
 }
 
 /**
- * Signs the context in as a demo account ('guest' stays signed out). The cookie is saved in .checks/auth
- * and reused while the server still accepts it, so repeated checks stay under the sign-in rate limit.
+ * Signs the context in as a demo account ('guest' stays signed out), or as any account given by its email
+ * with the password in INVICTUS_PASSWORD (a deployed app has no demo admin). The cookie is saved in
+ * .checks/auth, one file per server and account, and reused while the server still accepts it, so repeated
+ * checks stay under the sign-in rate limit (8 a person every 5 minutes, the real person's own included).
  */
 export async function signIn(context, who) {
   if (who === 'guest') return
-  const email = ACCOUNTS[who]
-  if (!email) throw new Error(`unknown account "${who}" (admin, famiglia, staff, candidato, guest)`)
-  const saved = resolve(`.checks/auth/${who}.json`)
+  // The server keeps emails lowercased: the same here, or the saved cookie would never match.
+  const email = who.includes('@') ? who.trim().toLowerCase() : ACCOUNTS[who]
+  if (!email) throw new Error(`unknown account "${who}" (${Object.keys(ACCOUNTS).join(', ')}, guest, or an email)`)
+  const demo = Object.values(ACCOUNTS).includes(email)
+  const saved = resolve(`.checks/auth/${new URL(BASE).host.replace(':', '-')}-${email}.json`)
   if (existsSync(saved)) {
     await context.addCookies(JSON.parse(readFileSync(saved, 'utf8')))
     const account = await context.request.get(`${BASE}/api/account`)
     if (account.ok() && (await account.json()).email === email) return
     await context.clearCookies()
   }
-  const response = await context.request.post(`${BASE}/api/auth/login`, { data: { email, password: PASSWORD } })
-  if (!response.ok()) throw new Error(`login ${who} failed (${response.status()}): run "pnpm db:seed --fresh"`)
+  const password = demo ? PASSWORD : process.env.INVICTUS_PASSWORD
+  if (!password) throw new Error(`INVICTUS_PASSWORD is not set for ${email}`)
+  const response = await context.request.post(`${BASE}/api/auth/login`, { data: { email, password } })
+  if (!response.ok()) {
+    // The server's message already says what went wrong (wrong password, disabled, too many attempts).
+    const { message = '' } = await response.json().catch(() => ({}))
+    const hint = !demo ? 'check INVICTUS_PASSWORD' : LOCAL ? 'seed the dev database (pnpm db:seed)' : 'use --as <email>'
+    throw new Error(`login ${email} failed (${response.status()} ${message}): ${hint}`)
+  }
   mkdirSync(dirname(saved), { recursive: true })
-  writeFileSync(saved, JSON.stringify(await context.cookies()))
+  writeFileSync(saved, JSON.stringify(await context.cookies()), { mode: 0o600 })
 }
 
 /** Where fill:<selector>=<text> splits: the first '=' outside [attribute] brackets and quotes. */
@@ -67,7 +81,11 @@ function fillSplit(arg) {
 /** Replaces {session}, {family}, {signature}… with ids from GET /api/dev/ids (dev only). */
 export async function resolvePath(context, path) {
   if (!/\{[a-zA-Z]+\}/.test(path)) return path
-  const ids = await (await context.request.get(`${BASE}/api/dev/ids`)).json()
+  const response = await context.request.get(`${BASE}/api/dev/ids`)
+  if (response.status() === 404)
+    throw new Error('{tokens} need the dev server (no /api/dev/ids here): put the ids in the path')
+  if (!response.ok()) throw new Error(`GET /api/dev/ids failed (${response.status()})`)
+  const ids = await response.json()
   return path.replace(/\{([a-zA-Z]+)\}/g, (_, key) => {
     if (!ids[key]) throw new Error(`no id for {${key}} for this account`)
     return ids[key]

@@ -24,6 +24,8 @@ pnpm db:seed [--fresh]     # demo data through the dev server: admin@ famiglia@ 
 pnpm test                  # unit + database tests (the db project recreates invictuscamp_test)
 pnpm exec vue-tsc -b --noEmit 2>&1 | grep "error TS"     # typecheck, filtered
 node scripts/page-check.mjs "/admin/sessioni/{session}" --as admin [--mobile]   # one page: errors + screenshot
+node --env-file=.env.prod scripts/page-check.mjs /admin --as <email>   # same in production: real account and ids,
+                           #   .env.prod (git-ignored) with INVICTUS_BASE_URL and INVICTUS_PASSWORD
 node scripts/check-pages.mjs                # every page of every role, desktop and phone
 node scripts/check-contrast.mjs             # the palette passes WCAG AA (DESIGN.md, Verified Rule)
 node scripts/check-icons.mjs                # every i-lucide-* icon exists
