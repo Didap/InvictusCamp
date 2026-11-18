@@ -54,17 +54,10 @@ export async function signIn(context, who) {
   if (!password) throw new Error(`INVICTUS_PASSWORD is not set for ${email}`)
   const response = await context.request.post(`${BASE}/api/auth/login`, { data: { email, password } })
   if (!response.ok()) {
-    const status = response.status()
+    // The server's message already says what went wrong (wrong password, disabled, too many attempts).
     const { message = '' } = await response.json().catch(() => ({}))
-    const hint =
-      status === 429
-        ? 'too many sign-ins, wait 5 minutes'
-        : !demo
-          ? 'check INVICTUS_PASSWORD'
-          : LOCAL
-            ? 'seed the dev database (pnpm db:seed)'
-            : 'no such demo account here: use --as <email>'
-    throw new Error(`login ${email} failed (${status} ${message}): ${hint}`)
+    const hint = !demo ? 'check INVICTUS_PASSWORD' : LOCAL ? 'seed the dev database (pnpm db:seed)' : 'use --as <email>'
+    throw new Error(`login ${email} failed (${response.status()} ${message}): ${hint}`)
   }
   mkdirSync(dirname(saved), { recursive: true })
   writeFileSync(saved, JSON.stringify(await context.cookies()), { mode: 0o600 })
