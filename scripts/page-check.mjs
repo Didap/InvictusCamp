@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-// Opens one page of the running dev server in headless Chromium, signed in as a demo account, and
-// reports what went wrong. Prints a few lines and exits 1 when the page has errors.
+// Opens one page of the running dev server (or INVICTUS_BASE_URL) in headless Chromium, signed in as a demo
+// account, and reports what went wrong. Prints a few lines and exits 1 when the page has errors.
 //
 //   node scripts/page-check.mjs <path> [options]
 //
 // <path> tokens (GET /api/dev/ids): {session} {sessionDraft} {sessionPast} {family} {staff} {candidate} {volunteer}
 //   {document} {communication} {signature} (a pending signature of the signed-in account)
+// A deployed app has no demo admin and no tokens: sign in with a real account and put the ids in the path,
+// with INVICTUS_BASE_URL and INVICTUS_PASSWORD in a git-ignored file (the cookie stays in .checks/auth):
+//   node --env-file=.env.prod scripts/page-check.mjs /admin/famiglie --as <email>
 // Options:
-//   --as <who>       admin (default), famiglia, staff, candidato, guest (signed out)
+//   --as <who>       admin (default), famiglia, staff, candidato, guest (signed out), or an account's email
 //   --mobile         390x844, touch (default desktop 1280x800)
 //   --shot <file>    screenshot path (default .checks/<who>-<slug>-<viewport>.png)
 //   --full           full-page screenshot        --no-shot   skip it

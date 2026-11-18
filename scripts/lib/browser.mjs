@@ -29,24 +29,33 @@ export function newContext(browser, { mobile = false } = {}) {
 }
 
 /**
- * Signs the context in as a demo account ('guest' stays signed out). The cookie is saved in .checks/auth
- * and reused while the server still accepts it, so repeated checks stay under the sign-in rate limit.
+ * Signs the context in as a demo account ('guest' stays signed out), or as any account given by its email
+ * with the password in INVICTUS_PASSWORD (a deployed app has no demo admin). The cookie is saved in
+ * .checks/auth, one file per server and account, and reused while the server still accepts it, so repeated
+ * checks stay under the sign-in rate limit (8 a person every 5 minutes, the real person's own included).
  */
 export async function signIn(context, who) {
   if (who === 'guest') return
-  const email = ACCOUNTS[who]
-  if (!email) throw new Error(`unknown account "${who}" (admin, famiglia, staff, candidato, guest)`)
-  const saved = resolve(`.checks/auth/${who}.json`)
+  const own = who.includes('@')
+  const email = own ? who : ACCOUNTS[who]
+  if (!email) throw new Error(`unknown account "${who}" (admin, famiglia, staff, candidato, guest, or an email)`)
+  const password = own ? process.env.INVICTUS_PASSWORD : PASSWORD
+  if (!password) throw new Error(`INVICTUS_PASSWORD is not set for ${email}`)
+  const saved = resolve(`.checks/auth/${new URL(BASE).host}-${email}.json`)
   if (existsSync(saved)) {
     await context.addCookies(JSON.parse(readFileSync(saved, 'utf8')))
     const account = await context.request.get(`${BASE}/api/account`)
     if (account.ok() && (await account.json()).email === email) return
     await context.clearCookies()
   }
-  const response = await context.request.post(`${BASE}/api/auth/login`, { data: { email, password: PASSWORD } })
-  if (!response.ok()) throw new Error(`login ${who} failed (${response.status()}): run "pnpm db:seed --fresh"`)
+  const response = await context.request.post(`${BASE}/api/auth/login`, { data: { email, password } })
+  if (!response.ok()) {
+    const status = response.status()
+    const hint = own ? 'check INVICTUS_PASSWORD' : 'run "pnpm db:seed --fresh" on the dev database'
+    throw new Error(`login ${email} failed (${status}): ${status === 429 ? 'too many sign-ins, wait 5 minutes' : hint}`)
+  }
   mkdirSync(dirname(saved), { recursive: true })
-  writeFileSync(saved, JSON.stringify(await context.cookies()))
+  writeFileSync(saved, JSON.stringify(await context.cookies()), { mode: 0o600 })
 }
 
 /** Where fill:<selector>=<text> splits: the first '=' outside [attribute] brackets and quotes. */
@@ -67,7 +76,9 @@ function fillSplit(arg) {
 /** Replaces {session}, {family}, {signature}… with ids from GET /api/dev/ids (dev only). */
 export async function resolvePath(context, path) {
   if (!/\{[a-zA-Z]+\}/.test(path)) return path
-  const ids = await (await context.request.get(`${BASE}/api/dev/ids`)).json()
+  const response = await context.request.get(`${BASE}/api/dev/ids`)
+  if (!response.ok()) throw new Error(`{tokens} need the dev server (GET /api/dev/ids ${response.status()}): put the ids in the path`)
+  const ids = await response.json()
   return path.replace(/\{([a-zA-Z]+)\}/g, (_, key) => {
     if (!ids[key]) throw new Error(`no id for {${key}} for this account`)
     return ids[key]
