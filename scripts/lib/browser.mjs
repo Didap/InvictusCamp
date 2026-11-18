@@ -77,7 +77,8 @@ function fillSplit(arg) {
 export async function resolvePath(context, path) {
   if (!/\{[a-zA-Z]+\}/.test(path)) return path
   const response = await context.request.get(`${BASE}/api/dev/ids`)
-  if (!response.ok()) throw new Error(`{tokens} need the dev server (GET /api/dev/ids ${response.status()}): put the ids in the path`)
+  if (!response.ok())
+    throw new Error(`{tokens} need the dev server (GET /api/dev/ids ${response.status()}): put the ids in the path`)
   const ids = await response.json()
   return path.replace(/\{([a-zA-Z]+)\}/g, (_, key) => {
     if (!ids[key]) throw new Error(`no id for {${key}} for this account`)
