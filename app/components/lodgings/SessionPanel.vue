@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SelectMenuItem } from '@nuxt/ui'
 import type { SessionLodgingFamily, SessionLodgingStaff, SessionLodgingsDto } from '#shared/types/lodgings'
+import { enumLabel, enumMeta, OF_TEAM, STAFF_TEAMS, type StaffTeam } from '#shared/utils/constants'
 import { NO_CARDS, plural } from '#shared/utils/format'
 import { featureLabels, groupByLocation, lodgingLine, lodgingName, placeGuests } from '#shared/utils/lodgings'
 
@@ -68,6 +69,10 @@ const choices = computed(
       ]),
     ),
 )
+
+/** The people convocated of one team: staff and v-team are two lists. */
+const staffByTeam = computed(() => Map.groupBy(data.value?.staff ?? [], person => person.team))
+const staffOf = (team: StaffTeam) => staffByTeam.value.get(team) ?? []
 
 /** The choices of the staff: any lodging without a family, with the staff already in it. */
 const staffChoices = computed(() =>
@@ -224,24 +229,25 @@ const assignStaff = (person: SessionLodgingStaff, value: string | null | undefin
       </IcSection>
 
       <IcSection
-        title="Staff e v-team"
+        v-for="team in STAFF_TEAMS"
+        :key="team"
+        :title="enumLabel('staffTeam', team)"
         description="Chi è convocato alla sessione. Più persone possono dormire nello stesso alloggio, mai con una famiglia."
       >
         <UEmpty
-          v-if="!data.staff.length"
-          icon="i-lucide-id-card"
-          title="Nessuno dello staff convocato"
-          description="Qui compaiono lo staff e il v-team convocati alla sessione, finché non rifiutano."
+          v-if="!staffOf(team).length"
+          :icon="enumMeta('staffTeam', team).icon"
+          :title="`Nessuna persona ${OF_TEAM[team]} convocata`"
+          description="Qui compaiono le persone convocate alla sessione, finché non rifiutano."
         />
         <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
           <li
-            v-for="person in data.staff"
+            v-for="person in staffOf(team)"
             :key="person.id"
             class="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between"
           >
             <div class="flex min-w-0 flex-wrap items-center gap-2">
               <span class="font-semibold text-highlighted">{{ person.name }}</span>
-              <IcStatusBadge kind="staffTeam" :value="person.team" />
               <IcStatusBadge kind="convocationStatus" :value="person.status" />
             </div>
             <UFormField label="Alloggio" class="w-full shrink-0 md:w-72">

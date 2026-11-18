@@ -4,6 +4,7 @@ import type {
   ParticipationStatus,
   ProgrammeBlockKind,
   ProgrammeGroup,
+  StaffTeam,
 } from '../utils/constants'
 
 /**
@@ -48,7 +49,7 @@ export type Audience =
       kinds?: ParticipationKind[]
       statuses?: ParticipationStatus[]
     }
-  | { type: 'session_staff'; sessionId: string; statuses?: ConvocationStatus[] }
+  | { type: 'session_staff'; sessionId: string; teams?: StaffTeam[]; statuses?: ConvocationStatus[] }
   | { type: 'users'; userIds: string[] }
 
 export type AudienceType = Audience['type']

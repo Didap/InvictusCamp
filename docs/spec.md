@@ -36,7 +36,7 @@ Public: `/accedi`, `/registrati` (family), `/candidati` (staff), `/password-dime
 `/reimposta-password?token`, `/invito?token`, `/verifica-email?token`, `/privacy`.
 
 Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova`, `/admin/sessioni/:id`
-(tabs Panoramica, Famiglie, Alloggi, Gruppi, Mensa, Staff e v-team, Programma, Documenti, Comunicazioni), `/admin/famiglie`,
+(tabs Panoramica, Famiglie, Alloggi, Gruppi, Mensa, Staff, V-team, Programma, Documenti, Comunicazioni), `/admin/famiglie`,
 `/admin/famiglie/:id`, `/admin/staff`, `/admin/staff/:userId`, `/admin/v-team`, `/admin/v-team/:userId` (3.4),
 `/admin/documenti`, `/admin/documenti/:id`,
 `/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/programma`,
@@ -149,8 +149,9 @@ availability or receive convocations. The administration can move a person to th
 - `/staff/disponibilita` lists the sessions not started yet (neither concluded nor cancelled), by date: approved
   staff and v-team switch "Ci sono" on or off for each one, for the whole session (`session_availability`).
   Taking it back keeps the convocations already received; the administration sees it on them.
-- A session's tab «Staff e v-team» has **two lists**, the staff and the v-team, each with its coordinator and
-  its own «Aggiungi persone». The administration adds people as convocations `draft` with a role for the
+- Staff and v-team of a session are **two tabs**, «Staff» and «V-team» (`?tab=staff`, `?tab=v-team`), each with
+  its list, its coordinator, its «Aggiungi persone», its selection and «Invia la convocazione», and «Scrivi ai
+  convocati» for that team only. The administration adds people as convocations `draft` with a role for the
   session, choosing only among the approved people of that team who said they are available for that session
   (the server does not refuse the others: the rule is about what is offered); the choice shows roles, age and
   Valutazione of each. The base of a session is `staffNeeded` people of the staff (10 by default) plus a
@@ -186,7 +187,7 @@ availability or receive convocations. The administration can move a person to th
 
 - The administration writes a message (subject, plain text body; blank lines are paragraphs) to an
   audience (`Audience` in `shared/types/domain.ts`): all families, all approved staff, candidates to review,
-  the families of a session (by kind and status), the staff of a session (by status), chosen people. The
+  the families of a session (by kind and status), the staff or v-team of a session (by team and status), chosen people. The
   composer shows how many people receive it, previews the email, and confirms before sending.
 - **Templates** ("Modelli", a tab of Comunicazioni): saved messages (name, subject, body) the composer starts
   from with "Parti da un modello"; the administration adds, edits and deletes them. Migration 0006 brings three
@@ -350,7 +351,7 @@ Where each family, and each member of the staff and v-team, sleeps during a sess
   per session: a lodging of another family is shown with its name and cannot be chosen. The tab flags a
   family with more people than beds, or placed where something it needs is missing; it does not refuse
   the choice. A reserve gets a lodging once called. Saving a choice sends no email and is audited.
-- **Staff e v-team**: the people convoked to the session (a convocation not declined nor withdrawn) get a
+- **Staff** and **V-team**, two lists: the people convoked to the session (a convocation not declined nor withdrawn) get a
   lodging each (`session_staff.lodgingId`, audited `convocation.lodging`). Several can share one, never
   with a family: a lodging of a family cannot be chosen for the staff and the other way round. More people
   than beds is flagged. Declining or withdrawing the convocation frees the lodging.

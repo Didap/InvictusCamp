@@ -29,12 +29,13 @@ const TABS = [
   { value: 'alloggi', label: 'Alloggi', icon: 'i-lucide-bed-double', slot: 'alloggi' as const },
   { value: 'gruppi', label: 'Gruppi', icon: 'i-lucide-shapes', slot: 'gruppi' as const },
   { value: 'mensa', label: 'Mensa', icon: 'i-lucide-utensils', slot: 'mensa' as const },
-  { value: 'staff', label: 'Staff e v-team', icon: 'i-lucide-id-card', slot: 'staff' as const },
+  { value: 'staff', label: 'Staff', icon: 'i-lucide-id-card', slot: 'staff' as const },
+  { value: 'v-team', label: 'V-team', icon: 'i-lucide-hand-heart', slot: 'vteam' as const },
   { value: 'programma', label: 'Programma', icon: 'i-lucide-calendar-clock', slot: 'programma' as const },
   { value: 'documenti', label: 'Documenti', icon: 'i-lucide-files', slot: 'documenti' as const },
   { value: 'comunicazioni', label: 'Comunicazioni', icon: 'i-lucide-mail', slot: 'comunicazioni' as const },
 ]
-// Nine tabs: they wrap on narrow screens instead of scrolling, so none hides past the edge (on a phone a
+// Ten tabs: they wrap on narrow screens instead of scrolling, so none hides past the edge (on a phone a
 // scrolling bar showed three and gave no sign of the others). The sliding indicator cannot follow a wrap:
 // the active tab draws its own line, under itself, since only the last row touches the border.
 const TABS_UI = {
@@ -533,7 +534,10 @@ const staffHint = computed(() => {
           <GroupsSessionPanel :session-id="session.id" />
         </template>
         <template #staff>
-          <StaffSessionStaffPanel :session-id="session.id" />
+          <StaffSessionStaffPanel :session-id="session.id" team="staff" />
+        </template>
+        <template #vteam>
+          <StaffSessionStaffPanel :session-id="session.id" team="volunteer" />
         </template>
         <template #programma>
           <ProgrammeSessionPanel :session-id="session.id" />
