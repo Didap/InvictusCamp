@@ -44,9 +44,10 @@ type Placed = (typeof placed.value)[number]
 /** «2 dello staff e 1 del v-team»: who of the two teams sleeps in a lodging. */
 const staffLine = (item: Placed) =>
   andList(
-    STAFF_TEAMS.map(team => [team, item.staff.filter(person => person.team === team).length] as const)
-      .filter(([, count]) => count)
-      .map(([team, count]) => `${count} ${OF_TEAM[team]}`),
+    STAFF_TEAMS.flatMap(team => {
+      const count = item.staff.filter(person => person.team === team).length
+      return count ? [`${count} ${OF_TEAM[team]}`] : []
+    }),
   )
 
 /** The lodgings by location as choices: `taken` says why one cannot be chosen, `line` what it is. */
@@ -77,7 +78,13 @@ const choices = computed(
 )
 
 /** The people convocated of one team: staff and v-team are two lists. */
-const staffOf = (team: StaffTeam) => data.value?.staff.filter(person => person.team === team) ?? []
+const staffByTeam = computed(() => {
+  const staff = data.value?.staff ?? []
+  return Object.fromEntries(STAFF_TEAMS.map(team => [team, staff.filter(person => person.team === team)])) as Record<
+    StaffTeam,
+    typeof staff
+  >
+})
 
 /** The choices of the staff: any lodging without a family, with the staff already in it. */
 const staffChoices = computed(() =>
@@ -240,14 +247,14 @@ const assignStaff = (person: SessionLodgingStaff, value: string | null | undefin
         description="Chi è convocato alla sessione. Più persone possono dormire nello stesso alloggio, mai con una famiglia."
       >
         <UEmpty
-          v-if="!staffOf(team).length"
+          v-if="!staffByTeam[team].length"
           :icon="enumMeta('staffTeam', team).icon"
           :title="`Nessuna persona ${OF_TEAM[team]} convocata`"
           description="Qui compaiono le persone convocate alla sessione, finché non rifiutano."
         />
         <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
           <li
-            v-for="person in staffOf(team)"
+            v-for="person in staffByTeam[team]"
             :key="person.id"
             class="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between"
           >

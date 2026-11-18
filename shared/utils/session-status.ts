@@ -1,14 +1,7 @@
 // The life of a session (docs/spec.md, 3.1). Every move is an explicit action of the administration;
 // the families' invitations go out when the session changes status. server/domain/sessions.ts applies
 // the moves and builds the emails; the interface uses these tables to offer only the valid moves.
-import { OF_TEAM, STAFF_TEAMS, type ParticipationStatus, type SessionStatus, type StaffTeam } from './constants'
-
-/** «2 da inviare», «1 del v-team da inviare»: the convocations of a session not sent yet, team by team. */
-export function draftsToSend(drafts: Record<StaffTeam, number>): string[] {
-  return STAFF_TEAMS.filter(team => drafts[team]).map(
-    team => `${drafts[team]}${team === 'staff' ? '' : ` ${OF_TEAM[team]}`} da inviare`,
-  )
-}
+import type { ParticipationStatus, SessionStatus } from './constants'
 
 export const SESSION_TRANSITIONS: Record<SessionStatus, readonly SessionStatus[]> = {
   draft: ['inviting', 'cancelled'],

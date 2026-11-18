@@ -56,7 +56,7 @@ Endpoints other areas call:
   `POST /api/admin/sessions/:id/families` body `{ familyIds: string[], kind: 'slot' | 'reserve' }` →
   `{ added: number, invited: number }` (A3 "Aggiungi a una sessione").
 - A5 composer prefill: `/admin/comunicazioni/nuova?audience=session_families&sessionId=…`,
-  `?audience=session_staff&sessionId=…[&team=staff|volunteer]`, `?userIds=id1,id2` (buttons "Scrivi" of A1, A2, A3).
+  `?audience=session_staff&sessionId=…[&team=staff|v-team]`, `?userIds=id1,id2` (buttons "Scrivi" of A1, A2, A3).
 - A4 signing page `/firma/:requestId` (linked from emails and PendingSignatures).
 - Foundation `requestSignatures()` + `signatureRequestEmails()` (A2 on accept, A4 on assign).
 

@@ -2,10 +2,11 @@
 import type { ButtonProps, DropdownMenuItem } from '@nuxt/ui'
 import type { SessionInput } from '#shared/schemas/sessions'
 import type { SessionCreated, SessionDetail, SessionMove, SessionTransitionResult } from '#shared/types/sessions'
-import { DEFAULT_LOCATION, enumMeta, type SessionStatus } from '#shared/utils/constants'
+import { DEFAULT_LOCATION, enumLabel, enumMeta, type SessionStatus, type StaffTeam } from '#shared/utils/constants'
+import { TEAM_SLUG } from '#shared/utils/routes'
 import { todayIso } from '#shared/utils/dates'
 import { formatDateTime, formatDay, formatDayRange, plural } from '#shared/utils/format'
-import { SESSION_TRANSITION_ACTIONS, draftsToSend, isSessionEditable } from '#shared/utils/session-status'
+import { SESSION_TRANSITION_ACTIONS, isSessionEditable } from '#shared/utils/session-status'
 
 // One session (docs/spec.md 3.2): the status with its valid moves, then the tabs. Every move first
 // says what it does and how many emails leave. The tab lives in the query string (?tab=famiglie).
@@ -23,14 +24,21 @@ const {
   refresh,
 } = await useApiFetch<SessionDetail>(() => `/api/admin/sessions/${sessionId.value}`)
 
+/** The tab of a team: its slug in the address, as in the menu (`?tab=v-team`). */
+const teamTab = (team: StaffTeam) => ({
+  value: TEAM_SLUG[team],
+  label: enumLabel('staffTeam', team),
+  icon: enumMeta('staffTeam', team).icon,
+})
+
 const TABS = [
   { value: 'panoramica', label: 'Panoramica', icon: 'i-lucide-layout-dashboard', slot: 'panoramica' as const },
   { value: 'famiglie', label: 'Famiglie', icon: 'i-lucide-heart-handshake', slot: 'famiglie' as const },
   { value: 'alloggi', label: 'Alloggi', icon: 'i-lucide-bed-double', slot: 'alloggi' as const },
   { value: 'gruppi', label: 'Gruppi', icon: 'i-lucide-shapes', slot: 'gruppi' as const },
   { value: 'mensa', label: 'Mensa', icon: 'i-lucide-utensils', slot: 'mensa' as const },
-  { value: 'staff', label: 'Staff', icon: 'i-lucide-id-card', slot: 'staff' as const },
-  { value: 'v-team', label: 'V-team', icon: 'i-lucide-hand-heart', slot: 'vteam' as const },
+  { ...teamTab('staff'), slot: 'staff' as const },
+  { ...teamTab('volunteer'), slot: 'vteam' as const },
   { value: 'programma', label: 'Programma', icon: 'i-lucide-calendar-clock', slot: 'programma' as const },
   { value: 'documenti', label: 'Documenti', icon: 'i-lucide-files', slot: 'documenti' as const },
   { value: 'comunicazioni', label: 'Comunicazioni', icon: 'i-lucide-mail', slot: 'comunicazioni' as const },
@@ -374,7 +382,7 @@ const staffHint = computed(() => {
   const missing = Math.max(0, staff.needed - staff.accepted - staff.waiting - staff.toSend)
   const parts = [
     pending && `${pending} in attesa di risposta o firma`,
-    ...draftsToSend(staff.drafts),
+    staff.drafts.staff && `${staff.drafts.staff} da inviare`,
     missing && `${missing} da trovare`,
   ].filter(Boolean)
   if (parts.length) return parts.join(' · ')

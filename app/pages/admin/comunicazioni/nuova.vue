@@ -18,12 +18,13 @@ import type {
 } from '#shared/types/communications'
 import type { AudienceType } from '#shared/types/domain'
 import { STAFF_TEAMS } from '#shared/utils/constants'
+import { TEAM_SLUG } from '#shared/utils/routes'
 import { plural } from '#shared/utils/format'
 import { fillMessageFields, MESSAGE_FIELDS_HELP, messageFieldValues } from '#shared/utils/message-fields'
 
 // The composer (docs/spec.md, 3.7): audience, live count of the recipients, subject and plain text
 // body, the email previewed by the real template, confirmation with the number of emails, send.
-// Opened with ?audience=session_families&sessionId=…, ?audience=session_staff&sessionId=…[&team=staff|volunteer],
+// Opened with ?audience=session_families&sessionId=…, ?audience=session_staff&sessionId=…[&team=staff|v-team],
 // ?userIds=id1,id2 (the "Scrivi" buttons of the other pages), ?bozza=<id> (a saved draft) or
 // ?modello=<id> (a saved template, from the Modelli tab).
 const route = useRoute()
@@ -44,7 +45,7 @@ function prefilled(): AudienceDraft {
   const type = AUDIENCE_TYPES.find(value => value === queryText('audience')) ?? ('all_families' as AudienceType)
   const draft = emptyAudienceDraft(type)
   if (UUID.test(queryText('sessionId'))) draft.sessionId = queryText('sessionId')
-  const team = STAFF_TEAMS.find(value => value === queryText('team'))
+  const team = STAFF_TEAMS.find(value => TEAM_SLUG[value] === queryText('team'))
   if (team) draft.staffTeams = [team]
   return draft
 }

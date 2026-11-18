@@ -4,7 +4,7 @@ import type { SessionConvocation, SessionStaffData } from '#shared/types/staff'
 import { staffSlot } from '#shared/schemas/staff'
 import { OF_TEAM, OPEN_CONVOCATIONS, type StaffTeam } from '#shared/utils/constants'
 import { formatDateTime, fullName, plural } from '#shared/utils/format'
-import { teamPath } from '#shared/utils/routes'
+import { teamPath, writeToSessionTeam } from '#shared/utils/routes'
 
 // CONTRACT (docs/BUILD.md): owned by A2 Staff. Admin session page, tab "Staff" or "V-team" (`team`): the
 // convocations of that team, with their status and the derived "Confermata" (accepted and contract signed),
@@ -32,9 +32,12 @@ watch(drafts, list => {
 const toSend = computed(() =>
   selected.value.length ? drafts.value.filter(c => selected.value.includes(c.id)) : drafts.value,
 )
-/** Ticks or unticks drafts: one, or all of them. */
-function select(ids: string[], value: boolean) {
-  selected.value = value ? [...new Set([...selected.value, ...ids])] : selected.value.filter(id => !ids.includes(id))
+/** Ticks or unticks one draft, or all of them. */
+function select(id: string, value: boolean) {
+  selected.value = value ? [...selected.value, id] : selected.value.filter(other => other !== id)
+}
+function selectAll(value: boolean) {
+  selected.value = value ? drafts.value.map(c => c.id) : []
 }
 /** The box «select all»: ticked, unticked or in between. */
 const allSelected = computed<boolean | 'indeterminate'>(() => {
@@ -180,8 +183,7 @@ const COLUMNS: TableColumn<SessionConvocation>[] = [
 // of the team: the coordinator is counted apart. Only the staff has a target.
 const confirmed = computed(() => convocations.value.filter(c => c.confirmed && staffSlot(c) === props.team).length)
 const needed = computed(() => (props.team === 'staff' ? (session.value?.staffNeeded ?? 0) : 0))
-const draftIds = computed(() => drafts.value.map(c => c.id))
-const columns = computed(() => (editable.value && draftIds.value.length ? [{ id: 'select' }, ...COLUMNS] : COLUMNS))
+const columns = computed(() => (editable.value && drafts.value.length ? [{ id: 'select' }, ...COLUMNS] : COLUMNS))
 const coordinators = computed(() =>
   convocations.value
     .filter(c => staffSlot(c) === 'coordinator' && OPEN_CONVOCATIONS.includes(c.status))
@@ -227,7 +229,7 @@ const description = computed(() =>
           <div class="flex flex-wrap items-center gap-2">
             <UButton
               class="pointer-coarse:min-h-11"
-              :to="`/admin/comunicazioni/nuova?audience=session_staff&sessionId=${sessionId}&team=${team}`"
+              :to="writeToSessionTeam(sessionId, team)"
               icon="i-lucide-mail"
               label="Scrivi ai convocati"
               color="neutral"
@@ -301,7 +303,7 @@ const description = computed(() =>
               <UCheckbox
                 :model-value="allSelected"
                 :aria-label="`Seleziona tutte le convocazioni ${OF_TEAM[team]} da inviare`"
-                @update:model-value="value => select(draftIds, value === true)"
+                @update:model-value="value => selectAll(value === true)"
               />
             </template>
             <template #select-cell="{ row }">
@@ -309,7 +311,7 @@ const description = computed(() =>
                 v-if="row.original.status === 'draft' && row.original.sendable"
                 :model-value="selected.includes(row.original.id)"
                 :aria-label="`Seleziona ${fullName(row.original)}`"
-                @update:model-value="value => select([row.original.id], value === true)"
+                @update:model-value="value => select(row.original.id, value === true)"
               />
             </template>
             <template #person-cell="{ row }">
@@ -406,7 +408,7 @@ const description = computed(() =>
                 :model-value="selected.includes(c.id)"
                 label="Seleziona per l’invio"
                 class="py-2"
-                @update:model-value="value => select([c.id], value === true)"
+                @update:model-value="value => select(c.id, value === true)"
               />
             </li>
           </ul>
