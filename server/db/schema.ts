@@ -558,7 +558,8 @@ export const documents = pgTable(
     requiresSignature: boolean().notNull().default(true),
     /**
      * A document the gestionale prepares for one family, its release (server/domain/releases.ts), with the
-     * digest of the data it was made from: never edited, assigned or restored by hand.
+     * digest of the data it was made from, a dot, the digest of its text: never edited, assigned or restored
+     * by hand.
      */
     familyId: uuid().references(() => families.id, { onDelete: 'cascade' }),
     sourceDigest: text(),

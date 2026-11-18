@@ -3,7 +3,8 @@
 // family's cards and its answers in «Dati della famiglia», signed in Documenti. No health data: no field
 // carries any.
 import { enumLabel, type MemberRelationship } from '../utils/constants'
-import { andList, formatDay, orList } from '../utils/format'
+import { andList, formatDay } from '../utils/format'
+import { textFields, textParagraphs } from '../utils/plain-text'
 
 export interface ReleaseInput {
   familyName: string
@@ -51,11 +52,9 @@ export const SAMPLE_RELEASE_INPUT: ReleaseInput = {
   publicationConsent: false,
 }
 
-const FIELD = /\{([\p{L}\d_]+)\}/gu
+const fields = textFields(RELEASE_FIELDS)
 /** Anything in braces on one line, written well or not: "{ foto }", "{data-nascita}", "{}". */
 const BRACED = /\{[^{}\n]*\}/g
-const FIELD_LIST = orList(RELEASE_FIELDS.map(name => `{${name}}`))
-const isField = (name: string): name is ReleaseField => (RELEASE_FIELDS as readonly string[]).includes(name)
 
 /**
  * What stops the text from being a release, or null: a field in braces it cannot fill ("{cognome}",
@@ -63,7 +62,7 @@ const isField = (name: string): name is ReleaseField => (RELEASE_FIELDS as reado
  */
 export function releaseFieldIssue(body: string): string | null {
   for (const [field] of body.matchAll(BRACED)) {
-    if (!isField(field.slice(1, -1))) return `${field} non si compila da solo: usa ${FIELD_LIST}.`
+    if (!fields.isField(field.slice(1, -1))) return fields.unknown(field)
   }
   if (/[{}]/.test(body.replace(BRACED, ''))) {
     return 'C’è una parentesi graffa aperta o chiusa da sola: le graffe servono solo per i campi, come {famiglia}.'
@@ -97,14 +96,12 @@ export function releaseText(body: string, input: ReleaseInput): { title: string;
     foto: consent(input.photoConsent),
     pubblicazione: consent(input.publicationConsent),
   }
-  const fill = (text: string) => text.replace(FIELD, (match, name: string) => (isField(name) ? values[name] : match))
   return {
     title: `Liberatoria · ${input.familyName}`,
-    paragraphs: body
-      .replace(/\r\n?/g, '\n')
-      .split(/\n[ \t]*\n/)
-      .map(paragraph => paragraph.trim())
-      .map(paragraph => (paragraph === '{componenti}' ? input.members.map(memberLine).join('\n') : fill(paragraph)))
+    paragraphs: textParagraphs(body)
+      .map(paragraph =>
+        paragraph === '{componenti}' ? input.members.map(memberLine).join('\n') : fields.fill(paragraph, values),
+      )
       .filter(Boolean),
   }
 }

@@ -4,18 +4,18 @@
 // data changes, the release is made again with the text in force and the old one archived (its pending
 // signature cancelled). A new text alone changes nothing: the administration asks for it (renewReleases).
 // No health data in it. Explicit imports only, so the database tests can load it.
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { DEFAULT_RELEASE_TEXT, releaseText, type ReleaseInput } from '../../shared/content/release'
 import type { ReleaseTextSaveValues } from '../../shared/schemas/releases'
 import type { ReleaseTextDto } from '../../shared/types/families'
 import { fullName, isCardToComplete } from '../../shared/utils/format'
-import { documents, families, familyMembers, releaseTexts, signatureRequests, users } from '../db/schema'
+import { documents, families, releaseTexts, signatureRequests, users } from '../db/schema'
 import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import { sha256 } from './crypto'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
-import { CARD_CHECK_COLUMNS, cardChecks, type Actor } from './families'
+import { cardChecks, cardChecksByFamily, type Actor } from './families'
 import { textPdf } from './pdf'
 import { requestSignatures, signatureRequestEmails } from './signature-requests'
 import { setDocumentArchived } from './signatures'
@@ -38,7 +38,7 @@ const templateOf = ({ body, revision }: { body: string; revision: number }): Tem
 })
 
 /** The text of the family release as it is now; `lock` keeps saves and renewals apart until the commit. */
-export async function getReleaseText(db: DbOrTx, lock = false): Promise<ReleaseTextState> {
+async function getReleaseText(db: DbOrTx, lock = false): Promise<ReleaseTextState> {
   if (lock) await db.execute(sql`select pg_advisory_xact_lock(${LOCK_KEY})`)
   const [row] = await db
     .select({
@@ -72,26 +72,25 @@ function consents(family: Family) {
 }
 
 /**
- * The release a family should have now, or null while its data is not complete. Its digest is the digest of
- * the data, a dot, the digest of the text: a family's change compares the first, a renewal the whole.
+ * What the release of a family is written from, with its digest; null while the data is not complete.
+ * `documents.sourceDigest` is this digest, a dot, the digest of the text.
  */
-function expectedRelease(template: Template, family: Family, referent: string, cards: Card[]) {
+function releaseData(family: Family, holder: string, cards: Card[]) {
   const answers = consents(family)
   if (!answers || !cards.length || cards.some(isCardToComplete)) return null
   const input: ReleaseInput = {
     familyName: family.name,
-    referent,
+    referent: holder,
     members: cards.map(card => ({ name: fullName(card), birthDate: card.birthDate, relationship: card.relationship })),
     ...answers,
   }
-  const data = sha256(JSON.stringify(input))
-  return { text: releaseText(template.body, input), data, digest: `${data}.${template.digest}` }
+  return { input, digest: sha256(JSON.stringify(input)) }
 }
 
 /**
  * Prepares (or redoes) the release once every card is complete; returns the email asking to sign it. A
- * release in force stays while the family's data is the same, written with whatever text, unless `template`
- * comes from a renewal: then it stays only if it is written with that text too.
+ * release in force stays while the family's data is the same, whatever its text; in a renewal (`renewWith`,
+ * the text in force) it stays only if it is written with that text too.
  */
 export async function familyRelease(
   db: DbOrTx,
@@ -104,30 +103,31 @@ export async function familyRelease(
   },
 ): Promise<EmailMessage[]> {
   // Locked: two saves at once would both see the release in force and both make a new one.
-  const [family] = await db.select().from(families).where(eq(families.id, input.familyId)).for('update')
-  if (!family) return []
+  const [row] = await db
+    .select({ family: families, firstName: users.firstName, lastName: users.lastName })
+    .from(families)
+    .innerJoin(users, eq(users.id, families.userId))
+    .where(eq(families.id, input.familyId))
+    .for('update', { of: families })
+  if (!row) return []
+  const { family } = row
   const [current] = await db
     .select({ id: documents.id, digest: documents.sourceDigest })
     .from(documents)
     .where(and(eq(documents.familyId, family.id), isNull(documents.archivedAt)))
   const answered = consents(family) !== null
   if (!answered && !current) return []
-  let release: ReturnType<typeof expectedRelease> = null
-  const template = input.renewWith ?? templateOf(await getReleaseText(db))
-  if (answered) {
-    const [holder] = await db
-      .select({ firstName: users.firstName, lastName: users.lastName })
-      .from(users)
-      .where(eq(users.id, family.userId))
-    release = expectedRelease(template, family, fullName(holder!), await cardChecks(db, family.id))
+  const data = answered ? releaseData(family, fullName(row), await cardChecks(db, family.id)) : null
+  const [currentData, currentText] = current?.digest?.split('.') ?? []
+  if (current && data && currentData === data.digest && (!input.renewWith || currentText === input.renewWith.digest)) {
+    return []
   }
-  const kept = input.renewWith ? release?.digest : release && `${release.data}.`
-  if (current && kept && current.digest?.startsWith(kept)) return []
   // The release in force no longer matches the family: it goes, and a new one comes once the data is complete.
   if (current) await setDocumentArchived(db, { documentId: current.id, archived: true, actor: input.actor })
-  if (!release) return []
+  if (!data) return []
 
-  const { text, digest } = release
+  const template = input.renewWith ?? templateOf(await getReleaseText(db))
+  const text = releaseText(template.body, data.input)
   const file = await storeFile(db, input.uploadsDir, {
     data: await textPdf(
       text.title,
@@ -150,7 +150,7 @@ export async function familyRelease(
       fileId: file.id,
       requiresSignature: true,
       familyId: family.id,
-      sourceDigest: digest,
+      sourceDigest: `${data.digest}.${template.digest}`,
     })
     .returning({ id: documents.id })
   const requests = await requestSignatures(db, { documentId: document!.id, userIds: [family.userId] })
@@ -189,27 +189,13 @@ async function releasesInForce(db: DbOrTx, template: Template) {
     .innerJoin(families, eq(families.id, documents.familyId))
     .innerJoin(users, eq(users.id, families.userId))
     .where(isNull(documents.archivedAt))
-  const cards = new Map<string, Card[]>()
-  if (releases.length) {
-    const rows = await db
-      .select({ familyId: familyMembers.familyId, ...CARD_CHECK_COLUMNS })
-      .from(familyMembers)
-      .where(
-        inArray(
-          familyMembers.familyId,
-          releases.map(release => release.familyId),
-        ),
-      )
-      .orderBy(familyMembers.position)
-    for (const { familyId, ...card } of rows) {
-      const list = cards.get(familyId)
-      if (list) list.push(card)
-      else cards.set(familyId, [card])
-    }
-  }
+  const cards = await cardChecksByFamily(
+    db,
+    releases.map(release => release.familyId),
+  )
   const outdated = releases.filter(release => {
-    const expected = expectedRelease(template, release, fullName(release), cards.get(release.familyId) ?? [])
-    return expected !== null && expected.digest !== release.digest
+    const data = releaseData(release, fullName(release), cards.get(release.familyId) ?? [])
+    return data !== null && `${data.digest}.${template.digest}` !== release.digest
   })
   return { inForce: releases.length, outdated }
 }

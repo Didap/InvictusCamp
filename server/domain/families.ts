@@ -815,7 +815,7 @@ const sessionRefColumns = {
 }
 
 /** What the card rules read (isCardToComplete, guestAgeStatus) and the release lists: no health details. */
-export const CARD_CHECK_COLUMNS = {
+const CARD_CHECK_COLUMNS = {
   filledAt: familyMembers.filledAt,
   firstName: familyMembers.firstName,
   lastName: familyMembers.lastName,
@@ -832,6 +832,16 @@ export function cardChecks(db: DbOrTx, familyId: string) {
     .from(familyMembers)
     .where(eq(familyMembers.familyId, familyId))
     .orderBy(familyMembers.position)
+}
+
+/** cardChecks of several families in one query, by family. */
+export async function cardChecksByFamily(db: DbOrTx, familyIds: string[]) {
+  const rows = await db
+    .select({ familyId: familyMembers.familyId, ...CARD_CHECK_COLUMNS })
+    .from(familyMembers)
+    .where(inArray(familyMembers.familyId, familyIds))
+    .orderBy(familyMembers.position)
+  return Map.groupBy(rows, row => row.familyId)
 }
 
 /**

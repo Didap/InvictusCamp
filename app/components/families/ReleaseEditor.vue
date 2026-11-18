@@ -34,6 +34,11 @@ watch(
 const dirty = computed(() => body.value.trim() !== props.release.body)
 const fieldIssue = computed(() => releaseFieldIssue(body.value) ?? undefined)
 const preview = computed(() => releaseText(body.value, SAMPLE_RELEASE_INPUT))
+const outdatedSummary = computed(() => {
+  const { inForce, outdated, outdatedSigned } = props.release
+  const signed = outdatedSigned ? ` (${plural(outdatedSigned, 'già firmata', 'già firmate')})` : ''
+  return `${outdated} di ${plural(inForce, 'liberatoria', 'liberatorie')} in vigore ${outdated === 1 ? 'ha' : 'hanno'} un testo di prima${signed}. Si rifanno con questo testo alla prossima modifica dei dati della famiglia, oppure subito con il pulsante.`
+})
 
 const saving = ref(false)
 async function onSave() {
@@ -54,9 +59,8 @@ async function onSave() {
     emit('saved', release)
     notifySuccess(
       'Testo salvato',
-      release.outdated
-        ? 'Le nuove liberatorie usano già questo testo. Sotto trovi quelle con il testo di prima.'
-        : 'Le nuove liberatorie usano già questo testo.',
+      'Le nuove liberatorie usano già questo testo.' +
+        (release.outdated ? ' Sotto trovi quelle con il testo di prima.' : ''),
     )
   } catch (error) {
     notifyError(error, 'Testo non salvato')
@@ -69,11 +73,11 @@ const renewing = ref(false)
 async function renew() {
   const { outdated, outdatedSigned } = props.release
   const signed = outdatedSigned
-    ? ` La liberatoria di prima viene archiviata, anche per ${plural(outdatedSigned, 'la famiglia che l’aveva già firmata', 'le famiglie che l’avevano già firmata')}.`
-    : ' La liberatoria di prima viene archiviata.'
+    ? `, anche per ${plural(outdatedSigned, 'famiglia che l’aveva già firmata', 'famiglie che l’avevano già firmata')}`
+    : ''
   const ok = await confirm({
     title: 'Chiedere di nuovo la firma?',
-    description: `${plural(outdated, 'famiglia riceve', 'famiglie ricevono')} la liberatoria con questo testo e un’email per firmarla: partono ${outdated} email.${signed}`,
+    description: `${plural(outdated, 'famiglia riceve', 'famiglie ricevono')} la liberatoria con questo testo e un’email per firmarla: partono ${outdated} email. La liberatoria di prima viene archiviata${signed}.`,
     confirmLabel: 'Chiedi la firma',
     cancelLabel: 'Annulla',
   })
@@ -148,12 +152,7 @@ useLeaveGuard(dirty, 'al testo della liberatoria')
         {{ plural(release.inForce, 'liberatoria in vigore', 'liberatorie in vigore') }}, tutte con questo testo.
       </p>
       <template v-else>
-        <p class="text-sm">
-          {{ release.outdated }} di {{ plural(release.inForce, 'liberatoria', 'liberatorie') }} in vigore
-          {{ release.outdated === 1 ? 'ha' : 'hanno' }} un testo di prima<template v-if="release.outdatedSigned">
-            ({{ release.outdatedSigned }} già {{ release.outdatedSigned === 1 ? 'firmata' : 'firmate' }})</template
-          >. Si rifanno con questo testo alla prossima modifica dei dati della famiglia, oppure subito con il pulsante.
-        </p>
+        <p class="text-sm">{{ outdatedSummary }}</p>
         <div class="mt-4 flex flex-wrap items-center gap-3">
           <UButton
             icon="i-lucide-pen-line"
