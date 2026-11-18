@@ -118,7 +118,7 @@ describe('audiences', () => {
     expect(none.recipients).toHaveLength(0)
   })
 
-  it('staff of a session: by convocation status', async () => {
+  it('staff and v-team of a session: by team and convocation status', async () => {
     const session = await makeSession(db)
     const other = await makeSession(db)
     const sent = await makeStaff(db)
@@ -143,6 +143,24 @@ describe('audiences', () => {
       statuses: ['sent', 'accepted'],
     })
     expect(ids(convoked)).toEqual(sorted(sent.user.id, accepted.user.id))
+
+    // Staff and v-team are written to apart: the tab of each team opens the composer with its team only.
+    await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.userId, accepted.user.id))
+    const volunteers = await resolveAudience(db, { type: 'session_staff', sessionId: session.id, teams: ['volunteer'] })
+    expect(ids(volunteers)).toEqual([accepted.user.id])
+    const staff = await resolveAudience(db, { type: 'session_staff', sessionId: session.id, teams: ['staff'] })
+    expect(staff.recipients).toHaveLength(3)
+    // Team and status together, as the composer always sends them: the v-team that was sent or accepted.
+    await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.userId, draft.user.id))
+    const sentVolunteers = await resolveAudience(db, {
+      type: 'session_staff',
+      sessionId: session.id,
+      teams: ['volunteer'],
+      statuses: ['sent', 'accepted'],
+    })
+    expect(ids(sentVolunteers)).toEqual([accepted.user.id])
+    const nobody = await resolveAudience(db, { type: 'session_staff', sessionId: session.id, teams: [] })
+    expect(nobody.recipients).toEqual([])
   })
 
   it('a session that does not exist is a 404', async () => {
@@ -518,7 +536,16 @@ describe('labels and text', () => {
       ),
     ).toBe('Famiglie di «Luglio» (solo titolari; stato: invitata o confermata)')
     expect(describeAudience({ type: 'session_staff', sessionId, statuses: ['sent', 'accepted'] }, 'Luglio')).toBe(
-      'Staff di «Luglio» (convocazione: inviata o accettata)',
+      'Staff e v-team di «Luglio» (convocazione: inviata o accettata)',
+    )
+    expect(describeAudience({ type: 'session_staff', sessionId, teams: ['volunteer'] }, 'Luglio')).toBe(
+      'V-team di «Luglio»',
+    )
+    expect(describeAudience({ type: 'session_staff', sessionId, teams: ['staff', 'staff'] }, 'Luglio')).toBe(
+      'Staff di «Luglio»',
+    )
+    expect(describeAudience({ type: 'session_staff', sessionId, teams: [] }, 'Luglio')).toBe(
+      'Staff e v-team di «Luglio» (nessuna squadra scelta)',
     )
     expect(describeAudience({ type: 'users', userIds: [sessionId, sessionId] })).toBe('1 persona scelta')
   })

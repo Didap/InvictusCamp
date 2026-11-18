@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { SessionCreated, SessionListItem } from '#shared/types/sessions'
-import { DEFAULT_LOCATION } from '#shared/utils/constants'
+import { DEFAULT_LOCATION, STAFF_TEAMS, enumLabel, enumMeta } from '#shared/utils/constants'
 import { formatDay, formatDayRange, plural } from '#shared/utils/format'
+import { TEAM_SLUG } from '#shared/utils/routes'
 import { isSessionEditable } from '#shared/utils/session-status'
 
 // The sessions of /admin/sessioni: a sortable table on desktop, a list of rows on phones.
@@ -65,7 +66,11 @@ function actions(session: SessionListItem): DropdownMenuItem[][] {
     [
       { label: 'Apri la sessione', icon: 'i-lucide-arrow-right', to: link(session) },
       { label: 'Famiglie', icon: 'i-lucide-heart-handshake', to: link(session, 'famiglie') },
-      { label: 'Staff', icon: 'i-lucide-id-card', to: link(session, 'staff') },
+      ...STAFF_TEAMS.map(team => ({
+        label: enumLabel('staffTeam', team),
+        icon: enumMeta('staffTeam', team).icon,
+        to: link(session, TEAM_SLUG[team]),
+      })),
     ],
     [{ label: 'Duplica', icon: 'i-lucide-copy', onSelect: () => duplicate(session) }],
   ]
@@ -77,7 +82,8 @@ const rows = computed(() => props.sessions)
 function staffToDo({ staff, status }: SessionListItem): string[] {
   if (!isSessionEditable(status)) return []
   const missing = Math.max(0, staff.needed - staff.accepted - staff.waiting - staff.toSend)
-  return [staff.drafts ? `${staff.drafts} da inviare` : '', missing ? `${missing} da trovare` : ''].filter(Boolean)
+  const drafts = staff.drafts.staff
+  return [drafts ? `${drafts} da inviare` : '', missing ? `${missing} da trovare` : ''].filter(Boolean)
 }
 </script>
 

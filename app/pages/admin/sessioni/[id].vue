@@ -2,7 +2,8 @@
 import type { ButtonProps, DropdownMenuItem } from '@nuxt/ui'
 import type { SessionInput } from '#shared/schemas/sessions'
 import type { SessionCreated, SessionDetail, SessionMove, SessionTransitionResult } from '#shared/types/sessions'
-import { DEFAULT_LOCATION, enumMeta, type SessionStatus } from '#shared/utils/constants'
+import { DEFAULT_LOCATION, enumLabel, enumMeta, type SessionStatus, type StaffTeam } from '#shared/utils/constants'
+import { TEAM_SLUG } from '#shared/utils/routes'
 import { todayIso } from '#shared/utils/dates'
 import { formatDateTime, formatDay, formatDayRange, plural } from '#shared/utils/format'
 import { SESSION_TRANSITION_ACTIONS, isSessionEditable } from '#shared/utils/session-status'
@@ -23,18 +24,26 @@ const {
   refresh,
 } = await useApiFetch<SessionDetail>(() => `/api/admin/sessions/${sessionId.value}`)
 
+/** The tab of a team: its slug in the address, as in the menu (`?tab=v-team`). */
+const teamTab = (team: StaffTeam) => ({
+  value: TEAM_SLUG[team],
+  label: enumLabel('staffTeam', team),
+  icon: enumMeta('staffTeam', team).icon,
+})
+
 const TABS = [
   { value: 'panoramica', label: 'Panoramica', icon: 'i-lucide-layout-dashboard', slot: 'panoramica' as const },
   { value: 'famiglie', label: 'Famiglie', icon: 'i-lucide-heart-handshake', slot: 'famiglie' as const },
   { value: 'alloggi', label: 'Alloggi', icon: 'i-lucide-bed-double', slot: 'alloggi' as const },
   { value: 'gruppi', label: 'Gruppi', icon: 'i-lucide-shapes', slot: 'gruppi' as const },
   { value: 'mensa', label: 'Mensa', icon: 'i-lucide-utensils', slot: 'mensa' as const },
-  { value: 'staff', label: 'Staff e v-team', icon: 'i-lucide-id-card', slot: 'staff' as const },
+  { ...teamTab('staff'), slot: 'staff' as const },
+  { ...teamTab('volunteer'), slot: 'vteam' as const },
   { value: 'programma', label: 'Programma', icon: 'i-lucide-calendar-clock', slot: 'programma' as const },
   { value: 'documenti', label: 'Documenti', icon: 'i-lucide-files', slot: 'documenti' as const },
   { value: 'comunicazioni', label: 'Comunicazioni', icon: 'i-lucide-mail', slot: 'comunicazioni' as const },
 ]
-// Nine tabs: they wrap on narrow screens instead of scrolling, so none hides past the edge (on a phone a
+// Ten tabs: they wrap on narrow screens instead of scrolling, so none hides past the edge (on a phone a
 // scrolling bar showed three and gave no sign of the others). The sliding indicator cannot follow a wrap:
 // the active tab draws its own line, under itself, since only the last row touches the border.
 const TABS_UI = {
@@ -373,7 +382,7 @@ const staffHint = computed(() => {
   const missing = Math.max(0, staff.needed - staff.accepted - staff.waiting - staff.toSend)
   const parts = [
     pending && `${pending} in attesa di risposta o firma`,
-    staff.drafts && `${staff.drafts} da inviare`,
+    staff.drafts.staff && `${staff.drafts.staff} da inviare`,
     missing && `${missing} da trovare`,
   ].filter(Boolean)
   if (parts.length) return parts.join(' · ')
@@ -533,7 +542,10 @@ const staffHint = computed(() => {
           <GroupsSessionPanel :session-id="session.id" />
         </template>
         <template #staff>
-          <StaffSessionStaffPanel :session-id="session.id" />
+          <StaffSessionStaffPanel :session-id="session.id" team="staff" />
+        </template>
+        <template #vteam>
+          <StaffSessionStaffPanel :session-id="session.id" team="volunteer" />
         </template>
         <template #programma>
           <ProgrammeSessionPanel :session-id="session.id" />

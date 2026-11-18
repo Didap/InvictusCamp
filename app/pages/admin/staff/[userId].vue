@@ -4,7 +4,7 @@ import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
 import { OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
 import { formatAge, formatDateTime, formatDay, formatDayRange, fullName } from '#shared/utils/format'
-import { teamOfSlug, teamPath } from '#shared/utils/routes'
+import { TEAM_SLUG, teamOfSlug, teamPath } from '#shared/utils/routes'
 
 // One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, application,
 // review with internal notes, the outcome email sent only from "Comunica l’esito", availability,
@@ -451,7 +451,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3"
             >
               <ULink
-                :to="`/admin/sessioni/${session.id}?tab=staff`"
+                :to="`/admin/sessioni/${session.id}?tab=${TEAM_SLUG[team]}`"
                 class="font-semibold hover:underline"
                 :class="session.startDate > today ? 'text-primary' : 'text-muted'"
               >
@@ -473,7 +473,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               <div class="flex flex-wrap items-start justify-between gap-2">
                 <div class="min-w-0">
                   <ULink
-                    :to="`/admin/sessioni/${c.sessionId}?tab=staff`"
+                    :to="`/admin/sessioni/${c.sessionId}?tab=${TEAM_SLUG[team]}`"
                     class="font-semibold text-primary hover:underline"
                   >
                     {{ c.sessionTitle }}

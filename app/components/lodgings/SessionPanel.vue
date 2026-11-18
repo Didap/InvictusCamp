@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { SelectMenuItem } from '@nuxt/ui'
 import type { SessionLodgingFamily, SessionLodgingStaff, SessionLodgingsDto } from '#shared/types/lodgings'
-import { NO_CARDS, plural } from '#shared/utils/format'
+import { enumLabel, enumMeta, OF_TEAM, STAFF_TEAMS, type StaffTeam } from '#shared/utils/constants'
+import { andList, NO_CARDS, plural } from '#shared/utils/format'
 import { featureLabels, groupByLocation, lodgingLine, lodgingName, placeGuests } from '#shared/utils/lodgings'
 
 // The Alloggi tab of a session (docs/spec.md 3.11): each titolare holding a place gets a lodging of the
@@ -40,7 +41,14 @@ const people = (family: SessionLodgingFamily) =>
   family.people ? plural(family.people, 'persona', 'persone') : NO_CARDS
 
 type Placed = (typeof placed.value)[number]
-const staffLine = (item: Placed) => plural(item.staff.length, 'persona', 'persone')
+/** «2 dello staff e 1 del v-team»: who of the two teams sleeps in a lodging. */
+const staffLine = (item: Placed) =>
+  andList(
+    STAFF_TEAMS.flatMap(team => {
+      const count = item.staff.filter(person => person.team === team).length
+      return count ? [`${count} ${OF_TEAM[team]}`] : []
+    }),
+  )
 
 /** The lodgings by location as choices: `taken` says why one cannot be chosen, `line` what it is. */
 function menu(choice: (item: Placed) => { taken?: string; line?: string }): SelectMenuItem[][] {
@@ -63,11 +71,20 @@ const choices = computed(
         family.id,
         menu(item => {
           if (item.family && item.family.id !== family.id) return { taken: `Assegnato a ${item.family.familyName}` }
-          return item.staff.length ? { taken: `Ci dorme lo staff: ${staffLine(item)}` } : {}
+          return item.staff.length ? { taken: `Occupato da ${staffLine(item)}` } : {}
         }),
       ]),
     ),
 )
+
+/** The people convocated of one team: staff and v-team are two lists. */
+const staffByTeam = computed(() => {
+  const staff = data.value?.staff ?? []
+  return Object.fromEntries(STAFF_TEAMS.map(team => [team, staff.filter(person => person.team === team)])) as Record<
+    StaffTeam,
+    typeof staff
+  >
+})
 
 /** The choices of the staff: any lodging without a family, with the staff already in it. */
 const staffChoices = computed(() =>
@@ -75,7 +92,7 @@ const staffChoices = computed(() =>
     item.family
       ? { taken: `Assegnato a ${item.family.familyName}` }
       : item.staff.length
-        ? { line: `${staffLine(item)} dello staff · ${lodgingLine(item)}` }
+        ? { line: `${staffLine(item)} · ${lodgingLine(item)}` }
         : {},
   ),
 )
@@ -224,24 +241,25 @@ const assignStaff = (person: SessionLodgingStaff, value: string | null | undefin
       </IcSection>
 
       <IcSection
-        title="Staff e v-team"
+        v-for="team in STAFF_TEAMS"
+        :key="team"
+        :title="enumLabel('staffTeam', team)"
         description="Chi è convocato alla sessione. Più persone possono dormire nello stesso alloggio, mai con una famiglia."
       >
         <UEmpty
-          v-if="!data.staff.length"
-          icon="i-lucide-id-card"
-          title="Nessuno dello staff convocato"
-          description="Qui compaiono lo staff e il v-team convocati alla sessione, finché non rifiutano."
+          v-if="!staffByTeam[team].length"
+          :icon="enumMeta('staffTeam', team).icon"
+          :title="`Nessuna persona ${OF_TEAM[team]} convocata`"
+          description="Qui compaiono le persone convocate alla sessione, finché non rifiutano."
         />
         <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
           <li
-            v-for="person in data.staff"
+            v-for="person in staffByTeam[team]"
             :key="person.id"
             class="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between"
           >
             <div class="flex min-w-0 flex-wrap items-center gap-2">
               <span class="font-semibold text-highlighted">{{ person.name }}</span>
-              <IcStatusBadge kind="staffTeam" :value="person.team" />
               <IcStatusBadge kind="convocationStatus" :value="person.status" />
             </div>
             <UFormField label="Alloggio" class="w-full shrink-0 md:w-72">

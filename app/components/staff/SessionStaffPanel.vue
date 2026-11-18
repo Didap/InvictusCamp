@@ -2,27 +2,25 @@
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { SessionConvocation, SessionStaffData } from '#shared/types/staff'
 import { staffSlot } from '#shared/schemas/staff'
-import { OF_TEAM, OPEN_CONVOCATIONS, STAFF_TEAMS, type StaffTeam } from '#shared/utils/constants'
+import { OF_TEAM, OPEN_CONVOCATIONS, type StaffTeam } from '#shared/utils/constants'
 import { formatDateTime, fullName, plural } from '#shared/utils/format'
-import { teamPath } from '#shared/utils/routes'
+import { teamPath, writeToSessionTeam } from '#shared/utils/routes'
 
-// CONTRACT (docs/BUILD.md): owned by A2 Staff. Admin session page, tab "Staff e v-team": two lists, the
-// convocations of the staff and those of the v-team, with their status and the derived "Confermata"
-// (accepted and contract signed), the coordinator of each team, the people of the team to add among those
-// available for the session; "Invia la convocazione" (one or the selected ones of both lists, optional
-// message), cancel (spec 3.5). Props are final.
-const props = defineProps<{ sessionId: string }>()
+// CONTRACT (docs/BUILD.md): owned by A2 Staff. Admin session page, tab "Staff" or "V-team" (`team`): the
+// convocations of that team, with their status and the derived "Confermata" (accepted and contract signed),
+// its coordinator, the people of the team to add among those available for the session; "Invia la
+// convocazione" (one or the selected ones, optional message), cancel (spec 3.5).
+const props = defineProps<{ sessionId: string; team: StaffTeam }>()
 
 const api = useApi()
 const confirm = useConfirm()
-const { label } = useEnums()
 const { roleItems, roleName, roleList } = useStaffLabels()
 const { data, status, refresh } = useApiFetch<SessionStaffData>('/api/admin/convocations', {
   query: computed(() => ({ sessionId: props.sessionId })),
 })
 
 const session = computed(() => data.value?.session)
-const convocations = computed(() => data.value?.convocations ?? [])
+const convocations = computed(() => (data.value?.convocations ?? []).filter(c => c.team === props.team))
 const editable = computed(() => session.value?.editable ?? false)
 const drafts = computed(() => convocations.value.filter(c => c.status === 'draft' && c.sendable))
 
@@ -34,22 +32,20 @@ watch(drafts, list => {
 const toSend = computed(() =>
   selected.value.length ? drafts.value.filter(c => selected.value.includes(c.id)) : drafts.value,
 )
-/** Ticks or unticks drafts: one, or all those of a list. */
-function select(ids: string[], value: boolean) {
-  selected.value = value ? [...new Set([...selected.value, ...ids])] : selected.value.filter(id => !ids.includes(id))
+/** Ticks or unticks one draft, or all of them. */
+function select(id: string, value: boolean) {
+  selected.value = value ? [...selected.value, id] : selected.value.filter(other => other !== id)
 }
-/** The box «select all» of a list: ticked, unticked or in between. */
-function allSelected(ids: string[]): boolean | 'indeterminate' {
-  const ticked = ids.filter(id => selected.value.includes(id)).length
-  return !ticked ? false : ticked === ids.length ? true : 'indeterminate'
+function selectAll(value: boolean) {
+  selected.value = value ? drafts.value.map(c => c.id) : []
 }
+/** The box «select all»: ticked, unticked or in between. */
+const allSelected = computed<boolean | 'indeterminate'>(() => {
+  const ticked = selected.value.length
+  return !ticked ? false : ticked === drafts.value.length ? true : 'indeterminate'
+})
 
 const addOpen = ref(false)
-const addTeam = ref<StaffTeam>('staff')
-function openAdd(team: StaffTeam) {
-  addTeam.value = team
-  addOpen.value = true
-}
 const sendOpen = ref(false)
 const sendList = ref<SessionConvocation[]>([])
 function openSend(list: SessionConvocation[]) {
@@ -160,9 +156,9 @@ const sendLabel = computed(() => {
   return drafts.value.length === 1 ? 'Invia la convocazione' : `Invia le ${drafts.value.length} convocazioni`
 })
 
-/** «3 accettate · 2 in attesa di risposta · 1 da inviare · 1 rifiutata» for one list. */
-function summaryOf(list: SessionConvocation[]): string {
-  const count = (status: SessionConvocation['status']) => list.filter(c => c.status === status).length
+/** «3 accettate · 2 in attesa di risposta · 1 da inviare · 1 rifiutata». */
+const summary = computed(() => {
+  const count = (status: SessionConvocation['status']) => convocations.value.filter(c => c.status === status).length
   const [accepted, waiting, draft, declined] = [count('accepted'), count('sent'), count('draft'), count('declined')]
   return [
     accepted && plural(accepted, 'accettata', 'accettate'),
@@ -172,7 +168,7 @@ function summaryOf(list: SessionConvocation[]): string {
   ]
     .filter(Boolean)
     .join(' · ')
-}
+})
 
 const COLUMNS: TableColumn<SessionConvocation>[] = [
   { id: 'person', header: 'Persona' },
@@ -182,32 +178,21 @@ const COLUMNS: TableColumn<SessionConvocation>[] = [
   { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Azioni') },
 ]
 
-// Each team is a list of its own, with its coordinator; selecting and sending work across both. The base of
-// a session (spec 3.5): `staffNeeded` people of the staff, plus a coordinator for the staff and one for the
-// v-team, counted on the convocations still open (draft, sent, accepted).
-const teams = computed(() =>
-  STAFF_TEAMS.map(team => {
-    const list = convocations.value.filter(c => c.team === team)
-    const draftIds = drafts.value.filter(c => c.team === team).map(c => c.id)
-    // Confirmed in the slot of the team: the coordinator is counted apart. Only the staff has a target.
-    const confirmed = list.filter(c => c.confirmed && staffSlot(c) === team).length
-    const needed = team === 'staff' ? (session.value?.staffNeeded ?? 0) : 0
-    return {
-      team,
-      list,
-      confirmed,
-      needed,
-      draftIds,
-      columns: editable.value && draftIds.length ? [{ id: 'select' }, ...COLUMNS] : COLUMNS,
-      coordinators: list
-        .filter(c => staffSlot(c) === 'coordinator' && OPEN_CONVOCATIONS.includes(c.status))
-        .map(c => (c.confirmed ? fullName(c) : `${fullName(c)} (non ancora confermato)`)),
-      description: needed
-        ? `${plural(confirmed, 'confermato', 'confermati')} su ${plural(needed, 'necessario', 'necessari')}, coordinatore a parte`
-        : plural(confirmed, 'confermato', 'confermati'),
-      summary: summaryOf(list),
-    }
-  }),
+// The base of a session (spec 3.5): `staffNeeded` people of the staff, plus a coordinator for the staff and
+// one for the v-team, counted on the convocations still open (draft, sent, accepted). Confirmed in the slot
+// of the team: the coordinator is counted apart. Only the staff has a target.
+const confirmed = computed(() => convocations.value.filter(c => c.confirmed && staffSlot(c) === props.team).length)
+const needed = computed(() => (props.team === 'staff' ? (session.value?.staffNeeded ?? 0) : 0))
+const columns = computed(() => (editable.value && drafts.value.length ? [{ id: 'select' }, ...COLUMNS] : COLUMNS))
+const coordinators = computed(() =>
+  convocations.value
+    .filter(c => staffSlot(c) === 'coordinator' && OPEN_CONVOCATIONS.includes(c.status))
+    .map(c => (c.confirmed ? fullName(c) : `${fullName(c)} (non ancora confermato)`)),
+)
+const description = computed(() =>
+  needed.value
+    ? `${plural(confirmed.value, 'confermato', 'confermati')} su ${plural(needed.value, 'necessario', 'necessari')}, coordinatore a parte`
+    : plural(confirmed.value, 'confermato', 'confermati'),
 )
 </script>
 
@@ -223,7 +208,7 @@ const teams = computed(() =>
       color="error"
       variant="subtle"
       icon="i-lucide-circle-alert"
-      title="Non riesco a caricare lo staff e il v-team della sessione"
+      :title="`Non riesco a caricare le convocazioni ${OF_TEAM[team]}`"
       description="Controlla la connessione e riprova."
       :actions="[{ label: 'Riprova', color: 'error', variant: 'outline', onClick: () => refresh() }]"
     />
@@ -244,7 +229,7 @@ const teams = computed(() =>
           <div class="flex flex-wrap items-center gap-2">
             <UButton
               class="pointer-coarse:min-h-11"
-              :to="`/admin/comunicazioni/nuova?audience=session_staff&sessionId=${sessionId}`"
+              :to="writeToSessionTeam(sessionId, team)"
               icon="i-lucide-mail"
               label="Scrivi ai convocati"
               color="neutral"
@@ -269,12 +254,7 @@ const teams = computed(() =>
         />
       </div>
 
-      <IcSection
-        v-for="{ team, list, confirmed, needed, draftIds, columns, coordinators, description, summary } in teams"
-        :key="team"
-        :title="label('staffTeam', team)"
-        :description="description"
-      >
+      <IcSection :title="`Convocazioni ${OF_TEAM[team]}`" :description="description">
         <template v-if="editable" #actions>
           <UButton
             class="pointer-coarse:min-h-11"
@@ -282,7 +262,7 @@ const teams = computed(() =>
             :label="`Aggiungi persone ${OF_TEAM[team]}`"
             color="neutral"
             variant="outline"
-            @click="openAdd(team)"
+            @click="addOpen = true"
           />
         </template>
 
@@ -307,7 +287,7 @@ const teams = computed(() =>
         </div>
 
         <UEmpty
-          v-if="!list.length"
+          v-if="!convocations.length"
           icon="i-lucide-users"
           :title="`Nessuna persona ${OF_TEAM[team]} convocata`"
           :description="
@@ -318,12 +298,12 @@ const teams = computed(() =>
         />
 
         <template v-else>
-          <UTable :data="list" :columns="columns" :get-row-id="row => row.id" class="hidden md:block">
+          <UTable :data="convocations" :columns="columns" :get-row-id="row => row.id" class="hidden md:block">
             <template #select-header>
               <UCheckbox
-                :model-value="allSelected(draftIds)"
+                :model-value="allSelected"
                 :aria-label="`Seleziona tutte le convocazioni ${OF_TEAM[team]} da inviare`"
-                @update:model-value="value => select(draftIds, value === true)"
+                @update:model-value="value => selectAll(value === true)"
               />
             </template>
             <template #select-cell="{ row }">
@@ -331,7 +311,7 @@ const teams = computed(() =>
                 v-if="row.original.status === 'draft' && row.original.sendable"
                 :model-value="selected.includes(row.original.id)"
                 :aria-label="`Seleziona ${fullName(row.original)}`"
-                @update:model-value="value => select([row.original.id], value === true)"
+                @update:model-value="value => select(row.original.id, value === true)"
               />
             </template>
             <template #person-cell="{ row }">
@@ -385,7 +365,7 @@ const teams = computed(() =>
           </UTable>
 
           <ul class="divide-y divide-default rounded-lg border border-default bg-elevated md:hidden">
-            <li v-for="c in list" :key="c.id" class="space-y-3 p-4">
+            <li v-for="c in convocations" :key="c.id" class="space-y-3 p-4">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <ULink :to="teamPath(team, c.userId)" class="font-semibold text-primary hover:underline">
@@ -428,7 +408,7 @@ const teams = computed(() =>
                 :model-value="selected.includes(c.id)"
                 label="Seleziona per l’invio"
                 class="py-2"
-                @update:model-value="value => select([c.id], value === true)"
+                @update:model-value="value => select(c.id, value === true)"
               />
             </li>
           </ul>
@@ -440,7 +420,7 @@ const teams = computed(() =>
       v-if="data"
       v-model:open="addOpen"
       :session-id="sessionId"
-      :team="addTeam"
+      :team="team"
       :available="data.available"
       @added="afterChange"
     />

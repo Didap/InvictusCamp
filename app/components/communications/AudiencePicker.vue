@@ -6,7 +6,8 @@ import type { UserListItem } from '#shared/types/users'
 import { formatDayRange, fullName } from '#shared/utils/format'
 
 // Who a message goes to (docs/spec.md, 3.7): all families, approved staff, candidates to review, the
-// families of a session (by kind and status), the staff of a session (by status), chosen people.
+// families of a session (by kind and status), the staff or v-team of a session (by team and status), chosen
+// people.
 const draft = defineModel<AudienceDraft>({ required: true })
 const props = defineProps<{ sessions: CommunicationSessionOption[] }>()
 
@@ -15,10 +16,11 @@ const { label, options } = useEnums()
 
 const typeItems = AUDIENCE_TYPES.map(type => ({ value: type, ...AUDIENCE_TYPE_META[type] }))
 /** Checkboxes show the label only: an item's icon would replace the tick. */
-const plain = (name: 'participationKind' | 'participationStatus' | 'convocationStatus') =>
+const plain = (name: 'participationKind' | 'participationStatus' | 'convocationStatus' | 'staffTeam') =>
   options(name).map(({ value, label }) => ({ value, label }))
 const kindItems = plain('participationKind')
 const familyStatusItems = plain('participationStatus')
+const staffTeamItems = plain('staffTeam')
 const staffStatusItems = plain('convocationStatus')
 
 const sessionItems = computed(() =>
@@ -133,15 +135,26 @@ function removePerson(id: string) {
         </UFormField>
       </template>
 
-      <UFormField v-else name="audience.statuses">
-        <UCheckboxGroup
-          v-model="draft.staffStatuses"
-          legend="Stato della convocazione"
-          :items="staffStatusItems"
-          orientation="horizontal"
-          :ui="groupUi"
-        />
-      </UFormField>
+      <template v-else>
+        <UFormField name="audience.teams">
+          <UCheckboxGroup
+            v-model="draft.staffTeams"
+            legend="Squadra"
+            :items="staffTeamItems"
+            orientation="horizontal"
+            :ui="groupUi"
+          />
+        </UFormField>
+        <UFormField name="audience.statuses">
+          <UCheckboxGroup
+            v-model="draft.staffStatuses"
+            legend="Stato della convocazione"
+            :items="staffStatusItems"
+            orientation="horizontal"
+            :ui="groupUi"
+          />
+        </UFormField>
+      </template>
     </template>
 
     <template v-if="draft.type === 'users'">
