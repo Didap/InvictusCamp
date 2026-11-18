@@ -6,9 +6,10 @@ import {
   type DashboardTodo,
 } from '#shared/types/dashboard'
 import { staffCountsOf } from '~~/server/domain/sessions'
-import { STAFF_TEAMS, enumLabel, type SessionStatus, type StaffTeam } from '#shared/utils/constants'
+import { OF_TEAM, STAFF_TEAMS, enumLabel, type SessionStatus, type StaffTeam } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDay, plural } from '#shared/utils/format'
+import { TEAM_SLUG } from '#shared/utils/routes'
 import { slotSummary } from '#shared/utils/slots'
 
 const ACTIVE: SessionStatus[] = ['draft', 'inviting', 'confirmed']
@@ -186,11 +187,14 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
         icon: 'i-lucide-phone',
       })
     }
-    if (s.staff.drafts > 0) {
+    // Each team sends from its own tab.
+    for (const team of STAFF_TEAMS) {
+      const drafts = s.staff.drafts[team]
+      if (!drafts) continue
       todo.push({
-        key: `${s.id}:convocations`,
-        label: `«${s.title}»: ${plural(s.staff.drafts, 'convocazione da inviare', 'convocazioni da inviare')}`,
-        to: sessionTab(s.id, 'staff'),
+        key: `${s.id}:convocations:${team}`,
+        label: `«${s.title}»: ${plural(drafts, 'convocazione', 'convocazioni')} ${OF_TEAM[team]} da inviare`,
+        to: sessionTab(s.id, TEAM_SLUG[team]),
         icon: 'i-lucide-send',
       })
     }

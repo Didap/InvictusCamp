@@ -2,7 +2,7 @@
 import type { SelectMenuItem } from '@nuxt/ui'
 import type { SessionLodgingFamily, SessionLodgingStaff, SessionLodgingsDto } from '#shared/types/lodgings'
 import { enumLabel, enumMeta, OF_TEAM, STAFF_TEAMS, type StaffTeam } from '#shared/utils/constants'
-import { NO_CARDS, plural } from '#shared/utils/format'
+import { andList, NO_CARDS, plural } from '#shared/utils/format'
 import { featureLabels, groupByLocation, lodgingLine, lodgingName, placeGuests } from '#shared/utils/lodgings'
 
 // The Alloggi tab of a session (docs/spec.md 3.11): each titolare holding a place gets a lodging of the
@@ -41,7 +41,13 @@ const people = (family: SessionLodgingFamily) =>
   family.people ? plural(family.people, 'persona', 'persone') : NO_CARDS
 
 type Placed = (typeof placed.value)[number]
-const staffLine = (item: Placed) => plural(item.staff.length, 'persona', 'persone')
+/** «2 dello staff e 1 del v-team»: who of the two teams sleeps in a lodging. */
+const staffLine = (item: Placed) =>
+  andList(
+    STAFF_TEAMS.map(team => [team, item.staff.filter(person => person.team === team).length] as const)
+      .filter(([, count]) => count)
+      .map(([team, count]) => `${count} ${OF_TEAM[team]}`),
+  )
 
 /** The lodgings by location as choices: `taken` says why one cannot be chosen, `line` what it is. */
 function menu(choice: (item: Placed) => { taken?: string; line?: string }): SelectMenuItem[][] {
@@ -64,15 +70,14 @@ const choices = computed(
         family.id,
         menu(item => {
           if (item.family && item.family.id !== family.id) return { taken: `Assegnato a ${item.family.familyName}` }
-          return item.staff.length ? { taken: `Ci dorme lo staff: ${staffLine(item)}` } : {}
+          return item.staff.length ? { taken: `Occupato da ${staffLine(item)}` } : {}
         }),
       ]),
     ),
 )
 
 /** The people convocated of one team: staff and v-team are two lists. */
-const staffByTeam = computed(() => Map.groupBy(data.value?.staff ?? [], person => person.team))
-const staffOf = (team: StaffTeam) => staffByTeam.value.get(team) ?? []
+const staffOf = (team: StaffTeam) => data.value?.staff.filter(person => person.team === team) ?? []
 
 /** The choices of the staff: any lodging without a family, with the staff already in it. */
 const staffChoices = computed(() =>
@@ -80,7 +85,7 @@ const staffChoices = computed(() =>
     item.family
       ? { taken: `Assegnato a ${item.family.familyName}` }
       : item.staff.length
-        ? { line: `${staffLine(item)} dello staff · ${lodgingLine(item)}` }
+        ? { line: `${staffLine(item)} · ${lodgingLine(item)}` }
         : {},
   ),
 )

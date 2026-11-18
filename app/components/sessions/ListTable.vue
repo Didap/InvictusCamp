@@ -3,7 +3,7 @@ import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { SessionCreated, SessionListItem } from '#shared/types/sessions'
 import { DEFAULT_LOCATION } from '#shared/utils/constants'
 import { formatDay, formatDayRange, plural } from '#shared/utils/format'
-import { isSessionEditable } from '#shared/utils/session-status'
+import { draftsToSend, isSessionEditable } from '#shared/utils/session-status'
 
 // The sessions of /admin/sessioni: a sortable table on desktop, a list of rows on phones.
 const props = defineProps<{ sessions: SessionListItem[]; caption: string }>()
@@ -77,7 +77,7 @@ const rows = computed(() => props.sessions)
 function staffToDo({ staff, status }: SessionListItem): string[] {
   if (!isSessionEditable(status)) return []
   const missing = Math.max(0, staff.needed - staff.accepted - staff.waiting - staff.toSend)
-  return [staff.drafts ? `${staff.drafts} da inviare` : '', missing ? `${missing} da trovare` : ''].filter(Boolean)
+  return [...draftsToSend(staff.drafts), ...(missing ? [`${missing} da trovare`] : [])]
 }
 </script>
 

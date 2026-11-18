@@ -118,7 +118,7 @@ describe('audiences', () => {
     expect(none.recipients).toHaveLength(0)
   })
 
-  it('staff of a session: by convocation status', async () => {
+  it('staff and v-team of a session: by team and convocation status', async () => {
     const session = await makeSession(db)
     const other = await makeSession(db)
     const sent = await makeStaff(db)
@@ -150,6 +150,15 @@ describe('audiences', () => {
     expect(ids(volunteers)).toEqual([accepted.user.id])
     const staff = await resolveAudience(db, { type: 'session_staff', sessionId: session.id, teams: ['staff'] })
     expect(staff.recipients).toHaveLength(3)
+    // Team and status together, as the composer always sends them: the v-team that was sent or accepted.
+    await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.userId, draft.user.id))
+    const sentVolunteers = await resolveAudience(db, {
+      type: 'session_staff',
+      sessionId: session.id,
+      teams: ['volunteer'],
+      statuses: ['sent', 'accepted'],
+    })
+    expect(ids(sentVolunteers)).toEqual([accepted.user.id])
     const nobody = await resolveAudience(db, { type: 'session_staff', sessionId: session.id, teams: [] })
     expect(nobody.recipients).toEqual([])
   })
@@ -531,6 +540,12 @@ describe('labels and text', () => {
     )
     expect(describeAudience({ type: 'session_staff', sessionId, teams: ['volunteer'] }, 'Luglio')).toBe(
       'V-team di «Luglio»',
+    )
+    expect(describeAudience({ type: 'session_staff', sessionId, teams: ['staff', 'staff'] }, 'Luglio')).toBe(
+      'Staff di «Luglio»',
+    )
+    expect(describeAudience({ type: 'session_staff', sessionId, teams: [] }, 'Luglio')).toBe(
+      'Staff e v-team di «Luglio» (nessuna squadra scelta)',
     )
     expect(describeAudience({ type: 'users', userIds: [sessionId, sessionId] })).toBe('1 persona scelta')
   })

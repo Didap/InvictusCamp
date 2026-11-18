@@ -36,11 +36,11 @@ const toSend = computed(() =>
 function select(ids: string[], value: boolean) {
   selected.value = value ? [...new Set([...selected.value, ...ids])] : selected.value.filter(id => !ids.includes(id))
 }
-/** The box «select all» of a list: ticked, unticked or in between. */
-function allSelected(ids: string[]): boolean | 'indeterminate' {
-  const ticked = ids.filter(id => selected.value.includes(id)).length
-  return !ticked ? false : ticked === ids.length ? true : 'indeterminate'
-}
+/** The box «select all»: ticked, unticked or in between. */
+const allSelected = computed<boolean | 'indeterminate'>(() => {
+  const ticked = selected.value.length
+  return !ticked ? false : ticked === drafts.value.length ? true : 'indeterminate'
+})
 
 const addOpen = ref(false)
 const sendOpen = ref(false)
@@ -153,9 +153,9 @@ const sendLabel = computed(() => {
   return drafts.value.length === 1 ? 'Invia la convocazione' : `Invia le ${drafts.value.length} convocazioni`
 })
 
-/** «3 accettate · 2 in attesa di risposta · 1 da inviare · 1 rifiutata» for one list. */
-function summaryOf(list: SessionConvocation[]): string {
-  const count = (status: SessionConvocation['status']) => list.filter(c => c.status === status).length
+/** «3 accettate · 2 in attesa di risposta · 1 da inviare · 1 rifiutata». */
+const summary = computed(() => {
+  const count = (status: SessionConvocation['status']) => convocations.value.filter(c => c.status === status).length
   const [accepted, waiting, draft, declined] = [count('accepted'), count('sent'), count('draft'), count('declined')]
   return [
     accepted && plural(accepted, 'accettata', 'accettate'),
@@ -165,7 +165,7 @@ function summaryOf(list: SessionConvocation[]): string {
   ]
     .filter(Boolean)
     .join(' · ')
-}
+})
 
 const COLUMNS: TableColumn<SessionConvocation>[] = [
   { id: 'person', header: 'Persona' },
@@ -192,7 +192,6 @@ const description = computed(() =>
     ? `${plural(confirmed.value, 'confermato', 'confermati')} su ${plural(needed.value, 'necessario', 'necessari')}, coordinatore a parte`
     : plural(confirmed.value, 'confermato', 'confermati'),
 )
-const summary = computed(() => summaryOf(convocations.value))
 </script>
 
 <template>
@@ -300,7 +299,7 @@ const summary = computed(() => summaryOf(convocations.value))
           <UTable :data="convocations" :columns="columns" :get-row-id="row => row.id" class="hidden md:block">
             <template #select-header>
               <UCheckbox
-                :model-value="allSelected(draftIds)"
+                :model-value="allSelected"
                 :aria-label="`Seleziona tutte le convocazioni ${OF_TEAM[team]} da inviare`"
                 @update:model-value="value => select(draftIds, value === true)"
               />

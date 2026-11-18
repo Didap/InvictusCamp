@@ -278,11 +278,11 @@ export async function staffCountsOf(
         waiting: 0,
         toSend: 0,
         open: 0,
-        drafts: 0,
+        drafts: { staff: 0, volunteer: 0 },
       }
       for (const convocation of bySession.get(session.id) ?? []) {
         if (OPEN_CONVOCATIONS.includes(convocation.status)) counts.open++
-        if (convocation.status === 'draft') counts.drafts++
+        if (convocation.status === 'draft') counts.drafts[convocation.team]++
         if (!countsTowardNeeded(convocation)) continue
         if (convocation.status === 'accepted') {
           counts.accepted++

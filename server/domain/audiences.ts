@@ -108,11 +108,18 @@ async function candidates(db: DbOrTx, audience: Audience): Promise<Candidate[]> 
         .select(candidateColumns)
         .from(sessionStaff)
         .innerJoin(users, eq(users.id, sessionStaff.userId))
-        .innerJoin(staffProfiles, eq(staffProfiles.userId, sessionStaff.userId))
         .where(
           and(
             eq(sessionStaff.sessionId, audience.sessionId),
-            audience.teams ? inArray(staffProfiles.team, audience.teams) : undefined,
+            audience.teams
+              ? inArray(
+                  sessionStaff.userId,
+                  db
+                    .select({ userId: staffProfiles.userId })
+                    .from(staffProfiles)
+                    .where(inArray(staffProfiles.team, audience.teams)),
+                )
+              : undefined,
             audience.statuses ? inArray(sessionStaff.status, audience.statuses) : undefined,
           ),
         )

@@ -268,10 +268,10 @@ export function describeAudience(audience: Audience, sessionTitle?: string | nul
       return `Famiglie di ${session} (${parts.join('; ')})`
     }
     case 'session_staff': {
-      const teams = audience.teams ?? [...STAFF_TEAMS]
-      const who =
-        teams.length === 1 ? enumLabel('staffTeam', teams[0]!) : teams.length ? 'Staff e v-team' : 'Nessuna squadra'
-      const statuses = audience.statuses ?? [...CONVOCATION_STATUSES]
+      const teams = [...new Set(audience.teams ?? STAFF_TEAMS)]
+      const who = teams.length === 1 ? enumLabel('staffTeam', teams[0]!) : 'Staff e v-team'
+      if (!teams.length) return `${who} di ${session} (nessuna squadra scelta)`
+      const statuses = [...new Set(audience.statuses ?? CONVOCATION_STATUSES)]
       if (statuses.length >= CONVOCATION_STATUSES.length) return `${who} di ${session}`
       return statuses.length
         ? `${who} di ${session} (convocazione: ${orList(statuses.map(s => enumLabel('convocationStatus', s).toLowerCase()))})`

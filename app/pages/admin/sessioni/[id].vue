@@ -5,7 +5,7 @@ import type { SessionCreated, SessionDetail, SessionMove, SessionTransitionResul
 import { DEFAULT_LOCATION, enumMeta, type SessionStatus } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
 import { formatDateTime, formatDay, formatDayRange, plural } from '#shared/utils/format'
-import { SESSION_TRANSITION_ACTIONS, isSessionEditable } from '#shared/utils/session-status'
+import { SESSION_TRANSITION_ACTIONS, draftsToSend, isSessionEditable } from '#shared/utils/session-status'
 
 // One session (docs/spec.md 3.2): the status with its valid moves, then the tabs. Every move first
 // says what it does and how many emails leave. The tab lives in the query string (?tab=famiglie).
@@ -374,7 +374,7 @@ const staffHint = computed(() => {
   const missing = Math.max(0, staff.needed - staff.accepted - staff.waiting - staff.toSend)
   const parts = [
     pending && `${pending} in attesa di risposta o firma`,
-    staff.drafts && `${staff.drafts} da inviare`,
+    ...draftsToSend(staff.drafts),
     missing && `${missing} da trovare`,
   ].filter(Boolean)
   if (parts.length) return parts.join(' · ')
