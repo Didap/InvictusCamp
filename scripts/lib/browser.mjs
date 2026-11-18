@@ -1,9 +1,12 @@
-// Shared by page-check.mjs and check-pages.mjs: a signed-in headless Chromium against the dev server.
+// Shared by page-check.mjs and check-pages.mjs: a signed-in headless Chromium against the dev server, or the
+// deployed app named by INVICTUS_BASE_URL.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { chromium } from 'playwright'
 
 export const BASE = (process.env.INVICTUS_BASE_URL ?? 'http://localhost:3080').replace(/\/$/, '')
+/** A dev server on this machine: demo data, /api/dev/ids, `pnpm db:seed`. Anything else is a deployed app. */
+export const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(BASE)
 export const PASSWORD = 'invictus-demo'
 export const ACCOUNTS = {
   admin: 'admin@invictuscamp.local',
@@ -36,23 +39,32 @@ export function newContext(browser, { mobile = false } = {}) {
  */
 export async function signIn(context, who) {
   if (who === 'guest') return
-  const own = who.includes('@')
-  const email = own ? who : ACCOUNTS[who]
-  if (!email) throw new Error(`unknown account "${who}" (admin, famiglia, staff, candidato, guest, or an email)`)
-  const password = own ? process.env.INVICTUS_PASSWORD : PASSWORD
-  if (!password) throw new Error(`INVICTUS_PASSWORD is not set for ${email}`)
-  const saved = resolve(`.checks/auth/${new URL(BASE).host}-${email}.json`)
+  // The server keeps emails lowercased: the same here, or the saved cookie would never match.
+  const email = who.includes('@') ? who.trim().toLowerCase() : ACCOUNTS[who]
+  if (!email) throw new Error(`unknown account "${who}" (${Object.keys(ACCOUNTS).join(', ')}, guest, or an email)`)
+  const demo = Object.values(ACCOUNTS).includes(email)
+  const saved = resolve(`.checks/auth/${new URL(BASE).host.replace(':', '-')}-${email}.json`)
   if (existsSync(saved)) {
     await context.addCookies(JSON.parse(readFileSync(saved, 'utf8')))
     const account = await context.request.get(`${BASE}/api/account`)
     if (account.ok() && (await account.json()).email === email) return
     await context.clearCookies()
   }
+  const password = demo ? PASSWORD : process.env.INVICTUS_PASSWORD
+  if (!password) throw new Error(`INVICTUS_PASSWORD is not set for ${email}`)
   const response = await context.request.post(`${BASE}/api/auth/login`, { data: { email, password } })
   if (!response.ok()) {
     const status = response.status()
-    const hint = own ? 'check INVICTUS_PASSWORD' : 'run "pnpm db:seed --fresh" on the dev database'
-    throw new Error(`login ${email} failed (${status}): ${status === 429 ? 'too many sign-ins, wait 5 minutes' : hint}`)
+    const { message = '' } = await response.json().catch(() => ({}))
+    const hint =
+      status === 429
+        ? 'too many sign-ins, wait 5 minutes'
+        : !demo
+          ? 'check INVICTUS_PASSWORD'
+          : LOCAL
+            ? 'seed the dev database (pnpm db:seed)'
+            : 'no such demo account here: use --as <email>'
+    throw new Error(`login ${email} failed (${status} ${message}): ${hint}`)
   }
   mkdirSync(dirname(saved), { recursive: true })
   writeFileSync(saved, JSON.stringify(await context.cookies()), { mode: 0o600 })
@@ -77,8 +89,9 @@ function fillSplit(arg) {
 export async function resolvePath(context, path) {
   if (!/\{[a-zA-Z]+\}/.test(path)) return path
   const response = await context.request.get(`${BASE}/api/dev/ids`)
-  if (!response.ok())
-    throw new Error(`{tokens} need the dev server (GET /api/dev/ids ${response.status()}): put the ids in the path`)
+  if (response.status() === 404)
+    throw new Error('{tokens} need the dev server (no /api/dev/ids here): put the ids in the path')
+  if (!response.ok()) throw new Error(`GET /api/dev/ids failed (${response.status()})`)
   const ids = await response.json()
   return path.replace(/\{([a-zA-Z]+)\}/g, (_, key) => {
     if (!ids[key]) throw new Error(`no id for {${key}} for this account`)
