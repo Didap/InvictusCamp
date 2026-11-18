@@ -51,6 +51,7 @@ const TABLES = [
   'documents',
   'programmes',
   'questionnaires',
+  'release_texts',
   'session_availability',
   'camp_sessions',
   'staff_profiles',

@@ -814,21 +814,34 @@ const sessionRefColumns = {
   status: sessionFamilies.status,
 }
 
-/** What the card rules read (isCardToComplete, guestAgeStatus) and the release lists, in order: no health details. */
+/** What the card rules read (isCardToComplete, guestAgeStatus) and the release lists: no health details. */
+const CARD_CHECK_COLUMNS = {
+  filledAt: familyMembers.filledAt,
+  firstName: familyMembers.firstName,
+  lastName: familyMembers.lastName,
+  kind: familyMembers.kind,
+  birthDate: familyMembers.birthDate,
+  relationship: familyMembers.relationship,
+  hasDisability: familyMembers.hasDisability,
+}
+
+/** The cards of a family as CARD_CHECK_COLUMNS, in order. */
 export function cardChecks(db: DbOrTx, familyId: string) {
   return db
-    .select({
-      filledAt: familyMembers.filledAt,
-      firstName: familyMembers.firstName,
-      lastName: familyMembers.lastName,
-      kind: familyMembers.kind,
-      birthDate: familyMembers.birthDate,
-      relationship: familyMembers.relationship,
-      hasDisability: familyMembers.hasDisability,
-    })
+    .select(CARD_CHECK_COLUMNS)
     .from(familyMembers)
     .where(eq(familyMembers.familyId, familyId))
     .orderBy(familyMembers.position)
+}
+
+/** cardChecks of several families in one query, by family. */
+export async function cardChecksByFamily(db: DbOrTx, familyIds: string[]) {
+  const rows = await db
+    .select({ familyId: familyMembers.familyId, ...CARD_CHECK_COLUMNS })
+    .from(familyMembers)
+    .where(inArray(familyMembers.familyId, familyIds))
+    .orderBy(familyMembers.position)
+  return Map.groupBy(rows, row => row.familyId)
 }
 
 /**

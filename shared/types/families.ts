@@ -230,5 +230,24 @@ export interface FamilyFormSaveResult {
   answersUpdated: number
 }
 
+/** The text of the family release and the releases in force (GET /api/admin/release-text). */
+export interface ReleaseTextDto {
+  body: string
+  /** 0 while the text is still the draft of the code (shared/content/release.ts). */
+  revision: number
+  updatedAt: string | null
+  updatedByName: string | null
+  /** Releases in force; `outdated` of them written with another text, `outdatedSigned` of those already signed. */
+  inForce: number
+  outdated: number
+  outdatedSigned: number
+}
+
+export interface ReleaseRenewResult {
+  /** Releases made again with the text in force. */
+  renewed: number
+  release: ReleaseTextDto
+}
+
 /** GET /api/family/form: the questions the family answers, with the revision they come from. */
 export type FamilyFormView = Pick<FamilyFormContent, 'sections'> & Pick<FamilyFormDto, 'revision'>

@@ -21,6 +21,7 @@ export const PAGES = {
     '/admin/famiglie',
     '/admin/famiglie/{family}',
     '/admin/famiglie/modulo',
+    '/admin/famiglie/liberatoria',
     '/admin/staff',
     '/admin/staff/{staff}',
     '/admin/staff/{candidate}',

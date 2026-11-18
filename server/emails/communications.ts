@@ -1,6 +1,7 @@
 // The message written in the dashboard (template `communication`). Plain text from the composer:
 // blank lines separate paragraphs, a single line break stays a line break. Not sensitive: the log
 // keeps its content.
+import { textParagraphs } from '../../shared/utils/plain-text'
 import { renderEmail } from './layout'
 import type { EmailContext, EmailMessage } from './types'
 
@@ -9,17 +10,7 @@ const LINE_BREAK = '\u2028'
 
 /** Paragraphs of a plain text body; lines inside a paragraph are joined by LINE_BREAK. */
 export function bodyParagraphs(body: string): string[] {
-  return body
-    .replace(/\r\n?|[\u2028\u2029]/g, '\n')
-    .split(/\n[ \t]*\n/)
-    .map(paragraph =>
-      paragraph
-        .split('\n')
-        .map(line => line.trimEnd())
-        .join(LINE_BREAK)
-        .trim(),
-    )
-    .filter(Boolean)
+  return textParagraphs(body, LINE_BREAK)
 }
 
 function oneLine(value: string): string {

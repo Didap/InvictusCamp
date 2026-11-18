@@ -1,11 +1,13 @@
 // The fields of a written message filled for each recipient (docs/spec.md, 3.7), and the parts in square
 // brackets that a template leaves to complete by hand before sending.
 import type { DayRange } from './dates'
-import { formatDayRange, orList } from './format'
+import { formatDayRange } from './format'
+import { FIELD, textFields } from './plain-text'
 
 /** {nome}: the first name of the recipient; {sessione} and {date}: the title and the days of the session. */
 const MESSAGE_FIELDS = ['nome', 'sessione', 'date'] as const
 type MessageField = (typeof MESSAGE_FIELDS)[number]
+const fields = textFields(MESSAGE_FIELDS)
 /** What {sessione} and {date} are written from. */
 export type FieldSession = DayRange & { title: string }
 
@@ -13,11 +15,7 @@ export type FieldSession = DayRange & { title: string }
 export const MESSAGE_FIELDS_HELP =
   'Si compilano da soli per ogni destinatario {nome} e, se scrivi a una sessione, {sessione} e {date}. Le parti tra parentesi quadre vanno completate prima dell’invio.'
 
-const FIELD = /\{([\p{L}\d_]+)\}/gu
 const TO_COMPLETE = /\[[^\]\n]+\]/
-const FIELD_LIST = orList(MESSAGE_FIELDS.map(name => `{${name}}`))
-
-const isField = (name: string): name is MessageField => (MESSAGE_FIELDS as readonly string[]).includes(name)
 
 /** The values of the fields for one recipient; a field without a value stays as written. */
 export function messageFieldValues(
@@ -33,7 +31,7 @@ export function messageFieldValues(
 
 /** Writes the values in; fields without a value, and anything else in braces, stay as they are. */
 export function fillMessageFields(text: string, values: Partial<Record<MessageField, string>>): string {
-  return text.replace(FIELD, (match, name: string) => (isField(name) ? (values[name] ?? match) : match))
+  return fields.fill(text, values)
 }
 
 /**
@@ -42,7 +40,7 @@ export function fillMessageFields(text: string, values: Partial<Record<MessageFi
  */
 export function fieldIssue(text: string, hasSession = true): string | null {
   for (const [field, name] of text.matchAll(FIELD)) {
-    if (!isField(name!)) return `${field} non si compila da solo: usa ${FIELD_LIST}.`
+    if (!fields.isField(name!)) return fields.unknown(field)
     if (!hasSession && name !== 'nome') {
       return `${field} si compila solo se scrivi alle famiglie o allo staff di una sessione.`
     }
