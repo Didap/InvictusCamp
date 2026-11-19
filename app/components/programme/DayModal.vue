@@ -2,14 +2,13 @@
 import type { FormError, FormSubmitEvent } from '@nuxt/ui'
 import { programmeDayNameSchema, type ProgrammeDayNameValues } from '#shared/schemas/programmes'
 import type { ProgrammeDay } from '#shared/types/domain'
-import { dayNameKey } from '#shared/utils/programme'
+import { dayNameTaken, nextDayName } from '#shared/utils/programme'
 
-// Names a day: a new one (`day` null, `suggested` as its name) or one of the week. Two days of the
+// Names a day: a new one (`day` null, suggested as the one after the last) or one of the week. Two days of the
 // same week cannot share a name: "Sposta a", the rotation and the dates go by the names.
 const props = defineProps<{
   day: ProgrammeDay | null
   days: Pick<ProgrammeDay, 'id' | 'name'>[]
-  suggested?: string
 }>()
 const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ submit: [value: ProgrammeDayNameValues] }>()
@@ -18,14 +17,14 @@ const formId = useId()
 const state = reactive<ProgrammeDayNameValues>({ name: '', subtitle: '' })
 watch(open, value => {
   if (!value) return
-  state.name = props.day?.name ?? props.suggested ?? ''
+  state.name = props.day?.name ?? nextDayName(props.days)
   state.subtitle = props.day?.subtitle ?? ''
 })
 
 function validate(values: Partial<ProgrammeDayNameValues>): FormError[] {
-  const name = dayNameKey(values.name ?? '')
-  const taken = props.days.some(other => other.id !== props.day?.id && dayNameKey(other.name) === name)
-  return taken ? [{ name: 'name', message: 'C’è già un giorno con questo nome' }] : []
+  return dayNameTaken(props.days, values.name ?? '', props.day?.id)
+    ? [{ name: 'name', message: 'C’è già un giorno con questo nome' }]
+    : []
 }
 
 function onSubmit(event: FormSubmitEvent<ProgrammeDayNameValues>) {

@@ -23,3 +23,9 @@ function canonical(value: unknown): string {
       : item,
   )
 }
+
+/** Moves the item at `index` by `by` places (-1 one up, 1 one down) in place. */
+export function moveAt<T>(list: T[], index: number, by: number): void {
+  const [item] = list.splice(index, 1)
+  list.splice(index + by, 0, item!)
+}

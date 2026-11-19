@@ -309,8 +309,8 @@ Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or 
 - **Days and blocks**: Monday to Friday in the model week and an empty one; the editor adds a day ("Aggiungi un
   giorno", up to 14), renames it (name and subtitle; two days never share a name, accents and case aside, checked
   on save too), moves it and takes it out (asking first when it has blocks, which go with it), so a weekend
-  session's copy becomes Venerdì, Sabato, Domenica. The session's Programma tab says when the session and the
-  year's programme have a different number of days; the editor says why the dates do not show. Each block has a time (start, optional end, or none), a title,
+  session's copy becomes Venerdì, Sabato, Domenica. When the session's dates do not fit the year's
+  programme, its Programma tab says why and suggests a copy; the editor says why the dates do not show. Each block has a time (start, optional end, or none), a title,
   a kind (attività a gruppi, tutti insieme, solo adulti, a scelta, accoglienza, pasto, riposo, libero,
   solo staff, partenza), who leads it, a note for everyone, an internal note, and the flag "Da
   confermare".

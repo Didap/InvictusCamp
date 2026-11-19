@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ProgrammeSaveInput } from '#shared/schemas/programmes'
 import type { SessionProgrammeDto } from '#shared/types/programmes'
+import { datesMismatch } from '#shared/utils/programme'
 
 // The Programma tab of a session: the programme of its year (read here, edited in /admin/programma),
 // or a copy of its own, edited here and valid for this session only.
@@ -47,20 +48,18 @@ async function dropCopy() {
 }
 
 /**
- * The alert of a session on the year's programme. A weekend on the year's five days is told to make its
- * own copy, where the editor fixes the days (and says why the dates do not show).
+ * The alert of a session on the year's programme. When the dates do not fit it (a weekend on the year's
+ * five days), it says why and to make a copy, where the editor fixes the days.
  */
 const yearDescription = computed(() => {
   if (!data.value?.programme) return ''
   const { year, dates, editable, programme } = data.value
   const everywhere = `Le modifiche al programma del ${year} valgono per tutte le sessioni dell’anno senza una copia.`
   if (!editable) return everywhere
-  const days = programme.content.days.length
-  if (dates.length && dates.length !== days) {
-    const lasts = dates.length === 1 ? 'un giorno' : `${dates.length} giorni`
-    return `La sessione dura ${lasts} e il programma del ${year} ne ha ${days}: crea una copia solo per questa sessione e sistemane i giorni. ${everywhere}`
-  }
-  return `${everywhere} Se questa sessione ha bisogno di qualcosa di diverso, crea una copia solo per lei.`
+  const mismatch = datesMismatch(programme.content, dates)
+  return mismatch
+    ? `${mismatch}: crea una copia solo per questa sessione e sistemane i giorni. ${everywhere}`
+    : `${everywhere} Se questa sessione ha bisogno di qualcosa di diverso, crea una copia solo per lei.`
 })
 
 async function save(body: ProgrammeSaveInput) {

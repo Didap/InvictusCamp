@@ -8,9 +8,9 @@ import {
 } from '#shared/schemas/programmes'
 import type { ProgrammeBlock, ProgrammeDay } from '#shared/types/domain'
 import type { ProgrammeDto } from '#shared/types/programmes'
-import { copyOf, newId, sameContent } from '#shared/utils/plain'
-import { weekdayIndex } from '#shared/utils/dates'
-import { datesFit, moveBlock, nextDayName, openPoints, placeBlock, WEEKDAY_NAMES } from '#shared/utils/programme'
+import { plural } from '#shared/utils/format'
+import { copyOf, moveAt, newId, sameContent } from '#shared/utils/plain'
+import { datesMismatch, moveBlock, openPoints, placeBlock } from '#shared/utils/programme'
 
 // The week editor of the administration (docs/spec.md 3.10): its days (a weekend has three, named as
 // the camp likes) and their blocks. Changes stay on this page until Salva,
@@ -128,23 +128,16 @@ function blockItems(day: ProgrammeDay, block: ProgrammeBlock, index: number): Dr
 // ─── Days ──────────────────────────────────────────────────────────────────────────────────────────
 
 const dayModalOpen = ref(false)
-/** The id of the day being named; null for a new one. */
-const editingDayId = ref<string | null>(null)
-const editingDay = computed(() => draft.value.days.find(day => day.id === editingDayId.value) ?? null)
-const canAddDay = computed(() => draft.value.days.length < MAX_PROGRAMME_DAYS)
+/** The day being named; null for a new one. */
+const editingDay = ref<ProgrammeDay | null>(null)
 function openDay(day: ProgrammeDay | null) {
-  editingDayId.value = day?.id ?? null
+  editingDay.value = day
   dayModalOpen.value = true
 }
 
 function applyDay(values: ProgrammeDayNameValues) {
   if (editingDay.value) Object.assign(editingDay.value, values)
-  else if (canAddDay.value) draft.value.days.push({ id: newId('d'), ...values, blocks: [] })
-}
-
-function moveDay(index: number, by: number) {
-  const [day] = draft.value.days.splice(index, 1)
-  draft.value.days.splice(index + by, 0, day!)
+  else draft.value.days.push({ id: newId('d'), ...values, blocks: [] })
 }
 
 /** A day with blocks goes only once confirmed: they go with it. Nothing is lost until Salva. */
@@ -160,32 +153,31 @@ async function removeDay(day: ProgrammeDay) {
     if (!ok) return
   }
   const index = draft.value.days.findIndex(other => other.id === day.id)
-  if (index >= 0 && draft.value.days.length > 1) draft.value.days.splice(index, 1)
+  if (index >= 0) draft.value.days.splice(index, 1)
 }
 
 /** Why the session's dates are not next to the days, as the draft stands. */
 const datesNote = computed(() => {
-  const dates = props.dates
-  if (!dates?.length || datesFit(draft.value, dates)) return ''
-  if (dates.length < draft.value.days.length) {
-    return `La sessione dura ${dates.length === 1 ? 'un giorno' : `${dates.length} giorni`}: con i giorni in più le date non compaiono.`
-  }
-  const weekday = WEEKDAY_NAMES[weekdayIndex(dates[0]!)]!.toLowerCase()
-  return `La sessione comincia di ${weekday}: con questi nomi dei giorni le date non compaiono.`
+  const mismatch = datesMismatch(draft.value, props.dates)
+  return mismatch && `${mismatch}: le date non compaiono.`
 })
 
-function dayItems(index: number): DropdownMenuItem[][] {
-  const day = draft.value.days[index]!
-  const last = draft.value.days.length - 1
+function dayItems(day: ProgrammeDay, index: number): DropdownMenuItem[][] {
+  const days = draft.value.days
   return [
     [{ label: 'Modifica', icon: 'i-lucide-pencil', onSelect: () => openDay(day) }],
     [
-      { label: 'Sposta prima', icon: 'i-lucide-arrow-left', disabled: index === 0, onSelect: () => moveDay(index, -1) },
+      {
+        label: 'Sposta prima',
+        icon: 'i-lucide-arrow-left',
+        disabled: index === 0,
+        onSelect: () => moveAt(days, index, -1),
+      },
       {
         label: 'Sposta dopo',
         icon: 'i-lucide-arrow-right',
-        disabled: index === last,
-        onSelect: () => moveDay(index, 1),
+        disabled: index === days.length - 1,
+        onSelect: () => moveAt(days, index, 1),
       },
     ],
     [
@@ -193,7 +185,7 @@ function dayItems(index: number): DropdownMenuItem[][] {
         label: 'Elimina il giorno',
         icon: 'i-lucide-trash-2',
         color: 'error',
-        disabled: last === 0,
+        disabled: days.length === 1,
         onSelect: () => removeDay(day),
       },
     ],
@@ -221,8 +213,8 @@ function showBlock(blockId: string) {
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div class="max-w-prose space-y-1 text-sm">
         <p class="text-muted">
-          {{ draft.days.length === 1 ? 'Un giorno' : `${draft.days.length} giorni` }}: dal menu di ogni giorno lo
-          rinomini, lo sposti o lo togli.
+          {{ plural(draft.days.length, 'giorno', 'giorni') }}: dal menu di ogni giorno lo rinomini, lo sposti o lo
+          togli.
         </p>
         <p v-if="datesNote" class="flex gap-1.5 text-highlighted">
           <UIcon name="i-lucide-calendar-x" class="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
@@ -234,7 +226,7 @@ function showBlock(blockId: string) {
         label="Aggiungi un giorno"
         color="neutral"
         variant="outline"
-        :disabled="!canAddDay"
+        :disabled="draft.days.length >= MAX_PROGRAMME_DAYS"
         class="pointer-coarse:min-h-11"
         @click="openDay(null)"
       />
@@ -242,7 +234,7 @@ function showBlock(blockId: string) {
 
     <ProgrammeBoard :content="draft" :dates="dates" @move="moveBlock(draft, $event)" @open="openBlock">
       <template #day-actions="{ day, index }">
-        <UDropdownMenu :items="dayItems(index)" :content="{ align: 'end' }">
+        <UDropdownMenu :items="dayItems(day, index)" :content="{ align: 'end' }">
           <UButton
             icon="i-lucide-ellipsis"
             color="neutral"
@@ -307,12 +299,6 @@ function showBlock(blockId: string) {
       :activities="draft.activities"
       @submit="applyBlock"
     />
-    <ProgrammeDayModal
-      v-model:open="dayModalOpen"
-      :day="editingDay"
-      :days="draft.days"
-      :suggested="nextDayName(draft)"
-      @submit="applyDay"
-    />
+    <ProgrammeDayModal v-model:open="dayModalOpen" :day="editingDay" :days="draft.days" @submit="applyDay" />
   </div>
 </template>

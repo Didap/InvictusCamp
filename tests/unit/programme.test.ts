@@ -10,6 +10,7 @@ import {
   blockTime,
   canFamilyReadProgramme,
   dayCaptions,
+  datesMismatch,
   nextDayName,
   weekdayOfName,
   groupRotation,
@@ -208,20 +209,28 @@ describe('editor helpers', () => {
     free.days[2]!.name = 'Sabato sera'
     expect(dayCaptions(free, seven)).toEqual(['', '', ''])
     expect(dayCaptions(free, ['2027-06-24', ...seven.slice(4)])[2]).toBe(formatDay('2027-06-26', 'long'))
+
+    // The reason the editor and the session's tab give.
+    expect(datesMismatch(weekend, friday)).toBe('')
+    expect(datesMismatch(weekend, undefined)).toBe('')
+    expect(datesMismatch(week, friday)).toBe('La sessione dura 3 giorni e il programma ne ha 5')
+    expect(datesMismatch(weekend, seven)).toBe(
+      'La sessione comincia di lunedì e i nomi dei giorni non cadono nelle sue date',
+    )
   })
 
   it('reads the weekday of a day name and suggests the name of the next day', () => {
     expect(['Lunedì', 'lunedi', 'MERCOLEDÌ pomeriggio', 'Domenica'].map(weekdayOfName)).toEqual([0, 0, 2, 6])
     expect(['Giorno 1', 'Arrivo', '', 'Lunedìssimo'].map(weekdayOfName)).toEqual([-1, -1, -1, -1])
     const week = emptyWeek()
-    expect(nextDayName(week)).toBe('Sabato')
+    expect(nextDayName(week.days)).toBe('Sabato')
     week.days[4]!.name = 'Domenica'
-    expect(nextDayName(week)).toBe('')
+    expect(nextDayName(week.days)).toBe('')
     week.days[4]!.name = 'Arrivo'
-    expect(nextDayName(week)).toBe('Giorno 6')
+    expect(nextDayName(week.days)).toBe('Giorno 6')
     week.days[4]!.name = 'Giorno 2'
-    expect(nextDayName(week)).toBe('Giorno 3')
-    expect(nextDayName({ days: [], activities: [] })).toBe('Giorno 1')
+    expect(nextDayName(week.days)).toBe('Giorno 3')
+    expect(nextDayName([])).toBe('Giorno 1')
   })
 
   it('refuses two days with the same name, accents and case aside', () => {

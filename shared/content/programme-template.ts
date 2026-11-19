@@ -1,5 +1,5 @@
 import type { ProgrammeContent } from '../types/domain'
-import { WEEKDAY_NAMES } from '../utils/programme'
+import { WEEKDAY_NAMES } from '../utils/dates'
 
 // The model week a new year's programme can start from: the 2027 draft of Nicola Giulivo (staff), taken
 // from his page in November 2026, without his comparisons with the 2026 programme.
