@@ -2,6 +2,7 @@
 import type { FormError, FormSubmitEvent } from '@nuxt/ui'
 import { programmeDayNameSchema, type ProgrammeDayNameValues } from '#shared/schemas/programmes'
 import type { ProgrammeDay } from '#shared/types/domain'
+import { dayNameKey } from '#shared/utils/programme'
 
 // Names a day: a new one (`day` null, `suggested` as its name) or one of the week. Two days of the
 // same week cannot share a name: "Sposta a", the rotation and the dates go by the names.
@@ -22,8 +23,8 @@ watch(open, value => {
 })
 
 function validate(values: Partial<ProgrammeDayNameValues>): FormError[] {
-  const name = values.name?.trim().toLowerCase()
-  const taken = props.days.some(other => other.id !== props.day?.id && other.name.toLowerCase() === name)
+  const name = dayNameKey(values.name ?? '')
+  const taken = props.days.some(other => other.id !== props.day?.id && dayNameKey(other.name) === name)
   return taken ? [{ name: 'name', message: 'C’è già un giorno con questo nome' }] : []
 }
 

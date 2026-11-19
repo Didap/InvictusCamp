@@ -18,8 +18,11 @@ defineSlots<{
 }>()
 
 const captions = computed(() => dayCaptions(props.content, props.dates))
-/** A weekend's three days fill the row as a week's five do. */
-const columns = computed(() => `repeat(${Math.min(props.content.days.length, 5)}, minmax(0, 1fr))`)
+/** Two, three, then up to five columns, never more than the days: a weekend's three fill the row. */
+const columns = computed(() => {
+  const at = (most: number) => `repeat(${Math.min(props.content.days.length, most)}, minmax(0, 1fr))`
+  return { '--columns-2': at(2), '--columns-3': at(3), '--columns-5': at(5) }
+})
 
 const dragList: DragListOptions = {
   group: 'programme-week',
@@ -33,8 +36,8 @@ const dragList: DragListOptions = {
 <template>
   <div class="@container">
     <div
-      class="grid items-start gap-3 @xl:grid-cols-2 @3xl:grid-cols-3 @4xl:grid-cols-(--day-columns)"
-      :style="{ '--day-columns': columns }"
+      class="grid items-start gap-3 @xl:grid-cols-(--columns-2) @3xl:grid-cols-(--columns-3) @4xl:grid-cols-(--columns-5)"
+      :style="columns"
     >
       <section
         v-for="(day, i) in content.days"

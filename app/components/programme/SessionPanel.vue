@@ -46,13 +46,21 @@ async function dropCopy() {
   }
 }
 
-/** "La sessione dura 3 giorni e …" when its days and the programme's differ (a weekend on the five days). */
-const lengthNote = computed(() => {
-  const days = data.value?.programme?.content.days.length
-  const sessionDays = data.value?.dates.length
-  if (!days || !sessionDays || days === sessionDays) return ''
-  const whose = data.value!.source === 'session' ? 'il suo programma' : `il programma del ${data.value!.year}`
-  return `La sessione dura ${sessionDays === 1 ? 'un giorno' : `${sessionDays} giorni`} e ${whose} ne ha ${days}`
+/**
+ * The alert of a session on the year's programme. A weekend on the year's five days is told to make its
+ * own copy, where the editor fixes the days (and says why the dates do not show).
+ */
+const yearDescription = computed(() => {
+  if (!data.value?.programme) return ''
+  const { year, dates, editable, programme } = data.value
+  const everywhere = `Le modifiche al programma del ${year} valgono per tutte le sessioni dell’anno senza una copia.`
+  if (!editable) return everywhere
+  const days = programme.content.days.length
+  if (dates.length && dates.length !== days) {
+    const lasts = dates.length === 1 ? 'un giorno' : `${dates.length} giorni`
+    return `La sessione dura ${lasts} e il programma del ${year} ne ha ${days}: crea una copia solo per questa sessione e sistemane i giorni. ${everywhere}`
+  }
+  return `${everywhere} Se questa sessione ha bisogno di qualcosa di diverso, crea una copia solo per lei.`
 })
 
 async function save(body: ProgrammeSaveInput) {
@@ -88,13 +96,7 @@ async function save(body: ProgrammeSaveInput) {
         variant="subtle"
         icon="i-lucide-calendar-clock"
         :title="`Questa sessione usa il programma del ${data.year}`"
-        :description="
-          data.editable && lengthNote
-            ? `${lengthNote}: crea una copia solo per questa sessione e sistemane i giorni. Le modifiche al programma del ${data.year} valgono per tutte le sessioni dell’anno senza una copia.`
-            : data.editable
-              ? `Le modifiche al programma del ${data.year} valgono per tutte le sessioni dell’anno senza una copia. Se questa sessione ha bisogno di qualcosa di diverso, crea una copia solo per lei.`
-              : `Le modifiche al programma del ${data.year} valgono per tutte le sessioni dell’anno senza una copia.`
-        "
+        :description="yearDescription"
         :actions="[
           {
             label: `Modifica il programma del ${data.year}`,
@@ -115,11 +117,7 @@ async function save(body: ProgrammeSaveInput) {
         variant="subtle"
         icon="i-lucide-copy"
         title="Questa sessione ha un programma suo"
-        :description="
-          data.editable && lengthNote
-            ? `${lengthNote}: sistema i giorni con «Aggiungi un giorno» e il menu di ogni giorno. Le modifiche fatte qui valgono solo per questa sessione.`
-            : `È una copia del programma del ${data.year}: le modifiche fatte qui valgono solo per questa sessione.`
-        "
+        :description="`È una copia del programma del ${data.year}: le modifiche fatte qui valgono solo per questa sessione.`"
         :actions="
           data.editable
             ? [

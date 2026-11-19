@@ -9,7 +9,8 @@ import {
 import type { ProgrammeBlock, ProgrammeDay } from '#shared/types/domain'
 import type { ProgrammeDto } from '#shared/types/programmes'
 import { copyOf, newId, sameContent } from '#shared/utils/plain'
-import { moveBlock, nextDayName, openPoints, placeBlock } from '#shared/utils/programme'
+import { weekdayIndex } from '#shared/utils/dates'
+import { datesFit, moveBlock, nextDayName, openPoints, placeBlock, WEEKDAY_NAMES } from '#shared/utils/programme'
 
 // The week editor of the administration (docs/spec.md 3.10): its days (a weekend has three, named as
 // the camp likes) and their blocks. Changes stay on this page until Salva,
@@ -23,6 +24,7 @@ const props = defineProps<{
 }>()
 
 const toast = useToast()
+const confirm = useConfirm()
 
 const draft = ref(copyOf(props.programme.content))
 watch(
@@ -145,22 +147,32 @@ function moveDay(index: number, by: number) {
   draft.value.days.splice(index + by, 0, day!)
 }
 
-/** Like a block, a day comes back with "Rimetti", with its blocks, where it was. */
-function removeDay(index: number) {
-  const [day] = draft.value.days.splice(index, 1)
-  const count = day!.blocks.length
-  const restore = () => {
-    const days = draft.value.days
-    if (days.some(other => other.id === day!.id) || days.length >= MAX_PROGRAMME_DAYS) return
-    days.splice(Math.min(index, days.length), 0, day!)
+/** A day with blocks goes only once confirmed: they go with it. Nothing is lost until Salva. */
+async function removeDay(day: ProgrammeDay) {
+  const count = day.blocks.length
+  if (count) {
+    const ok = await confirm({
+      title: `Togliere ${day.name} dal programma?`,
+      description: `Con ${count === 1 ? 'il suo blocco' : `i suoi ${count} blocchi`}. Il programma cambia quando premi Salva.`,
+      confirmLabel: 'Togli il giorno',
+      danger: true,
+    })
+    if (!ok) return
   }
-  toast.add({
-    title: `«${day!.name}» tolto dal programma`,
-    description: count ? `Con ${count === 1 ? 'il suo blocco' : `i suoi ${count} blocchi`}.` : undefined,
-    color: 'neutral',
-    actions: [{ label: 'Rimetti', color: 'neutral', variant: 'outline', onClick: restore }],
-  })
+  const index = draft.value.days.findIndex(other => other.id === day.id)
+  if (index >= 0 && draft.value.days.length > 1) draft.value.days.splice(index, 1)
 }
+
+/** Why the session's dates are not next to the days, as the draft stands. */
+const datesNote = computed(() => {
+  const dates = props.dates
+  if (!dates?.length || datesFit(draft.value, dates)) return ''
+  if (dates.length < draft.value.days.length) {
+    return `La sessione dura ${dates.length === 1 ? 'un giorno' : `${dates.length} giorni`}: con i giorni in più le date non compaiono.`
+  }
+  const weekday = WEEKDAY_NAMES[weekdayIndex(dates[0]!)]!.toLowerCase()
+  return `La sessione comincia di ${weekday}: con questi nomi dei giorni le date non compaiono.`
+})
 
 function dayItems(index: number): DropdownMenuItem[][] {
   const day = draft.value.days[index]!
@@ -182,7 +194,7 @@ function dayItems(index: number): DropdownMenuItem[][] {
         icon: 'i-lucide-trash-2',
         color: 'error',
         disabled: last === 0,
-        onSelect: () => removeDay(index),
+        onSelect: () => removeDay(day),
       },
     ],
   ]
@@ -207,10 +219,16 @@ function showBlock(blockId: string) {
     />
 
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <p class="max-w-prose text-sm text-muted">
-        {{ draft.days.length === 1 ? 'Un giorno' : `${draft.days.length} giorni` }}: dal menu di ogni giorno lo
-        rinomini, lo sposti o lo togli.
-      </p>
+      <div class="max-w-prose space-y-1 text-sm">
+        <p class="text-muted">
+          {{ draft.days.length === 1 ? 'Un giorno' : `${draft.days.length} giorni` }}: dal menu di ogni giorno lo
+          rinomini, lo sposti o lo togli.
+        </p>
+        <p v-if="datesNote" class="flex gap-1.5 text-highlighted">
+          <UIcon name="i-lucide-calendar-x" class="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+          {{ datesNote }}
+        </p>
+      </div>
       <UButton
         icon="i-lucide-calendar-plus"
         label="Aggiungi un giorno"

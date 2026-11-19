@@ -219,7 +219,17 @@ describe('editor helpers', () => {
     expect(nextDayName(week)).toBe('')
     week.days[4]!.name = 'Arrivo'
     expect(nextDayName(week)).toBe('Giorno 6')
+    week.days[4]!.name = 'Giorno 2'
+    expect(nextDayName(week)).toBe('Giorno 3')
     expect(nextDayName({ days: [], activities: [] })).toBe('Giorno 1')
+  })
+
+  it('refuses two days with the same name, accents and case aside', () => {
+    const week = emptyWeek()
+    expect(programmeContentSchema.safeParse(week).success).toBe(true)
+    week.days[4]!.name = 'giovedi'
+    const result = programmeContentSchema.safeParse(week)
+    expect(result.error?.issues.map(issue => issue.message)).toEqual(['Due giorni hanno lo stesso nome'])
   })
 })
 

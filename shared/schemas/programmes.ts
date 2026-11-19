@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ProgrammeGroupTurn } from '../types/domain'
 import { PROGRAMME_BLOCK_KINDS, PROGRAMME_GROUPS, type ProgrammeGroup } from '../utils/constants'
+import { dayNameKey } from '../utils/programme'
 import { zOptionalText, zRequiredText, zText } from './common'
 
 export const MAX_PROGRAMME_DAYS = 14
@@ -78,6 +79,10 @@ export const programmeContentSchema = z
   .superRefine((content, ctx) => {
     const ids = content.days.flatMap(day => [day.id, ...day.blocks.map(block => block.id)])
     if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', message: 'Due elementi hanno lo stesso id' })
+    const days = content.days.map(day => dayNameKey(day.name))
+    if (new Set(days).size !== days.length) {
+      ctx.addIssue({ code: 'custom', message: 'Due giorni hanno lo stesso nome', path: ['days'] })
+    }
     const names = content.activities.map(activity => activity.toLowerCase())
     if (new Set(names).size !== names.length) {
       ctx.addIssue({ code: 'custom', message: 'Un’attività compare due volte', path: ['activities'] })
