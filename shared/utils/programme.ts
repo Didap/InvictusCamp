@@ -109,14 +109,41 @@ export function openPoints(content: ProgrammeContent): OpenPoint[] {
   )
 }
 
+/** The names of the week's days, Monday first (weekdayIndex). */
+export const WEEKDAY_NAMES = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
+
+const plainWeekdays = WEEKDAY_NAMES.map(name => plainWord(name))
+function plainWord(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+}
+
+/** The weekday a day's name starts with ("Sabato", "venerdi sera": 5, 4), or -1 ("Giorno 1", "Arrivo"). */
+export function weekdayOfName(name: string): number {
+  return plainWeekdays.indexOf(plainWord(name.trim().split(/\s+/)[0] ?? ''))
+}
+
+/** The name to suggest for a day added after the last one: the next weekday, or "Giorno N". */
+export function nextDayName(content: ProgrammeContent): string {
+  const last = content.days.at(-1)
+  const weekday = last ? weekdayOfName(last.name) : -1
+  const name = weekday < 0 ? `Giorno ${content.days.length + 1}` : WEEKDAY_NAMES[(weekday + 1) % 7]!
+  return content.days.some(day => day.name.toLowerCase() === name.toLowerCase()) ? '' : name
+}
+
 /**
  * What follows each day's name: "21 giugno 2027 · Arrivo", the date, then the subtitle. Day one is the
- * first day of the session, and so on. The days of a programme start on Monday, so the dates appear only
- * for a session that starts on a Monday and is at least as long as the programme; otherwise they would
- * not line up with the names of the days.
+ * first day of the session, and so on. The dates appear only for a session at least as long as the
+ * programme whose dates fall on the weekdays the days are named after (a week from Monday starts on a
+ * Monday, a weekend from Friday on a Friday); days with other names ("Giorno 1") take any date.
  */
 export function dayCaptions(content: ProgrammeContent, dates: string[] | undefined): string[] {
-  const dated = !!dates?.length && weekdayIndex(dates[0]!) === 0 && dates.length >= content.days.length
+  const dated =
+    !!dates &&
+    dates.length >= content.days.length &&
+    content.days.every((day, i) => {
+      const weekday = weekdayOfName(day.name)
+      return weekday < 0 || weekday === weekdayIndex(dates[i]!)
+    })
   return content.days.map((day, i) =>
     [dated ? formatDay(dates![i]!, 'long') : '', day.subtitle].filter(Boolean).join(' · '),
   )

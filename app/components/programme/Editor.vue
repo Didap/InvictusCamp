@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { MAX_ACTIVITIES, type ProgrammeSaveInput } from '#shared/schemas/programmes'
+import {
+  MAX_ACTIVITIES,
+  MAX_PROGRAMME_DAYS,
+  type ProgrammeDayNameValues,
+  type ProgrammeSaveInput,
+} from '#shared/schemas/programmes'
 import type { ProgrammeBlock, ProgrammeDay } from '#shared/types/domain'
 import type { ProgrammeDto } from '#shared/types/programmes'
 import { copyOf, newId, sameContent } from '#shared/utils/plain'
-import { moveBlock, openPoints, placeBlock } from '#shared/utils/programme'
+import { moveBlock, nextDayName, openPoints, placeBlock } from '#shared/utils/programme'
 
-// The week editor of the administration (docs/spec.md 3.10). Changes stay on this page until Salva,
+// The week editor of the administration (docs/spec.md 3.10): its days (a weekend has three, named as
+// the camp likes) and their blocks. Changes stay on this page until Salva,
 // which sends the whole week with the revision it was loaded at: if someone saved in between, the
 // server refuses (409) and nothing is overwritten. Leaving with unsaved changes asks first.
 // `save` sends the week; the parent stores the programme it gets back, and the editor starts from it.
@@ -117,6 +123,71 @@ function blockItems(day: ProgrammeDay, block: ProgrammeBlock, index: number): Dr
   ]
 }
 
+// ─── Days ──────────────────────────────────────────────────────────────────────────────────────────
+
+const dayModalOpen = ref(false)
+/** The id of the day being named; null for a new one. */
+const editingDayId = ref<string | null>(null)
+const editingDay = computed(() => draft.value.days.find(day => day.id === editingDayId.value) ?? null)
+const canAddDay = computed(() => draft.value.days.length < MAX_PROGRAMME_DAYS)
+function openDay(day: ProgrammeDay | null) {
+  editingDayId.value = day?.id ?? null
+  dayModalOpen.value = true
+}
+
+function applyDay(values: ProgrammeDayNameValues) {
+  if (editingDay.value) Object.assign(editingDay.value, values)
+  else if (canAddDay.value) draft.value.days.push({ id: newId('d'), ...values, blocks: [] })
+}
+
+function moveDay(index: number, by: number) {
+  const [day] = draft.value.days.splice(index, 1)
+  draft.value.days.splice(index + by, 0, day!)
+}
+
+/** Like a block, a day comes back with "Rimetti", with its blocks, where it was. */
+function removeDay(index: number) {
+  const [day] = draft.value.days.splice(index, 1)
+  const count = day!.blocks.length
+  const restore = () => {
+    const days = draft.value.days
+    if (days.some(other => other.id === day!.id) || days.length >= MAX_PROGRAMME_DAYS) return
+    days.splice(Math.min(index, days.length), 0, day!)
+  }
+  toast.add({
+    title: `«${day!.name}» tolto dal programma`,
+    description: count ? `Con ${count === 1 ? 'il suo blocco' : `i suoi ${count} blocchi`}.` : undefined,
+    color: 'neutral',
+    actions: [{ label: 'Rimetti', color: 'neutral', variant: 'outline', onClick: restore }],
+  })
+}
+
+function dayItems(index: number): DropdownMenuItem[][] {
+  const day = draft.value.days[index]!
+  const last = draft.value.days.length - 1
+  return [
+    [{ label: 'Modifica', icon: 'i-lucide-pencil', onSelect: () => openDay(day) }],
+    [
+      { label: 'Sposta prima', icon: 'i-lucide-arrow-left', disabled: index === 0, onSelect: () => moveDay(index, -1) },
+      {
+        label: 'Sposta dopo',
+        icon: 'i-lucide-arrow-right',
+        disabled: index === last,
+        onSelect: () => moveDay(index, 1),
+      },
+    ],
+    [
+      {
+        label: 'Elimina il giorno',
+        icon: 'i-lucide-trash-2',
+        color: 'error',
+        disabled: last === 0,
+        onSelect: () => removeDay(index),
+      },
+    ],
+  ]
+}
+
 const points = computed(() => openPoints(draft.value))
 function showBlock(blockId: string) {
   document.getElementById(`blocco-${blockId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -135,7 +206,35 @@ function showBlock(blockId: string) {
       @discard="draft = copyOf(programme.content)"
     />
 
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <p class="max-w-prose text-sm text-muted">
+        {{ draft.days.length === 1 ? 'Un giorno' : `${draft.days.length} giorni` }}: dal menu di ogni giorno lo
+        rinomini, lo sposti o lo togli.
+      </p>
+      <UButton
+        icon="i-lucide-calendar-plus"
+        label="Aggiungi un giorno"
+        color="neutral"
+        variant="outline"
+        :disabled="!canAddDay"
+        class="pointer-coarse:min-h-11"
+        @click="openDay(null)"
+      />
+    </div>
+
     <ProgrammeBoard :content="draft" :dates="dates" @move="moveBlock(draft, $event)" @open="openBlock">
+      <template #day-actions="{ day, index }">
+        <UDropdownMenu :items="dayItems(index)" :content="{ align: 'end' }">
+          <UButton
+            icon="i-lucide-ellipsis"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :aria-label="`Azioni per ${day.name}`"
+            class="pointer-coarse:size-11 pointer-coarse:justify-center"
+          />
+        </UDropdownMenu>
+      </template>
       <template #block-actions="{ day, block, index }">
         <UDropdownMenu :items="blockItems(day, block, index)" :content="{ align: 'end' }">
           <UButton
@@ -189,6 +288,13 @@ function showBlock(blockId: string) {
       :days="draft.days"
       :activities="draft.activities"
       @submit="applyBlock"
+    />
+    <ProgrammeDayModal
+      v-model:open="dayModalOpen"
+      :day="editingDay"
+      :days="draft.days"
+      :suggested="nextDayName(draft)"
+      @submit="applyDay"
     />
   </div>
 </template>

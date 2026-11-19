@@ -306,7 +306,11 @@ session: "Crea una copia per questa sessione", edited there, valid for that sess
 programma del 2027" deletes the copy). A new year starts from the model week (the 2027 draft by Nicola
 Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or empty.
 
-- **Days and blocks**: Monday to Friday; each block has a time (start, optional end, or none), a title,
+- **Days and blocks**: Monday to Friday in the model week and an empty one; the editor adds a day ("Aggiungi un
+  giorno", up to 14), renames it (name and subtitle, two days never share a name), moves it and takes it out
+  (with its blocks, back with "Rimetti" until Salva), so a weekend session's copy becomes Venerdì, Sabato,
+  Domenica. The session's Programma tab says when the session and its programme have a different number of
+  days. Each block has a time (start, optional end, or none), a title,
   a kind (attività a gruppi, tutti insieme, solo adulti, a scelta, accoglienza, pasto, riposo, libero,
   solo staff, partenza), who leads it, a note for everyone, an internal note, and the flag "Da
   confermare".
@@ -322,8 +326,9 @@ Giulivo, `shared/content/programme-template.ts`), as a copy of another year, or 
   the revision it was loaded at: if someone saved in between, it is refused and nothing is overwritten.
 - **Who reads it**: families invited to or confirmed in the session (link on their session card) and
   staff who accepted the convocation (`/staff/sessioni`), read-only, once the session is not cancelled.
-  Families never see "solo staff" blocks or internal notes; staff see everything. The days carry the session's dates when the session starts on a Monday and is at least as
-  long as the programme.
+  Families never see "solo staff" blocks or internal notes; staff see everything. The days carry the session's dates when the session is at least as long as the programme and
+  every day named after a weekday ("Lunedì", "Sabato") falls on that weekday; other names ("Giorno 1") take any
+  date.
 - **On paper**: "PDF per le famiglie" in the Programma tab opens the programme the session uses as its
   families read it (no "solo staff" blocks, no internal notes), the saved version, to print and hand out;
   families open the same PDF from their programme page ("Stampa o scarica"). Day by day, each block with its
