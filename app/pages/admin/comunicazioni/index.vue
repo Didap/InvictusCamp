@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EmailQuotaSummary } from '#shared/types/communications'
+import type { EmailQuotaStatus } from '#shared/types/communications'
 
 // Comunicazioni (docs/spec.md, 3.7): today's emails against the daily limit, the messages written in the
 // dashboard, the saved templates, the queue and the log of every email the platform sent. The tab lives
@@ -7,7 +7,7 @@ import type { EmailQuotaSummary } from '#shared/types/communications'
 const route = useRoute()
 const router = useRouter()
 
-const quota = useLiveEmailData<EmailQuotaSummary>('/api/admin/email-log/quota')
+const quota = useLiveEmailData<EmailQuotaStatus>('/api/admin/email-log/quota')
 
 const tabs = computed(() => [
   { label: 'Messaggi', value: 'messaggi', icon: 'i-lucide-mails', slot: 'messaggi' as const },

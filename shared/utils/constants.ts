@@ -131,7 +131,7 @@ export type FilePurpose = (typeof FILE_PURPOSES)[number]
 export const EMAIL_STATUSES = ['sent', 'failed', 'simulated', 'queued', 'sending', 'withdrawn'] as const
 export type EmailStatus = (typeof EMAIL_STATUSES)[number]
 
-/** The most emails that may leave in one day (Italian time), whatever they are. */
+/** The most emails that may leave in one day, whatever they are: Resend's free plan, on a UTC day. */
 export const EMAIL_DAILY_LIMIT = 100
 /** Kept for access emails (links, codes) until 23:59, when what is left goes to the queue. */
 export const EMAIL_ACCESS_RESERVE = 20

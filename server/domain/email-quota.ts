@@ -1,7 +1,8 @@
-// The daily limit on outgoing email: at most 100 a day, Italian time. Ordinary emails use the first 80;
-// over that they wait in the queue (email_log, status `queued`) and leave by themselves, in order. The
-// last 20 are kept for access emails (links, codes), which expire and so never wait. At 23:59 whatever
-// is left of the day goes to the queue. A row counts against the limit from the moment it has `sent_at`.
+// The daily limit on outgoing email: at most 100 a day, the quota of Resend's free plan. Resend counts a
+// UTC day, so the count restarts at 01:00 Italian time (02:00 in summer). Ordinary emails use the first
+// 80; over that they wait in the queue (email_log, status `queued`) and leave by themselves, in order.
+// The last 20 are kept for access emails (links, codes), which expire and so never wait. At 23:59 Italian
+// time whatever is left goes to the queue. A row counts against the limit from the moment it has `sent_at`.
 import { randomUUID } from 'node:crypto'
 import { and, asc, eq, gte, inArray, lt, sql } from 'drizzle-orm'
 import type { EmailDeparture, EmailQueueOverview, EmailQuotaSummary } from '../../shared/types/communications'
@@ -23,7 +24,6 @@ const QUEUE_ITEMS_SHOWN = 100
 const QUEUE_ORDER = [asc(emailLog.createdAt), asc(emailLog.id)]
 const INTERRUPTED_AFTER_MS = 15 * 60 * 1000
 
-const LIMIT_REACHED = `Limite di ${EMAIL_DAILY_LIMIT} email al giorno raggiunto: richiedila di nuovo domani.`
 const INTERRUPTED = 'Invio interrotto: l’email potrebbe essere partita, controlla prima di rimandarla.'
 const ACCOUNT_DISABLED = 'Account disattivato mentre l’email era in coda: non è partita.'
 const WITHDRAWN = 'Ritirata prima di partire: non è stata inviata.'
@@ -76,13 +76,19 @@ function queueCeiling(now: Date): number {
   return clock.hour >= EMAIL_QUEUE_START_HOUR && clock.hour < EMAIL_QUEUE_END_HOUR ? EMAIL_ORDINARY_LIMIT : 0
 }
 
-function dayStart(now: Date) {
-  const zone = sql.raw(`'${TIME_ZONE}'`)
-  return sql`(date_trunc('day', ${now.toISOString()}::timestamptz at time zone ${zone}) at time zone ${zone})`
+/** The start of Resend's quota day, which is a UTC calendar day. */
+function quotaDayStart(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+}
+
+/** When the count restarts, in Italian time: "01:00", or "02:00" in summer. */
+export function emailQuotaResetTime(now: Date = new Date()): string {
+  const nextDay = new Date(quotaDayStart(now).getTime() + 24 * 60 * 60 * 1000)
+  return new Intl.DateTimeFormat('it-IT', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit' }).format(nextDay)
 }
 
 async function usedToday(db: DbOrTx, now: Date): Promise<number> {
-  return db.$count(emailLog, gte(emailLog.sentAt, dayStart(now)))
+  return db.$count(emailLog, gte(emailLog.sentAt, quotaDayStart(now)))
 }
 
 export async function queuedCount(db: DbOrTx): Promise<number> {
@@ -138,7 +144,10 @@ export async function claimEmailSlots(db: Db, messages: EmailMessage[], now: Dat
         id,
         textBody: message.sensitive ? null : message.text,
         status,
-        error: status === 'failed' ? LIMIT_REACHED : null,
+        error:
+          status === 'failed'
+            ? `Limite di ${EMAIL_DAILY_LIMIT} email al giorno raggiunto: il conteggio riparte alle ${emailQuotaResetTime(now)}.`
+            : null,
         sentAt: status === 'sending' ? now : null,
       })),
     )
@@ -290,7 +299,8 @@ export function planDepartures(queued: number, used: number, now: Date): EmailQu
   const clock = romeClock(now)
   const plan: EmailQuotaSummary['departures'] = []
   let left = queued
-  let spent = used
+  // Just after midnight Resend is still on yesterday's day: today's places are all free.
+  let spent = today === now.toISOString().slice(0, 10) ? used : 0
   const take = (day: string, time: EmailDeparture['time'], ceiling: number) => {
     const size = Math.min(left, Math.max(0, ceiling - spent))
     if (!size) return
@@ -322,6 +332,7 @@ export async function getEmailQuota(db: Db, now: Date = new Date()): Promise<Ema
     ordinaryLeft: queued ? 0 : Math.max(0, EMAIL_ORDINARY_LIMIT - used),
     queued,
     departures: planDepartures(queued, used, now),
+    resetTime: emailQuotaResetTime(now),
   }
 }
 

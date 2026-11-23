@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { EmailQuotaSummary } from '#shared/types/communications'
+import type { EmailQuotaStatus } from '#shared/types/communications'
 import { EMAIL_ACCESS_RESERVE, EMAIL_DAILY_LIMIT } from '#shared/utils/constants'
 import { plural } from '#shared/utils/format'
 
 // Today's emails against the daily limit: one bar, always in view on the Comunicazioni page.
-const props = defineProps<{ quota: EmailQuotaSummary }>()
+const props = defineProps<{ quota: EmailQuotaStatus }>()
 
 const reserveLeft = computed(() => Math.max(0, Math.min(EMAIL_ACCESS_RESERVE, EMAIL_DAILY_LIMIT - props.quota.used)))
 const share = (value: number) => `${(Math.min(value, EMAIL_DAILY_LIMIT) / EMAIL_DAILY_LIMIT) * 100}%`
@@ -60,6 +60,15 @@ const summary = computed(() => {
         Riserva per password e codici ({{ reserveLeft }}), usata per la coda alle 23:59
       </li>
     </ul>
-    <p class="mt-2 text-sm text-muted">{{ summary }}</p>
+    <p class="mt-2 text-sm text-muted">{{ summary }} Il conteggio riparte alle {{ quota.resetTime }}.</p>
+    <UAlert
+      v-if="quota.simulated"
+      class="mt-3"
+      color="warning"
+      variant="subtle"
+      icon="i-lucide-flask-conical"
+      title="Le email non partono davvero"
+      description="Manca la chiave di Resend: per ora vengono solo registrate e non contano nel limite."
+    />
   </section>
 </template>

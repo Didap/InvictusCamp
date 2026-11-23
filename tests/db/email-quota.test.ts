@@ -4,6 +4,7 @@ import {
   canSendAccessEmail,
   claimEmailSlots,
   claimQueuedEmails,
+  emailQuotaResetTime,
   getEmailQueue,
   planDepartures,
   providerRefusal,
@@ -183,6 +184,26 @@ describe('daily email limit', () => {
     ])
     expect(queue.items[0]).toMatchObject({ departure: { day: '2026-11-23', time: 'last' } })
     expect(queue.items[24]).toMatchObject({ departure: { day: '2026-11-24', time: 'opening' } })
+  })
+})
+
+describe('the day of the limit follows Resend (UTC)', () => {
+  const TUESDAY_0030 = new Date('2026-11-24T00:30:00+01:00')
+  const TUESDAY_0100 = new Date('2026-11-24T01:00:00+01:00')
+
+  it('restarts at 01:00 Italian time, not at midnight', async () => {
+    await claimEmailSlots(db, messages(80), MONDAY_10)
+    expect((await getEmailQueue(db, TUESDAY_0030)).used).toBe(80)
+    expect((await getEmailQueue(db, TUESDAY_0100)).used).toBe(0)
+  })
+
+  it('says when the count restarts, in winter and in summer', () => {
+    expect(emailQuotaResetTime(MONDAY_10)).toBe('01:00')
+    expect(emailQuotaResetTime(new Date('2026-07-01T10:00:00Z'))).toBe('02:00')
+  })
+
+  it('just after midnight plans today with all its places free', () => {
+    expect(planDepartures(30, 100, TUESDAY_0030)).toEqual([{ day: '2026-11-24', time: 'opening', count: 30 }])
   })
 })
 

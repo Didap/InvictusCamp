@@ -460,8 +460,10 @@ What the supplier of the meals needs for a session: the **Mensa** tab of the ses
 
 ## 4. Emails
 
-**Daily limit.** At most 100 emails leave per day, Italian time (`server/domain/email-quota.ts`). Ordinary emails
-use the first 80; the others wait in the queue (`email_log`, status `queued`), in order, and leave by themselves
+**Daily limit.** At most 100 emails leave per day (`server/domain/email-quota.ts`), the quota of Resend's free plan.
+Resend counts a UTC day, so the count restarts at 01:00 Italian time (02:00 in summer). If Resend refuses for its own
+quota (received emails count there too, and the plan also stops at 3,000 a month), ordinary emails go back in the
+queue. Ordinary emails use the first 80; the others wait in the queue (`email_log`, status `queued`), in order, and leave by themselves
 from 8:00 to 20:00. The last 20 are kept for access emails (`sensitive`: links and codes), which expire and so never
 wait: over 100 they are recorded as failed. At 23:59 whatever is left of the day goes to the queue. The admin sees
 today's count, the expected departures and the queue in Comunicazioni, and the queue size in the Panoramica.

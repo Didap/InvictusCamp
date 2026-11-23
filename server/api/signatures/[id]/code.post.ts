@@ -1,10 +1,11 @@
 import type { SignatureCodeState } from '#shared/types/documents'
-import { canSendAccessEmail } from '~~/server/domain/email-quota'
+import { canSendAccessEmail, emailQuotaResetTime } from '~~/server/domain/email-quota'
 import { devCodes, issueSignatureCode } from '~~/server/domain/signatures'
 
 /**
  * Sends the six-digit code that confirms the signature (10 minutes, a new one after 60 seconds). With
- * the daily email limit reached it stops first, so a code already received keeps working.
+ * the daily email limit already reached it stops before replacing the code. If the send fails after
+ * that, the previous code is gone and the person asks for a new one.
  */
 export default defineEventHandler(async (event): Promise<SignatureCodeState> => {
   const user = await requireRole(event, 'family', 'staff')
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event): Promise<SignatureCodeState> => 
   if (!(await canSendAccessEmail(useDb()))) {
     throw createError({
       statusCode: 503,
-      message: 'Oggi abbiamo raggiunto il limite di email. Puoi chiedere il codice di nuovo domani.',
+      message: `Abbiamo raggiunto il limite giornaliero di email. Puoi chiedere il codice dopo le ${emailQuotaResetTime()}.`,
     })
   }
   const { code, message, state } = await issueSignatureCode(useDb(), emailContext(), { requestId, userId: user.id })

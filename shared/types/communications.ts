@@ -109,6 +109,13 @@ export interface EmailQuotaSummary {
   ordinaryLeft: number
   queued: number
   departures: (EmailDeparture & { count: number })[]
+  /** When the count restarts, in Italian time: Resend's day is UTC, so "01:00" or "02:00" in summer. */
+  resetTime: string
+}
+
+/** What the quota bar shows: the summary, and whether emails are only recorded (no Resend key). */
+export interface EmailQuotaStatus extends EmailQuotaSummary {
+  simulated: boolean
 }
 
 /** GET /api/admin/email-log/queue: the summary and the first of the queue, in order. */
