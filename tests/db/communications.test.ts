@@ -478,7 +478,7 @@ describe('reading', () => {
       })),
     )
     const detail = await getCommunication(db, sent.communicationId)
-    expect(detail.delivery).toEqual({ sent: 0, failed: 1, simulated: 0 })
+    expect(detail.delivery).toEqual({ sent: 0, failed: 1, simulated: 0, queued: 0, sending: 0 })
     expect(detail.recipients).toMatchObject([
       { userId: anna.user.id, status: 'failed', error: 'Indirizzo inesistente' },
     ])

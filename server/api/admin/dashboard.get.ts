@@ -92,11 +92,13 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
             ),
           ),
       ),
-    ]).then(([applicationsToReview, formsToComplete, signaturesPending, emailsFailed]) => ({
+      total(db.select({ total: count() }).from(t.emailLog).where(eq(t.emailLog.status, 'queued'))),
+    ]).then(([applicationsToReview, formsToComplete, signaturesPending, emailsFailed, emailsQueued]) => ({
       applicationsToReview,
       formsToComplete,
       signaturesPending,
       emailsFailed,
+      emailsQueued,
     })),
     total(
       db

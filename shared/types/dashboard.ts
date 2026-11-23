@@ -48,6 +48,8 @@ export interface DashboardDto {
     signaturesPending: number
     /** Emails not delivered in the last FAILED_EMAIL_DAYS days. */
     emailsFailed: number
+    /** Emails waiting for a place in the daily limit. */
+    emailsQueued: number
   }
   todo: DashboardTodo[]
 }

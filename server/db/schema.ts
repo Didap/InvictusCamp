@@ -683,15 +683,21 @@ export const emailLog = pgTable(
     subject: text().notNull(),
     /** The HTML sent; null for emails that carry access links or codes. */
     html: text(),
+    /** The plain text of an email waiting in the queue; cleared once it has left. */
+    textBody: text(),
     status: text().$type<EmailStatus>().notNull(),
     providerId: text(),
     error: text(),
     communicationId: uuid().references(() => communications.id, { onDelete: 'set null' }),
     sessionId: uuid().references(() => campSessions.id, { onDelete: 'set null' }),
+    /** When it left or may have left: every row with a value counts against that day's limit. */
+    sentAt: timestamp(tz),
     createdAt: createdAt(),
   },
   t => [
     index('email_log_created_idx').on(t.createdAt),
+    index('email_log_sent_idx').on(t.sentAt),
+    index('email_log_status_idx').on(t.status, t.createdAt),
     index('email_log_user_idx').on(t.toUserId),
     index('email_log_communication_idx').on(t.communicationId),
     index('email_log_session_idx').on(t.sessionId),

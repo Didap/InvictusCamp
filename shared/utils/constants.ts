@@ -128,8 +128,16 @@ export type PersonalDocumentCategory = (typeof PERSONAL_DOCUMENT_CATEGORIES)[num
 export const FILE_PURPOSES = ['personal_document', 'cv', 'document', 'signed_copy'] as const
 export type FilePurpose = (typeof FILE_PURPOSES)[number]
 
-export const EMAIL_STATUSES = ['sent', 'failed', 'simulated'] as const
+export const EMAIL_STATUSES = ['sent', 'failed', 'simulated', 'queued', 'sending'] as const
 export type EmailStatus = (typeof EMAIL_STATUSES)[number]
+
+/** The most emails that may leave in one day (Italian time), whatever they are. */
+export const EMAIL_DAILY_LIMIT = 100
+/** Kept for access emails (links, codes) until 23:59, when what is left goes to the queue. */
+export const EMAIL_ACCESS_RESERVE = 20
+/** The queue leaves between these hours, plus one last round at 23:59. */
+export const EMAIL_QUEUE_START_HOUR = 8
+export const EMAIL_QUEUE_END_HOUR = 20
 
 /** What a block of the week programme is (docs/spec.md 3.10). `staff` blocks are not shown to families. */
 export const PROGRAMME_BLOCK_KINDS = [
@@ -372,6 +380,13 @@ const emailStatus: Record<EmailStatus, EnumMeta> = {
     color: 'neutral',
     description: 'Non inviata: manca la chiave di Resend (sviluppo)',
   },
+  queued: {
+    label: 'In coda',
+    icon: 'i-lucide-clock',
+    color: 'warning',
+    description: 'Aspetta il primo posto libero nel limite giornaliero',
+  },
+  sending: { label: 'In invio', icon: 'i-lucide-loader', color: 'info' },
 }
 
 const programmeBlockKind: Record<ProgrammeBlockKind, EnumMeta> = {

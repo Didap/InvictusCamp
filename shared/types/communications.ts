@@ -1,5 +1,6 @@
 // DTOs of the communications area: the composer, the messages sent, the email log.
 import type { EmailStatus, SessionStatus, UserRole } from '../utils/constants'
+import type { IsoDay } from '../utils/dates'
 import type { Audience } from './domain'
 
 /** A person who would receive a message. */
@@ -76,6 +77,40 @@ export interface CommunicationSendResult {
   sent: number
   failed: number
   simulated: number
+  /** Over the daily limit: they leave by themselves, see GET /api/admin/email-log/queue. */
+  queued: number
+}
+
+/** When a group of queued emails is expected to leave: right away, at 8:00 or in the 23:59 round. */
+export interface EmailDeparture {
+  day: IsoDay
+  time: 'now' | '08:00' | '23:59'
+}
+
+/** A queued email with its place in line. */
+export interface EmailQueueItem {
+  id: string
+  position: number
+  toEmail: string
+  toName: string | null
+  subject: string
+  template: string
+  createdAt: string
+  departure: EmailDeparture
+}
+
+/** GET /api/admin/email-log/queue: today's count against the limit and the queue. */
+export interface EmailQueueOverview {
+  used: number
+  limit: number
+  /** Of the limit, kept for access emails until 23:59. */
+  reserve: number
+  /** How many more ordinary emails can leave today before the queue starts. */
+  ordinaryLeft: number
+  queued: number
+  departures: (EmailDeparture & { count: number })[]
+  /** The first of the queue, in order. */
+  items: EmailQueueItem[]
 }
 
 /** POST /api/admin/communications/preview: the email as it will look. */
