@@ -176,6 +176,13 @@
       "when": 1794993896125,
       "tag": "0024_release_texts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795432269804,
+      "tag": "0025_email_queue",
+      "breakpoints": true
     }
   ]
 }

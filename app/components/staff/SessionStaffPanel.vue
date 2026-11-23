@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DeliveryReport } from '#shared/types/communications'
 import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { SessionConvocation, SessionStaffData } from '#shared/types/staff'
 import { staffSlot } from '#shared/schemas/staff'
@@ -98,15 +99,12 @@ async function cancel(c: SessionConvocation) {
   if (!ok) return
   try {
     const url: string = `/api/admin/convocations/${c.id}/cancel`
-    const result = await api<{ emails: number; failed: number }>(url, { method: 'POST' })
-    notifySuccess(
-      draft ? 'Convocazione tolta' : 'Convocazione annullata',
-      result.failed
-        ? 'L’email di avviso non è stata recapitata: controlla il registro delle email.'
-        : result.emails
-          ? `Email inviata a ${name}.`
-          : undefined,
-    )
+    const result = await api<{ emails: number } & Pick<DeliveryReport, 'failed' | 'queued'>>(url, { method: 'POST' })
+    let note: string | undefined
+    if (result.failed) note = 'L’email di avviso non è stata recapitata: controlla il registro delle email.'
+    else if (result.queued) note = `L’email per ${name} è in coda e parte da sola.`
+    else if (result.emails) note = `Email inviata a ${name}.`
+    notifySuccess(draft ? 'Convocazione tolta' : 'Convocazione annullata', note)
   } catch (error) {
     notifyError(error)
   }

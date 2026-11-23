@@ -46,6 +46,17 @@ const tiles = computed(() => {
           },
         ]
       : []),
+    ...(counts.emailsQueued
+      ? [
+          {
+            label: 'Email in coda',
+            value: formatNumber(counts.emailsQueued),
+            hint: 'Oltre il limite giornaliero: partono da sole',
+            icon: 'i-lucide-clock',
+            to: '/admin/comunicazioni?tab=coda',
+          },
+        ]
+      : []),
   ]
 })
 </script>

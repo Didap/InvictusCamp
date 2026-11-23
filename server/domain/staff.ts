@@ -67,6 +67,7 @@ import {
 import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
+import { withdrawQueuedEmails } from './email-quota'
 import { requestSignatures, signatureRequestEmails } from './signature-requests'
 import { checkLabels, staffRoleOptions } from './staff-labels'
 import { createError } from './errors'
@@ -760,7 +761,13 @@ export async function cancelConvocation(
     await releaseContract(db, { documentId: session.contractDocumentId, userId: convocation.userId })
   }
   await writeAudit(db, { ...audit, action: 'convocation.cancel' })
-  if (row.accountStatus === 'disabled') return { emails: [], removed: false }
+  // A convocation still waiting in the queue never reached the person: there is nothing to take back.
+  const neverLeft = await withdrawQueuedEmails(db, {
+    template: 'staff.convocation',
+    toUserId: convocation.userId,
+    sessionId: session.id,
+  })
+  if (neverLeft || row.accountStatus === 'disabled') return { emails: [], removed: false }
   return {
     emails: [
       convocationCancelledEmail(ctx, {
@@ -1054,9 +1061,15 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
   const template = outcomeTemplate(profile.status)
   const [lastOutcome] = template
     ? await db
-        .select({ createdAt: emailLog.createdAt })
+        .select({ createdAt: emailLog.createdAt, status: emailLog.status })
         .from(emailLog)
-        .where(and(eq(emailLog.toUserId, userId), eq(emailLog.template, template), ne(emailLog.status, 'failed')))
+        .where(
+          and(
+            eq(emailLog.toUserId, userId),
+            eq(emailLog.template, template),
+            inArray(emailLog.status, ['sent', 'simulated', 'queued', 'sending']),
+          ),
+        )
         .orderBy(desc(emailLog.createdAt))
         .limit(1)
     : []
@@ -1091,6 +1104,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
       subject: template ? outcomeSubject(template) : '',
       defaultMessage: template ? defaultOutcomeMessage(template) : '',
       sentAt: iso(lastOutcome?.createdAt),
+      queued: lastOutcome?.status === 'queued',
     },
   }
 }

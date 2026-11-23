@@ -128,8 +128,18 @@ export type PersonalDocumentCategory = (typeof PERSONAL_DOCUMENT_CATEGORIES)[num
 export const FILE_PURPOSES = ['personal_document', 'cv', 'document', 'signed_copy'] as const
 export type FilePurpose = (typeof FILE_PURPOSES)[number]
 
-export const EMAIL_STATUSES = ['sent', 'failed', 'simulated'] as const
+export const EMAIL_STATUSES = ['sent', 'failed', 'simulated', 'queued', 'sending', 'withdrawn'] as const
 export type EmailStatus = (typeof EMAIL_STATUSES)[number]
+
+/** The most emails that may leave in one day, whatever they are: Resend's free plan, on a UTC day. */
+export const EMAIL_DAILY_LIMIT = 100
+/** Kept for access emails (links, codes) until 23:59, when what is left goes to the queue. */
+export const EMAIL_ACCESS_RESERVE = 20
+/** Ordinary emails leave up to here; over it they wait in the queue. */
+export const EMAIL_ORDINARY_LIMIT = EMAIL_DAILY_LIMIT - EMAIL_ACCESS_RESERVE
+/** The queue leaves between these hours, plus one last round at 23:59. */
+export const EMAIL_QUEUE_START_HOUR = 8
+export const EMAIL_QUEUE_END_HOUR = 20
 
 /** What a block of the week programme is (docs/spec.md 3.10). `staff` blocks are not shown to families. */
 export const PROGRAMME_BLOCK_KINDS = [
@@ -371,6 +381,19 @@ const emailStatus: Record<EmailStatus, EnumMeta> = {
     icon: 'i-lucide-flask-conical',
     color: 'neutral',
     description: 'Non inviata: manca la chiave di Resend (sviluppo)',
+  },
+  queued: {
+    label: 'In coda',
+    icon: 'i-lucide-clock',
+    color: 'warning',
+    description: 'Aspetta il primo posto libero nel limite giornaliero',
+  },
+  sending: { label: 'In invio', icon: 'i-lucide-loader', color: 'info' },
+  withdrawn: {
+    label: 'Ritirata',
+    icon: 'i-lucide-undo-2',
+    color: 'neutral',
+    description: 'Tolta dalla coda prima di partire',
   },
 }
 

@@ -314,6 +314,10 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               title="Esito non ancora comunicato"
               description="Vede lo stato nella sua area, ma non ha ricevuto l’email con l’esito."
             />
+            <p v-else-if="person.outcome.queued" class="flex items-center gap-2 text-sm text-muted">
+              <UIcon name="i-lucide-clock" class="size-4 shrink-0" aria-hidden="true" />
+              Esito in coda: l’email parte da sola
+            </p>
             <p v-else-if="person.outcome.sentAt" class="flex items-center gap-2 text-sm text-muted">
               <UIcon name="i-lucide-mail-check" class="size-4 shrink-0" aria-hidden="true" />
               Esito comunicato il {{ formatDateTime(person.outcome.sentAt) }}
