@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DeliveryReport } from '#shared/types/communications'
 import type { SessionConvocation } from '#shared/types/staff'
 import { fullName } from '#shared/utils/format'
 
@@ -27,7 +28,7 @@ const description = computed(() =>
 async function send() {
   sending.value = true
   try {
-    const result = await api<{ sent: number; skipped: number; failed: number; queued: number }>(
+    const result = await api<{ sent: number; skipped: number } & Pick<DeliveryReport, 'failed' | 'queued'>>(
       '/api/admin/convocations/send',
       {
         method: 'POST',

@@ -1,36 +1,43 @@
 <script setup lang="ts">
 import { emailTemplateLabel } from '#shared/schemas/communications'
 import type { EmailQueueOverview } from '#shared/types/communications'
+import {
+  EMAIL_DAILY_LIMIT,
+  EMAIL_ORDINARY_LIMIT,
+  EMAIL_QUEUE_END_HOUR,
+  EMAIL_QUEUE_START_HOUR,
+} from '#shared/utils/constants'
 import { formatDateTime, plural } from '#shared/utils/format'
 
-// The queue at a glance: when the waiting emails leave and who receives them, in order.
+// The queue at a glance: when the waiting emails leave and who receives them, in order. It loads only
+// while its tab is open.
 const DEPARTURES_SHOWN = 6
 
-const props = defineProps<{ queue: EmailQueueOverview }>()
+const queue = useLiveEmailData<EmailQueueOverview>('/api/admin/email-log/queue')
 
-const ordinary = computed(() => props.queue.limit - props.queue.reserve)
-const shownDepartures = computed(() => props.queue.departures.slice(0, DEPARTURES_SHOWN))
+const departures = computed(() => queue.value?.departures ?? [])
+const shownDepartures = computed(() => departures.value.slice(0, DEPARTURES_SHOWN))
 const laterCount = computed(() =>
-  props.queue.departures.slice(DEPARTURES_SHOWN).reduce((total, departure) => total + departure.count, 0),
+  departures.value.slice(DEPARTURES_SHOWN).reduce((total, departure) => total + departure.count, 0),
 )
 </script>
 
 <template>
-  <div v-if="!queue.queued" class="rounded-lg border border-default bg-elevated p-8 text-center">
+  <div v-if="queue && !queue.queued" class="rounded-lg border border-default bg-elevated p-8 text-center">
     <UIcon name="i-lucide-circle-check" class="size-6 text-success" />
     <p class="mt-2 font-medium text-highlighted">Nessuna email in coda</p>
     <p class="mx-auto mt-1 max-w-prose text-sm text-muted">
-      Quando un invio supera il limite di {{ queue.limit }} email al giorno, quelle in più compaiono qui e partono da
-      sole.
+      Quando un invio supera il limite di {{ EMAIL_DAILY_LIMIT }} email al giorno, quelle in più compaiono qui e partono
+      da sole.
     </p>
   </div>
 
-  <div v-else class="space-y-6">
+  <div v-else-if="queue" class="space-y-6">
     <section aria-labelledby="queue-plan-title">
       <h2 id="queue-plan-title" class="font-medium text-highlighted">Quando partono</h2>
       <p class="mt-1 text-sm text-muted">
-        Ogni giorno partono fino a {{ ordinary }} email dalle 8 alle 20. Alle 23:59 parte anche quello che resta, fino a
-        {{ queue.limit }}.
+        Ogni giorno partono fino a {{ EMAIL_ORDINARY_LIMIT }} email dalle {{ EMAIL_QUEUE_START_HOUR }} alle
+        {{ EMAIL_QUEUE_END_HOUR }}. Alle 23:59 parte anche quello che resta, fino a {{ EMAIL_DAILY_LIMIT }}.
       </p>
       <ol class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <li
@@ -59,8 +66,12 @@ const laterCount = computed(() =>
         />
       </div>
       <ol class="mt-2 divide-y divide-default rounded-lg border border-default bg-elevated">
-        <li v-for="item in queue.items" :key="item.id" class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-          <span class="w-8 shrink-0 text-sm text-muted tabular-nums">{{ item.position }}</span>
+        <li
+          v-for="(item, index) in queue.items"
+          :key="item.id"
+          class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3"
+        >
+          <span class="w-8 shrink-0 text-sm text-muted tabular-nums">{{ index + 1 }}</span>
           <div class="min-w-0 flex-1 basis-48">
             <p class="truncate font-medium text-highlighted">{{ item.toName ?? item.toEmail }}</p>
             <p class="truncate text-sm text-muted">{{ item.subject }}</p>

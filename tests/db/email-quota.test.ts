@@ -178,26 +178,26 @@ describe('daily email limit', () => {
     const queue = await getEmailQueue(db, MONDAY_10)
     expect(queue).toMatchObject({ used: 80, ordinaryLeft: 0, queued: 25 })
     expect(queue.departures).toEqual([
-      { day: '2026-11-23', time: '23:59', count: 20 },
-      { day: '2026-11-24', time: '08:00', count: 5 },
+      { day: '2026-11-23', time: 'last', count: 20 },
+      { day: '2026-11-24', time: 'opening', count: 5 },
     ])
-    expect(queue.items[0]).toMatchObject({ position: 1, departure: { day: '2026-11-23', time: '23:59' } })
-    expect(queue.items[24]).toMatchObject({ position: 25, departure: { day: '2026-11-24', time: '08:00' } })
+    expect(queue.items[0]).toMatchObject({ departure: { day: '2026-11-23', time: 'last' } })
+    expect(queue.items[24]).toMatchObject({ departure: { day: '2026-11-24', time: 'opening' } })
   })
 })
 
 describe('planDepartures', () => {
   it('spreads a long queue over the days, 80 in the morning and 20 at 23:59', () => {
     expect(planDepartures(230, 100, MONDAY_10)).toEqual([
-      { day: '2026-11-24', time: '08:00', count: 80 },
-      { day: '2026-11-24', time: '23:59', count: 20 },
-      { day: '2026-11-25', time: '08:00', count: 80 },
-      { day: '2026-11-25', time: '23:59', count: 20 },
-      { day: '2026-11-26', time: '08:00', count: 30 },
+      { day: '2026-11-24', time: 'opening', count: 80 },
+      { day: '2026-11-24', time: 'last', count: 20 },
+      { day: '2026-11-25', time: 'opening', count: 80 },
+      { day: '2026-11-25', time: 'last', count: 20 },
+      { day: '2026-11-26', time: 'opening', count: 30 },
     ])
   })
 
   it('after 20:00 only the 23:59 round is left today', () => {
-    expect(planDepartures(10, 40, MONDAY_21)).toEqual([{ day: '2026-11-23', time: '23:59', count: 10 }])
+    expect(planDepartures(10, 40, MONDAY_21)).toEqual([{ day: '2026-11-23', time: 'last', count: 10 }])
   })
 })

@@ -1,7 +1,9 @@
 import { Resend } from 'resend'
+import type { DeliveryReport } from '#shared/types/communications'
 import {
   claimEmailSlots,
   claimQueuedEmails,
+  hasQueueWork,
   providerRefusal,
   recordEmailOutcomes,
   recordUndelivered,
@@ -22,11 +24,8 @@ export function emailContext(): EmailContext {
   return { appUrl: useRuntimeConfig().appUrl }
 }
 
-export interface DeliveryReport {
-  sent: number
-  failed: number
-  simulated: number
-  queued: number
+export function logEmailError(label: string, error: unknown) {
+  console.error(`[email] ${label}:`, error instanceof Error ? error.message : error)
 }
 
 /**
@@ -73,7 +72,7 @@ async function dispatch(items: EmailToSend[]): Promise<EmailOutcome[]> {
       let accepted = 0
       chunk.forEach((item, index) => {
         const reason = rejected.get(index)
-        if (reason) outcomes.push({ id: item.id, status: 'failed', error: reason.slice(0, 500) })
+        if (reason) outcomes.push({ id: item.id, status: 'failed', error: reason })
         else outcomes.push({ id: item.id, status: 'sent', providerId: ids[accepted++]?.id })
       })
     } catch (error) {
@@ -89,7 +88,7 @@ async function record(outcomes: EmailOutcome[]) {
   try {
     await recordEmailOutcomes(useDb(), outcomes)
   } catch (error) {
-    console.error('[email] registro non aggiornato:', error instanceof Error ? error.message : error)
+    logEmailError('registro non aggiornato', error)
   }
 }
 
@@ -108,11 +107,10 @@ export async function deliver(input: EmailMessage | EmailMessage[]): Promise<Del
     claim = await claimEmailSlots(useDb(), messages)
   } catch (error) {
     // Without the count the limit cannot be guaranteed, so nothing leaves.
-    console.error('[email] limite non verificabile, invio annullato:', error instanceof Error ? error.message : error)
+    logEmailError('limite non verificabile, invio annullato', error)
     report.failed = messages.length
     await recordUndelivered(useDb(), messages, 'Limite giornaliero non verificabile: email non inviata.').catch(
-      failure =>
-        console.error('[email] registro non aggiornato:', failure instanceof Error ? failure.message : failure),
+      failure => logEmailError('registro non aggiornato', failure),
     )
     return report
   }
@@ -127,6 +125,7 @@ export async function deliver(input: EmailMessage | EmailMessage[]): Promise<Del
 /** One round of the queue: closes interrupted sends, then sends what fits now. Returns how many left. */
 export async function drainEmailQueue(now: Date = new Date()): Promise<number> {
   const db = useDb()
+  if (!(await hasQueueWork(db))) return 0
   await recoverInterruptedEmails(db, now)
   if (now.getTime() < queuePausedUntil) return 0
   const items = await claimQueuedEmails(db, now)

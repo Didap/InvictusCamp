@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import type { EmailQueueOverview } from '#shared/types/communications'
+import type { EmailQuotaSummary } from '#shared/types/communications'
+import { EMAIL_ACCESS_RESERVE, EMAIL_DAILY_LIMIT } from '#shared/utils/constants'
 import { plural } from '#shared/utils/format'
 
 // Today's emails against the daily limit: one bar, always in view on the Comunicazioni page.
-const props = defineProps<{ quota: EmailQueueOverview }>()
+const props = defineProps<{ quota: EmailQuotaSummary }>()
 
-const reserveLeft = computed(() => Math.max(0, Math.min(props.quota.reserve, props.quota.limit - props.quota.used)))
-const share = (value: number) => `${(Math.min(value, props.quota.limit) / props.quota.limit) * 100}%`
+const reserveLeft = computed(() => Math.max(0, Math.min(EMAIL_ACCESS_RESERVE, EMAIL_DAILY_LIMIT - props.quota.used)))
+const share = (value: number) => `${(Math.min(value, EMAIL_DAILY_LIMIT) / EMAIL_DAILY_LIMIT) * 100}%`
 
 const summary = computed(() => {
-  const { queued, ordinaryLeft, departures, limit, used } = props.quota
+  const { queued, ordinaryLeft, departures, used } = props.quota
   if (queued) {
     const next = departures[0]
     return `${plural(queued, 'email', 'email')} in coda.${next ? ` Prossima partenza: ${departureLabel(next).toLowerCase()}.` : ''}`
@@ -17,7 +18,7 @@ const summary = computed(() => {
   if (ordinaryLeft) {
     return `Puoi inviarne ancora ${ordinaryLeft}. Le ultime ${reserveLeft.value} restano per password e codici.`
   }
-  if (used < limit)
+  if (used < EMAIL_DAILY_LIMIT)
     return `I prossimi invii vanno in coda. Le ultime ${reserveLeft.value} restano per password e codici.`
   return 'Limite di oggi raggiunto. I prossimi invii vanno in coda e partono da soli.'
 })
@@ -29,7 +30,7 @@ const summary = computed(() => {
       <div>
         <h2 id="email-quota-title" class="text-sm font-medium text-muted">Email di oggi</h2>
         <p class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">
-          {{ quota.used }} <span class="text-base font-normal text-muted">su {{ quota.limit }}</span>
+          {{ quota.used }} <span class="text-base font-normal text-muted">su {{ EMAIL_DAILY_LIMIT }}</span>
         </p>
       </div>
       <UButton
@@ -43,7 +44,7 @@ const summary = computed(() => {
     </div>
     <div
       role="img"
-      :aria-label="`${quota.used} email inviate oggi su ${quota.limit}`"
+      :aria-label="`${quota.used} email inviate oggi su ${EMAIL_DAILY_LIMIT}`"
       class="relative mt-3 h-2.5 overflow-hidden rounded-full bg-accented"
     >
       <div class="absolute inset-y-0 right-0 bg-warning/40" :style="{ width: share(reserveLeft) }" />

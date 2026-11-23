@@ -1,29 +1,13 @@
 <script setup lang="ts">
-import type { EmailQueueOverview } from '#shared/types/communications'
+import type { EmailQuotaSummary } from '#shared/types/communications'
 
 // Comunicazioni (docs/spec.md, 3.7): today's emails against the daily limit, the messages written in the
 // dashboard, the saved templates, the queue and the log of every email the platform sent. The tab lives
 // in the address (?tab=registro), so the Panoramica and the composer can link to it.
-const QUEUE_REFRESH_MS = 30_000
-
 const route = useRoute()
 const router = useRouter()
 
-const { data: latestQueue, refresh: refreshQueue } = useApiFetch<EmailQueueOverview>('/api/admin/email-log/queue')
-// A failed refresh keeps the last numbers on screen.
-const queue = shallowRef<EmailQueueOverview | null>(null)
-watch(
-  latestQueue,
-  value => {
-    if (value) queue.value = value
-  },
-  { immediate: true },
-)
-let queueTimer: ReturnType<typeof setInterval> | undefined
-onMounted(() => {
-  queueTimer = setInterval(() => refreshQueue(), QUEUE_REFRESH_MS)
-})
-onBeforeUnmount(() => clearInterval(queueTimer))
+const quota = useLiveEmailData<EmailQuotaSummary>('/api/admin/email-log/quota')
 
 const tabs = computed(() => [
   { label: 'Messaggi', value: 'messaggi', icon: 'i-lucide-mails', slot: 'messaggi' as const },
@@ -33,7 +17,7 @@ const tabs = computed(() => [
     value: 'coda',
     icon: 'i-lucide-clock',
     slot: 'coda' as const,
-    badge: queue.value?.queued || undefined,
+    badge: quota.value?.queued || undefined,
   },
   { label: 'Registro', value: 'registro', icon: 'i-lucide-scroll-text', slot: 'registro' as const },
 ])
@@ -51,7 +35,7 @@ const tab = computed({
       <UButton to="/admin/comunicazioni/nuova" icon="i-lucide-pen-line" label="Scrivi un messaggio" />
     </template>
 
-    <CommunicationsEmailQuota v-if="queue" :quota="queue" class="mb-6" />
+    <CommunicationsEmailQuota v-if="quota" :quota="quota" class="mb-6" />
 
     <UTabs v-model="tab" :items="tabs" variant="link" :ui="tabsUi">
       <template #messaggi>
@@ -61,7 +45,7 @@ const tab = computed({
         <CommunicationsTemplateList />
       </template>
       <template #coda>
-        <CommunicationsEmailQueue v-if="queue" :queue="queue" />
+        <CommunicationsEmailQueue />
       </template>
       <template #registro>
         <CommunicationsEmailLog sync-query />

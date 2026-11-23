@@ -71,9 +71,13 @@ export interface CommunicationDetail extends CommunicationListItem {
 }
 
 /** POST /api/admin/communications and POST /api/admin/communications/:id/send */
-export interface CommunicationSendResult {
+export interface CommunicationSendResult extends DeliveryReport {
   id: string
   recipients: number
+}
+
+/** What happened to a group of emails handed to deliver(). */
+export interface DeliveryReport {
   sent: number
   failed: number
   simulated: number
@@ -81,16 +85,15 @@ export interface CommunicationSendResult {
   queued: number
 }
 
-/** When a group of queued emails is expected to leave: right away, at 8:00 or in the 23:59 round. */
+/** When a group of queued emails is expected to leave: right away, when the queue opens, or at 23:59. */
 export interface EmailDeparture {
   day: IsoDay
-  time: 'now' | '08:00' | '23:59'
+  time: 'now' | 'opening' | 'last'
 }
 
-/** A queued email with its place in line. */
+/** A queued email, in order of departure. */
 export interface EmailQueueItem {
   id: string
-  position: number
   toEmail: string
   toName: string | null
   subject: string
@@ -99,17 +102,17 @@ export interface EmailQueueItem {
   departure: EmailDeparture
 }
 
-/** GET /api/admin/email-log/queue: today's count against the limit and the queue. */
-export interface EmailQueueOverview {
+/** GET /api/admin/email-log/quota: today's count against the limit and the expected departures. */
+export interface EmailQuotaSummary {
   used: number
-  limit: number
-  /** Of the limit, kept for access emails until 23:59. */
-  reserve: number
   /** How many more ordinary emails can leave today before the queue starts. */
   ordinaryLeft: number
   queued: number
   departures: (EmailDeparture & { count: number })[]
-  /** The first of the queue, in order. */
+}
+
+/** GET /api/admin/email-log/queue: the summary and the first of the queue, in order. */
+export interface EmailQueueOverview extends EmailQuotaSummary {
   items: EmailQueueItem[]
 }
 

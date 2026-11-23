@@ -12,7 +12,7 @@ export default defineNitroPlugin(nitroApp => {
       const sent = await drainEmailQueue()
       if (sent) console.log(`[email] coda: ${sent} email partite`)
     } catch (error) {
-      console.error('[email] coda non elaborata:', error instanceof Error ? error.message : error)
+      logEmailError('coda non elaborata', error)
     } finally {
       running = false
     }

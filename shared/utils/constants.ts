@@ -135,6 +135,8 @@ export type EmailStatus = (typeof EMAIL_STATUSES)[number]
 export const EMAIL_DAILY_LIMIT = 100
 /** Kept for access emails (links, codes) until 23:59, when what is left goes to the queue. */
 export const EMAIL_ACCESS_RESERVE = 20
+/** Ordinary emails leave up to here; over it they wait in the queue. */
+export const EMAIL_ORDINARY_LIMIT = EMAIL_DAILY_LIMIT - EMAIL_ACCESS_RESERVE
 /** The queue leaves between these hours, plus one last round at 23:59. */
 export const EMAIL_QUEUE_START_HOUR = 8
 export const EMAIL_QUEUE_END_HOUR = 20

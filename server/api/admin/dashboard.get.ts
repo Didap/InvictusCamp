@@ -5,6 +5,7 @@ import {
   type DashboardSession,
   type DashboardTodo,
 } from '#shared/types/dashboard'
+import { queuedCount } from '~~/server/domain/email-quota'
 import { staffCountsOf } from '~~/server/domain/sessions'
 import { OF_TEAM, STAFF_TEAMS, enumLabel, type SessionStatus, type StaffTeam } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
@@ -92,7 +93,7 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
             ),
           ),
       ),
-      total(db.select({ total: count() }).from(t.emailLog).where(eq(t.emailLog.status, 'queued'))),
+      queuedCount(db),
     ]).then(([applicationsToReview, formsToComplete, signaturesPending, emailsFailed, emailsQueued]) => ({
       applicationsToReview,
       formsToComplete,

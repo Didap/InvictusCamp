@@ -3,23 +3,24 @@
 // last 20 are kept for access emails (links, codes), which expire and so never wait. At 23:59 whatever
 // is left of the day goes to the queue. A row counts against the limit from the moment it has `sent_at`.
 import { randomUUID } from 'node:crypto'
-import { and, asc, count, eq, gte, inArray, lt, sql } from 'drizzle-orm'
-import type { EmailDeparture, EmailQueueOverview } from '../../shared/types/communications'
+import { and, asc, eq, gte, inArray, lt, sql } from 'drizzle-orm'
+import type { EmailDeparture, EmailQueueOverview, EmailQuotaSummary } from '../../shared/types/communications'
 import {
-  EMAIL_ACCESS_RESERVE,
   EMAIL_DAILY_LIMIT,
+  EMAIL_ORDINARY_LIMIT,
   EMAIL_QUEUE_END_HOUR,
   EMAIL_QUEUE_START_HOUR,
   TIME_ZONE,
   type EmailStatus,
 } from '../../shared/utils/constants'
 import { addDays, todayIso } from '../../shared/utils/dates'
+import { fullName } from '../../shared/utils/format'
 import { emailLog, users } from '../db/schema'
 import type { EmailMessage } from '../emails/types'
 import type { Db, DbOrTx, Tx } from './db'
 
-const ORDINARY_LIMIT = EMAIL_DAILY_LIMIT - EMAIL_ACCESS_RESERVE
 const QUEUE_ITEMS_SHOWN = 100
+const QUEUE_ORDER = [asc(emailLog.createdAt), asc(emailLog.id)]
 const INTERRUPTED_AFTER_MS = 15 * 60 * 1000
 
 const LIMIT_REACHED = `Limite di ${EMAIL_DAILY_LIMIT} email al giorno raggiunto: richiedila di nuovo domani.`
@@ -27,16 +28,7 @@ const INTERRUPTED = 'Invio interrotto: l’email potrebbe essere partita, contro
 const ACCOUNT_DISABLED = 'Account disattivato mentre l’email era in coda: non è partita.'
 const WITHDRAWN = 'Ritirata prima di partire: non è stata inviata.'
 
-export interface EmailToSend {
-  id: string
-  to: string
-  template: string
-  subject: string
-  html: string
-  text: string
-  sensitive?: boolean
-  devNote?: string
-}
+export type EmailToSend = EmailMessage & { id: string }
 
 export interface EmailOutcome {
   id: string
@@ -45,8 +37,6 @@ export interface EmailOutcome {
   error?: string
   /** The provider did not answer: the email may have left, so it keeps counting against the limit. */
   uncertain?: boolean
-  /** The plain text to keep when the email goes back to the queue. */
-  text?: string
 }
 
 /**
@@ -58,11 +48,10 @@ export function providerRefusal(
   item: EmailToSend,
   error: { message: string; statusCode: number | null },
 ): EmailOutcome {
-  const reason = error.message.slice(0, 500)
-  if (error.statusCode === null) return { id: item.id, status: 'failed', error: reason, uncertain: true }
+  const { id } = item
+  if (error.statusCode === null) return { id, status: 'failed', error: error.message, uncertain: true }
   const temporary = [401, 403, 429].includes(error.statusCode) || error.statusCode >= 500
-  if (temporary && !item.sensitive) return { id: item.id, status: 'queued', error: reason, text: item.text }
-  return { id: item.id, status: 'failed', error: reason }
+  return { id, status: temporary && !item.sensitive ? 'queued' : 'failed', error: error.message }
 }
 
 function romeClock(now: Date) {
@@ -84,7 +73,7 @@ const isLastMinute = ({ hour, minute }: { hour: number; minute: number }) => hou
 function queueCeiling(now: Date): number {
   const clock = romeClock(now)
   if (isLastMinute(clock)) return EMAIL_DAILY_LIMIT
-  return clock.hour >= EMAIL_QUEUE_START_HOUR && clock.hour < EMAIL_QUEUE_END_HOUR ? ORDINARY_LIMIT : 0
+  return clock.hour >= EMAIL_QUEUE_START_HOUR && clock.hour < EMAIL_QUEUE_END_HOUR ? EMAIL_ORDINARY_LIMIT : 0
 }
 
 function dayStart(now: Date) {
@@ -93,20 +82,36 @@ function dayStart(now: Date) {
 }
 
 async function usedToday(db: DbOrTx, now: Date): Promise<number> {
-  const [row] = await db
-    .select({ total: count() })
-    .from(emailLog)
-    .where(gte(emailLog.sentAt, dayStart(now)))
-  return row?.total ?? 0
+  return db.$count(emailLog, gte(emailLog.sentAt, dayStart(now)))
 }
 
-async function queuedCount(db: DbOrTx): Promise<number> {
-  const [row] = await db.select({ total: count() }).from(emailLog).where(eq(emailLog.status, 'queued'))
-  return row?.total ?? 0
+export async function queuedCount(db: DbOrTx): Promise<number> {
+  return db.$count(emailLog, eq(emailLog.status, 'queued'))
+}
+
+/** Whether a round of the queue has anything to do. */
+export async function hasQueueWork(db: DbOrTx): Promise<boolean> {
+  const [row] = await db
+    .select({ id: emailLog.id })
+    .from(emailLog)
+    .where(inArray(emailLog.status, ['queued', 'sending']))
+    .limit(1)
+  return Boolean(row)
 }
 
 /** One writer at a time on the count, so two sends together cannot pass the limit. */
 const lockQuota = (tx: Tx) => tx.execute(sql`select pg_advisory_xact_lock(7310100)`)
+
+/** The columns of a log row that come straight from the message. Access emails keep no content. */
+const logColumns = (message: EmailMessage) => ({
+  template: message.template,
+  toEmail: message.to,
+  toUserId: message.toUserId ?? null,
+  subject: message.subject,
+  html: message.sensitive ? null : message.html,
+  communicationId: message.communicationId ?? null,
+  sessionId: message.sessionId ?? null,
+})
 
 /**
  * Decides the fate of new messages and records them: `toSend` have their place in today's limit,
@@ -119,7 +124,7 @@ export async function claimEmailSlots(db: Db, messages: EmailMessage[], now: Dat
     let used = await usedToday(tx, now)
     const lineAhead = (await queuedCount(tx)) > 0
     const plan = messages.map(message => {
-      const ceiling = message.sensitive ? EMAIL_DAILY_LIMIT : ORDINARY_LIMIT
+      const ceiling = message.sensitive ? EMAIL_DAILY_LIMIT : EMAIL_ORDINARY_LIMIT
       let status: EmailStatus = message.sensitive ? 'failed' : 'queued'
       if (used < ceiling && (message.sensitive || !lineAhead)) {
         used++
@@ -129,32 +134,17 @@ export async function claimEmailSlots(db: Db, messages: EmailMessage[], now: Dat
     })
     await tx.insert(emailLog).values(
       plan.map(({ id, message, status }) => ({
+        ...logColumns(message),
         id,
-        template: message.template,
-        toEmail: message.to,
-        toUserId: message.toUserId ?? null,
-        subject: message.subject,
-        html: message.sensitive ? null : message.html,
-        textBody: status === 'queued' ? message.text : null,
+        textBody: message.sensitive ? null : message.text,
         status,
         error: status === 'failed' ? LIMIT_REACHED : null,
-        communicationId: message.communicationId ?? null,
-        sessionId: message.sessionId ?? null,
         sentAt: status === 'sending' ? now : null,
       })),
     )
     const toSend: EmailToSend[] = plan
       .filter(item => item.status === 'sending')
-      .map(({ id, message }) => ({
-        id,
-        to: message.to,
-        template: message.template,
-        subject: message.subject,
-        html: message.html,
-        text: message.text,
-        sensitive: message.sensitive,
-        devNote: message.devNote,
-      }))
+      .map(({ id, message }) => ({ ...message, id }))
     return {
       toSend,
       queued: plan.filter(item => item.status === 'queued').length,
@@ -165,9 +155,11 @@ export async function claimEmailSlots(db: Db, messages: EmailMessage[], now: Dat
 
 /** Takes the oldest queued emails that fit now. They go to the account's current address. */
 export async function claimQueuedEmails(db: Db, now: Date = new Date()): Promise<EmailToSend[]> {
+  const ceiling = queueCeiling(now)
+  if (!ceiling) return []
   return db.transaction(async tx => {
     await lockQuota(tx)
-    const free = queueCeiling(now) - (await usedToday(tx, now))
+    const free = ceiling - (await usedToday(tx, now))
     if (free <= 0) return []
     const rows = await tx
       .select({
@@ -183,7 +175,7 @@ export async function claimQueuedEmails(db: Db, now: Date = new Date()): Promise
       .from(emailLog)
       .leftJoin(users, eq(users.id, emailLog.toUserId))
       .where(eq(emailLog.status, 'queued'))
-      .orderBy(asc(emailLog.createdAt), asc(emailLog.id))
+      .orderBy(...QUEUE_ORDER)
       .limit(free)
 
     const disabled = rows.filter(row => row.userStatus === 'disabled')
@@ -232,14 +224,14 @@ export async function claimQueuedEmails(db: Db, now: Date = new Date()): Promise
 export async function recordEmailOutcomes(db: Db, outcomes: EmailOutcome[]) {
   if (!outcomes.length) return
   await db.transaction(async tx => {
-    for (const { id, status, providerId, error, uncertain, text } of outcomes) {
+    for (const { id, status, providerId, error, uncertain } of outcomes) {
       await tx
         .update(emailLog)
         .set({
           status,
           providerId: providerId ?? null,
-          error: error ?? null,
-          textBody: status === 'queued' ? (text ?? null) : null,
+          error: error?.slice(0, 500) ?? null,
+          ...(status === 'queued' ? {} : { textBody: null }),
           ...(status === 'sent' || uncertain ? {} : { sentAt: null }),
         })
         .where(eq(emailLog.id, id))
@@ -252,15 +244,9 @@ export async function recordUndelivered(db: Db, messages: EmailMessage[], reason
   if (!messages.length) return
   await db.insert(emailLog).values(
     messages.map(message => ({
-      template: message.template,
-      toEmail: message.to,
-      toUserId: message.toUserId ?? null,
-      subject: message.subject,
-      html: message.sensitive ? null : message.html,
+      ...logColumns(message),
       status: 'failed' as const,
       error: reason.slice(0, 500),
-      communicationId: message.communicationId ?? null,
-      sessionId: message.sessionId ?? null,
     })),
   )
 }
@@ -299,10 +285,10 @@ export async function recoverInterruptedEmails(db: Db, now: Date = new Date()) {
 }
 
 /** When a queue of this size is expected to leave, assuming no other email takes a place. */
-export function planDepartures(queued: number, used: number, now: Date): (EmailDeparture & { count: number })[] {
+export function planDepartures(queued: number, used: number, now: Date): EmailQuotaSummary['departures'] {
   const today = todayIso(now)
   const clock = romeClock(now)
-  const plan: (EmailDeparture & { count: number })[] = []
+  const plan: EmailQuotaSummary['departures'] = []
   let left = queued
   let spent = used
   const take = (day: string, time: EmailDeparture['time'], ceiling: number) => {
@@ -316,23 +302,41 @@ export function planDepartures(queued: number, used: number, now: Date): (EmailD
     take(today, 'now', EMAIL_DAILY_LIMIT)
   } else {
     if (clock.hour < EMAIL_QUEUE_END_HOUR) {
-      take(today, clock.hour < EMAIL_QUEUE_START_HOUR ? '08:00' : 'now', ORDINARY_LIMIT)
+      take(today, clock.hour < EMAIL_QUEUE_START_HOUR ? 'opening' : 'now', EMAIL_ORDINARY_LIMIT)
     }
-    take(today, '23:59', EMAIL_DAILY_LIMIT)
+    take(today, 'last', EMAIL_DAILY_LIMIT)
   }
   for (let day = addDays(today, 1); left > 0; day = addDays(day, 1)) {
     spent = 0
-    take(day, '08:00', ORDINARY_LIMIT)
-    take(day, '23:59', EMAIL_DAILY_LIMIT)
+    take(day, 'opening', EMAIL_ORDINARY_LIMIT)
+    take(day, 'last', EMAIL_DAILY_LIMIT)
   }
   return plan
 }
 
-/** Today's count against the limit, the expected departures and the first of the queue. */
+/** Today's count against the limit and the expected departures. */
+export async function getEmailQuota(db: Db, now: Date = new Date()): Promise<EmailQuotaSummary> {
+  const [used, queued] = await Promise.all([usedToday(db, now), queuedCount(db)])
+  return {
+    used,
+    ordinaryLeft: queued ? 0 : Math.max(0, EMAIL_ORDINARY_LIMIT - used),
+    queued,
+    departures: planDepartures(queued, used, now),
+  }
+}
+
+function departureOf(departures: EmailQuotaSummary['departures'], index: number): EmailDeparture | undefined {
+  let left = index
+  for (const { day, time, count } of departures) {
+    if (left < count) return { day, time }
+    left -= count
+  }
+}
+
+/** The summary and the first of the queue, each with its expected departure. */
 export async function getEmailQueue(db: Db, now: Date = new Date()): Promise<EmailQueueOverview> {
-  const [used, queued, rows] = await Promise.all([
-    usedToday(db, now),
-    queuedCount(db),
+  const [quota, rows] = await Promise.all([
+    getEmailQuota(db, now),
     db
       .select({
         id: emailLog.id,
@@ -346,28 +350,18 @@ export async function getEmailQueue(db: Db, now: Date = new Date()): Promise<Ema
       .from(emailLog)
       .leftJoin(users, eq(users.id, emailLog.toUserId))
       .where(eq(emailLog.status, 'queued'))
-      .orderBy(asc(emailLog.createdAt), asc(emailLog.id))
+      .orderBy(...QUEUE_ORDER)
       .limit(QUEUE_ITEMS_SHOWN),
   ])
-  const departures = planDepartures(queued, used, now)
-  const slots = departures.flatMap(({ day, time, count: size }) =>
-    Array.from({ length: Math.min(size, QUEUE_ITEMS_SHOWN) }, () => ({ day, time })),
-  )
   return {
-    used,
-    limit: EMAIL_DAILY_LIMIT,
-    reserve: EMAIL_ACCESS_RESERVE,
-    ordinaryLeft: queued ? 0 : Math.max(0, ORDINARY_LIMIT - used),
-    queued,
-    departures,
+    ...quota,
     items: rows.flatMap(({ firstName, lastName, createdAt, ...row }, index) => {
-      const departure = slots[index]
+      const departure = departureOf(quota.departures, index)
       if (!departure) return []
       return [
         {
           ...row,
-          position: index + 1,
-          toName: [firstName, lastName].filter(Boolean).join(' ') || null,
+          toName: fullName({ firstName, lastName }) || null,
           createdAt: createdAt.toISOString(),
           departure,
         },
