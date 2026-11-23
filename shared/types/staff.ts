@@ -115,6 +115,8 @@ export interface StaffOutcome {
   subject: string
   defaultMessage: string
   sentAt: string | null
+  /** The last outcome email is still waiting in the daily queue. */
+  queued: boolean
 }
 
 /** GET /api/admin/staff/:userId */

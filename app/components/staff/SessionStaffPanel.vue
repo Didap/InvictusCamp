@@ -98,14 +98,16 @@ async function cancel(c: SessionConvocation) {
   if (!ok) return
   try {
     const url: string = `/api/admin/convocations/${c.id}/cancel`
-    const result = await api<{ emails: number; failed: number }>(url, { method: 'POST' })
+    const result = await api<{ emails: number; failed: number; queued: number }>(url, { method: 'POST' })
     notifySuccess(
       draft ? 'Convocazione tolta' : 'Convocazione annullata',
       result.failed
         ? 'L’email di avviso non è stata recapitata: controlla il registro delle email.'
-        : result.emails
-          ? `Email inviata a ${name}.`
-          : undefined,
+        : result.queued
+          ? `L’email per ${name} è in coda e parte da sola.`
+          : result.emails
+            ? `Email inviata a ${name}.`
+            : undefined,
     )
   } catch (error) {
     notifyError(error)

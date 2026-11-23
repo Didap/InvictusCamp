@@ -2,14 +2,20 @@ import { Resend } from 'resend'
 import {
   claimEmailSlots,
   claimQueuedEmails,
+  providerRefusal,
   recordEmailOutcomes,
+  recordUndelivered,
   recoverInterruptedEmails,
   type EmailOutcome,
   type EmailToSend,
 } from '../domain/email-quota'
 import type { EmailContext, EmailMessage } from '../emails/types'
 
+/** After a provider problem the queue waits this long, so an outage does not burn through it. */
+const QUEUE_PAUSE_MS = 10 * 60 * 1000
+
 let resend: Resend | null = null
+let queuePausedUntil = 0
 
 /** What templates need from the configuration. */
 export function emailContext(): EmailContext {
@@ -24,8 +30,9 @@ export interface DeliveryReport {
 }
 
 /**
- * Hands the emails to Resend in batches of 100. Without an API key they are "simulated" and, in
- * development, their devNote (the link or code of an access email) is printed in the console.
+ * Hands the emails to Resend in batches of 100, each address judged on its own (`permissive`), so one
+ * bad address does not stop the others. Without an API key they are "simulated" and, in development,
+ * their devNote (the link or code of an access email) is printed in the console.
  */
 async function dispatch(items: EmailToSend[]): Promise<EmailOutcome[]> {
   const config = useRuntimeConfig()
@@ -53,23 +60,26 @@ async function dispatch(items: EmailToSend[]): Promise<EmailOutcome[]> {
           text: item.text,
           ...(config.emailReplyTo ? { replyTo: config.emailReplyTo } : {}),
         })),
+        { batchValidation: 'permissive' },
       )
       if (error) {
         console.error(`[email] invio rifiutato (${chunk.length} messaggi): ${error.message}`)
-        for (const item of chunk) {
-          outcomes.push({ id: item.id, status: 'failed', error: error.message.slice(0, 500) })
-        }
+        for (const item of chunk) outcomes.push(providerRefusal(item, error))
         continue
       }
-      chunk.forEach((item, index) =>
-        outcomes.push({ id: item.id, status: 'sent', providerId: data?.data?.[index]?.id }),
-      )
+      // The ids come back only for the accepted emails, in order.
+      const rejected = new Map((data?.errors ?? []).map(({ index, message }) => [index, message]))
+      const ids = data?.data ?? []
+      let accepted = 0
+      chunk.forEach((item, index) => {
+        const reason = rejected.get(index)
+        if (reason) outcomes.push({ id: item.id, status: 'failed', error: reason.slice(0, 500) })
+        else outcomes.push({ id: item.id, status: 'sent', providerId: ids[accepted++]?.id })
+      })
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error)
-      console.error(`[email] invio non riuscito (${chunk.length} messaggi): ${reason}`)
-      for (const item of chunk) {
-        outcomes.push({ id: item.id, status: 'failed', error: reason.slice(0, 500), uncertain: true })
-      }
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`[email] invio non riuscito (${chunk.length} messaggi): ${message}`)
+      for (const item of chunk) outcomes.push(providerRefusal(item, { message, statusCode: null }))
     }
   }
   return outcomes
@@ -100,6 +110,10 @@ export async function deliver(input: EmailMessage | EmailMessage[]): Promise<Del
     // Without the count the limit cannot be guaranteed, so nothing leaves.
     console.error('[email] limite non verificabile, invio annullato:', error instanceof Error ? error.message : error)
     report.failed = messages.length
+    await recordUndelivered(useDb(), messages, 'Limite giornaliero non verificabile: email non inviata.').catch(
+      failure =>
+        console.error('[email] registro non aggiornato:', failure instanceof Error ? failure.message : failure),
+    )
     return report
   }
   report.queued = claim.queued
@@ -114,8 +128,13 @@ export async function deliver(input: EmailMessage | EmailMessage[]): Promise<Del
 export async function drainEmailQueue(now: Date = new Date()): Promise<number> {
   const db = useDb()
   await recoverInterruptedEmails(db, now)
+  if (now.getTime() < queuePausedUntil) return 0
   const items = await claimQueuedEmails(db, now)
   if (!items.length) return 0
-  await record(await dispatch(items))
-  return items.length
+  const outcomes = await dispatch(items)
+  await record(outcomes)
+  if (outcomes.some(outcome => outcome.status === 'queued' || outcome.uncertain)) {
+    queuePausedUntil = now.getTime() + QUEUE_PAUSE_MS
+  }
+  return outcomes.filter(outcome => outcome.status === 'sent' || outcome.status === 'simulated').length
 }

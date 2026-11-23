@@ -128,7 +128,7 @@ export type PersonalDocumentCategory = (typeof PERSONAL_DOCUMENT_CATEGORIES)[num
 export const FILE_PURPOSES = ['personal_document', 'cv', 'document', 'signed_copy'] as const
 export type FilePurpose = (typeof FILE_PURPOSES)[number]
 
-export const EMAIL_STATUSES = ['sent', 'failed', 'simulated', 'queued', 'sending'] as const
+export const EMAIL_STATUSES = ['sent', 'failed', 'simulated', 'queued', 'sending', 'withdrawn'] as const
 export type EmailStatus = (typeof EMAIL_STATUSES)[number]
 
 /** The most emails that may leave in one day (Italian time), whatever they are. */
@@ -387,6 +387,12 @@ const emailStatus: Record<EmailStatus, EnumMeta> = {
     description: 'Aspetta il primo posto libero nel limite giornaliero',
   },
   sending: { label: 'In invio', icon: 'i-lucide-loader', color: 'info' },
+  withdrawn: {
+    label: 'Ritirata',
+    icon: 'i-lucide-undo-2',
+    color: 'neutral',
+    description: 'Tolta dalla coda prima di partire',
+  },
 }
 
 const programmeBlockKind: Record<ProgrammeBlockKind, EnumMeta> = {

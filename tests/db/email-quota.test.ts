@@ -1,15 +1,19 @@
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
+  canSendAccessEmail,
   claimEmailSlots,
   claimQueuedEmails,
   getEmailQueue,
   planDepartures,
+  providerRefusal,
   recordEmailOutcomes,
+  recordUndelivered,
   recoverInterruptedEmails,
+  withdrawQueuedEmails,
 } from '../../server/domain/email-quota'
 import type { EmailMessage } from '../../server/emails/types'
-import { makeUser, t, useTestDb } from './helpers'
+import { makeSession, makeUser, t, useTestDb } from './helpers'
 
 const db = useTestDb()
 
@@ -30,7 +34,7 @@ function messages(size: number, extra: Partial<EmailMessage> = {}): EmailMessage
   }))
 }
 
-const statusCount = async (status: 'queued' | 'sending' | 'failed') =>
+const statusCount = async (status: 'queued' | 'sending' | 'failed' | 'withdrawn') =>
   (await db.select().from(t.emailLog).where(eq(t.emailLog.status, status))).length
 
 describe('daily email limit', () => {
@@ -96,7 +100,61 @@ describe('daily email limit', () => {
     )
     const leaving = await claimQueuedEmails(db, TUESDAY_09)
     expect(leaving.map(item => item.to)).toEqual(['nuovo@example.test'])
-    expect(await statusCount('failed')).toBe(1)
+    expect(await statusCount('withdrawn')).toBe(1)
+    const [stored] = await db.select().from(t.emailLog).where(eq(t.emailLog.id, leaving[0]!.id))
+    expect(stored?.toEmail).toBe('nuovo@example.test')
+  })
+
+  it('puts a queued email back with its text when the provider has a temporary problem', async () => {
+    await claimEmailSlots(db, messages(81), MONDAY_10)
+    const [item] = await claimQueuedEmails(db, TUESDAY_09)
+    const outcome = providerRefusal(item!, { message: 'quota', statusCode: 429 })
+    expect(outcome.status).toBe('queued')
+    await recordEmailOutcomes(db, [outcome])
+    const [again] = await claimQueuedEmails(db, TUESDAY_09)
+    expect(again).toMatchObject({ id: item!.id, text: 'Ciao' })
+  })
+
+  it('reads provider errors: lost answer, refusal, and access emails that cannot wait', () => {
+    const item = { id: 'a', to: 'a@example.test', template: 'x', subject: 's', html: 'h', text: 't' }
+    expect(providerRefusal(item, { message: 'rete', statusCode: null })).toMatchObject({
+      status: 'failed',
+      uncertain: true,
+    })
+    expect(providerRefusal(item, { message: 'indirizzo', statusCode: 422 }).status).toBe('failed')
+    expect(providerRefusal({ ...item, sensitive: true }, { message: 'giù', statusCode: 503 }).status).toBe('failed')
+  })
+
+  it('does not count simulated emails against the limit', async () => {
+    const { toSend } = await claimEmailSlots(db, messages(3), MONDAY_10)
+    await recordEmailOutcomes(
+      db,
+      toSend.map(item => ({ id: item.id, status: 'simulated' as const })),
+    )
+    expect((await getEmailQueue(db, MONDAY_10)).used).toBe(0)
+  })
+
+  it('withdraws what is still waiting for that person and session, and logs unclaimed messages', async () => {
+    const person = await makeUser(db)
+    const session = await makeSession(db)
+    await claimEmailSlots(db, messages(80), MONDAY_10)
+    await claimEmailSlots(
+      db,
+      messages(1, { template: 'staff.convocation', toUserId: person.id, sessionId: session.id }),
+      MONDAY_10,
+    )
+    const input = { template: 'staff.convocation', toUserId: person.id, sessionId: session.id }
+    expect(await withdrawQueuedEmails(db, input)).toBe(1)
+    expect(await withdrawQueuedEmails(db, input)).toBe(0)
+    await recordUndelivered(db, messages(2), 'non verificabile')
+    expect(await statusCount('failed')).toBe(2)
+  })
+
+  it('says when no access email can leave today', async () => {
+    await claimEmailSlots(db, messages(80), MONDAY_10)
+    expect(await canSendAccessEmail(db, MONDAY_10)).toBe(true)
+    await claimEmailSlots(db, messages(20, { sensitive: true }), MONDAY_10)
+    expect(await canSendAccessEmail(db, MONDAY_10)).toBe(false)
   })
 
   it('gives back the place of a refused email and keeps the one of an uncertain send', async () => {

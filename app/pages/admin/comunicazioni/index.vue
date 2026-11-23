@@ -9,7 +9,16 @@ const QUEUE_REFRESH_MS = 30_000
 const route = useRoute()
 const router = useRouter()
 
-const { data: queue, refresh: refreshQueue } = useApiFetch<EmailQueueOverview>('/api/admin/email-log/queue')
+const { data: latestQueue, refresh: refreshQueue } = useApiFetch<EmailQueueOverview>('/api/admin/email-log/queue')
+// A failed refresh keeps the last numbers on screen.
+const queue = shallowRef<EmailQueueOverview | null>(null)
+watch(
+  latestQueue,
+  value => {
+    if (value) queue.value = value
+  },
+  { immediate: true },
+)
 let queueTimer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
   queueTimer = setInterval(() => refreshQueue(), QUEUE_REFRESH_MS)

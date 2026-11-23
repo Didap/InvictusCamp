@@ -25,6 +25,7 @@ const INTERRUPTED_AFTER_MS = 15 * 60 * 1000
 const LIMIT_REACHED = `Limite di ${EMAIL_DAILY_LIMIT} email al giorno raggiunto: richiedila di nuovo domani.`
 const INTERRUPTED = 'Invio interrotto: l’email potrebbe essere partita, controlla prima di rimandarla.'
 const ACCOUNT_DISABLED = 'Account disattivato mentre l’email era in coda: non è partita.'
+const WITHDRAWN = 'Ritirata prima di partire: non è stata inviata.'
 
 export interface EmailToSend {
   id: string
@@ -33,16 +34,35 @@ export interface EmailToSend {
   subject: string
   html: string
   text: string
+  sensitive?: boolean
   devNote?: string
 }
 
 export interface EmailOutcome {
   id: string
-  status: 'sent' | 'failed' | 'simulated'
+  status: 'sent' | 'failed' | 'simulated' | 'queued'
   providerId?: string
   error?: string
   /** The provider did not answer: the email may have left, so it keeps counting against the limit. */
   uncertain?: boolean
+  /** The plain text to keep when the email goes back to the queue. */
+  text?: string
+}
+
+/**
+ * What a provider error means for one email. No status code: the answer was lost and it may have left.
+ * A temporary problem (quota, key, outage) puts an ordinary email back in the queue; anything else is a
+ * refusal of that email. Access emails expire, so they never go back.
+ */
+export function providerRefusal(
+  item: EmailToSend,
+  error: { message: string; statusCode: number | null },
+): EmailOutcome {
+  const reason = error.message.slice(0, 500)
+  if (error.statusCode === null) return { id: item.id, status: 'failed', error: reason, uncertain: true }
+  const temporary = [401, 403, 429].includes(error.statusCode) || error.statusCode >= 500
+  if (temporary && !item.sensitive) return { id: item.id, status: 'queued', error: reason, text: item.text }
+  return { id: item.id, status: 'failed', error: reason }
 }
 
 function romeClock(now: Date) {
@@ -132,6 +152,7 @@ export async function claimEmailSlots(db: Db, messages: EmailMessage[], now: Dat
         subject: message.subject,
         html: message.html,
         text: message.text,
+        sensitive: message.sensitive,
         devNote: message.devNote,
       }))
     return {
@@ -169,7 +190,7 @@ export async function claimQueuedEmails(db: Db, now: Date = new Date()): Promise
     if (disabled.length) {
       await tx
         .update(emailLog)
-        .set({ status: 'failed', error: ACCOUNT_DISABLED, textBody: null })
+        .set({ status: 'withdrawn', error: ACCOUNT_DISABLED, textBody: null })
         .where(
           inArray(
             emailLog.id,
@@ -178,11 +199,20 @@ export async function claimQueuedEmails(db: Db, now: Date = new Date()): Promise
         )
     }
     const leaving = rows.filter(row => row.userStatus !== 'disabled')
-    for (const row of leaving) {
+    if (leaving.length) {
       await tx
         .update(emailLog)
-        .set({ status: 'sending', sentAt: now, toEmail: row.userEmail ?? row.toEmail })
-        .where(eq(emailLog.id, row.id))
+        .set({
+          status: 'sending',
+          sentAt: now,
+          toEmail: sql`coalesce((select ${users.email} from ${users} where ${users.id} = ${emailLog.toUserId}), ${emailLog.toEmail})`,
+        })
+        .where(
+          inArray(
+            emailLog.id,
+            leaving.map(row => row.id),
+          ),
+        )
     }
     return leaving.map(row => ({
       id: row.id,
@@ -195,23 +225,69 @@ export async function claimQueuedEmails(db: Db, now: Date = new Date()): Promise
   })
 }
 
-/** Writes how each send went. A refused email gives its place back; an uncertain one keeps it. */
+/**
+ * Writes how each send went. Only what really left, or may have, keeps its place in the limit: a
+ * refused or simulated email gives it back, and one going back to the queue keeps its text.
+ */
 export async function recordEmailOutcomes(db: Db, outcomes: EmailOutcome[]) {
   if (!outcomes.length) return
   await db.transaction(async tx => {
-    for (const { id, status, providerId, error, uncertain } of outcomes) {
+    for (const { id, status, providerId, error, uncertain, text } of outcomes) {
       await tx
         .update(emailLog)
         .set({
           status,
           providerId: providerId ?? null,
           error: error ?? null,
-          textBody: null,
-          ...(status === 'failed' && !uncertain ? { sentAt: null } : {}),
+          textBody: status === 'queued' ? (text ?? null) : null,
+          ...(status === 'sent' || uncertain ? {} : { sentAt: null }),
         })
         .where(eq(emailLog.id, id))
     }
   })
+}
+
+/** Records messages that could not be claimed, so the log still shows them. */
+export async function recordUndelivered(db: Db, messages: EmailMessage[], reason: string) {
+  if (!messages.length) return
+  await db.insert(emailLog).values(
+    messages.map(message => ({
+      template: message.template,
+      toEmail: message.to,
+      toUserId: message.toUserId ?? null,
+      subject: message.subject,
+      html: message.sensitive ? null : message.html,
+      status: 'failed' as const,
+      error: reason.slice(0, 500),
+      communicationId: message.communicationId ?? null,
+      sessionId: message.sessionId ?? null,
+    })),
+  )
+}
+
+/** Whether an access email (link, code) can still leave today. */
+export async function canSendAccessEmail(db: DbOrTx, now: Date = new Date()): Promise<boolean> {
+  return (await usedToday(db, now)) < EMAIL_DAILY_LIMIT
+}
+
+/** Takes back the emails still waiting for this person and session. Returns how many. */
+export async function withdrawQueuedEmails(
+  db: DbOrTx,
+  input: { template: string; toUserId: string; sessionId: string },
+): Promise<number> {
+  const rows = await db
+    .update(emailLog)
+    .set({ status: 'withdrawn', error: WITHDRAWN, textBody: null })
+    .where(
+      and(
+        eq(emailLog.status, 'queued'),
+        eq(emailLog.template, input.template),
+        eq(emailLog.toUserId, input.toUserId),
+        eq(emailLog.sessionId, input.sessionId),
+      ),
+    )
+    .returning({ id: emailLog.id })
+  return rows.length
 }
 
 /** Emails left `sending` by a crash: they may have left, so they stay counted. */

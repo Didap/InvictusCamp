@@ -212,13 +212,21 @@ async function send() {
       draftId.value ? `/api/admin/communications/${draftId.value}/send` : '/api/admin/communications',
       { method: 'POST', body: message },
     )
-    const outcome = result.failed
-      ? `${plural(result.failed, 'email non recapitata', 'email non recapitate')}: le trovi nel registro.`
-      : result.queued
+    const outcome = [
+      result.failed
+        ? `${plural(result.failed, 'email non recapitata', 'email non recapitate')}: le trovi nel registro.`
+        : '',
+      result.queued
         ? `${plural(result.sent + result.simulated, 'email partita', 'email partite')}, ${result.queued} in coda: partono da sole.`
+        : '',
+      result.failed || result.queued
+        ? ''
         : result.simulated
           ? `${plural(result.simulated, 'email registrata come simulata', 'email registrate come simulate')}: in questo ambiente non partono davvero.`
-          : `${plural(result.sent, 'email partita', 'email partite')}.`
+          : `${plural(result.sent, 'email partita', 'email partite')}.`,
+    ]
+      .filter(Boolean)
+      .join(' ')
     notifySuccess('Messaggio inviato', outcome)
     await navigateTo(`/admin/comunicazioni/${result.id}`)
   } catch (error) {

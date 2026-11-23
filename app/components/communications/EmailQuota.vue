@@ -5,7 +5,7 @@ import { plural } from '#shared/utils/format'
 // Today's emails against the daily limit: one bar, always in view on the Comunicazioni page.
 const props = defineProps<{ quota: EmailQueueOverview }>()
 
-const reserveLeft = computed(() => Math.min(props.quota.reserve, props.quota.limit - props.quota.used))
+const reserveLeft = computed(() => Math.max(0, Math.min(props.quota.reserve, props.quota.limit - props.quota.used)))
 const share = (value: number) => `${(Math.min(value, props.quota.limit) / props.quota.limit) * 100}%`
 
 const summary = computed(() => {
