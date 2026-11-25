@@ -4,8 +4,10 @@ import type { UsefulInfo } from './domain'
 import type { FileDto } from './api'
 import type {
   ConvocationStatus,
+  ItalianRegion,
   PersonalDocumentCategory,
   SessionStatus,
+  ShirtSize,
   StaffRole,
   StaffStatus,
   StaffTagColor,
@@ -17,10 +19,27 @@ import type { IsoDay } from '../utils/dates'
 /** The outcome emails of a review, sent only by an explicit action of the administration. */
 export type StaffOutcomeTemplate = 'staff.approved' | 'staff.rejected'
 
-/** GET /api/staff/useful-info: what the canteen knows about the signed-in staff member. */
+/**
+ * GET /api/staff/useful-info (the person) and /api/admin/staff/:userId/health (the administration, audited):
+ * the details for the canteen and the other ones, under the consent to health data.
+ */
 export interface StaffUsefulInfoDto {
   info: UsefulInfo | null
+  otherInfo: string | null
   consentAt: string | null
+}
+
+/** The personal sheet as stored (/staff/scheda): null where it is not filled in. */
+export interface StaffSheet {
+  birthDate: IsoDay | null
+  birthPlace: string | null
+  fiscalCode: string | null
+  address: string | null
+  city: string | null
+  postalCode: string | null
+  province: string | null
+  region: ItalianRegion | null
+  shirtSize: ShirtSize | null
 }
 
 /**
@@ -130,8 +149,9 @@ export interface StaffDetail {
   createdAt: string
   status: StaffStatus
   team: StaffTeam
-  birthDate: IsoDay | null
-  city: string | null
+  sheet: StaffSheet
+  /** When the person consented to health data: the reserved section opens only then. */
+  healthConsentAt: string | null
   roles: StaffRole[]
   /** Ids of the tags of the «Valutazione»: never shown to the person. */
   tags: string[]
@@ -215,11 +235,16 @@ export interface SessionStaffData {
 
 // ─── Staff side ────────────────────────────────────────────────────────────────────────────────────
 
-/** GET /api/staff/application */
+/** GET /api/staff/sheet: the personal sheet, with the account's details and the application as it was sent. */
+export interface StaffSheetDto {
+  account: { firstName: string; lastName: string; email: string; phone: string | null }
+  sheet: StaffSheet
+  application: StaffApplicationDto
+}
+
+/** The application as it was sent, read only. */
 export interface StaffApplicationDto {
   team: StaffTeam
-  birthDate: IsoDay | null
-  city: string | null
   /** The person's roles, with the names the administration gave them. */
   roles: { id: StaffRole; name: string }[]
   qualifications: string | null
@@ -271,6 +296,8 @@ export interface StaffHome {
   upcoming: MyConvocation[]
   /** Sessions not started yet: how many the person said they can come to, out of how many. */
   availability: { available: number; total: number }
+  /** The personal sheet has every required field (approved and inactive only; true before). */
+  sheetComplete: boolean
 }
 
 /** A session of /staff/disponibilita with the person's answer. */

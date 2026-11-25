@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FormError, FormErrorEvent } from '@nuxt/ui'
+import type { FormError } from '@nuxt/ui'
 import { formQuestions } from '#shared/content/family-form'
 import {
   COMPOSITION_GROUPS,
@@ -15,6 +15,7 @@ import type { FamilyDataResult, FamilyFormView, FamilyProfileDto } from '#shared
 import type { ItalianRegion } from '#shared/utils/constants'
 import { formatDateTime, plural, surnameOf } from '#shared/utils/format'
 import { answerFields, fieldAnswers, type AnswerFields } from '~/utils/family-form'
+import { focusFirstError } from '~/utils/errors'
 
 // The family data (docs/spec.md, 3.8): the first form of the family, editable afterwards. Confirming it
 // creates one card per person declared, filled in on /famiglia/membri; the «-» removes an empty card. The
@@ -123,15 +124,6 @@ function validate(): FormError[] {
   return errors
 }
 
-/** Brings the first field with an error into view and puts the focus on its first control. */
-function onError(event: FormErrorEvent) {
-  const name = event.errors[0]?.name
-  const field = name ? document.querySelector<HTMLElement>(`[data-field="${name}"]`) : null
-  if (!field) return
-  field.scrollIntoView({ block: 'center' })
-  field.querySelector<HTMLElement>('input, textarea, button')?.focus({ preventScroll: true })
-}
-
 const saving = ref(false)
 
 async function save() {
@@ -208,7 +200,14 @@ async function save() {
       title="Le domande non si sono caricate"
       :description="`${apiErrorMessage(formError)}. Ricarica la pagina.`"
     />
-    <UForm v-else :schema="familyDataFieldsSchema" :state="state" :validate="validate" @submit="save" @error="onError">
+    <UForm
+      v-else
+      :schema="familyDataFieldsSchema"
+      :state="state"
+      :validate="validate"
+      @submit="save"
+      @error="focusFirstError"
+    >
       <IcSection title="La famiglia">
         <div class="space-y-5">
           <UFormField
@@ -227,7 +226,7 @@ async function save() {
       </IcSection>
 
       <IcSection title="Residenza">
-        <FamiliesResidenceFields v-model="state" required />
+        <IcResidenceFields v-model="state" required />
       </IcSection>
 
       <IcSection

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import { isSheetComplete } from '#shared/schemas/staff'
 import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
-import { OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
+import { inStaffArea, OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
-import { formatAge, formatDateTime, formatDay, formatDayRange, fullName } from '#shared/utils/format'
+import { formatAge, formatDateTime, formatDay, formatDayRange, formatTown, fullName } from '#shared/utils/format'
 import { TEAM_SLUG, teamOfSlug, teamPath } from '#shared/utils/routes'
 
-// One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, application,
-// review with internal notes, the outcome email sent only from "Comunica l’esito", availability,
+// One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, personal
+// sheet with the health data behind the reserved section, application, review with internal notes, the outcome email sent only from "Comunica l’esito", availability,
 // convocations, personal documents, signatures.
 // Keyed by the person: moving to the list of the other team keeps the page, and what is typed in it.
 definePageMeta({ path: '/admin/:team(staff|v-team)/:userId', key: route => String(route.params.userId) })
@@ -195,12 +196,34 @@ const contacts = computed(() => {
   return [
     { label: 'Email', value: p.email },
     { label: 'Telefono', value: p.phone },
-    { label: 'Città', value: p.city },
+    { label: 'Account creato il', value: dayOf(p.createdAt) },
+  ]
+})
+
+/** Whether the person still has to fill in the sheet: they can once approved. */
+const sheetNote = computed(() => {
+  const p = person.value
+  if (!p || isSheetComplete(p.sheet)) return undefined
+  return inStaffArea(p.status)
+    ? 'Non ancora completa: la compila la persona.'
+    : 'La persona la compila dopo l’approvazione.'
+})
+
+/** The personal sheet the person fills in once approved (/staff/scheda). */
+const sheet = computed(() => {
+  const s = person.value?.sheet
+  if (!s) return []
+  return [
     {
       label: 'Data di nascita',
-      value: p.birthDate && `${formatDay(p.birthDate, 'long')} (${formatAge(ageOn(p.birthDate, today))})`,
+      value: s.birthDate && `${formatDay(s.birthDate, 'long')} (${formatAge(ageOn(s.birthDate, today))})`,
     },
-    { label: 'Account creato il', value: dayOf(p.createdAt) },
+    { label: 'Luogo di nascita', value: s.birthPlace },
+    { label: 'Codice fiscale', value: s.fiscalCode },
+    { label: 'Taglia della maglietta', value: s.shirtSize },
+    { label: 'Indirizzo', value: s.address },
+    { label: 'Città', value: formatTown(s) },
+    { label: 'Regione', value: s.region },
   ]
 })
 
@@ -406,6 +429,13 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
       </aside>
 
       <div class="min-w-0 lg:order-1">
+        <IcSection title="Scheda personale" :description="sheetNote">
+          <div class="space-y-6">
+            <IcDataList :items="sheet" :columns="2" />
+            <StaffReservedHealth :user-id="person.userId" :consent-at="person.healthConsentAt" />
+          </div>
+        </IcSection>
+
         <IcSection
           title="Candidatura"
           :description="person.appliedAt ? `Inviata il ${dayOf(person.appliedAt)}` : 'Non ancora inviata'"

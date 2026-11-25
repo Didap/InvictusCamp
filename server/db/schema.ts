@@ -35,6 +35,7 @@ import type {
   PersonalDocumentCategory,
   ProgrammeGroup,
   SessionStatus,
+  ShirtSize,
   SignatureStatus,
   StaffRole,
   StaffStatus,
@@ -281,8 +282,19 @@ export const staffProfiles = pgTable(
     status: text().$type<StaffStatus>().notNull().default('registered'),
     /** Staff or v-team (volunteers): chosen in the application, changed by the administration. */
     team: text().$type<StaffTeam>().notNull().default('staff'),
+    // The personal sheet (/staff/scheda), filled in once approved: birth, codice fiscale, residence, size.
     birthDate: day(),
+    birthPlace: text(),
+    fiscalCode: text(),
+    /** Residence: street and number. */
+    address: text(),
     city: text(),
+    /** CAP, five digits. */
+    postalCode: text(),
+    province: text(),
+    region: text().$type<ItalianRegion>(),
+    /** For the uniform. */
+    shirtSize: text().$type<ShirtSize>(),
     /** Ids of `staff_roles`: chosen in the application, then given by the administration. */
     roles: jsonb().$type<StaffRole[]>().notNull().default([]),
     /** Ids of `staff_tags`: the «Valutazione» of the administration, never shown to the person. */
@@ -293,6 +305,12 @@ export const staffProfiles = pgTable(
     cvFileId: uuid().references(() => files.id, { onDelete: 'set null' }),
     /** Allergies, diet, notes for the canteen (health data): kept only with `usefulInfoConsentAt`. */
     usefulInfo: jsonb().$type<UsefulInfo>(),
+    /**
+     * What makes the camp more welcoming for the person (dyscalculia, colour blindness…): health data under the
+     * same consent, read by the administration only, never by the canteen.
+     */
+    otherInfo: text(),
+    /** The consent to health data: `usefulInfo` and `otherInfo`. */
     usefulInfoConsentAt: timestamp(tz),
     appliedAt: timestamp(tz),
     reviewedAt: timestamp(tz),

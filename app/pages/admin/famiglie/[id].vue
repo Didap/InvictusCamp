@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { adminNotesSchema } from '#shared/schemas/families'
 import type { AdminFamilyDetail, FamilyMemberDto } from '#shared/types/families'
-import { formatDateTime, fullName, isEmptyCard, memberLine, memberName, plural } from '#shared/utils/format'
+import { formatDateTime, formatTown, fullName, isEmptyCard, memberLine, memberName, plural } from '#shared/utils/format'
 
 // The record of one family for the administration: data and contacts, members (health details only
 // in the reserved section, loaded on demand), sessions (A1), questionnaire, personal documents,
@@ -24,10 +24,7 @@ const contacts = computed(() => {
     { label: 'Email', value: f.referent.email },
     { label: 'Telefono', value: f.phone ?? f.referent.phone },
     { label: 'Indirizzo', value: f.address },
-    {
-      label: 'Città',
-      value: [f.postalCode, f.city, f.province ? `(${f.province})` : null].filter(Boolean).join(' '),
-    },
+    { label: 'Città', value: formatTown(f) },
     { label: 'Regione', value: f.region },
     { label: 'Registrata il', value: formatDateTime(f.createdAt) },
     { label: 'Ultimo accesso', value: f.referent.lastLoginAt ? formatDateTime(f.referent.lastLoginAt) : 'Mai' },

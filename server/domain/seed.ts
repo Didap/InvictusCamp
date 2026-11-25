@@ -768,6 +768,18 @@ export async function seedDemo(
         : null,
       motivation: applied ? 'Voglio contribuire a un’estate inclusiva per le famiglie del camp (esempio).' : null,
       cvFileId: cv?.id ?? null,
+      // The demo account has its personal sheet filled in (/staff/scheda); the others still have to.
+      ...(s.email === DEMO_ACCOUNTS.staff
+        ? {
+            birthPlace: 'Lecce',
+            fiscalCode: 'BNCCHR04A50E506U',
+            address: 'Via Templari 12',
+            postalCode: '73100',
+            province: 'LE',
+            region: 'Puglia' as const,
+            shirtSize: 'M' as const,
+          }
+        : {}),
       // Some canteen details of the approved staff, with the consent.
       ...(s.status === 'approved' && index % 3 === 1
         ? {

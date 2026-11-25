@@ -31,5 +31,7 @@ export default defineAppConfig({
     selectMenu: { slots: { base: 'pointer-coarse:min-h-11' } },
     formField: { slots: { label: 'font-semibold' } },
     badge: { slots: { base: 'font-semibold' } },
+    // Title and description keep clear of the close button, which sits over the header's corner.
+    modal: { slots: { wrapper: 'pe-8' } },
   },
 })

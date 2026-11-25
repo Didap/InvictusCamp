@@ -8,8 +8,10 @@ import { alias } from 'drizzle-orm/pg-core'
 import {
   canMoveStaff,
   isReviewMove,
+  isSheetComplete,
   type ConvocationAddInput,
   type ConvocationSendInput,
+  type StaffSheetInput,
   type StaffUsefulInfoInput,
 } from '../../shared/schemas/staff'
 import { normalizeUsefulInfo } from '../../shared/schemas/families'
@@ -22,13 +24,14 @@ import type {
   MyConvocation,
   SessionConvocation,
   SessionStaffData,
-  StaffApplicationDto,
   StaffConvocationSummary,
   StaffDetail,
   StaffDocumentDto,
   StaffHome,
   StaffListItem,
   StaffOutcomeTemplate,
+  StaffSheet,
+  StaffSheetDto,
   StaffUsefulInfoDto,
 } from '../../shared/types/staff'
 import {
@@ -73,31 +76,81 @@ import { createError } from './errors'
 /** What a convocation declined or withdrawn lets go: its activity group and its lodging. */
 const LEAVE_SESSION = { activityGroup: null, lodgingId: null } as const
 
-/** Saves the canteen details of a staff member with the consent, or clears both; audited without the values. */
+/** The health data of a staff member as the person and the administration read it. */
+export function staffUsefulInfo(
+  profile: Pick<ProfileRow, 'usefulInfo' | 'otherInfo' | 'usefulInfoConsentAt'>,
+): StaffUsefulInfoDto {
+  return { info: profile.usefulInfo, otherInfo: profile.otherInfo, consentAt: iso(profile.usefulInfoConsentAt) }
+}
+
+/**
+ * Saves the health data of a staff member (canteen details and other ones) with the consent, or clears them
+ * and the consent; audited without the values.
+ */
 export async function saveStaffUsefulInfo(
   db: DbOrTx,
   input: { userId: string; value: StaffUsefulInfoInput; actor: Actor },
 ): Promise<StaffUsefulInfoDto> {
   const info = normalizeUsefulInfo(input.value.info)
+  const otherInfo = input.value.otherInfo?.trim() || null
   const [row] = await db
     .update(staffProfiles)
     // The consent keeps the day it was first given; saving nothing withdraws it.
     .set({
       usefulInfo: info,
-      usefulInfoConsentAt: info ? sql`coalesce(${staffProfiles.usefulInfoConsentAt}, now())` : null,
+      otherInfo,
+      usefulInfoConsentAt: info || otherInfo ? sql`coalesce(${staffProfiles.usefulInfoConsentAt}, now())` : null,
     })
     .where(eq(staffProfiles.userId, input.userId))
-    .returning({ consentAt: staffProfiles.usefulInfoConsentAt })
+    .returning()
   if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.useful_info',
     entityType: 'user',
     entityId: input.userId,
-    data: { fields: info ? Object.keys(info) : [] },
+    data: { fields: [...(info ? Object.keys(info) : []), ...(otherInfo ? ['otherInfo'] : [])] },
     ip: input.actor.ip,
   })
-  return { info, consentAt: row.consentAt?.toISOString() ?? null }
+  return staffUsefulInfo(row)
+}
+
+/** The personal sheet of a profile row. */
+export function staffSheetOf(profile: ProfileRow): StaffSheet {
+  return {
+    birthDate: profile.birthDate,
+    birthPlace: profile.birthPlace,
+    fiscalCode: profile.fiscalCode,
+    address: profile.address,
+    city: profile.city,
+    postalCode: profile.postalCode,
+    province: profile.province,
+    region: profile.region,
+    shirtSize: profile.shirtSize,
+  }
+}
+
+/** Saves the personal sheet of a staff member; the audit names the fields that changed, never their values. */
+export async function saveStaffSheet(
+  db: DbOrTx,
+  input: { userId: string; value: StaffSheetInput; actor: Actor },
+): Promise<StaffSheet> {
+  const [before] = await db.select().from(staffProfiles).where(eq(staffProfiles.userId, input.userId)).limit(1)
+  if (!before) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
+  const sheet: StaffSheet = { ...input.value, province: input.value.province || null }
+  const previous = staffSheetOf(before)
+  const fields = (Object.keys(sheet) as (keyof StaffSheet)[]).filter(key => sheet[key] !== previous[key])
+  if (!fields.length) return previous
+  const [row] = await db.update(staffProfiles).set(sheet).where(eq(staffProfiles.id, before.id)).returning()
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.sheet',
+    entityType: 'user',
+    entityId: input.userId,
+    data: { fields },
+    ip: input.actor.ip,
+  })
+  return staffSheetOf(row!)
 }
 
 /** A disabled account leaves the open sessions: its convocations let go of their group and lodging. */
@@ -1051,8 +1104,8 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     createdAt: user.createdAt.toISOString(),
     status: profile.status,
     team: profile.team,
-    birthDate: profile.birthDate,
-    city: profile.city,
+    sheet: staffSheetOf(profile),
+    healthConsentAt: iso(profile.usefulInfoConsentAt),
     roles: profile.roles,
     tags: profile.tags,
     qualifications: profile.qualifications,
@@ -1199,29 +1252,32 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
 
 // ─── Reads: staff side ─────────────────────────────────────────────────────────────────────────────
 
-/** The application of the signed-in person. */
-export async function myApplication(db: DbOrTx, userId: string): Promise<StaffApplicationDto> {
+/** The personal sheet of the signed-in person, with the account's details and the application. */
+export async function myStaffSheet(db: DbOrTx, userId: string): Promise<StaffSheetDto> {
   const [[row], roleOptions] = await Promise.all([
     db
-      .select({ profile: staffProfiles, cv: files })
+      .select({ profile: staffProfiles, user: users, cv: files })
       .from(staffProfiles)
+      .innerJoin(users, eq(users.id, staffProfiles.userId))
       .leftJoin(files, eq(files.id, staffProfiles.cvFileId))
       .where(eq(staffProfiles.userId, userId))
       .limit(1),
     staffRoleOptions(db),
   ])
   if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
-  const { profile, cv } = row
+  const { profile, user, cv } = row
   return {
-    team: profile.team,
-    birthDate: profile.birthDate,
-    city: profile.city,
-    roles: roleOptions.filter(role => profile.roles.includes(role.id)),
-    qualifications: profile.qualifications,
-    experience: profile.experience,
-    motivation: profile.motivation,
-    cv: cv ? toFileDto(cv) : null,
-    appliedAt: iso(profile.appliedAt),
+    account: { firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone },
+    sheet: staffSheetOf(profile),
+    application: {
+      team: profile.team,
+      roles: roleOptions.filter(role => profile.roles.includes(role.id)),
+      qualifications: profile.qualifications,
+      experience: profile.experience,
+      motivation: profile.motivation,
+      cv: cv ? toFileDto(cv) : null,
+      appliedAt: iso(profile.appliedAt),
+    },
   }
 }
 
@@ -1319,7 +1375,13 @@ export async function myConvocations(
 export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string = todayIso()): Promise<StaffHome> {
   // Before the approval the home is only where the application stands.
   if (!inStaffArea(profile.status)) {
-    return { status: profile.status, toAnswer: [], upcoming: [], availability: { available: 0, total: 0 } }
+    return {
+      status: profile.status,
+      toAnswer: [],
+      upcoming: [],
+      availability: { available: 0, total: 0 },
+      sheetComplete: true,
+    }
   }
   const [convocations, { sessions }] = await Promise.all([
     myConvocations(db, profile.userId, { approved: profile.status === 'approved' }),
@@ -1333,5 +1395,6 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       c => c.status === 'accepted' && c.session.endDate >= today && c.session.status !== 'cancelled',
     ),
     availability: { available, total: sessions.length },
+    sheetComplete: isSheetComplete(staffSheetOf(profile)),
   }
 }

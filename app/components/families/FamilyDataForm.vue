@@ -65,7 +65,7 @@ async function save() {
     >
       <UInput v-model="state.name" class="w-full" />
     </UFormField>
-    <FamiliesResidenceFields v-model="state" />
+    <IcResidenceFields v-model="state" />
     <UFormField label="Telefono" name="phone" hint="Facoltativo">
       <UInput v-model="state.phone" type="tel" autocomplete="tel" class="w-full" />
     </UFormField>

@@ -43,7 +43,7 @@ Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova
 `/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/feedback` (3.13), `/admin/utenti`.
 
 Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
-`/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`, `/famiglia/questionario/:sessionId` (3.13). Staff: `/staff` (home), `/staff/candidatura`,
+`/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`, `/famiglia/questionario/:sessionId` (3.13). Staff: `/staff` (home), `/staff/scheda`,
 `/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`,
 `/staff/programma/:sessionId`.
 Everyone: `/account`, `/firma/:requestId`.
@@ -129,8 +129,20 @@ every staff endpoint but the home and the CV (`requireStaff`, access `area` by d
 it sends the application like the confirmation link; migration 0026 sent the drafts of the old form that had
 a CV and a confirmed address. The home says «Grazie per la tua richiesta, stiamo valutando la candidatura e presto riceverai
 aggiornamenti», with the staff address (`contact.staffEmail`, staff@), or asks for the CV; not selected, a kind
-message. Applications sent with the older, longer form keep birth date, city, roles and texts, and the person
-still sees them on `/staff/candidatura` once approved.
+message. Applications sent with the older, longer form keep birth date, city, roles and texts.
+
+Once approved, «Scheda personale» (`/staff/scheda`, staff and v-team alike) takes the place of the application
+page. Name, surname, email and phone are the account's, read only (changed from `/account`). To fill in, all
+required but the province: birth date (the age counts itself as it is typed), birthplace, codice fiscale
+(checked with its control letter, omocodia included), residence (street and number, city, CAP, province,
+region) and the T-shirt size «per la divisa» (XS to 3XL). Saving is audited (`staff.sheet`) with the names of
+the fields that changed, never their values. Under it, «Alimentazione e altre informazioni»: allergies and
+intolerances, food preference and notes with the lists of the families (3.8), which reach the canteen (3.14),
+and «Altro da condividere» (dyscalculia, dysgraphia, colour blindness…), which only the administration reads
+(`staff_profiles.otherInfo`): both are health data under one consent, saving nothing withdraws it. Last, the
+application as it was sent (team, roles, the older texts, CV). Until the sheet is complete the home asks for
+it. The administration sees the sheet on the person's page, the health data in a reserved section opened on
+demand and audited (`staff.health_view`), as for families.
 The outcome email (`staff.approved` / `staff.rejected`) is **not automatic**: the administration sends it
 from the dashboard when it chooses, with a message it can edit. Until approved, a staff member cannot give
 availability or receive convocations. The administration can move a person to the other team from their page
@@ -459,8 +471,8 @@ What the supplier of the meals needs for a session: the **Mensa** tab of the ses
 - **Needs**: allergies and intolerances («senza lattosio», «senza glutine»…) and food preferences
   («vegetariana»…), each with how many and who, by name; then «Da sapere»: the food selectivity of the young
   people with a condition and the other notes. They come from «Informazioni utili» of the cards (3.8) and, for
-  the staff, from «Per la mensa» on their home (`staff_profiles.usefulInfo`, with a consent of their own:
-  saving nothing withdraws it).
+  the staff, from their personal sheet (3.4, `staff_profiles.usefulInfo`, with a consent of their own: saving
+  nothing withdraws it; «Altro da condividere» never reaches the canteen).
 - «Genera PDF per il fornitore» (the primary action) downloads an A4 PDF: the session and its dates, «Totale
   pasti» with the groups, each need with how many and who by first and last name, then «Da sapere». «Copia il
   testo» copies «Totale pasti 72 (persone a ogni pasto: 60 di 12 famiglie, 10 dello staff e 2 del v-team) di

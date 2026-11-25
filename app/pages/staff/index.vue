@@ -4,8 +4,9 @@ import { formatDayRange, plural } from '#shared/utils/format'
 
 // The staff home: it follows the application (spec 3.4). Until the approval it is the whole area:
 // registered, the CV to upload (an account made before it was asked at registration); applied, the
-// notice that we are reviewing it; not selected, a kind message. Approved: convocations to answer, next
-// sessions, documents to sign, availability. Inactive: no convocations for now.
+// notice that we are reviewing it; not selected, a kind message. Approved: the personal sheet while it is
+// incomplete, convocations to answer, next sessions, documents to sign, availability. Inactive: no
+// convocations for now.
 const { user, session, fetch: fetchSession } = useUserSession()
 const { data: home, refresh } = await useApiFetch<StaffHome>('/api/staff/home')
 
@@ -60,8 +61,27 @@ watch(
         </div>
       </IcSection>
 
-      <!-- Approved (and inactive): convocations, sessions, documents, availability. -->
+      <!-- Approved (and inactive): the sheet to complete, convocations, sessions, documents, availability. -->
       <template v-else>
+        <UAlert
+          v-if="!home.sheetComplete"
+          class="mb-8"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-id-card"
+          title="Completa la tua scheda personale"
+          description="Ci servono la data e il luogo di nascita, il codice fiscale, la residenza e la taglia della maglietta."
+          :actions="[
+            {
+              label: 'Compila la scheda',
+              to: '/staff/scheda',
+              class: 'pointer-coarse:min-h-11',
+              color: 'neutral',
+              variant: 'outline',
+            },
+          ]"
+        />
+
         <IcSection v-if="home.status === 'inactive'" title="Il tuo profilo non è attivo">
           <p class="max-w-prose text-muted">
             Al momento non ricevi convocazioni e non puoi indicare la disponibilità.
@@ -116,13 +136,6 @@ watch(
             </li>
           </ul>
           <p v-else class="text-muted">Nessuna sessione in programma. Quando accetti una convocazione, la trovi qui.</p>
-        </IcSection>
-
-        <IcSection
-          title="Per la mensa"
-          description="Allergie, intolleranze e preferenze alimentari, per i pasti delle sessioni a cui partecipi."
-        >
-          <StaffUsefulInfo />
         </IcSection>
 
         <IcSection title="Documenti da firmare">

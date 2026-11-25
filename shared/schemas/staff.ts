@@ -1,10 +1,12 @@
 // Schemas of the staff area, shared by the forms (UForm) and the API (parseBody), plus the small rules
 // both sides need: the moves of a review (docs/spec.md 3.4, 3.5).
 import { z } from 'zod'
+import type { UsefulInfo } from '../types/domain'
 import { normalizeUsefulInfo, usefulInfoSchema } from './families'
 import {
   COORDINATOR_ROLE,
   PERSONAL_DOCUMENT_CATEGORIES,
+  SHIRT_SIZES,
   STAFF_TAG_COLORS,
   STAFF_TEAMS,
   type PersonalDocumentCategory,
@@ -12,7 +14,7 @@ import {
   type StaffStatus,
   type StaffTeam,
 } from '../utils/constants'
-import { zRequiredText, zText, zUuid } from './common'
+import { zBirthDate, zFiscalCode, zPostalCode, zProvince, zRegion, zRequiredText, zText, zUuid } from './common'
 
 /** The id of a role of `staff_roles` (the server checks it exists). */
 export const zStaffRole = z.string().trim().min(1).max(64)
@@ -21,15 +23,56 @@ export const zStaffTeam = z.enum(STAFF_TEAMS)
 const STAFF_LABELS_MAX = 40
 const zRoles = z.array(zStaffRole).max(STAFF_LABELS_MAX)
 
-// ─── Canteen ───────────────────────────────────────────────────────────────────────────────────────
+// ─── The personal sheet ────────────────────────────────────────────────────────────────────────────
 
 /**
- * PUT /api/staff/useful-info: allergies, diet and notes for the canteen. Allergies are health data: saving
- * anything needs the consent, saving nothing withdraws it.
+ * PUT /api/staff/sheet: the personal sheet of an approved staff or v-team member (/staff/scheda). Name,
+ * email and phone are the account's; everything here is required, the province apart.
+ */
+export const staffSheetSchema = z.object({
+  birthDate: zBirthDate,
+  birthPlace: zRequiredText(100),
+  fiscalCode: zFiscalCode,
+  address: zRequiredText(200),
+  city: zRequiredText(100),
+  postalCode: zPostalCode.refine(value => value !== '', { error: 'Campo obbligatorio' }),
+  province: zProvince.optional(),
+  region: zRegion,
+  shirtSize: z.enum(SHIRT_SIZES, { error: 'Scegli la taglia' }),
+})
+export type StaffSheetInput = z.output<typeof staffSheetSchema>
+
+/** The fields of the sheet the person has to fill in: the province is optional. */
+const SHEET_REQUIRED = [
+  'birthDate',
+  'birthPlace',
+  'fiscalCode',
+  'address',
+  'city',
+  'postalCode',
+  'region',
+  'shirtSize',
+] as const
+
+/** Whether a sheet as stored has every required field: until then the home asks for it. */
+export function isSheetComplete(sheet: Record<(typeof SHEET_REQUIRED)[number], string | null>): boolean {
+  return SHEET_REQUIRED.every(key => sheet[key])
+}
+
+// ─── Health: canteen and other details ─────────────────────────────────────────────────────────────
+
+/** Whether there is health data to keep: «Informazioni utili» or the other details. */
+export function hasStaffHealth(value: { info?: UsefulInfo | null; otherInfo?: string | null }): boolean {
+  return Boolean(normalizeUsefulInfo(value.info) || value.otherInfo?.trim())
+}
+
+/**
+ * PUT /api/staff/useful-info: allergies, diet and notes for the canteen, and the other details the camp should
+ * know. Health data: saving anything needs the consent, saving nothing withdraws it.
  */
 export const staffUsefulInfoSchema = z
-  .object({ info: usefulInfoSchema, consent: z.boolean().default(false) })
-  .refine(value => value.consent || !normalizeUsefulInfo(value.info), {
+  .object({ info: usefulInfoSchema, otherInfo: zText(2000).optional(), consent: z.boolean().default(false) })
+  .refine(value => value.consent || !hasStaffHealth(value), {
     path: ['consent'],
     error: 'Per salvare questi dati serve il tuo consenso',
   })

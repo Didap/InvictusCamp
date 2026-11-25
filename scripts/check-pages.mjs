@@ -47,7 +47,7 @@ export const PAGES = {
   ],
   staff: [
     '/staff',
-    '/staff/candidatura',
+    '/staff/scheda',
     '/staff/disponibilita',
     '/staff/convocazioni',
     '/staff/sessioni',

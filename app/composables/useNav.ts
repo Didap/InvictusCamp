@@ -39,7 +39,7 @@ export function useNav() {
         return [
           [
             home,
-            { label: 'Candidatura', icon: 'i-lucide-file-user', to: '/staff/candidatura' },
+            { label: 'Scheda personale', icon: 'i-lucide-id-card', to: '/staff/scheda' },
             { label: 'Disponibilità', icon: 'i-lucide-calendar-check', to: '/staff/disponibilita' },
             { label: 'Convocazioni', icon: 'i-lucide-bell-ring', to: '/staff/convocazioni' },
             { label: 'Sessioni', icon: 'i-lucide-calendar-days', to: '/staff/sessioni' },

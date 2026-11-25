@@ -17,6 +17,8 @@ export const HEALTH_LABELS = {
   allergies: 'Allergie e intolleranze',
   diet: 'Preferenze alimentari',
   infoNotes: 'Altre note da segnalare',
+  /** A staff member's details beyond the canteen (dyscalculia, colour blindness…). */
+  staffOther: 'Altro da condividere',
 } as const
 
 /** The 14 allergens of EU Regulation 1169/2011, lactose with milk. `canteen` is how the canteen lists them. */
@@ -128,6 +130,11 @@ export function usefulInfoItems(info: { allergies?: string[]; diet?: string; not
     { label: HEALTH_LABELS.diet, value: info?.diet ? choiceLabel(DIETS, info.diet) : 'Nessuna indicata' },
     { label: HEALTH_LABELS.infoNotes, value: info?.notes ?? null },
   ]
+}
+
+/** A staff member's health data as label and value: «Informazioni utili» and the other details. */
+export function staffHealthItems(health: { info: Parameters<typeof usefulInfoItems>[0]; otherInfo: string | null }) {
+  return [...usefulInfoItems(health.info), { label: HEALTH_LABELS.staffOther, value: health.otherInfo }]
 }
 
 /** The label of a stored choice; an unknown key (an option removed since) shows as it is. */

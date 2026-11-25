@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ITALIAN_REGIONS, type ItalianRegion } from '#shared/utils/constants'
 
-// The residence of a family, inside the parent's UForm (which validates it): required in the family
-// data form (/famiglia/profilo), optional when the administration edits it (FamilyDataForm).
+// A residence, inside the parent's UForm (which validates it): required in the family data form
+// (/famiglia/profilo) and in the staff's personal sheet (/staff/scheda), optional when the administration
+// edits a family (FamilyDataForm).
 const residence = defineModel<{
   address: string
   city: string

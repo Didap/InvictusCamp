@@ -8,7 +8,6 @@ import type { DisabilityInfo, FormAnswers, UsefulInfo } from '../types/domain'
 import {
   FAMILY_FORM_STATUSES,
   GUEST_AGE,
-  ITALIAN_REGIONS,
   MEMBER_KINDS,
   MEMBER_RELATIONSHIPS,
   PERSONAL_DOCUMENT_CATEGORIES,
@@ -23,26 +22,14 @@ import {
   zListQuery,
   zPersonName,
   zPhone,
+  zPostalCode,
+  zProvince,
+  zRegion,
   zRequiredPhone,
   zRequiredText,
   zText,
   zUuid,
 } from './common'
-
-/** An Italian province as its two-letter code ("TA"); empty is allowed. */
-const zProvince = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^([A-Z]{2})?$/, { error: 'Scrivi la sigla di due lettere, per esempio TA' })
-
-/** A CAP: five digits; empty is allowed. */
-const zPostalCode = z
-  .string()
-  .trim()
-  .regex(/^(\d{5})?$/, { error: 'Il CAP ha cinque cifre, per esempio 74024' })
-
-const zRegion = z.enum(ITALIAN_REGIONS, { error: 'Scegli la regione' })
 
 /** Family name, residence and phone, as the administration edits them on the family's behalf. */
 export const familyProfileSchema = z.object({
