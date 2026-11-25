@@ -200,8 +200,23 @@ async function approvedProfile(db: DbOrTx, userId: string, options: { lock?: boo
   return profile
 }
 
-/** The sessions whose answer the person confirmed (availabilityConfirmations). */
-const confirmationsOf = (userId: string) => eq(availabilityConfirmations.userId, userId)
+/**
+ * The last «Conferma le preferenze» among the sessions still open for availability: what the person sees fixed, can
+ * ask to reopen, and the administration reopens. Null when none is fixed.
+ */
+async function lastOpenConfirmation(db: DbOrTx, userId: string, today: string): Promise<Date | null> {
+  const [row] = await db
+    .select({ at: max(availabilityConfirmations.createdAt) })
+    .from(availabilityConfirmations)
+    .innerJoin(campSessions, eq(campSessions.id, availabilityConfirmations.sessionId))
+    .where(and(eq(availabilityConfirmations.userId, userId), openForAvailability(today)))
+  return row?.at ?? null
+}
+
+/** New dates for a session: the staff confirmed other ones, so their answers are open again (sessions.ts). */
+export async function reopenSessionAvailability(db: DbOrTx, sessionId: string): Promise<void> {
+  await db.delete(availabilityConfirmations).where(eq(availabilityConfirmations.sessionId, sessionId))
+}
 const SESSION_CLOSED = 'La sessione è conclusa o annullata: le convocazioni non si possono più cambiare'
 
 const iso = (value: Date | null | undefined) => value?.toISOString() ?? null
@@ -340,11 +355,13 @@ export async function changeStaffStatus(
   }
   const review = isReviewMove(profile.status, input.status)
   // Out of the approved staff the availability starts over: back in, nothing of it is fixed.
-  if (profile.status === 'approved') await clearAvailabilityConfirmations(db, input.userId)
+  const leaving = profile.status === 'approved'
+  if (leaving) await db.delete(availabilityConfirmations).where(eq(availabilityConfirmations.userId, input.userId))
   const [updated] = await db
     .update(staffProfiles)
     .set({
       status: input.status,
+      ...(leaving ? { availabilityResetRequestedAt: null } : {}),
       ...(input.notes !== undefined ? { reviewNotes: input.notes?.trim() || null } : {}),
       ...(review ? { reviewedAt: new Date(), reviewedBy: input.actor.userId } : {}),
     })
@@ -527,7 +544,9 @@ export async function setAvailability(
   const [confirmed] = await db
     .select({ id: availabilityConfirmations.id })
     .from(availabilityConfirmations)
-    .where(and(confirmationsOf(input.userId), eq(availabilityConfirmations.sessionId, input.sessionId)))
+    .where(
+      and(eq(availabilityConfirmations.userId, input.userId), eq(availabilityConfirmations.sessionId, input.sessionId)),
+    )
   if (confirmed) throw createError({ statusCode: 409, message: AVAILABILITY_LOCKED })
   if (input.available) {
     await db
@@ -550,29 +569,28 @@ export async function confirmAvailability(
   db: DbOrTx,
   input: { userId: string; sessionIds: string[]; actor: Actor },
   today: string = todayIso(),
-): Promise<MyAvailability> {
+): Promise<void> {
   const profile = await approvedProfile(db, input.userId, { lock: true })
-  const before = await myAvailability(db, profile, today)
   const shown = new Set(input.sessionIds)
-  const confirmed = before.sessions.filter(session => !session.locked && shown.has(session.id))
-  if (confirmed.length) {
-    await db
-      .insert(availabilityConfirmations)
-      .values(confirmed.map(session => ({ sessionId: session.id, userId: input.userId })))
-      .onConflictDoNothing()
-    await writeAudit(db, {
-      actorUserId: input.actor.userId,
-      action: 'staff.availability_confirm',
-      entityType: 'user',
-      entityId: input.userId,
-      data: {
-        sessions: confirmed.map(session => session.id),
-        available: confirmed.filter(session => session.available).map(session => session.id),
-      },
-      ip: input.actor.ip,
-    })
-  }
-  return myAvailability(db, profile, today)
+  const confirmed = (await myAvailability(db, profile, today)).sessions.filter(
+    session => !session.locked && shown.has(session.id),
+  )
+  if (!confirmed.length) return
+  await db
+    .insert(availabilityConfirmations)
+    .values(confirmed.map(session => ({ sessionId: session.id, userId: input.userId })))
+    .onConflictDoNothing()
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.availability_confirm',
+    entityType: 'user',
+    entityId: input.userId,
+    data: {
+      sessions: confirmed.map(session => session.id),
+      available: confirmed.filter(session => session.available).map(session => session.id),
+    },
+    ip: input.actor.ip,
+  })
 }
 
 /** «Chiedi il reset»: once something is confirmed, the person asks the administration to reopen it. */
@@ -580,22 +598,16 @@ export async function requestAvailabilityReset(
   db: DbOrTx,
   input: { userId: string; actor: Actor },
   today: string = todayIso(),
-): Promise<MyAvailability> {
+): Promise<void> {
   const profile = await approvedProfile(db, input.userId, { lock: true })
-  const [confirmed] = await db
-    .select({ id: availabilityConfirmations.id })
-    .from(availabilityConfirmations)
-    .where(confirmationsOf(input.userId))
-    .limit(1)
-  if (!confirmed) {
+  if (!(await lastOpenConfirmation(db, input.userId, today))) {
     throw createError({ statusCode: 409, message: 'Non hai ancora confermato la disponibilità: puoi cambiarla tu' })
   }
-  if (profile.availabilityResetRequestedAt) return myAvailability(db, profile, today)
-  const [row] = await db
+  if (profile.availabilityResetRequestedAt) return
+  await db
     .update(staffProfiles)
     .set({ availabilityResetRequestedAt: sql`now()` })
     .where(eq(staffProfiles.id, profile.id))
-    .returning()
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.availability_reset_request',
@@ -603,26 +615,16 @@ export async function requestAvailabilityReset(
     entityId: input.userId,
     ip: input.actor.ip,
   })
-  return myAvailability(db, row!, today)
-}
-
-/** Every confirmation of a person goes, with the reset they asked for: reopened, or out of the approved staff. */
-async function clearAvailabilityConfirmations(db: DbOrTx, userId: string): Promise<number> {
-  const removed = await db
-    .delete(availabilityConfirmations)
-    .where(confirmationsOf(userId))
-    .returning({ id: availabilityConfirmations.id })
-  await db.update(staffProfiles).set({ availabilityResetRequestedAt: null }).where(eq(staffProfiles.userId, userId))
-  return removed.length
 }
 
 /**
- * «Riapri la disponibilità» (administration, approved staff with something confirmed): the answers stay, the
- * person can change them and confirm again. Returns the email that tells them (none to a disabled account).
+ * «Riapri la disponibilità» (administration, approved staff with something fixed): the answers stay, the person
+ * can change them and confirm again. Returns the email that tells them (none to a disabled account).
  */
 export async function reopenAvailability(
   db: DbOrTx,
   input: { userId: string; actor: Actor; ctx: EmailContext },
+  today: string = todayIso(),
 ): Promise<EmailMessage[]> {
   const profile = await profileOf(db, input.userId, { lock: true })
   if (profile.status !== 'approved') {
@@ -631,16 +633,19 @@ export async function reopenAvailability(
       message: 'La persona non è nello staff approvato: non c’è niente da riaprire',
     })
   }
-  const reopened = await clearAvailabilityConfirmations(db, input.userId)
-  if (!reopened) {
+  if (!(await lastOpenConfirmation(db, input.userId, today))) {
     throw createError({ statusCode: 409, message: 'La disponibilità non è confermata: la persona può già cambiarla' })
+  }
+  await db.delete(availabilityConfirmations).where(eq(availabilityConfirmations.userId, input.userId))
+  if (profile.availabilityResetRequestedAt) {
+    await db.update(staffProfiles).set({ availabilityResetRequestedAt: null }).where(eq(staffProfiles.id, profile.id))
   }
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.availability_reopen',
     entityType: 'user',
     entityId: input.userId,
-    data: { requested: profile.availabilityResetRequestedAt !== null, sessions: reopened },
+    data: { requested: profile.availabilityResetRequestedAt !== null },
     ip: input.actor.ip,
   })
   const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1)
@@ -1162,16 +1167,15 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
   if (!row) throw createError({ statusCode: 404, message: 'Persona dello staff non trovata' })
   const { user, profile, cv } = row
 
-  const availability: AvailabilitySession[] = await db
-    .select(availabilitySession)
-    .from(sessionAvailability)
-    .innerJoin(campSessions, eq(campSessions.id, sessionAvailability.sessionId))
-    .where(and(eq(sessionAvailability.userId, userId), ne(campSessions.status, 'cancelled')))
-    .orderBy(asc(campSessions.startDate))
-  const [lastConfirmation] = await db
-    .select({ at: max(availabilityConfirmations.createdAt) })
-    .from(availabilityConfirmations)
-    .where(confirmationsOf(userId))
+  const [availability, confirmedAt]: [AvailabilitySession[], Date | null] = await Promise.all([
+    db
+      .select(availabilitySession)
+      .from(sessionAvailability)
+      .innerJoin(campSessions, eq(campSessions.id, sessionAvailability.sessionId))
+      .where(and(eq(sessionAvailability.userId, userId), ne(campSessions.status, 'cancelled')))
+      .orderBy(asc(campSessions.startDate)),
+    lastOpenConfirmation(db, userId, todayIso()),
+  ])
 
   const convocationRows = await db
     .select({
@@ -1255,7 +1259,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     reviewedByName: row.reviewerFirstName ? `${row.reviewerFirstName} ${row.reviewerLastName ?? ''}`.trim() : null,
     reviewNotes: profile.reviewNotes,
     availability,
-    availabilityConfirmedAt: iso(lastConfirmation?.at),
+    availabilityConfirmedAt: iso(confirmedAt),
     availabilityResetRequestedAt: iso(profile.availabilityResetRequestedAt),
     convocations,
     documents: await staffDocuments(db, userId),
@@ -1460,7 +1464,10 @@ export async function myAvailability(
     )
     .leftJoin(
       availabilityConfirmations,
-      and(eq(availabilityConfirmations.sessionId, campSessions.id), confirmationsOf(profile.userId)),
+      and(
+        eq(availabilityConfirmations.sessionId, campSessions.id),
+        eq(availabilityConfirmations.userId, profile.userId),
+      ),
     )
     .leftJoin(sessionStaff, and(eq(sessionStaff.sessionId, campSessions.id), eq(sessionStaff.userId, profile.userId)))
     .where(openForAvailability(today))

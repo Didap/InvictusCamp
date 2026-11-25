@@ -140,13 +140,8 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
       })
       .from(t.staffProfiles)
       .innerJoin(t.users, eq(t.users.id, t.staffProfiles.userId))
-      .where(
-        and(
-          isNotNull(t.staffProfiles.availabilityResetRequestedAt),
-          eq(t.staffProfiles.status, 'approved'),
-          ne(t.users.status, 'disabled'),
-        ),
-      )
+      // Leaving the approved staff drops the request; a disabled account has nothing to change.
+      .where(and(isNotNull(t.staffProfiles.availabilityResetRequestedAt), ne(t.users.status, 'disabled')))
       .orderBy(asc(t.staffProfiles.availabilityResetRequestedAt)),
   ])
 

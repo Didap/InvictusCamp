@@ -44,8 +44,8 @@ describe('staff availability', () => {
     })
 
     // The page showed June only (July came while it was open): June is fixed, July stays to answer.
-    const confirmed = await confirmAvailability(db, { userId: user.id, sessionIds: [june.id], actor }, TODAY)
-    expect(confirmed.confirmedAt).not.toBeNull()
+    await confirmAvailability(db, { userId: user.id, sessionIds: [june.id], actor }, TODAY)
+    expect((await myAvailability(db, await profileOf(user.id), TODAY)).confirmedAt).not.toBeNull()
     expect(await lockedOf(user.id)).toEqual([
       ['Giugno', true, true],
       ['Luglio', false, false],
@@ -73,12 +73,12 @@ describe('staff availability', () => {
     ])
 
     // «Chiedi il reset», once; the administration reopens and the person hears it by email.
-    const asked = await requestAvailabilityReset(db, { userId: user.id, actor }, TODAY)
-    expect(asked.resetRequestedAt).not.toBeNull()
-    expect((await requestAvailabilityReset(db, { userId: user.id, actor }, TODAY)).resetRequestedAt).toBe(
-      asked.resetRequestedAt,
-    )
-    const [email] = await reopenAvailability(db, { userId: user.id, ctx, actor: adminActor })
+    await requestAvailabilityReset(db, { userId: user.id, actor }, TODAY)
+    const asked = (await profileOf(user.id)).availabilityResetRequestedAt
+    expect(asked).not.toBeNull()
+    await requestAvailabilityReset(db, { userId: user.id, actor }, TODAY)
+    expect((await profileOf(user.id)).availabilityResetRequestedAt).toEqual(asked)
+    const [email] = await reopenAvailability(db, { userId: user.id, ctx, actor: adminActor }, TODAY)
     expect(email).toMatchObject({ template: 'staff.availability_reopened', to: user.email })
     const reopened = await myAvailability(db, await profileOf(user.id), TODAY)
     expect(reopened).toMatchObject({ confirmedAt: null, resetRequestedAt: null })
@@ -87,7 +87,7 @@ describe('staff availability', () => {
       [true, false],
     ])
     await setAvailability(db, { userId: user.id, sessionId: june.id, available: false }, TODAY)
-    await expect(reopenAvailability(db, { userId: user.id, ctx, actor: adminActor })).rejects.toMatchObject({
+    await expect(reopenAvailability(db, { userId: user.id, ctx, actor: adminActor }, TODAY)).rejects.toMatchObject({
       statusCode: 409,
     })
   })
@@ -101,7 +101,7 @@ describe('staff availability', () => {
     await requestAvailabilityReset(db, { userId: user.id, actor }, TODAY)
     await changeStaffStatus(db, { userId: user.id, status: 'inactive', actor: { userId: admin.id, ip: null } })
     await expect(
-      reopenAvailability(db, { userId: user.id, ctx, actor: { userId: admin.id, ip: null } }),
+      reopenAvailability(db, { userId: user.id, ctx, actor: { userId: admin.id, ip: null } }, TODAY),
     ).rejects.toMatchObject({ statusCode: 409 })
     await changeStaffStatus(db, { userId: user.id, status: 'approved', actor: { userId: admin.id, ip: null } })
     const back = await myAvailability(db, await profileOf(user.id), TODAY)

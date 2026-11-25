@@ -12,8 +12,16 @@ const { data, refresh } = await useApiFetch<MyAvailability>('/api/staff/availabi
 
 const sessions = computed(() => data.value?.sessions ?? [])
 const available = computed(() => sessions.value.filter(session => session.available).length)
-const hasLocked = computed(() => sessions.value.some(session => session.locked))
 const hasOpen = computed(() => sessions.value.some(session => !session.locked))
+
+/** The camp's words on what availability is (the docx of 25 November 2026). */
+const INTRO =
+  'In questa sezione puoi esprimere le tue preferenze. Si tratta di una semplice indicazione di disponibilità, che non costituisce una convocazione ufficiale né comporta alcun vincolo per la Fondazione. In caso di convocazione, riceverai una notifica e un’email ufficiale. Una volta confermate le tue preferenze, per modificare il calendario dovrai richiedere un reset. Ti invitiamo quindi a prenderti tutto il tempo necessario per compilare la sezione con attenzione. «Ci sono» vale per tutta la sessione, dal primo all’ultimo giorno.'
+const intro = computed(() =>
+  sessions.value.length
+    ? `${INTRO}${available.value ? ` Ci sei per ${plural(available.value, 'sessione', 'sessioni')}.` : ''}`
+    : undefined,
+)
 
 const saving = ref<string | null>(null)
 async function answer(session: MyAvailabilitySession, value: boolean) {
@@ -47,55 +55,48 @@ async function answer(session: MyAvailabilitySession, value: boolean) {
   }
 }
 
-/** «Conferma le preferenze» and «Chiedi il reset»: each asks first, and returns the availability as it is now. */
-async function act(
-  path: 'confirm' | 'reset-request',
-  ask: Parameters<typeof confirm>[0],
-  done: string,
-  body?: Record<string, unknown>,
-) {
-  if (!(await confirm(ask))) return
-  saving.value = path
+async function confirmAll() {
+  const ok = await confirm({
+    title: 'Confermi le tue preferenze?',
+    description: `${
+      available.value
+        ? `Ci sei per ${plural(available.value, 'sessione', 'sessioni')}`
+        : 'Non ci sei per nessuna sessione'
+    }. Dopo la conferma, per cambiarle dovrai chiedere un reset all’amministrazione.`,
+    confirmLabel: 'Conferma le preferenze',
+  })
+  if (!ok) return
+  saving.value = 'confirm'
   try {
-    const url: string = `/api/staff/availability/${path}`
-    data.value = await api<MyAvailability>(url, { method: 'POST', body })
-    notifySuccess(done)
+    const sessionIds = sessions.value.filter(session => !session.locked).map(session => session.id)
+    await api('/api/staff/availability/confirm', { method: 'POST', body: { sessionIds } })
+    notifySuccess('Preferenze confermate')
   } catch (error) {
-    notifyError(error, 'Non è stato possibile completare la richiesta')
-    await refresh()
+    notifyError(error, 'Preferenze non confermate')
   } finally {
+    await refresh()
     saving.value = null
   }
 }
 
-function confirmAll() {
-  return act(
-    'confirm',
-    {
-      title: 'Confermi le tue preferenze?',
-      description: `${
-        available.value
-          ? `Ci sei per ${plural(available.value, 'sessione', 'sessioni')}`
-          : 'Non ci sei per nessuna sessione'
-      }. Dopo la conferma, per cambiarle dovrai chiedere un reset all’amministrazione.`,
-      confirmLabel: 'Conferma le preferenze',
-    },
-    'Preferenze confermate',
-    { sessionIds: sessions.value.filter(session => !session.locked).map(session => session.id) },
-  )
-}
-
-function requestReset() {
-  return act(
-    'reset-request',
-    {
-      title: 'Chiedi il reset della disponibilità?',
-      description:
-        'L’amministrazione riceve la richiesta: quando riapre la tua disponibilità ti mandiamo un’email e puoi cambiarla.',
-      confirmLabel: 'Chiedi il reset',
-    },
-    'Richiesta inviata',
-  )
+async function requestReset() {
+  const ok = await confirm({
+    title: 'Chiedi il reset della disponibilità?',
+    description:
+      'L’amministrazione riceve la richiesta: quando riapre la tua disponibilità ti mandiamo un’email e puoi cambiarla.',
+    confirmLabel: 'Chiedi il reset',
+  })
+  if (!ok) return
+  saving.value = 'reset'
+  try {
+    await api('/api/staff/availability/reset-request', { method: 'POST' })
+    notifySuccess('Richiesta inviata')
+  } catch (error) {
+    notifyError(error, 'Richiesta non inviata')
+  } finally {
+    await refresh()
+    saving.value = null
+  }
 }
 </script>
 
@@ -111,43 +112,33 @@ function requestReset() {
         description="Potrai indicare a quali sessioni puoi venire quando la tua candidatura sarà approvata."
       />
       <UAlert
-        v-else-if="hasLocked && data.confirmedAt"
+        v-else-if="data.confirmedAt"
         class="mb-8"
         color="info"
         variant="subtle"
         icon="i-lucide-calendar-check"
         :title="`Hai confermato le tue preferenze il ${formatDateTime(data.confirmedAt)}`"
-        :description="
-          data.resetRequestedAt
-            ? `Hai chiesto il reset il ${formatDateTime(data.resetRequestedAt)}: quando l’amministrazione riapre la disponibilità ti mandiamo un’email.`
-            : 'Per cambiarle chiedi il reset all’amministrazione.'
-        "
-        :actions="
-          data.resetRequestedAt
-            ? []
-            : [
-                {
-                  label: 'Chiedi il reset',
-                  loading: saving === 'reset-request',
-                  class: 'pointer-coarse:min-h-11',
-                  color: 'neutral',
-                  variant: 'outline',
-                  onClick: requestReset,
-                },
-              ]
-        "
-      />
-
-      <IcSection
-        title="Le sessioni"
-        :description="
-          sessions.length
-            ? `In questa sezione puoi esprimere le tue preferenze. Si tratta di una semplice indicazione di disponibilità, che non costituisce una convocazione ufficiale né comporta alcun vincolo per la Fondazione. In caso di convocazione, riceverai una notifica e un’email ufficiale. Una volta confermate le tue preferenze, per modificare il calendario dovrai richiedere un reset. Ti invitiamo quindi a prenderti tutto il tempo necessario per compilare la sezione con attenzione. «Ci sono» vale per tutta la sessione, dal primo all’ultimo giorno.${
-                available ? ` Ci sei per ${plural(available, 'sessione', 'sessioni')}.` : ''
-              }`
-            : undefined
-        "
       >
+        <template #description>
+          <template v-if="data.resetRequestedAt">
+            Hai chiesto il reset il {{ formatDateTime(data.resetRequestedAt) }}: quando l’amministrazione riapre la
+            disponibilità ti mandiamo un’email.
+          </template>
+          <template v-else>Per cambiarle chiedi il reset all’amministrazione.</template>
+        </template>
+        <template v-if="!data.resetRequestedAt" #actions>
+          <UButton
+            label="Chiedi il reset"
+            color="neutral"
+            variant="outline"
+            :loading="saving === 'reset'"
+            class="pointer-coarse:min-h-11"
+            @click="requestReset"
+          />
+        </template>
+      </UAlert>
+
+      <IcSection title="Le sessioni" :description="intro">
         <UEmpty
           v-if="!sessions.length"
           icon="i-lucide-calendar"
@@ -165,7 +156,7 @@ function requestReset() {
                   {{ plural(dayCount(session), 'giorno', 'giorni') }}
                 </p>
                 <p v-if="session.convoked" class="text-sm text-muted">Hai già una convocazione per questa sessione.</p>
-                <p v-else-if="hasLocked && !session.locked" class="text-sm text-muted">Da confermare.</p>
+                <p v-else-if="data.confirmedAt && !session.locked" class="text-sm text-muted">Da confermare.</p>
               </div>
               <USwitch
                 :model-value="session.available"
@@ -178,10 +169,7 @@ function requestReset() {
               />
             </li>
           </ul>
-          <div v-if="hasOpen" class="mt-6 flex flex-wrap items-center justify-between gap-3">
-            <p class="max-w-prose text-sm text-muted">
-              Quando hai finito, conferma: dopo potrai cambiare le preferenze solo chiedendo un reset.
-            </p>
+          <div v-if="hasOpen" class="mt-6 flex justify-end">
             <UButton
               label="Conferma le preferenze"
               icon="i-lucide-calendar-check"

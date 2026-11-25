@@ -247,7 +247,7 @@ const availability = computed(() => {
 const availabilityNote = computed(() => {
   const at = person.value?.availabilityConfirmedAt
   return at
-    ? `Ultima conferma il ${formatDateTime(at)}: le sessioni confermate cambiano solo se riapri la disponibilità.`
+    ? `Ultima conferma il ${dayOf(at)}: le sessioni confermate cambiano solo se riapri la disponibilità.`
     : 'Le sessioni a cui ha detto che c’è, dal primo all’ultimo giorno. Non ancora confermate.'
 })
 const reopening = ref(false)
@@ -506,7 +506,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
             color="warning"
             variant="subtle"
             icon="i-lucide-calendar-clock"
-            :title="`Ha chiesto di cambiare la disponibilità il ${formatDateTime(person.availabilityResetRequestedAt)}`"
+            :title="`Ha chiesto di cambiare la disponibilità il ${dayOf(person.availabilityResetRequestedAt)}`"
             description="Riaprila e la persona potrà modificarla: riceve un’email che la avvisa."
           />
           <p v-if="!availability.length" class="text-muted">
