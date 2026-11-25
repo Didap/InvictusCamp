@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { REQUIRED_DOCUMENT_NAMES, isSheetComplete, missingStaffDocuments } from '#shared/schemas/staff'
+import { REQUIRED_DOCUMENT_NAMES, isSheetComplete } from '#shared/schemas/staff'
 import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
 import { inStaffArea, OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
@@ -249,17 +249,6 @@ const texts = computed(() => {
 const availability = computed(() => {
   const all = person.value?.availability ?? []
   return [...all.filter(s => s.startDate > today), ...all.filter(s => s.startDate <= today).reverse()]
-})
-
-/** The required documents (CV, ID) still missing, once the person is in the staff area. */
-const documentsMissing = computed(() => {
-  const p = person.value
-  return p && inStaffArea(p.status)
-    ? missingStaffDocuments(
-        p.cv !== null,
-        p.documents.map(d => d.category),
-      )
-    : []
 })
 
 /** The availability confirmed, and the reset the person asked for: «Riapri la disponibilità». */
@@ -587,12 +576,14 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
 
         <IcSection title="Documenti personali" description="Caricati dalla persona: titoli, attestati, documenti.">
           <UAlert
-            v-if="documentsMissing.length"
+            v-if="person.documentsMissing.length"
             class="mb-4"
             color="warning"
             variant="subtle"
             icon="i-lucide-file-warning"
-            :title="`Manca ${andList(documentsMissing.map(d => REQUIRED_DOCUMENT_NAMES[d]))}`"
+            :title="`${person.documentsMissing.length === 1 ? 'Manca' : 'Mancano'} ${andList(
+              person.documentsMissing.map(d => REQUIRED_DOCUMENT_NAMES[d]),
+            )}`"
             description="Il curriculum e il documento d’identità in PDF sono obbligatori: la persona li carica dai suoi Documenti."
           />
           <p v-if="!person.documents.length" class="text-muted">Nessun documento caricato.</p>

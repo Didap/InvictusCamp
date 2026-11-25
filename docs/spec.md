@@ -144,10 +144,11 @@ empty, the date is the last save's); saving nothing withdraws it. Last, the
 application as it was sent (team, roles, the older texts, CV). Until the sheet is complete the home asks for
 it. The administration sees the sheet on the person's page, the health data in a reserved section opened on
 demand and audited (`staff.health_view`), as for families.
-**Required documents** (`/staff/documenti`, «Documenti obbligatori» first): the CV (`staff_profiles.cvFileId`, sent
-with the application or missing for someone invited as approved; a new one from `POST /api/staff/cv` takes its
-place, audited `staff.cv`) and an ID (a personal document `id_document`), both in PDF only. Until both are there the
-home asks for them, and the person's admin page says which is missing. The other personal documents (titles,
+**Required documents** (`/staff/documenti`, «Documenti obbligatori» first): the CV (`staff_profiles.cvFileId`, the one
+sent with the application, which stays as it was; someone invited as approved and without one uploads it from
+`POST /api/staff/cv`, audited `staff.cv`; an updated CV goes among the other documents) and an ID (a personal
+document `id_document`), both in PDF only: an ID uploaded earlier as a photo does not count. Until both are there
+the home asks for them, and the person's admin page says which is missing. The other personal documents (titles,
 certificates) keep their categories and formats.
 Once the sheet is complete, the gestionale writes its PDF («Scheda personale · Nome Cognome»: the account's
 name, email and phone, birth, codice fiscale, residence, T-shirt size and «Con la firma confermo che i dati di

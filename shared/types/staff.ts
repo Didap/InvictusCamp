@@ -173,6 +173,8 @@ export interface StaffDetail {
   availabilityResetRequestedAt: string | null
   convocations: StaffConvocationSummary[]
   documents: StaffDocumentDto[]
+  /** The required documents (CV, ID in PDF) not there yet, once in the staff area. */
+  documentsMissing: RequiredStaffDocument[]
   outcome: StaffOutcome
 }
 
@@ -323,6 +325,8 @@ export interface StaffHome {
 export interface MyStaffDocuments {
   cv: FileDto | null
   documents: StaffDocumentDto[]
+  /** The required documents not there yet: an ID counts only in PDF. */
+  documentsMissing: RequiredStaffDocument[]
 }
 
 /** A session of /staff/disponibilita with the person's answer. */

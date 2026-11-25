@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { REQUIRED_DOCUMENT_NAMES, STAFF_DOCUMENT_CATEGORIES, missingStaffDocuments } from '#shared/schemas/staff'
+import { PDF_ONLY_DOCUMENT_CATEGORIES, REQUIRED_DOCUMENT_NAMES, STAFF_DOCUMENT_CATEGORIES } from '#shared/schemas/staff'
 import type { MyStaffDocuments, StaffDocumentDto } from '#shared/types/staff'
 import type { PersonalDocumentCategory } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
@@ -15,20 +15,15 @@ const { data, refresh } = await useApiFetch<MyStaffDocuments>('/api/staff/docume
 const documents = computed(() => data.value?.documents ?? [])
 const idDocuments = computed(() => documents.value.filter(document => document.category === 'id_document'))
 const others = computed(() => documents.value.filter(document => document.category !== 'id_document'))
-const missing = computed(() =>
-  data.value
-    ? missingStaffDocuments(
-        data.value.cv !== null,
-        documents.value.map(document => document.category),
-      )
-    : [],
-)
+const missing = computed(() => data.value?.documentsMissing ?? [])
+/** One primary action: the upload of the first required document missing. */
+const primary = computed(() => missing.value[0])
 
 /** The ID has its own place among the required documents. */
 const categoryItems = computed(() =>
   options(
     'personalDocumentCategory',
-    STAFF_DOCUMENT_CATEGORIES.filter(category => category !== 'id_document'),
+    STAFF_DOCUMENT_CATEGORIES.filter(category => !PDF_ONLY_DOCUMENT_CATEGORIES.includes(category)),
   ).map(option => ({ label: option.label, value: option.value as PersonalDocumentCategory })),
 )
 const upload = reactive({ category: 'certification' as PersonalDocumentCategory, title: '' })
@@ -44,7 +39,7 @@ const dayOf = (instant: string) => formatDay(todayIso(new Date(instant)), 'long'
 const removing = ref<string | null>(null)
 async function remove(document: StaffDocumentDto) {
   const ok = await confirm({
-    title: `Elimini «${document.title}»?`,
+    title: `Elimini «${document.title}» (${document.file.originalName})?`,
     description: 'Il file viene cancellato e l’amministrazione non lo vede più.',
     confirmLabel: 'Elimina',
     danger: true,
@@ -70,29 +65,37 @@ async function remove(document: StaffDocumentDto) {
       title="Documenti obbligatori"
       :description="
         missing.length
-          ? `Ci servono per lavorare con te: carica ${andList(missing.map(m => REQUIRED_DOCUMENT_NAMES[m]))}, in PDF.`
+          ? `Per lavorare con te carica ${andList(missing.map(m => REQUIRED_DOCUMENT_NAMES[m]))}, in PDF.`
           : 'Il curriculum e il documento d’identità, in PDF: ci sono tutti e due.'
       "
     >
       <div class="space-y-6">
         <div>
           <h3 class="font-semibold text-highlighted">Curriculum</h3>
-          <IcFileLink v-if="data.cv" :file="data.cv" class="mt-2" />
-          <p v-else class="mt-1 text-warning">Da caricare</p>
-          <IcFileUpload
-            class="mt-3"
-            endpoint="/api/staff/cv"
-            accept="application/pdf"
-            description="PDF, fino a 15 MB"
-            :button-label="data.cv ? 'Sostituisci il CV' : 'Carica il CV'"
-            @uploaded="refresh()"
-          />
+          <template v-if="data.cv">
+            <IcFileLink :file="data.cv" class="mt-2" />
+            <p class="mt-1 text-sm text-muted">
+              È quello che ci hai mandato. Un CV aggiornato caricalo qui sotto, tra gli altri documenti.
+            </p>
+          </template>
+          <template v-else>
+            <p class="mt-1 text-warning">Da caricare</p>
+            <IcFileUpload
+              class="mt-3"
+              endpoint="/api/staff/cv"
+              accept="application/pdf"
+              description="PDF, fino a 15 MB"
+              button-label="Carica il CV"
+              :secondary="primary !== 'cv'"
+              @uploaded="refresh()"
+            />
+          </template>
         </div>
         <div>
           <h3 class="font-semibold text-highlighted">Documento d’identità</h3>
           <ul v-if="idDocuments.length" class="mt-2 space-y-2">
             <li v-for="document in idDocuments" :key="document.id" class="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <IcFileLink :file="document.file" :label="document.title" />
+              <IcFileLink :file="document.file" />
               <UButton
                 class="pointer-coarse:min-h-11"
                 icon="i-lucide-trash-2"
@@ -101,19 +104,22 @@ async function remove(document: StaffDocumentDto) {
                 variant="ghost"
                 size="sm"
                 :loading="removing === document.id"
-                :aria-label="`Elimina ${document.title}`"
+                :aria-label="`Elimina ${document.file.originalName}`"
                 @click="remove(document)"
               />
             </li>
           </ul>
-          <p v-else class="mt-1 text-warning">Da caricare</p>
+          <p v-if="missing.includes('id_document')" class="mt-1 text-warning">
+            {{ idDocuments.length ? 'Da caricare in PDF' : 'Da caricare' }}
+          </p>
           <IcFileUpload
             class="mt-3"
             endpoint="/api/staff/documents"
             accept="application/pdf"
             description="PDF con fronte e retro, fino a 15 MB"
             :fields="{ category: 'id_document', title: 'Documento d’identità' }"
-            :button-label="idDocuments.length ? 'Carica un altro documento' : 'Carica il documento'"
+            :button-label="idDocuments.length ? 'Carica un altro file' : 'Carica il documento'"
+            :secondary="primary !== 'id_document'"
             @uploaded="refresh()"
           />
         </div>
@@ -171,6 +177,7 @@ async function remove(document: StaffDocumentDto) {
           :fields="{ category: upload.category, title: upload.title.trim() }"
           :disabled="!upload.title.trim()"
           button-label="Carica il documento"
+          :secondary="primary !== undefined"
           @uploaded="uploaded"
         />
         <p v-if="!upload.title.trim()" class="text-sm text-muted">Scrivi il titolo per poter caricare il file.</p>

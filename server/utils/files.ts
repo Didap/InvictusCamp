@@ -77,6 +77,39 @@ export function saveFile(input: StoreFileInput, db: DbOrTx = useDb()): Promise<F
   return storeFile(db, uploadsDir(), input)
 }
 
+/**
+ * A CV (PDF only) uploaded by `userId` and stored, then `attach` records it on the profile: the file is removed when
+ * `attach` refuses (false: 409 with `refused`) or fails.
+ */
+export async function uploadCv(
+  event: H3Event,
+  userId: string,
+  attach: (fileId: string) => Promise<boolean>,
+  refused: string,
+): Promise<FileRow> {
+  const upload = await readUpload(event, { accept: ['application/pdf'] })
+  const file = await saveFile({
+    data: upload.data,
+    originalName: upload.filename,
+    mimeType: upload.mimeType,
+    purpose: 'cv',
+    ownerUserId: userId,
+    uploadedBy: userId,
+  })
+  let attached: boolean
+  try {
+    attached = await attach(file.id)
+  } catch (error) {
+    await removeFile(file.id)
+    throw error
+  }
+  if (!attached) {
+    await removeFile(file.id)
+    throw createError({ statusCode: 409, message: refused })
+  }
+  return file
+}
+
 export function loadFile(file: Pick<FileRow, 'storageKey'>): Promise<Buffer> {
   return readStoredFile(uploadsDir(), file)
 }

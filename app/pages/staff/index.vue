@@ -90,7 +90,9 @@ watch(
           variant="subtle"
           icon="i-lucide-file-up"
           title="Carica i documenti obbligatori"
-          :description="`Ci servono ${andList(home.documentsMissing.map(d => REQUIRED_DOCUMENT_NAMES[d]))}, in PDF.`"
+          :description="`${home.documentsMissing.length === 1 ? 'Ci serve' : 'Ci servono'} ${andList(
+            home.documentsMissing.map(d => REQUIRED_DOCUMENT_NAMES[d]),
+          )}, in PDF.`"
           :actions="[
             {
               label: 'Vai ai documenti',

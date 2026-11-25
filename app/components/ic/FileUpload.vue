@@ -11,6 +11,8 @@ const props = withDefaults(
     description?: string
     buttonLabel?: string
     disabled?: boolean
+    /** Not the primary action of the page: a neutral button. */
+    secondary?: boolean
   }>(),
   {
     accept: 'application/pdf,image/jpeg,image/png',
@@ -58,6 +60,8 @@ async function upload() {
         :loading="uploading"
         icon="i-lucide-upload"
         :label="buttonLabel"
+        :color="secondary ? 'neutral' : 'primary'"
+        :variant="secondary ? 'outline' : 'solid'"
         class="pointer-coarse:min-h-11"
         @click="upload"
       />

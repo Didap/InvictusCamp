@@ -204,9 +204,12 @@ export const REQUIRED_DOCUMENT_NAMES: Record<RequiredStaffDocument, string> = {
   id_document: 'il documento d’identità',
 }
 
-/** The required documents still missing, from the CV on the profile and the categories of the documents uploaded. */
-export function missingStaffDocuments(hasCv: boolean, categories: readonly string[]): RequiredStaffDocument[] {
-  return REQUIRED_STAFF_DOCUMENTS.filter(required => (required === 'cv' ? !hasCv : !categories.includes(required)))
+/** The categories of personal documents accepted in PDF only: the ID is a required document, like the CV. */
+export const PDF_ONLY_DOCUMENT_CATEGORIES: readonly PersonalDocumentCategory[] = ['id_document']
+
+/** The required documents still missing, from which of them are there. */
+export function missingStaffDocuments(present: Record<RequiredStaffDocument, boolean>): RequiredStaffDocument[] {
+  return REQUIRED_STAFF_DOCUMENTS.filter(required => !present[required])
 }
 
 /** The text fields sent with the file to POST /api/staff/documents. */

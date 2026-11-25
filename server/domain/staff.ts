@@ -1137,40 +1137,55 @@ async function availableFor(db: DbOrTx, sessionId: string): Promise<Set<string>>
   return new Set(rows.map(row => row.userId))
 }
 
-/** Personal documents of an account, newest first. */
-/** The documents page of the signed-in person: the CV on the profile and the documents uploaded. */
+/** The CV on a profile, as a file to show or download. */
+async function cvFileOf(db: DbOrTx, cvFileId: string | null): Promise<FileDto | null> {
+  if (!cvFileId) return null
+  const [cv] = await db.select().from(files).where(eq(files.id, cvFileId)).limit(1)
+  return cv ? toFileDto(cv) : null
+}
+
+/** The required documents not there yet: the CV on the profile, an ID among the documents (in PDF only). */
+function requiredDocumentsMissing(cvFileId: string | null, documents: StaffDocumentDto[]) {
+  return missingStaffDocuments({
+    cv: cvFileId !== null,
+    id_document: documents.some(d => d.category === 'id_document' && d.file.mimeType === 'application/pdf'),
+  })
+}
+
+/** The documents page of the signed-in person: the CV on the profile, the documents uploaded, what is missing. */
 export async function myStaffDocuments(
   db: DbOrTx,
   profile: Pick<ProfileRow, 'userId' | 'cvFileId'>,
 ): Promise<MyStaffDocuments> {
-  const [[cv], documents] = await Promise.all([
-    profile.cvFileId ? db.select().from(files).where(eq(files.id, profile.cvFileId)).limit(1) : [],
-    staffDocuments(db, profile.userId),
-  ])
-  return { cv: cv ? toFileDto(cv) : null, documents }
+  const [cv, documents] = await Promise.all([cvFileOf(db, profile.cvFileId), staffDocuments(db, profile.userId)])
+  return { cv, documents, documentsMissing: requiredDocumentsMissing(profile.cvFileId, documents) }
 }
 
 /**
- * A new CV (PDF) from the staff area: it takes the place of the one on the profile, sent with the application or
- * missing for someone invited as approved. Returns the file it replaces, to remove after the commit.
+ * The CV from the staff area, for someone without one (invited as approved): the CV sent with an application stays
+ * as it was. False when there is one already.
  */
-export async function replaceStaffCv(
+export async function addStaffCv(
   db: DbOrTx,
   input: { userId: string; fileId: string; actor: Actor },
-): Promise<string | null> {
-  const profile = await profileOf(db, input.userId, { lock: true })
-  await db.update(staffProfiles).set({ cvFileId: input.fileId }).where(eq(staffProfiles.id, profile.id))
+): Promise<boolean> {
+  const [added] = await db
+    .update(staffProfiles)
+    .set({ cvFileId: input.fileId })
+    .where(and(eq(staffProfiles.userId, input.userId), isNull(staffProfiles.cvFileId)))
+    .returning({ id: staffProfiles.id })
+  if (!added) return false
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.cv',
     entityType: 'user',
     entityId: input.userId,
-    data: { replaced: profile.cvFileId !== null },
     ip: input.actor.ip,
   })
-  return profile.cvFileId
+  return true
 }
 
+/** Personal documents of an account, newest first. */
 export async function staffDocuments(db: DbOrTx, userId: string): Promise<StaffDocumentDto[]> {
   const rows = await db
     .select({ document: personalDocuments, file: files })
@@ -1276,6 +1291,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
         .limit(1)
     : []
 
+  const documents = await staffDocuments(db, userId)
   return {
     userId: user.id,
     firstName: user.firstName,
@@ -1302,7 +1318,8 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     availabilityConfirmedAt: iso(confirmedAt),
     availabilityResetRequestedAt: iso(profile.availabilityResetRequestedAt),
     convocations,
-    documents: await staffDocuments(db, userId),
+    documents,
+    documentsMissing: inStaffArea(profile.status) ? requiredDocumentsMissing(profile.cvFileId, documents) : [],
     outcome: {
       template,
       subject: template ? outcomeSubject(template) : '',
@@ -1456,8 +1473,8 @@ export async function myStaffSheet(
   user: Pick<typeof users.$inferSelect, 'firstName' | 'lastName' | 'email' | 'phone'>,
   profile: ProfileRow,
 ): Promise<StaffSheetDto> {
-  const [[cv], roleOptions, signature] = await Promise.all([
-    profile.cvFileId ? db.select().from(files).where(eq(files.id, profile.cvFileId)).limit(1) : [],
+  const [cv, roleOptions, signature] = await Promise.all([
+    cvFileOf(db, profile.cvFileId),
     staffRoleOptions(db),
     sheetSignature(db, profile.userId),
   ])
@@ -1472,7 +1489,7 @@ export async function myStaffSheet(
       qualifications: profile.qualifications,
       experience: profile.experience,
       motivation: profile.motivation,
-      cv: cv ? toFileDto(cv) : null,
+      cv,
       appliedAt: iso(profile.appliedAt),
     },
   }
@@ -1602,14 +1619,10 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       documentsMissing: [],
     }
   }
-  const [convocations, { sessions }, [idDocument]] = await Promise.all([
+  const [convocations, { sessions }, documents] = await Promise.all([
     myConvocations(db, profile.userId, { approved: profile.status === 'approved' }),
     myAvailability(db, profile, today),
-    db
-      .select({ id: personalDocuments.id })
-      .from(personalDocuments)
-      .where(and(eq(personalDocuments.userId, profile.userId), eq(personalDocuments.category, 'id_document')))
-      .limit(1),
+    staffDocuments(db, profile.userId),
   ])
   const available = sessions.filter(session => session.available).length
   return {
@@ -1618,6 +1631,6 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
     upcoming: convocations.filter(c => c.status === 'accepted' && isSessionAhead(c.session, today)),
     availability: { available, total: sessions.length, toConfirm: sessions.filter(session => !session.locked).length },
     sheetComplete,
-    documentsMissing: missingStaffDocuments(profile.cvFileId !== null, idDocument ? ['id_document'] : []),
+    documentsMissing: requiredDocumentsMissing(profile.cvFileId, documents),
   }
 }
