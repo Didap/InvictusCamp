@@ -1172,7 +1172,8 @@ export async function documentOptions(db: DbOrTx): Promise<DocumentOptions> {
       sessionId: documents.sessionId,
     })
     .from(documents)
-    .where(isNull(documents.archivedAt))
+    // A release or a staff sheet is one person's own: never assigned (assertNotGenerated).
+    .where(and(isNull(documents.archivedAt), isNull(documents.familyId), isNull(documents.staffUserId)))
     .orderBy(desc(documents.createdAt))
   return {
     sessions,

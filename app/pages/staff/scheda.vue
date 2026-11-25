@@ -73,22 +73,42 @@ function onHealth(health: StaffUsefulInfoDto) {
   if (data.value) data.value = { ...data.value, health }
 }
 
+/** The sheet as the server keeps it, to tell a change from a different spelling (a lower-case codice fiscale). */
+const normalized = (value: unknown) => JSON.stringify(staffSheetSchema.safeParse(value).data)
+const confirm = useConfirm()
 const saving = ref(false)
-async function save() {
+/** Saves the form; `body` the sheet as saved, to prepare its PDF when none is in force. */
+async function save(body = state) {
+  const saved = data.value && sheetForm(data.value.sheet)
+  if (
+    body === state &&
+    signature.value?.status === 'signed' &&
+    normalized(state) !== normalized(saved) &&
+    !(await confirm({
+      title: 'Dovrai firmare di nuovo la scheda',
+      description:
+        'Hai già firmato la scheda: con i dati nuovi prepariamo un altro PDF da firmare e ti mandiamo un’email.',
+      confirmLabel: 'Salva le modifiche',
+    }))
+  ) {
+    return
+  }
   saving.value = true
   try {
-    const saved = await api<StaffSheetSaved>('/api/staff/sheet', { method: 'PUT', body: state })
+    const result = await api<StaffSheetSaved>('/api/staff/sheet', { method: 'PUT', body })
     const before = signature.value?.requestId
     // `data` is shallow: a new object, so what reads the sheet sees it.
-    if (data.value) data.value = { ...data.value, ...saved }
-    Object.assign(state, sheetForm(saved.sheet))
-    if (saved.signature?.status === 'pending' && saved.signature.requestId !== before) {
-      notifySuccess('Scheda salvata', 'Abbiamo preparato il PDF con i tuoi dati: ora firmalo.')
+    if (data.value) data.value = { ...data.value, ...result }
+    // Preparing the PDF leaves what is being typed as it is.
+    if (body === state) Object.assign(state, sheetForm(result.sheet))
+    const title = body === state ? 'Scheda salvata' : 'PDF preparato'
+    if (result.signature?.status === 'pending' && result.signature.requestId !== before) {
+      notifySuccess(title, 'Abbiamo preparato il PDF con i tuoi dati: ora firmalo.')
       await nextTick()
       signAlert.value?.querySelector('a')?.focus()
-    } else notifySuccess('Scheda salvata')
+    } else notifySuccess(title)
   } catch (error) {
-    notifyError(error, 'Scheda non salvata')
+    notifyError(error, body === state ? 'Scheda non salvata' : 'PDF non preparato')
   } finally {
     saving.value = false
   }
@@ -107,7 +127,27 @@ async function save() {
         title="Completa la tua scheda"
         :description="SHEET_MISSING"
       />
-      <div v-else-if="signature?.status === 'pending'" ref="signAlert">
+      <!-- Complete with no PDF in force: saved before the PDFs came, or archived by the administration. -->
+      <UAlert
+        v-else-if="!signature"
+        class="mb-8"
+        color="warning"
+        variant="subtle"
+        icon="i-lucide-pen-line"
+        title="Firma la tua scheda"
+        description="Prepariamo il PDF con i dati che hai salvato: poi lo leggi e lo firmi con il codice che ti mandiamo via email."
+        :actions="[
+          {
+            label: 'Prepara il PDF da firmare',
+            loading: saving,
+            class: 'pointer-coarse:min-h-11',
+            color: 'neutral',
+            variant: 'outline',
+            onClick: () => save(sheetForm(data!.sheet)),
+          },
+        ]"
+      />
+      <div v-else-if="signature.status === 'pending'" ref="signAlert">
         <UAlert
           class="mb-8"
           color="warning"
@@ -115,13 +155,21 @@ async function save() {
           icon="i-lucide-pen-line"
           title="Firma la tua scheda"
           description="Abbiamo preparato il PDF con i dati che hai salvato. Leggilo e firmalo: per confermare ti mandiamo un codice via email."
-          :actions="[{ label: 'Leggi e firma', to: `/firma/${signature.requestId}`, class: 'pointer-coarse:min-h-11' }]"
+          :actions="[
+            {
+              label: 'Leggi e firma',
+              to: `/firma/${signature.requestId}`,
+              class: 'pointer-coarse:min-h-11',
+              color: 'neutral',
+              variant: 'outline',
+            },
+          ]"
         />
       </div>
-      <p v-else-if="signature?.status === 'signed'" class="mb-8 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted">
+      <p v-else-if="signature.status === 'signed'" class="mb-8 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted">
         <span class="inline-flex items-center gap-2">
-          <UIcon name="i-lucide-file-check" class="size-5 shrink-0 text-success" />
-          Hai firmato la scheda il {{ formatDateTime(signature.signedAt) }}.
+          <IcStatusBadge kind="signatureStatus" value="signed" />
+          il {{ formatDateTime(signature.signedAt) }}
         </span>
         <ULink
           :href="`/api/signatures/${signature.requestId}/copy`"
@@ -141,7 +189,7 @@ async function save() {
         </p>
       </IcSection>
 
-      <UForm :schema="staffSheetSchema" :state="state" @submit="save" @error="focusFirstError">
+      <UForm :schema="staffSheetSchema" :state="state" @submit="save()" @error="focusFirstError">
         <IcSection title="Nascita e codice fiscale">
           <div class="space-y-5">
             <div class="grid gap-5 sm:grid-cols-2">

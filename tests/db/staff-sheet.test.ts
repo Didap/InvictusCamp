@@ -1,11 +1,11 @@
 // The personal sheet of the staff against a real database (docs/spec.md 3.4): saved and read back, audited by the
 // names of the fields that changed, asked for by the home until complete; the other details under the consent;
 // once complete, its PDF to sign, made again when the data changes.
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq, isNull } from 'drizzle-orm'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { assignDocument, setDocumentArchived } from '../../server/domain/signatures'
 import { myStaffSheet, saveStaffSheet, saveStaffUsefulInfo, sheetSignature, staffHome } from '../../server/domain/staff'
 import { staffSheetDocument } from '../../server/domain/staff-sheets'
@@ -14,6 +14,7 @@ import { makeStaff, t, useTestDb } from './helpers'
 const db = useTestDb()
 const uploadsDir = mkdtempSync(join(tmpdir(), 'invictus-staff-sheet-'))
 const ctx = { appUrl: 'http://localhost:3080' }
+afterAll(() => rmSync(uploadsDir, { recursive: true, force: true }))
 
 const VALUE = {
   birthDate: '1985-12-10',

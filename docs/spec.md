@@ -296,7 +296,7 @@ availability or receive convocations. The administration can move a person to th
   release with the members (name, birth date, relationship; never health data) as a PDF document of the family
   (category consent, `documents.familyId`, `sourceDigest` = digest of its data, a dot, digest of its text) for the
   account holder to sign in Documenti (audited `family.release`). When those data change (the family's or the
-  administration's edits), a new release with the text in force replaces it: the old one is archived and its
+  administration's edits, the holder's name from `/account`), a new release with the text in force replaces it: the old one is archived and its
   pending signature cancelled; cards no longer complete archive it until they are. A release is never assigned
   to anyone else nor restored once archived.
 - **The release text** (`/admin/famiglie/liberatoria`, from the Famiglie list; table `release_texts`, audited

@@ -1,5 +1,5 @@
 {
-  "id": "b6f057b4-a113-4da4-b3bf-8810c50b3b01",
+  "id": "6cf3ab6f-a25d-4b2e-a2df-04884c22e3e4",
   "prevId": "1037d19a-9672-4240-ae58-706c5de7495a",
   "version": "7",
   "dialect": "postgresql",
@@ -619,6 +619,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_staff_sheet_key": {
+          "name": "documents_staff_sheet_key",
+          "columns": [
+            {
+              "expression": "staff_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"documents\".\"archived_at\" is null",
           "concurrently": false,
           "method": "btree",
           "with": {}

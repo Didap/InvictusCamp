@@ -5,7 +5,17 @@ import type { AccountDto } from '#shared/types/api'
 import { formatDateTime } from '#shared/utils/format'
 
 const api = useApi()
-const { fetch: refreshSession } = useUserSession()
+const { fetch: refreshSession, user } = useUserSession()
+/** What a change makes again, to sign: the staff sheet (name, phone), the family's release (the holder's name). */
+const signedWith = computed(() => {
+  if (user.value?.role === 'staff') {
+    return 'Nome, cognome e telefono sono nella tua scheda personale: se li cambi, ti chiediamo di firmarla di nuovo.'
+  }
+  if (user.value?.role === 'family') {
+    return 'Il tuo nome è nella liberatoria della famiglia: se lo cambi, ti chiediamo di firmarla di nuovo.'
+  }
+  return null
+})
 const { data: account, refresh } = await useApiFetch<AccountDto>('/api/account')
 
 const profile = reactive({ firstName: '', lastName: '', phone: '' })
@@ -68,6 +78,7 @@ async function savePassword() {
         <UFormField label="Telefono" name="phone" hint="Facoltativo">
           <UInput v-model="profile.phone" type="tel" autocomplete="tel" class="w-full" />
         </UFormField>
+        <p v-if="signedWith" class="text-sm text-muted">{{ signedWith }}</p>
         <UButton type="submit" :loading="savingProfile" label="Salva" />
       </UForm>
       <p v-if="account?.lastLoginAt" class="mt-6 text-sm text-muted">

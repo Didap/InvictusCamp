@@ -250,8 +250,9 @@ export interface StaffSheetSaved {
 }
 
 /**
- * The PDF of the sheet in force (server/domain/staff-sheets.ts) and its signature: null until the sheet is
- * complete. Signed on /firma/:requestId, the signed copy at /api/signatures/:requestId/copy.
+ * The PDF of the sheet in force (server/domain/staff-sheets.ts) and its signature: null while there is none (the
+ * sheet incomplete, or complete but never saved since, or archived). Signed on /firma/:requestId, the signed copy
+ * at /api/signatures/:requestId/copy.
  */
 export interface StaffSheetSignature {
   requestId: string

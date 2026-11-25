@@ -593,7 +593,13 @@ export const documents = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  t => [index('documents_session_idx').on(t.sessionId)],
+  t => [
+    index('documents_session_idx').on(t.sessionId),
+    // One sheet in force per person: the new one is inserted after the old one is archived.
+    uniqueIndex('documents_staff_sheet_key')
+      .on(t.staffUserId)
+      .where(sql`${t.archivedAt} is null`),
+  ],
 )
 
 /**
