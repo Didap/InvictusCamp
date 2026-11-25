@@ -49,6 +49,11 @@ export function isSessionOver(session: { status: SessionStatus; endDate: string 
   return session.status === 'completed' || (session.status !== 'cancelled' && session.endDate < today)
 }
 
+/** Still to come (or under way): neither over nor cancelled. The staff's «prossime sessioni». */
+export function isSessionAhead(session: { status: SessionStatus; endDate: string }, today: string): boolean {
+  return session.status !== 'cancelled' && !isSessionOver(session, today)
+}
+
 export function isSessionEditable(status: SessionStatus): boolean {
   return SESSION_EDITABLE_STATUSES.includes(status)
 }

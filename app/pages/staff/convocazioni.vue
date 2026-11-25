@@ -1,57 +1,55 @@
 <script setup lang="ts">
 import type { MyConvocations } from '#shared/types/staff'
+import { todayIso } from '#shared/utils/dates'
+import { isSessionAhead } from '#shared/utils/session-status'
 
-// Convocations (spec 3.5): only the ones to answer, accept or decline with a reason. The sessions accepted, with
-// the contract to sign, are on /staff/sessioni.
+// Convocations (spec 3.5): only the ones waiting for an answer, accept or decline with a reason (an inactive
+// person sees them without the buttons). The sessions accepted, with the contract to sign, are on /staff/sessioni.
 const { data, refresh } = await useApiFetch<MyConvocations>('/api/staff/convocations')
 
-const toAnswer = computed(() => (data.value?.items ?? []).filter(c => c.answerable))
+const today = todayIso()
+const waiting = computed(() =>
+  (data.value?.items ?? []).filter(c => c.status === 'sent' && isSessionAhead(c.session, today)),
+)
 </script>
 
 <template>
   <IcPage title="Convocazioni" width="narrow">
     <template v-if="data">
       <UEmpty
-        v-if="!toAnswer.length"
+        v-if="!waiting.length"
         icon="i-lucide-bell-ring"
-        :title="data.approved ? 'Nessuna convocazione da rispondere' : 'Le convocazioni arrivano dopo l’approvazione'"
+        :title="data.approved ? 'Nessuna convocazione da rispondere' : 'Il tuo profilo non è attivo'"
         :description="
           data.approved
-            ? 'Quando l’amministrazione ti convoca per una sessione, la trovi qui e ricevi un’email. Le sessioni che hai accettato sono in Sessioni.'
-            : 'Quando la tua candidatura sarà approvata, potrai indicare la disponibilità e ricevere le convocazioni alle sessioni.'
+            ? 'Quando l’amministrazione ti convoca per una sessione, la trovi qui e ricevi un’email: ti convochiamo solo per le sessioni a cui hai detto che ci sei. Quelle che hai accettato sono in Sessioni.'
+            : 'Non ricevi nuove convocazioni. Per tornare attivo scrivi all’amministrazione.'
         "
         :actions="
           data.approved
             ? [
                 {
-                  label: 'Vai alle sessioni',
-                  icon: 'i-lucide-calendar-days',
-                  to: '/staff/sessioni',
-                  color: 'neutral',
-                  variant: 'outline',
+                  label: 'Aggiorna la disponibilità',
+                  icon: 'i-lucide-calendar-check',
+                  to: '/staff/disponibilita',
                   class: 'pointer-coarse:min-h-11',
                 },
               ]
-            : [
-                {
-                  label: 'Vedi la scheda personale',
-                  icon: 'i-lucide-id-card',
-                  to: '/staff/scheda',
-                  color: 'neutral',
-                  variant: 'outline',
-                  class: 'pointer-coarse:min-h-11',
-                },
-              ]
+            : []
         "
       />
 
       <IcSection
         v-else
         title="Da rispondere"
-        description="Accetta o rifiuta: l’amministrazione vede subito la tua risposta."
+        :description="
+          data.approved
+            ? 'Accetta o rifiuta: l’amministrazione vede subito la tua risposta.'
+            : 'Il tuo profilo non è attivo: per rispondere scrivi all’amministrazione.'
+        "
       >
         <div class="divide-y divide-default rounded-lg border border-default bg-elevated">
-          <StaffMyConvocation v-for="c in toAnswer" :key="c.id" :convocation="c" @changed="refresh" />
+          <StaffMyConvocation v-for="c in waiting" :key="c.id" :convocation="c" @changed="refresh" />
         </div>
       </IcSection>
     </template>

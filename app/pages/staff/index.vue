@@ -105,7 +105,7 @@ watch(
             <UButton
               class="pointer-coarse:min-h-11"
               to="/staff/sessioni"
-              label="Calendario"
+              label="Tutte le sessioni"
               icon="i-lucide-calendar-days"
               color="neutral"
               variant="ghost"

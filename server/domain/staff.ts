@@ -46,7 +46,7 @@ import {
 } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
 import { changedKeys } from '../../shared/utils/plain'
-import { SESSION_EDITABLE_STATUSES, isSessionEditable } from '../../shared/utils/session-status'
+import { SESSION_EDITABLE_STATUSES, isSessionAhead, isSessionEditable } from '../../shared/utils/session-status'
 import {
   availabilityConfirmations,
   campSessions,
@@ -1491,7 +1491,7 @@ export async function myAvailability(
 
 /**
  * The convocations of the signed-in person (never the drafts), by session date. Only approved staff can
- * answer: an inactive person still sees them, without the buttons.
+ * answer: an inactive person still sees the ones waiting, without the buttons.
  */
 export async function myConvocations(
   db: DbOrTx,
@@ -1569,9 +1569,7 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
   return {
     status: profile.status,
     toAnswer: convocations.filter(c => c.answerable),
-    upcoming: convocations.filter(
-      c => c.status === 'accepted' && c.session.endDate >= today && c.session.status !== 'cancelled',
-    ),
+    upcoming: convocations.filter(c => c.status === 'accepted' && isSessionAhead(c.session, today)),
     availability: { available, total: sessions.length, toConfirm: sessions.filter(session => !session.locked).length },
     sheetComplete,
   }

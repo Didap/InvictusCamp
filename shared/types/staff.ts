@@ -296,7 +296,7 @@ export interface MyConvocation {
 
 /** GET /api/staff/convocations */
 export interface MyConvocations {
-  /** Approved staff can answer; the others only see their history. */
+  /** Approved staff can answer; an inactive person sees the ones waiting, without the buttons. */
   approved: boolean
   items: MyConvocation[]
 }

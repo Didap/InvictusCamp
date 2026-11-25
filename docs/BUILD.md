@@ -170,7 +170,7 @@ P0:
   data under consent, the application read only);
   `/staff/disponibilita` ("Ci sono" per session; refused before approval); `/staff/convocazioni` (accept,
   decline with reason; accept creates the contract request with `requestSignatures` and sends it);
-  `/staff/sessioni` (calendar and list of accepted sessions); `/staff/documenti` (`PendingSignatures` +
+  `/staff/sessioni` (contracts to sign, next confirmed sessions, sessions done, cancelled ones; no calendar); `/staff/documenti` (`PendingSignatures` +
   personal documents upload with category and title).
 - Database tests: review, convocation send, accept with and without contract, availability rules.
 

@@ -34,10 +34,13 @@ async function accept() {
   accepting.value = true
   try {
     const result = await api<AcceptResult>(`/api/staff/convocations/${c.value.id}/accept`, { method: 'POST' })
-    notifySuccess(
-      'Convocazione accettata',
-      result.signatureRequestId ? 'Ora firma il contratto: trovi il pulsante nella convocazione.' : undefined,
-    )
+    if (result.signatureRequestId) {
+      // The convocation leaves the list of those to answer: the contract is signed right away (or from Sessioni).
+      notifySuccess('Convocazione accettata', 'Ora firma il contratto.')
+      await navigateTo(`/firma/${result.signatureRequestId}`)
+      return
+    }
+    notifySuccess('Convocazione accettata', 'La trovi in Sessioni.')
     emit('changed')
   } catch (error) {
     notifyError(error)

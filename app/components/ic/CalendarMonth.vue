@@ -15,7 +15,7 @@ export interface CalendarEvent {
   caption?: string
 }
 
-const props = defineProps<{ events: CalendarEvent[]; initialDay?: IsoDay }>()
+const props = defineProps<{ events: CalendarEvent[] }>()
 // Resolved here: resolveComponent() inside the template does not find NuxtLink at runtime.
 const NuxtLink = resolveComponent('NuxtLink')
 
@@ -29,7 +29,7 @@ function firstUsefulDay(): IsoDay {
   return upcoming?.startDate ?? today
 }
 
-const cursor = ref(monthOf(props.initialDay ?? firstUsefulDay()))
+const cursor = ref(monthOf(firstUsefulDay()))
 const month = computed(() => monthBounds(cursor.value))
 
 const weeks = computed(() => {
