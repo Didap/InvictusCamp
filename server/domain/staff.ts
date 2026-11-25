@@ -9,7 +9,10 @@ import {
   canMoveStaff,
   isReviewMove,
   isSheetComplete,
+  REQUIRED_STAFF_DOCUMENTS,
+  staffDocumentTypes,
   type ConvocationAddInput,
+  type RequiredStaffDocument,
   type ConvocationSendInput,
   type StaffSheetInput,
   type StaffUsefulInfoInput,
@@ -30,6 +33,7 @@ import type {
   StaffHome,
   StaffListItem,
   StaffOutcomeTemplate,
+  MyStaffDocuments,
   StaffSheet,
   StaffSheetDto,
   StaffSheetSignature,
@@ -1135,6 +1139,39 @@ async function availableFor(db: DbOrTx, sessionId: string): Promise<Set<string>>
   return new Set(rows.map(row => row.userId))
 }
 
+/** The CV on a profile, as a file to show or download. */
+async function cvFileOf(db: DbOrTx, cvFileId: string | null): Promise<FileDto | null> {
+  if (!cvFileId) return null
+  const [cv] = await db.select().from(files).where(eq(files.id, cvFileId)).limit(1)
+  return cv ? toFileDto(cv) : null
+}
+
+/**
+ * The required documents not there yet, in the staff area: each among the documents in a format it is taken in (PDF);
+ * the CV sent with the application counts as the CV.
+ */
+function requiredDocumentsMissing(
+  profile: Pick<ProfileRow, 'status' | 'cvFileId'>,
+  documents: StaffDocumentDto[],
+): RequiredStaffDocument[] {
+  if (!inStaffArea(profile.status)) return []
+  const there = (category: RequiredStaffDocument) =>
+    (category === 'cv' && profile.cvFileId !== null) ||
+    documents.some(
+      d => d.category === category && (staffDocumentTypes(category) as readonly string[]).includes(d.file.mimeType),
+    )
+  return REQUIRED_STAFF_DOCUMENTS.filter(category => !there(category))
+}
+
+/** The documents page of the signed-in person: the CV on the profile, the documents uploaded, what is missing. */
+export async function myStaffDocuments(
+  db: DbOrTx,
+  profile: Pick<ProfileRow, 'userId' | 'status' | 'cvFileId'>,
+): Promise<MyStaffDocuments> {
+  const [cv, documents] = await Promise.all([cvFileOf(db, profile.cvFileId), staffDocuments(db, profile.userId)])
+  return { cv, documents, documentsMissing: requiredDocumentsMissing(profile, documents) }
+}
+
 /** Personal documents of an account, newest first. */
 export async function staffDocuments(db: DbOrTx, userId: string): Promise<StaffDocumentDto[]> {
   const rows = await db
@@ -1241,6 +1278,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
         .limit(1)
     : []
 
+  const documents = await staffDocuments(db, userId)
   return {
     userId: user.id,
     firstName: user.firstName,
@@ -1267,7 +1305,8 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     availabilityConfirmedAt: iso(confirmedAt),
     availabilityResetRequestedAt: iso(profile.availabilityResetRequestedAt),
     convocations,
-    documents: await staffDocuments(db, userId),
+    documents,
+    documentsMissing: requiredDocumentsMissing(profile, documents),
     outcome: {
       template,
       subject: template ? outcomeSubject(template) : '',
@@ -1421,8 +1460,8 @@ export async function myStaffSheet(
   user: Pick<typeof users.$inferSelect, 'firstName' | 'lastName' | 'email' | 'phone'>,
   profile: ProfileRow,
 ): Promise<StaffSheetDto> {
-  const [[cv], roleOptions, signature] = await Promise.all([
-    profile.cvFileId ? db.select().from(files).where(eq(files.id, profile.cvFileId)).limit(1) : [],
+  const [cv, roleOptions, signature] = await Promise.all([
+    cvFileOf(db, profile.cvFileId),
     staffRoleOptions(db),
     sheetSignature(db, profile.userId),
   ])
@@ -1437,7 +1476,7 @@ export async function myStaffSheet(
       qualifications: profile.qualifications,
       experience: profile.experience,
       motivation: profile.motivation,
-      cv: cv ? toFileDto(cv) : null,
+      cv,
       appliedAt: iso(profile.appliedAt),
     },
   }
@@ -1564,11 +1603,13 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       upcoming: [],
       availability: { available: 0, total: 0, toConfirm: 0 },
       sheetComplete,
+      documentsMissing: [],
     }
   }
-  const [convocations, { sessions }] = await Promise.all([
+  const [convocations, { sessions }, documents] = await Promise.all([
     myConvocations(db, profile.userId, { approved: profile.status === 'approved' }),
     myAvailability(db, profile, today),
+    staffDocuments(db, profile.userId),
   ])
   const available = sessions.filter(session => session.available).length
   return {
@@ -1577,5 +1618,6 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
     upcoming: convocations.filter(c => c.status === 'accepted' && isSessionAhead(c.session, today)),
     availability: { available, total: sessions.length, toConfirm: sessions.filter(session => !session.locked).length },
     sheetComplete,
+    documentsMissing: requiredDocumentsMissing(profile, documents),
   }
 }

@@ -1,7 +1,8 @@
-import { staffDocuments } from '../../../domain/staff'
+import type { MyStaffDocuments } from '#shared/types/staff'
+import { myStaffDocuments } from '../../../domain/staff'
 
-/** The personal documents the signed-in person uploaded (downloads through GET /api/files/:id). */
-export default defineEventHandler(async event => {
-  const { user } = await requireStaff(event)
-  return staffDocuments(useDb(), user.id)
+/** The CV and the personal documents of the signed-in person (downloads through GET /api/files/:id). */
+export default defineEventHandler(async (event): Promise<MyStaffDocuments> => {
+  const { profile } = await requireStaff(event)
+  return myStaffDocuments(useDb(), profile)
 })

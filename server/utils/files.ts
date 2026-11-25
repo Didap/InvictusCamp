@@ -34,6 +34,15 @@ const UPLOADS_PER_HOUR = 60
  * (a request without one, chunked, would be buffered whole). 400, 411, 413, 415 or 429 with an Italian
  * message when something is wrong.
  */
+/** The answer to a file in a format the upload does not take. */
+export function unsupportedType(accept: readonly UploadMimeType[]) {
+  const onlyPdf = accept.length === 1 && accept[0] === 'application/pdf'
+  return createError({
+    statusCode: 415,
+    message: onlyPdf ? 'Carica un file PDF' : 'Formato non supportato: carica un PDF, un JPG o un PNG',
+  })
+}
+
 export async function readUpload(
   event: H3Event,
   options: { accept?: readonly UploadMimeType[]; maxBytes?: number } = {},
@@ -62,13 +71,7 @@ export async function readUpload(
   if (!file || !file.data.length) throw createError({ statusCode: 400, message: 'Nessun file ricevuto' })
   if (file.data.length > maxBytes) throw createError({ statusCode: 413, message: tooBig })
   const mimeType = sniffMimeType(file.data)
-  if (!mimeType || !accept.includes(mimeType)) {
-    const onlyPdf = accept.length === 1 && accept[0] === 'application/pdf'
-    throw createError({
-      statusCode: 415,
-      message: onlyPdf ? 'Carica un file PDF' : 'Formato non supportato: carica un PDF, un JPG o un PNG',
-    })
-  }
+  if (!mimeType || !accept.includes(mimeType)) throw unsupportedType(accept)
   return { data: file.data, filename: cleanName(file.filename), mimeType, fields }
 }
 
