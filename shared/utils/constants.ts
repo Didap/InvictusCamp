@@ -25,9 +25,14 @@ export type ParticipationKind = (typeof PARTICIPATION_KINDS)[number]
 export const PARTICIPATION_STATUSES = ['selected', 'invited', 'confirmed', 'declined', 'cancelled'] as const
 export type ParticipationStatus = (typeof PARTICIPATION_STATUSES)[number]
 
-/** registered (account only) → applied (candidatura inviata) → approved / rejected; inactive = no longer called. */
+/**
+ * registered (account, address or CV still missing) → applied (candidatura inviata) → approved / rejected;
+ * inactive = no longer called.
+ */
 export const STAFF_STATUSES = ['registered', 'applied', 'approved', 'rejected', 'inactive'] as const
 export type StaffStatus = (typeof STAFF_STATUSES)[number]
+/** Who sees the whole staff area: the others see only the home with where their application stands. */
+export const STAFF_AREA_STATUSES: readonly StaffStatus[] = ['approved', 'inactive']
 
 /**
  * A role of staff and v-team: the id of a row of `staff_roles`, which the administration creates, renames

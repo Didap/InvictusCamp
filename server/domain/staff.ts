@@ -3,16 +3,13 @@
 // tests load this module directly. Functions take the client or a transaction; those that produce emails
 // return them, and the handler delivers them after the commit. A review never sends anything by itself:
 // the outcome leaves only from staffOutcomeEmails ("Comunica l’esito").
-import { and, asc, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNotNull, ne, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import {
-  applicationMissing,
   canMoveStaff,
   isReviewMove,
   type ConvocationAddInput,
   type ConvocationSendInput,
-  type StaffApplicationDraft,
-  type StaffApplicationInput,
   type StaffUsefulInfoInput,
 } from '../../shared/schemas/staff'
 import { normalizeUsefulInfo } from '../../shared/schemas/families'
@@ -208,48 +205,19 @@ async function contractRequests(
 
 // ─── Application ───────────────────────────────────────────────────────────────────────────────────
 
-/** Saves what the person wrote so far; only while the application has not been sent. */
-export async function saveApplicationDraft(db: DbOrTx, userId: string, input: StaffApplicationDraft): Promise<void> {
-  const profile = await profileOf(db, userId, { lock: true })
-  if (profile.status !== 'registered') throw createError({ statusCode: 409, message: NOT_EDITABLE })
-  const values: Partial<typeof staffProfiles.$inferInsert> = {}
-  if (input.team !== undefined) values.team = input.team
-  if (input.birthDate !== undefined) values.birthDate = input.birthDate
-  if (input.city !== undefined) values.city = input.city || null
-  if (input.roles !== undefined) values.roles = await checkLabels(db, 'role', input.roles, { dropMissing: true })
-  if (input.qualifications !== undefined) values.qualifications = input.qualifications || null
-  if (input.experience !== undefined) values.experience = input.experience || null
-  if (input.motivation !== undefined) values.motivation = input.motivation || null
-  if (Object.keys(values).length) await db.update(staffProfiles).set(values).where(eq(staffProfiles.id, profile.id))
-}
-
-/** Attaches an uploaded CV while the application is open; returns the id of the CV it replaces. */
-export async function replaceCv(db: DbOrTx, userId: string, fileId: string): Promise<string | null> {
-  const profile = await profileOf(db, userId, { lock: true })
-  if (profile.status !== 'registered') throw createError({ statusCode: 409, message: NOT_EDITABLE })
-  await db.update(staffProfiles).set({ cvFileId: fileId }).where(eq(staffProfiles.id, profile.id))
-  return profile.cvFileId && profile.cvFileId !== fileId ? profile.cvFileId : null
-}
-
-/** registered → applied: the whole application, with the CV already uploaded. Sends nothing. */
-export async function submitApplication(
-  db: DbOrTx,
-  userId: string,
-  input: StaffApplicationInput,
-  actor: Partial<Actor> = {},
-): Promise<void> {
-  const profile = await profileOf(db, userId, { lock: true })
-  if (profile.status !== 'registered') throw createError({ statusCode: 409, message: NOT_EDITABLE })
-  if (!profile.cvFileId) {
-    throw createError({ statusCode: 400, message: 'Carica il tuo CV in PDF prima di inviare la candidatura' })
-  }
-  // A role deleted while the form was open is left out; the application still needs one.
-  const roles = await checkLabels(db, 'role', input.roles, { dropMissing: true })
-  if (!roles.length) throw createError({ statusCode: 400, message: 'Scegli almeno un ruolo' })
-  await db
+/**
+ * The application is the account with its CV (spec 3.4): registered → applied once the address is
+ * confirmed and the CV is there. Sends nothing; false when there was nothing to send.
+ */
+export async function applyWithCv(db: DbOrTx, userId: string, actor: Partial<Actor> = {}): Promise<boolean> {
+  const [applied] = await db
     .update(staffProfiles)
-    .set({ ...input, roles, status: 'applied', appliedAt: new Date() })
-    .where(eq(staffProfiles.id, profile.id))
+    .set({ status: 'applied', appliedAt: new Date() })
+    .where(
+      and(eq(staffProfiles.userId, userId), eq(staffProfiles.status, 'registered'), isNotNull(staffProfiles.cvFileId)),
+    )
+    .returning({ id: staffProfiles.id })
+  if (!applied) return false
   await writeAudit(db, {
     actorUserId: userId,
     action: 'staff.apply',
@@ -257,6 +225,25 @@ export async function submitApplication(
     entityId: userId,
     ip: actor.ip ?? null,
   })
+  return true
+}
+
+/**
+ * The CV a signed-in person (so with a confirmed address) uploads while the application is not sent yet:
+ * an account made before the CV was asked at registration. It sends the application; returns the id of
+ * the CV it replaces.
+ */
+export async function replaceCv(
+  db: DbOrTx,
+  userId: string,
+  fileId: string,
+  actor: Partial<Actor> = {},
+): Promise<string | null> {
+  const profile = await profileOf(db, userId, { lock: true })
+  if (profile.status !== 'registered') throw createError({ statusCode: 409, message: NOT_EDITABLE })
+  await db.update(staffProfiles).set({ cvFileId: fileId }).where(eq(staffProfiles.id, profile.id))
+  await applyWithCv(db, userId, actor)
+  return profile.cvFileId && profile.cvFileId !== fileId ? profile.cvFileId : null
 }
 
 // ─── Review ────────────────────────────────────────────────────────────────────────────────────────
@@ -1247,7 +1234,6 @@ export async function myApplication(db: DbOrTx, userId: string): Promise<StaffAp
   const { profile, cv } = row
   return {
     status: profile.status,
-    editable: profile.status === 'registered',
     team: profile.team,
     birthDate: profile.birthDate,
     city: profile.city,
@@ -1361,7 +1347,6 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
   return {
     status: profile.status,
     appliedAt: iso(profile.appliedAt),
-    missing: profile.status === 'registered' ? applicationMissing(profile) : [],
     toAnswer: convocations.filter(c => c.answerable),
     upcoming: convocations.filter(
       c => c.status === 'accepted' && c.session.endDate >= today && c.session.status !== 'cancelled',

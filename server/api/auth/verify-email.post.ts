@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { verifyEmailSchema } from '#shared/schemas/auth'
 import { ROLE_HOME } from '#shared/utils/routes'
+import { applyWithCv } from '../../domain/staff'
 import { consumeToken } from '../../domain/tokens'
 
 /** The link of the confirmation email: confirms the address and signs the user in. */
@@ -18,6 +19,8 @@ export default defineEventHandler(async event => {
   if (!user || user.status !== 'active') {
     throw createError({ statusCode: 400, message: 'Il link non è valido o è scaduto: chiedine uno nuovo' })
   }
+  // A candidate's application, CV included, reaches the administration with the confirmed address.
+  if (user.role === 'staff') await applyWithCv(db, user.id, { ip: clientIp(event) })
   await signIn(event, user)
   return { redirectTo: ROLE_HOME[user.role] }
 })

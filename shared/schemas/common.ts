@@ -13,7 +13,7 @@ export const zEmail = z
 
 export const zPassword = z
   .string()
-  .min(10, { error: 'Almeno 10 caratteri' })
+  .min(8, { error: 'Almeno 8 caratteri' })
   .max(200, { error: 'Al massimo 200 caratteri' })
 
 export const zPersonName = z

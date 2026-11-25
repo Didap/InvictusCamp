@@ -4,9 +4,9 @@
     <aside class="hidden flex-col justify-between border-e border-default bg-elevated p-12 lg:flex">
       <IcLogo size="lg" :subtitle="false" />
       <div class="max-w-sm">
-        <p class="text-3xl leading-tight font-bold text-highlighted">Il gestionale di Invictus Camp</p>
+        <p class="text-3xl leading-tight font-bold text-highlighted">Il “dietro le quinte” di Invictus Camp</p>
         <p class="mt-4 text-lg text-muted">
-          Sessioni, famiglie, staff e documenti in un unico posto, per un camp dove ogni famiglia è accolta.
+          Famiglie, staff, volontari e volontarie: la vostra esperienza inizia da qui!
         </p>
       </div>
       <div class="space-y-4">

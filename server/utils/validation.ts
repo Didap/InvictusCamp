@@ -26,6 +26,13 @@ export function parseParams<T extends z.ZodType>(event: H3Event, schema: T): z.o
   return result.data
 }
 
+/** Validates the text fields of a multipart form (`readUpload(...).fields`), like parseBody. */
+export function parseFields<T extends z.ZodType>(fields: Record<string, string>, schema: T): z.output<T> {
+  const result = schema.safeParse(fields)
+  if (!result.success) invalid(result.error.issues)
+  return result.data
+}
+
 /** Validates the query string. */
 export function parseQuery<T extends z.ZodType>(event: H3Event, schema: T): z.output<T> {
   const result = schema.safeParse(getQuery(event))

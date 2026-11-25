@@ -45,15 +45,17 @@ export interface Contact extends ContactConfig {
 }
 
 /**
- * How to reach the camp (runtimeConfig.public.contact): families write to their own address, everyone
- * else to the general one. `families` for a public page; signed in, the role decides.
+ * How to reach the camp (runtimeConfig.public.contact): families and staff write to their own address,
+ * everyone else to the general one. `families` for a public page; signed in, the role decides.
  */
 export function useContact(families?: MaybeRefOrGetter<boolean | undefined>) {
   const { user } = useUserSession()
-  const { familiesEmail, ...contact } = useRuntimeConfig().public.contact
-  return computed<Contact>(() =>
-    (toValue(families) || user.value?.role === 'family') && familiesEmail
-      ? { ...contact, email: familiesEmail, question: 'Ti occorre supporto per la registrazione?' }
-      : { ...contact, question: 'Serve aiuto?' },
-  )
+  const { familiesEmail, staffEmail, ...contact } = useRuntimeConfig().public.contact
+  return computed<Contact>(() => {
+    if ((toValue(families) || user.value?.role === 'family') && familiesEmail) {
+      return { ...contact, email: familiesEmail, question: 'Ti occorre supporto per la registrazione?' }
+    }
+    if (user.value?.role === 'staff' && staffEmail) return { ...contact, email: staffEmail, question: 'Serve aiuto?' }
+    return { ...contact, question: 'Serve aiuto?' }
+  })
 }

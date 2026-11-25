@@ -6,7 +6,6 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
   addConvocations,
-  saveApplicationDraft,
   sessionStaffData,
   setStaffRoles,
   setStaffTags,
@@ -120,15 +119,6 @@ describe('roles', () => {
 })
 
 describe('roles of a person', () => {
-  it('a role deleted while the application form is open is left out of the draft', async () => {
-    const admin = await makeAdmin(db)
-    const id = await createStaffRole(db, { name: unique('Autista') }, { userId: admin.id })
-    const { user } = await makeStaff(db, 'registered')
-    await deleteStaffLabel(db, 'role', id, { userId: admin.id })
-    await saveApplicationDraft(db, user.id, { roles: [id, 'other'] })
-    expect((await profile(user.id)).roles).toEqual(['other'])
-  })
-
   it('are the administration’s once the application is sent, audited', async () => {
     const admin = await makeAdmin(db)
     const draft = await makeStaff(db, 'registered')

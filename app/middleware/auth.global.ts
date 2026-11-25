@@ -1,7 +1,8 @@
 import { GUEST_ONLY_PATHS, ROLE_HOME, areaRole, isPublicPath } from '#shared/utils/routes'
 
 // Who may open what. The server checks again on every API call; this only keeps people on their pages.
-export default defineNuxtRouteMiddleware(to => {
+// Staff not approved yet see only their home (spec 3.4).
+export default defineNuxtRouteMiddleware(async to => {
   const { loggedIn, user } = useUserSession()
   const home = user.value ? ROLE_HOME[user.value.role] : '/accedi'
 
@@ -20,4 +21,12 @@ export default defineNuxtRouteMiddleware(to => {
 
   const role = areaRole(to.path)
   if (role && role !== user.value.role) return navigateTo(home, { replace: true })
+
+  if (user.value.role === 'staff') {
+    const staff = useStaffStatus()
+    await staff.load().catch(() => null)
+    if (to.path !== home && role === 'staff' && staff.status.value && !staff.inArea.value) {
+      return navigateTo(home, { replace: true })
+    }
+  }
 })

@@ -3,6 +3,7 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 /** The sections of the sidebar for the signed-in role. Every area page is listed here. */
 export function useNav() {
   const { user } = useUserSession()
+  const staff = useStaffStatus()
   return computed<NavigationMenuItem[][]>(() => {
     switch (user.value?.role) {
       case 'admin':
@@ -32,6 +33,8 @@ export function useNav() {
           ],
         ]
       case 'staff':
+        // Before the approval the area is the home alone (spec 3.4).
+        if (!staff.inArea.value) return [[{ label: 'Home', icon: 'i-lucide-house', to: '/staff', exact: true }]]
         return [
           [
             { label: 'Home', icon: 'i-lucide-house', to: '/staff', exact: true },

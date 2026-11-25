@@ -80,7 +80,7 @@ async function savePassword() {
         <UFormField label="Password attuale" name="currentPassword" required>
           <IcPasswordInput v-model="passwords.currentPassword" autocomplete="current-password" />
         </UFormField>
-        <UFormField label="Nuova password" name="newPassword" help="Almeno 10 caratteri." required>
+        <UFormField label="Nuova password" name="newPassword" help="Almeno 8 caratteri." required>
           <IcPasswordInput v-model="passwords.newPassword" autocomplete="new-password" />
         </UFormField>
         <UFormField label="Ripeti la nuova password" name="confirm" required>

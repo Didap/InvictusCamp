@@ -218,13 +218,11 @@ export interface SessionStaffData {
 /** GET /api/staff/application */
 export interface StaffApplicationDto {
   status: StaffStatus
-  /** The application can still be changed (until it is sent). */
-  editable: boolean
   team: StaffTeam
   birthDate: IsoDay | null
   city: string | null
   roles: StaffRole[]
-  /** The roles the administration created, to choose from. */
+  /** The roles the administration created, to name the person's. */
   roleOptions: { id: StaffRole; name: string }[]
   qualifications: string | null
   experience: string | null
@@ -271,8 +269,6 @@ export interface MyConvocations {
 export interface StaffHome {
   status: StaffStatus
   appliedAt: string | null
-  /** What the application still lacks (labels of APPLICATION_CHECKLIST), while it has not been sent. */
-  missing: string[]
   toAnswer: MyConvocation[]
   /** Accepted convocations of sessions that have not ended. */
   upcoming: MyConvocation[]

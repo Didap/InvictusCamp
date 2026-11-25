@@ -72,7 +72,7 @@ async function onSubmit() {
         >.
       </p>
       <UForm :schema="schema" :state="state" class="mt-8 space-y-5" @submit="onSubmit">
-        <UFormField label="Password" name="password" help="Almeno 10 caratteri." required>
+        <UFormField label="Password" name="password" help="Almeno 8 caratteri." required>
           <IcPasswordInput v-model="state.password" autocomplete="new-password" />
         </UFormField>
         <UFormField label="Ripeti la password" name="confirm" required>

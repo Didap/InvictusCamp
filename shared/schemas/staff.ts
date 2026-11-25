@@ -1,5 +1,5 @@
 // Schemas of the staff area, shared by the forms (UForm) and the API (parseBody), plus the small rules
-// both sides need: what an application lacks, the moves of a review (docs/spec.md 3.4, 3.5).
+// both sides need: the moves of a review (docs/spec.md 3.4, 3.5).
 import { z } from 'zod'
 import { normalizeUsefulInfo, usefulInfoSchema } from './families'
 import {
@@ -12,8 +12,7 @@ import {
   type StaffStatus,
   type StaffTeam,
 } from '../utils/constants'
-import { todayIso } from '../utils/dates'
-import { zIsoDay, zRequiredText, zText, zUuid } from './common'
+import { zRequiredText, zText, zUuid } from './common'
 
 /** The id of a role of `staff_roles` (the server checks it exists). */
 export const zStaffRole = z.string().trim().min(1).max(64)
@@ -21,10 +20,6 @@ export const zStaffTeam = z.enum(STAFF_TEAMS)
 /** The most roles or tags a person can have. */
 const STAFF_LABELS_MAX = 40
 const zRoles = z.array(zStaffRole).max(STAFF_LABELS_MAX)
-
-const zBirthDate = zIsoDay.refine(day => day >= '1920-01-01' && day < todayIso(), {
-  error: 'Data di nascita non valida',
-})
 
 // ─── Canteen ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -39,69 +34,6 @@ export const staffUsefulInfoSchema = z
     error: 'Per salvare questi dati serve il tuo consenso',
   })
 export type StaffUsefulInfoInput = z.output<typeof staffUsefulInfoSchema>
-
-// ─── Application ───────────────────────────────────────────────────────────────────────────────────
-
-/** POST /api/staff/application/submit: the whole application (the CV is checked on the server). */
-export const staffApplicationSchema = z.object({
-  team: zStaffTeam,
-  birthDate: zBirthDate,
-  city: zRequiredText(100),
-  roles: zRoles.min(1, { error: 'Scegli almeno un ruolo' }),
-  qualifications: zRequiredText(2000),
-  experience: zRequiredText(4000),
-  motivation: zRequiredText(2000),
-})
-export type StaffApplicationInput = z.infer<typeof staffApplicationSchema>
-
-/** PUT /api/staff/application: a draft, every field may be empty. */
-export const staffApplicationDraftSchema = z.object({
-  team: zStaffTeam.optional(),
-  birthDate: zBirthDate.nullable().optional(),
-  city: zText(100).nullable().optional(),
-  roles: zRoles.optional(),
-  qualifications: zText(2000).nullable().optional(),
-  experience: zText(4000).nullable().optional(),
-  motivation: zText(2000).nullable().optional(),
-})
-export type StaffApplicationDraft = z.infer<typeof staffApplicationDraftSchema>
-
-interface ApplicationFields {
-  birthDate: string | null
-  city: string | null
-  roles: readonly string[]
-  qualifications: string | null
-  experience: string | null
-  motivation: string | null
-  cvFileId?: string | null
-  cv?: unknown
-}
-
-/** The parts of an application, as the labels of the form (the checklist of the staff home). */
-export const APPLICATION_CHECKLIST = [
-  'Data di nascita',
-  'Città',
-  'Ruoli',
-  'Titoli e qualifiche',
-  'Esperienze',
-  'Motivazione',
-  'CV in PDF',
-] as const
-export type ApplicationPart = (typeof APPLICATION_CHECKLIST)[number]
-
-/** What the application still lacks before it can be sent, in the order of the form. */
-export function applicationMissing(profile: ApplicationFields): ApplicationPart[] {
-  const filled: Record<ApplicationPart, boolean> = {
-    'Data di nascita': Boolean(profile.birthDate),
-    Città: Boolean(profile.city?.trim()),
-    Ruoli: profile.roles.length > 0,
-    'Titoli e qualifiche': Boolean(profile.qualifications?.trim()),
-    Esperienze: Boolean(profile.experience?.trim()),
-    Motivazione: Boolean(profile.motivation?.trim()),
-    'CV in PDF': Boolean(profile.cvFileId || profile.cv),
-  }
-  return APPLICATION_CHECKLIST.filter(part => !filled[part])
-}
 
 /**
  * Where a person sits in the base of a session (spec 3.5): a coordinator (one per team), or one of the

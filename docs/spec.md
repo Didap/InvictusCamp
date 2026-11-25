@@ -57,9 +57,11 @@ Everyone: `/account`, `/firma/:requestId`.
   email confirms the address (48 h).
   Sign-in is refused until the address is confirmed. The "Partecipa" or "Iscriviti" button of the camp's
   website links here. Once in, the first thing to do is the family data (3.8).
-- A staff member registers at `/candidati`: user `staff` and a `staff_profiles` row `registered`; same
-  confirmation. `/candidati?squadra=v-team` (the v-team link of «Accedi») gives the row the v-team, which the
-  application can still change. The application itself is completed inside the platform (3.4).
+- A staff member applies at `/candidati` with name, surname, email, phone, password and the CV as PDF: user
+  `staff` and a `staff_profiles` row `registered` with the CV; same confirmation, and confirming the address
+  sends the application (3.4). `/candidati?squadra=v-team` (the v-team link of «Accedi») gives the row the
+  v-team.
+- Passwords have at least 8 characters.
 - The administration invites any role (`/admin/utenti`): user `invited` without password and an
   invitation email (7 days). Choosing the password activates the account. For a family the invitation also
   creates the `families` row; for staff the profile (`registered`, or `approved` when the administration
@@ -117,17 +119,23 @@ sessione avviene al cambio di stato": the status change is the moment invitation
 
 ### 3.4 Staff application and review
 
-`registered` → (the person completes and sends the application: team (staff or v-team), birth date, city,
-roles, qualifications, experience, motivation, CV as PDF) → `applied` → the administration reviews: `approved` or `rejected`,
-with internal notes never shown to the person → `inactive` when someone is no longer convoked.
+`registered` → (the address confirmed, with the CV: the application is the account and the CV) → `applied` →
+the administration reviews: `approved` or `rejected`, with internal notes never shown to the person →
+`inactive` when someone is no longer convoked. A `registered` account without CV (made before the CV was asked
+at registration, or invited by the administration) sends the application by uploading it from its home.
+**Until the approval the area is the home alone**: the menu has nothing else and the other pages lead back
+there. The home says «Grazie per la tua richiesta, stiamo valutando la candidatura e presto riceverai
+aggiornamenti», with the staff address (`contact.staffEmail`, staff@), or asks for the CV; not selected, a kind
+message. Applications sent with the older, longer form keep birth date, city, roles and texts, and the person
+still sees them on `/staff/candidatura` once approved.
 The outcome email (`staff.approved` / `staff.rejected`) is **not automatic**: the administration sends it
 from the dashboard when it chooses, with a message it can edit. Until approved, a staff member cannot give
 availability or receive convocations. The administration can move a person to the other team from their page
 (audited).
 
 - **Roles** are a list the administration keeps ("Ruoli e valutazione" in `/admin/staff`, table `staff_roles`):
-  it creates, renames and deletes them. The application offers them; once it is sent, the administration
-  changes a person's roles from their page (audited, `staff.roles`). Deleting a role takes it away from every
+  it creates, renames and deletes them, and gives them to people from their page once the application is
+  sent (audited, `staff.roles`). Deleting a role takes it away from every
   person and convocation that has it. Migration 0023 keeps the four roles of the old fixed list with their keys:
   `coordinator` is the coordinator of the base of a session (3.5), so it can be renamed but not deleted;
   `group_lead` comes first among the staff who can lead an activity group (3.12).
@@ -137,8 +145,7 @@ availability or receive convocations. The administration can move a person to th
 - **Staff and v-team are two separate lists**, two items of the menu: `/admin/staff` and `/admin/v-team`, each
   with the pages of its people (`/admin/staff/:userId`, `/admin/v-team/:userId`). A person's page opened under
   the other team (an old link, the users list, a change of team) moves to the list of their team. The
-  application is one for both: the team comes from the link (`/candidati?squadra=v-team`) or the person's
-  choice. Roles and Valutazione are the same for both lists. The Panoramica has a tile of applications to
+  application is one for both: the team comes from the link (`/candidati?squadra=v-team`). Roles and Valutazione are the same for both lists. The Panoramica has a tile of applications to
   review for each list.
 - Each list shows name, roles, city, age and Valutazione; status, application date and availability are on
   each person's page. Filters: search, role, age (ranges of years at today), availability (at least one

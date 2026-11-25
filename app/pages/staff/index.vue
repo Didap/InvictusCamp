@@ -1,70 +1,51 @@
 <script setup lang="ts">
-import { APPLICATION_CHECKLIST } from '#shared/schemas/staff'
 import type { StaffHome } from '#shared/types/staff'
-import { todayIso } from '#shared/utils/dates'
-import { formatDay, formatDayRange, plural } from '#shared/utils/format'
+import { formatDayRange, plural } from '#shared/utils/format'
 
-// The staff home: it follows the application (spec 3.4). Registered: complete the application. Applied:
-// wait for the review. Approved: convocations to answer, next sessions, documents to sign, availability.
-// Not selected: a kind message. Inactive: no convocations for now.
+// The staff home: it follows the application (spec 3.4). Until the approval it is the whole area:
+// registered, the CV to upload (an account made before it was asked at registration); applied, the
+// notice that we are reviewing it; not selected, a kind message. Approved: convocations to answer, next
+// sessions, documents to sign, availability. Inactive: no convocations for now.
 const { user } = useUserSession()
 const { data: home, refresh } = await useApiFetch<StaffHome>('/api/staff/home')
 
-const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
-const checklist = computed(() =>
-  APPLICATION_CHECKLIST.map(part => ({ part, done: !home.value?.missing.includes(part) })),
+// The approval may come while the tab is open: the home brings the menu up to date.
+const staff = useStaffStatus()
+watch(
+  () => home.value?.status,
+  status => {
+    if (status) staff.status.value = status
+  },
+  { immediate: true },
 )
-const started = computed(() => checklist.value.some(item => item.done))
 </script>
 
 <template>
   <IcPage :title="user?.firstName ? `Ciao ${user.firstName}` : 'Home'" width="narrow">
     <template v-if="home">
-      <!-- Registered: the application is still to complete and send. -->
+      <!-- Registered: the CV is missing, and with it the application. -->
       <IcSection
         v-if="home.status === 'registered'"
-        title="Completa la candidatura"
-        description="Per entrare nello staff di Invictus Camp ti chiediamo qualche informazione su di te e il tuo CV in PDF. Puoi salvare e riprendere quando vuoi."
+        title="Carica qui il tuo CV"
+        description="Per completare la candidatura ci serve il tuo curriculum in PDF: con il CV la candidatura arriva a noi."
       >
-        <ul class="space-y-2" aria-label="Cosa serve per la candidatura">
-          <li v-for="item in checklist" :key="item.part" class="flex items-center gap-3">
-            <UIcon
-              :name="item.done ? 'i-lucide-circle-check' : 'i-lucide-circle'"
-              class="size-5 shrink-0"
-              :class="item.done ? 'text-success' : 'text-dimmed'"
-              aria-hidden="true"
-            />
-            <span :class="item.done ? 'text-muted' : 'text-highlighted'">{{ item.part }}</span>
-            <span class="sr-only">{{ item.done ? ': fatto' : ': da completare' }}</span>
-          </li>
-        </ul>
-        <UButton
-          to="/staff/candidatura"
-          size="lg"
-          icon="i-lucide-file-user"
-          :label="started ? 'Riprendi la candidatura' : 'Completa la candidatura'"
-          class="pointer-coarse:min-h-11 mt-6"
+        <IcFileUpload
+          endpoint="/api/staff/application/cv"
+          accept="application/pdf"
+          description="PDF, fino a 15 MB"
+          button-label="Invia il CV"
+          @uploaded="refresh()"
         />
       </IcSection>
 
-      <!-- Applied: waiting for the review. -->
+      <!-- Applied: waiting for the review, nothing else to see. -->
       <IcSection v-else-if="home.status === 'applied'" title="La tua candidatura">
         <div class="flex items-start gap-4">
           <UIcon name="i-lucide-hourglass" class="mt-1 size-6 shrink-0 text-info" aria-hidden="true" />
           <div class="max-w-prose space-y-2">
-            <p class="font-semibold text-highlighted">Candidatura inviata il {{ dayOf(home.appliedAt) }}.</p>
-            <p class="text-muted">
-              L’amministrazione la sta valutando. Ti scriveremo per email quando c’è un esito: intanto non devi fare
-              nulla.
-            </p>
-            <UButton
-              to="/staff/candidatura"
-              label="Rivedi la candidatura"
-              icon="i-lucide-file-user"
-              color="neutral"
-              variant="outline"
-              class="pointer-coarse:min-h-11 mt-2"
-            />
+            <p class="font-semibold text-highlighted">Grazie per la tua richiesta.</p>
+            <p>Stiamo valutando la candidatura e presto riceverai aggiornamenti.</p>
+            <IcContactLine lead="Per dubbi o necessità" class="text-muted" />
           </div>
         </div>
       </IcSection>

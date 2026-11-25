@@ -46,7 +46,8 @@ describe('staff registration', () => {
     firstName: 'Luca',
     lastName: 'Neri',
     email: 'luca@example.com',
-    password: 'una-password-lunga',
+    phone: '333 1234567',
+    password: 'password',
     privacy: true,
   }
 
@@ -54,6 +55,13 @@ describe('staff registration', () => {
     expect(registerStaffSchema.parse(valid).team).toBe('staff')
     expect(registerStaffSchema.parse({ ...valid, team: 'volunteer' }).team).toBe('volunteer')
     expect(registerStaffSchema.safeParse({ ...valid, team: 'boss' }).success).toBe(false)
+  })
+
+  it('needs the phone and a password of 8 characters, and reads the tick of the multipart form', () => {
+    expect(registerStaffSchema.safeParse({ ...valid, phone: '' }).success).toBe(false)
+    expect(registerStaffSchema.safeParse({ ...valid, password: 'corta12' }).success).toBe(false)
+    expect(registerStaffSchema.parse({ ...valid, privacy: 'true' }).privacy).toBe(true)
+    expect(registerStaffSchema.safeParse({ ...valid, privacy: 'false' }).success).toBe(false)
   })
 })
 
