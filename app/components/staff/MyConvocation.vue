@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { AcceptResult, MyConvocation } from '#shared/types/staff'
-import { todayIso } from '#shared/utils/dates'
-import { formatDay, formatDayRange } from '#shared/utils/format'
-import { isSessionEditable } from '#shared/utils/session-status'
+import { formatDayRange } from '#shared/utils/format'
 
-// A convocation as the staff member sees it (spec 3.5): session, dates, place, role, the message of the
-// administration; accept or decline (with an optional reason) while it waits; then the contract to sign.
+// A convocation waiting for an answer (spec 3.5): session, dates, place, role, the message of the administration;
+// accept (then the contract to sign, if any) or decline with an optional reason. Once answered it lives on
+// /staff/sessioni.
 const props = defineProps<{ convocation: MyConvocation; headingLevel?: 2 | 3 }>()
 const emit = defineEmits<{ changed: [] }>()
 
@@ -15,10 +14,6 @@ const titleId = useId()
 
 const c = computed(() => props.convocation)
 const dates = computed(() => formatDayRange(c.value.session.startDate, c.value.session.endDate, 'long'))
-const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
-const sessionOver = computed(() => c.value.session.endDate < todayIso())
-// For the person convoked, "Inviata" (the administration's word) means it waits for their answer.
-const toAnswer = computed(() => c.value.status === 'sent' && isSessionEditable(c.value.session.status))
 
 const accepting = ref(false)
 async function accept() {
@@ -34,14 +29,15 @@ async function accept() {
   accepting.value = true
   try {
     const result = await api<AcceptResult>(`/api/staff/convocations/${c.value.id}/accept`, { method: 'POST' })
-    if (result.signatureRequestId) {
-      // The convocation leaves the list of those to answer: the contract is signed right away (or from Sessioni).
-      notifySuccess('Convocazione accettata', 'Ora firma il contratto.')
-      await navigateTo(`/firma/${result.signatureRequestId}`)
-      return
-    }
-    notifySuccess('Convocazione accettata', 'La trovi in Sessioni.')
-    emit('changed')
+    // It leaves the list of those to answer: the contract is signed right away, or the session is in Sessioni.
+    const requestId = result.signatureRequestId
+    notifySuccess(
+      'Convocazione accettata',
+      requestId ? 'Ora firma il contratto.' : undefined,
+      requestId ? undefined : { label: 'Vai a Sessioni', to: '/staff/sessioni' },
+    )
+    if (requestId) await navigateTo(`/firma/${requestId}`)
+    else emit('changed')
   } catch (error) {
     notifyError(error)
   } finally {
@@ -82,16 +78,7 @@ async function decline() {
         </component>
         <p class="text-muted">{{ dates }}</p>
       </div>
-      <UBadge
-        v-if="toAnswer"
-        color="info"
-        variant="subtle"
-        size="lg"
-        icon="i-lucide-reply"
-        label="Da rispondere"
-        class="shrink-0"
-      />
-      <StaffConvocationBadge v-else :status="c.status" :confirmed="c.confirmed" />
+      <UBadge color="info" variant="subtle" size="lg" icon="i-lucide-reply" label="Da rispondere" class="shrink-0" />
     </div>
 
     <dl class="grid gap-x-8 gap-y-2 sm:grid-cols-2">
@@ -110,73 +97,30 @@ async function decline() {
       <p class="whitespace-pre-line">{{ c.message }}</p>
     </div>
 
-    <template v-if="c.status === 'sent'">
-      <p v-if="c.contractTitle" class="text-sm text-muted">
-        Se accetti, ti chiederemo di firmare il contratto «{{ c.contractTitle }}».
-      </p>
-      <div v-if="c.answerable" class="flex flex-wrap gap-2">
-        <UButton
-          class="pointer-coarse:min-h-11"
-          icon="i-lucide-thumbs-up"
-          label="Accetta la convocazione"
-          size="lg"
-          :loading="accepting"
-          @click="accept"
-        />
-        <UButton
-          class="pointer-coarse:min-h-11"
-          icon="i-lucide-thumbs-down"
-          label="Rifiuta"
-          color="neutral"
-          variant="outline"
-          size="lg"
-          @click="declineOpen = true"
-        />
-      </div>
-      <p v-else-if="!isSessionEditable(c.session.status)" class="text-sm text-muted">
-        La sessione è conclusa o annullata: non serve più rispondere.
-      </p>
-      <p v-else class="text-sm text-muted">
-        Il tuo profilo non è attivo: <IcContactLine as="span" lead="per rispondere" />
-      </p>
-    </template>
-
-    <template v-else-if="c.status === 'accepted'">
-      <p class="text-sm text-muted">Hai accettato il {{ dayOf(c.respondedAt) }}.</p>
-      <div
-        v-if="c.contract === 'pending' && c.contractRequestId"
-        class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/10 p-3"
-      >
-        <p class="flex items-center gap-2 font-semibold text-warning">
-          <UIcon name="i-lucide-pen-line" class="size-5 shrink-0" aria-hidden="true" />
-          Firma il contratto per confermare la tua presenza.
-        </p>
-        <UButton
-          class="pointer-coarse:min-h-11"
-          :to="`/firma/${c.contractRequestId}`"
-          icon="i-lucide-signature"
-          label="Firma il contratto"
-          size="lg"
-        />
-      </div>
-      <p v-else-if="c.contract === 'signed'" class="flex items-center gap-2 text-sm text-success">
-        <UIcon name="i-lucide-file-check" class="size-4 shrink-0" aria-hidden="true" />
-        Contratto firmato: la tua presenza è confermata.
-      </p>
-      <p v-else-if="c.contract === 'missing'" class="text-sm text-muted">
-        Il contratto da firmare arriverà dall’amministrazione: ti avviseremo per email.
-      </p>
-      <p v-if="c.session.status === 'cancelled'" class="text-sm font-semibold text-error">
-        La sessione è stata annullata.
-      </p>
-      <p v-else-if="sessionOver" class="text-sm text-muted">Sessione conclusa.</p>
-    </template>
-
-    <p v-else-if="c.status === 'declined'" class="text-sm text-muted">
-      Hai rifiutato il {{ dayOf(c.respondedAt) }}<template v-if="c.declineReason">: «{{ c.declineReason }}»</template>.
+    <p v-if="c.contractTitle" class="text-sm text-muted">
+      Se accetti, ti chiederemo di firmare il contratto «{{ c.contractTitle }}».
     </p>
-    <p v-else-if="c.status === 'cancelled'" class="text-sm text-muted">
-      L’amministrazione ha annullato questa convocazione.
+    <div v-if="c.answerable" class="flex flex-wrap gap-2">
+      <UButton
+        class="pointer-coarse:min-h-11"
+        icon="i-lucide-thumbs-up"
+        label="Accetta la convocazione"
+        size="lg"
+        :loading="accepting"
+        @click="accept"
+      />
+      <UButton
+        class="pointer-coarse:min-h-11"
+        icon="i-lucide-thumbs-down"
+        label="Rifiuta"
+        color="neutral"
+        variant="outline"
+        size="lg"
+        @click="declineOpen = true"
+      />
+    </div>
+    <p v-else class="text-sm text-muted">
+      Il tuo profilo non è attivo: <IcContactLine as="span" lead="per rispondere" />
     </p>
 
     <UModal

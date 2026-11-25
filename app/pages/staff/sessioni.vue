@@ -24,6 +24,15 @@ const cancelled = computed(() =>
   ),
 )
 
+/** Accepted and not cancelled: both lists open the session's programme (canStaffReadProgramme). */
+const lists = computed(() => [
+  {
+    title: 'Le tue prossime sessioni confermate',
+    items: upcoming.value,
+    empty: 'Nessuna sessione confermata in programma.',
+  },
+  { title: 'Sessioni fatte', items: done.value, empty: '' },
+])
 const where = (c: MyConvocation) =>
   `${formatDayRange(c.session.startDate, c.session.endDate, 'long')} · ${c.session.location}`
 </script>
@@ -79,63 +88,48 @@ const where = (c: MyConvocation) =>
           />
         </template>
 
-        <IcSection title="Le tue prossime sessioni confermate">
-          <p v-if="!upcoming.length" class="text-muted">Nessuna sessione confermata in programma.</p>
-          <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
+        <template v-for="list in lists" :key="list.title">
+          <IcSection v-if="list.items.length || list.empty" :title="list.title">
+            <p v-if="!list.items.length" class="text-muted">{{ list.empty }}</p>
+            <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
+              <li
+                v-for="c in list.items"
+                :key="c.id"
+                class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 p-4"
+              >
+                <div class="min-w-0">
+                  <p class="font-semibold text-highlighted">{{ c.session.title }}</p>
+                  <p class="text-sm text-muted">{{ where(c) }}</p>
+                  <p v-if="c.roleName" class="text-sm">Ruolo: {{ c.roleName }}</p>
+                </div>
+                <UButton
+                  :to="`/staff/programma/${c.session.id}`"
+                  icon="i-lucide-calendar-clock"
+                  label="Programma"
+                  color="neutral"
+                  variant="outline"
+                  class="pointer-coarse:min-h-11"
+                />
+              </li>
+            </ul>
+          </IcSection>
+        </template>
+
+        <IcSection v-if="cancelled.length" title="Annullate">
+          <ul class="divide-y divide-default rounded-lg border border-default bg-elevated">
             <li
-              v-for="c in upcoming"
+              v-for="c in cancelled"
               :key="c.id"
               class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 p-4"
             >
               <div class="min-w-0">
-                <p class="font-semibold text-highlighted">{{ c.session.title }}</p>
-                <p class="text-sm text-muted">{{ where(c) }}</p>
-                <p v-if="c.roleName" class="text-sm">Ruolo: {{ c.roleName }}</p>
-              </div>
-              <UButton
-                v-if="canStaffReadProgramme(c.status, c.session.status)"
-                :to="`/staff/programma/${c.session.id}`"
-                icon="i-lucide-calendar-clock"
-                label="Programma"
-                color="neutral"
-                variant="outline"
-                class="pointer-coarse:min-h-11"
-              />
-            </li>
-          </ul>
-        </IcSection>
-
-        <IcSection v-if="done.length" title="Sessioni fatte">
-          <ul class="divide-y divide-default rounded-lg border border-default bg-elevated">
-            <li v-for="c in done" :key="c.id" class="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 p-4">
-              <div class="min-w-0">
                 <p class="font-semibold">{{ c.session.title }}</p>
-                <p class="text-sm text-muted">
-                  {{ formatDayRange(c.session.startDate, c.session.endDate, 'long')
-                  }}<template v-if="c.roleName"> · {{ c.roleName }}</template>
-                </p>
+                <p class="text-sm text-muted">{{ formatDayRange(c.session.startDate, c.session.endDate, 'long') }}</p>
               </div>
-              <UButton
-                v-if="canStaffReadProgramme(c.status, c.session.status)"
-                :to="`/staff/programma/${c.session.id}`"
-                icon="i-lucide-calendar-clock"
-                label="Programma"
-                color="neutral"
-                variant="outline"
-                class="pointer-coarse:min-h-11"
+              <IcStatusBadge
+                :kind="c.session.status === 'cancelled' ? 'sessionStatus' : 'convocationStatus'"
+                value="cancelled"
               />
-            </li>
-          </ul>
-        </IcSection>
-
-        <IcSection v-if="cancelled.length" title="Annullate">
-          <ul class="divide-y divide-default rounded-lg border border-default bg-elevated">
-            <li v-for="c in cancelled" :key="c.id" class="p-4">
-              <p class="font-semibold">{{ c.session.title }}</p>
-              <p class="text-sm text-muted">
-                {{ formatDayRange(c.session.startDate, c.session.endDate, 'long') }} ·
-                {{ c.session.status === 'cancelled' ? 'Sessione annullata' : 'Convocazione annullata' }}
-              </p>
             </li>
           </ul>
         </IcSection>

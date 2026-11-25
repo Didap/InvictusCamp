@@ -1,16 +1,12 @@
 <script setup lang="ts">
 import type { MyConvocations } from '#shared/types/staff'
-import { todayIso } from '#shared/utils/dates'
-import { isSessionAhead } from '#shared/utils/session-status'
+import { isConvocationWaiting } from '#shared/utils/session-status'
 
 // Convocations (spec 3.5): only the ones waiting for an answer, accept or decline with a reason (an inactive
 // person sees them without the buttons). The sessions accepted, with the contract to sign, are on /staff/sessioni.
 const { data, refresh } = await useApiFetch<MyConvocations>('/api/staff/convocations')
 
-const today = todayIso()
-const waiting = computed(() =>
-  (data.value?.items ?? []).filter(c => c.status === 'sent' && isSessionAhead(c.session, today)),
-)
+const waiting = computed(() => (data.value?.items ?? []).filter(isConvocationWaiting))
 </script>
 
 <template>
@@ -42,11 +38,7 @@ const waiting = computed(() =>
       <IcSection
         v-else
         title="Da rispondere"
-        :description="
-          data.approved
-            ? 'Accetta o rifiuta: l’amministrazione vede subito la tua risposta.'
-            : 'Il tuo profilo non è attivo: per rispondere scrivi all’amministrazione.'
-        "
+        :description="data.approved ? 'Accetta o rifiuta: l’amministrazione vede subito la tua risposta.' : undefined"
       >
         <div class="divide-y divide-default rounded-lg border border-default bg-elevated">
           <StaffMyConvocation v-for="c in waiting" :key="c.id" :convocation="c" @changed="refresh" />

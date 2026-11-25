@@ -46,7 +46,12 @@ import {
 } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
 import { changedKeys } from '../../shared/utils/plain'
-import { SESSION_EDITABLE_STATUSES, isSessionAhead, isSessionEditable } from '../../shared/utils/session-status'
+import {
+  SESSION_EDITABLE_STATUSES,
+  isConvocationWaiting,
+  isSessionAhead,
+  isSessionEditable,
+} from '../../shared/utils/session-status'
 import {
   availabilityConfirmations,
   campSessions,
@@ -1543,7 +1548,7 @@ export async function myConvocations(
       contractRequestId: request?.status === 'pending' ? request.id : null,
       contractTitle: contractTitle ?? null,
       confirmed: isConfirmed(convocation.status, contract),
-      answerable: options.approved && convocation.status === 'sent' && isSessionEditable(session.status),
+      answerable: options.approved && isConvocationWaiting({ status: convocation.status, session }),
     }
   })
 }

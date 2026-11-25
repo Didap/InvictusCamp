@@ -35,8 +35,15 @@ export function notifyError(error: unknown, title = 'Operazione non riuscita') {
   toast().add({ title, description: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
 }
 
-export function notifySuccess(title: string, description?: string) {
-  toast().add({ title, description, color: 'success', icon: 'i-lucide-circle-check' })
+/** A success toast; `action` points to where the result went (e.g. «Vai a Sessioni»). */
+export function notifySuccess(title: string, description?: string, action?: { label: string; to: string }) {
+  toast().add({
+    title,
+    description,
+    color: 'success',
+    icon: 'i-lucide-circle-check',
+    actions: action ? [{ ...action, color: 'neutral', variant: 'outline' }] : undefined,
+  })
 }
 
 /** A form's `@error`: brings the first field with an error into view and puts the focus on its control. */
