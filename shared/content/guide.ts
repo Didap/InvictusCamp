@@ -7,29 +7,33 @@ import {
   MAX_UPLOAD_BYTES,
   type UserRole,
 } from '#shared/utils/constants'
+import { formatBytes } from '#shared/utils/format'
 import { ACCOUNT_ITEM } from '#shared/utils/nav'
 
 // The guide of each role (/guida): what each section of the menu is for, the common tasks step by step and
 // the frequent questions. Plain words for people who are not at ease with a computer: one action per step,
 // button names in «» exactly as the pages show them. When a flow changes (docs/spec.md), change its text here.
 
-export interface GuideHowTo {
+interface GuideHowTo {
   title: string
   steps: string[]
 }
 
-export interface GuideFaq {
+interface GuideFaq {
   question: string
   answer: string
 }
 
-export interface Guide {
+interface Guide {
   intro: string
   /** What each page of the menu (`navFor`) and the account page are for, by path; the page shows them in the menu's order. */
   areas: Record<string, string>
   howTos: GuideHowTo[]
   faqs: GuideFaq[]
 }
+
+const INTRO =
+  'Qui trovi a cosa serve ogni parte del gestionale, come fare le cose più comuni e le risposte alle domande che ci fate più spesso.'
 
 const ACCOUNT = {
   [ACCOUNT_ITEM.to]: 'Il tuo nome, il telefono e la password. Lo apri premendo il tuo nome, in fondo al menu.',
@@ -73,8 +77,7 @@ const CODE: GuideFaq = {
 
 export const GUIDES: Record<UserRole, Guide> = {
   family: {
-    intro:
-      'Qui trovi a cosa serve ogni parte del gestionale, come fare le cose più comuni e le risposte alle domande che ci fate più spesso.',
+    intro: INTRO,
     areas: {
       '/famiglia': 'La tua pagina iniziale: ti dice cosa resta da fare e ti porta dove serve.',
       '/famiglia/sessioni':
@@ -143,7 +146,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       },
       {
         question: 'Quali documenti posso caricare?',
-        answer: `Certificati, diagnosi, documenti di identità e tessera sanitaria, in PDF, JPG o PNG fino a ${MAX_UPLOAD_BYTES / 1024 / 1024} MB. Certificati medici e diagnosi si possono caricare solo dopo aver dato il consenso sui dati di salute.`,
+        answer: `Certificati, diagnosi, documenti di identità e tessera sanitaria, in PDF, JPG o PNG fino a ${formatBytes(MAX_UPLOAD_BYTES)}. Certificati medici e diagnosi si possono caricare solo dopo aver dato il consenso sui dati di salute.`,
       },
       {
         question: 'Dove vedo l’alloggio e il gruppo della mia famiglia?',
@@ -156,8 +159,7 @@ export const GUIDES: Record<UserRole, Guide> = {
   },
 
   staff: {
-    intro:
-      'Qui trovi a cosa serve ogni parte del gestionale, come fare le cose più comuni e le risposte alle domande che ci fate più spesso. Vale per lo staff e per il v-team.',
+    intro: `${INTRO} Vale per lo staff e per il v-team.`,
     areas: {
       '/staff': 'La tua pagina iniziale: ti dice a che punto è la candidatura e cosa resta da fare.',
       '/staff/scheda':

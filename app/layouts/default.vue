@@ -8,7 +8,7 @@ import { ACCOUNT_ITEM } from '#shared/utils/nav'
 // and staff also find there how to reach the camp, families at their own address.
 const { user, clear } = useUserSession()
 const nav = useNav()
-const showHelp = computed(() => user.value?.role === 'family' || user.value?.role === 'staff')
+const showHelp = computed(() => showsContact(user.value?.role))
 const contact = useContact()
 
 async function logout() {

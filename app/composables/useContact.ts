@@ -1,3 +1,5 @@
+import type { UserRole } from '#shared/utils/constants'
+
 export interface ContactConfig {
   email?: string
   phone?: string
@@ -37,6 +39,11 @@ export function contactSentence(contact: ContactConfig, lead?: string): string {
   return contactParts(contact, lead)
     .map(part => part.text)
     .join('')
+}
+
+/** Whether a role is shown how to reach the camp (the help box of the menu, the end of the guide). */
+export function showsContact(role: UserRole | undefined): boolean {
+  return role === 'family' || role === 'staff'
 }
 
 /** How families or staff reach the camp, with the question the help box asks. */

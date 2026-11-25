@@ -14,6 +14,11 @@ export const GUIDE_ITEM: NavItem = { label: 'Guida', icon: 'i-lucide-circle-help
 /** The account page, in the menu under the name for every role. */
 export const ACCOUNT_ITEM: NavItem = { label: 'Il mio account', icon: 'i-lucide-user-cog', to: '/account' }
 
+/** The pages the guide describes (docs/spec.md 3.15): the menu without the guide itself, then the account. */
+export function guidePages(nav: NavItem[][]): NavItem[] {
+  return [...nav.flat().filter(item => item.to !== GUIDE_ITEM.to), ACCOUNT_ITEM]
+}
+
 /**
  * The sections of the sidebar for a role. Every area page is listed here. Staff not approved yet
  * (`staffInArea` false) have the home alone (spec 3.4), and the guide.
