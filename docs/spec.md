@@ -144,6 +144,14 @@ empty, the date is the last save's); saving nothing withdraws it. Last, the
 application as it was sent (team, roles, the older texts, CV). Until the sheet is complete the home asks for
 it. The administration sees the sheet on the person's page, the health data in a reserved section opened on
 demand and audited (`staff.health_view`), as for families.
+Once the sheet is complete, the gestionale writes its PDF («Scheda personale · Nome Cognome»: the account's
+name, email and phone, birth, codice fiscale, residence, T-shirt size and «Con la firma confermo che i dati di
+questa scheda sono corretti e aggiornati»; no health data) and asks the person to sign it like every document,
+with the code by email (3.6): the email «Hai un documento da firmare», «Firma la tua scheda» on the sheet and the
+document among those to sign. A change of the sheet, or of name or phone from `/account`, makes it again: the
+old one archived, its signature cancelled if still to sign (audited, `staff.sheet_document`). Like a family's
+release it is never edited, assigned or restored by hand (`documents.staffUserId`); the administration finds it
+in Documenti and in «Firme» on the person's page.
 The outcome email (`staff.approved` / `staff.rejected`) is **not automatic**: the administration sends it
 from the dashboard when it chooses, with a message it can edit. Until approved, a staff member cannot give
 availability or receive convocations. The administration can move a person to the other team from their page

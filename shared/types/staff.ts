@@ -8,6 +8,7 @@ import type {
   PersonalDocumentCategory,
   SessionStatus,
   ShirtSize,
+  SignatureStatus,
   StaffRole,
   StaffStatus,
   StaffTagColor,
@@ -236,11 +237,26 @@ export interface SessionStaffData {
 // ─── Staff side ────────────────────────────────────────────────────────────────────────────────────
 
 /** GET /api/staff/sheet: the personal sheet, with the account's details, the health data and the application. */
-export interface StaffSheetDto {
+export interface StaffSheetDto extends StaffSheetSaved {
   account: { firstName: string; lastName: string; email: string; phone: string | null }
-  sheet: StaffSheet
   health: StaffUsefulInfoDto
   application: StaffApplicationDto
+}
+
+/** PUT /api/staff/sheet: the sheet as saved and the signature of its PDF, perhaps a new one to sign. */
+export interface StaffSheetSaved {
+  sheet: StaffSheet
+  signature: StaffSheetSignature | null
+}
+
+/**
+ * The PDF of the sheet in force (server/domain/staff-sheets.ts) and its signature: null until the sheet is
+ * complete. Signed on /firma/:requestId, the signed copy at /api/signatures/:requestId/copy.
+ */
+export interface StaffSheetSignature {
+  requestId: string
+  status: SignatureStatus
+  signedAt: string | null
 }
 
 /** The application as it was sent, read only. */

@@ -580,6 +580,11 @@ export const documents = pgTable(
      * by hand.
      */
     familyId: uuid().references(() => families.id, { onDelete: 'cascade' }),
+    /**
+     * Or for one staff or v-team member, the PDF of their personal sheet (server/domain/staff-sheets.ts), with
+     * the digest of the sheet in `sourceDigest`: the same rules.
+     */
+    staffUserId: uuid().references(() => users.id, { onDelete: 'cascade' }),
     sourceDigest: text(),
     /** Set when the document belongs to one session (e.g. its contract). */
     sessionId: uuid().references((): AnyPgColumn => campSessions.id, { onDelete: 'set null' }),

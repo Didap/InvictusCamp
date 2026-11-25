@@ -24,6 +24,7 @@ import { familyNameOf } from '../../shared/utils/format'
 import * as t from '../db/schema'
 import type { Db, DbOrTx } from './db'
 import { textPdf } from './pdf'
+import { staffSheetDocument } from './staff-sheets'
 import { storeFile } from './storage'
 
 export const DEMO_PASSWORD = 'invictus-demo'
@@ -797,6 +798,17 @@ export async function seedDemo(
       firstName: user.firstName,
       status: s.status,
       sessions: s.sessions,
+    })
+  }
+  // The demo account's sheet is complete: its PDF waits for the signature, as after a save. The seed sends no
+  // email, so the address of the links does not matter.
+  const demoStaff = staff.find(s => s.email === DEMO_ACCOUNTS.staff)
+  if (demoStaff) {
+    await staffSheetDocument(db, {
+      userId: demoStaff.userId,
+      ctx: { appUrl: 'http://localhost' },
+      uploadsDir: options.uploadsDir,
+      actor: { userId: demoStaff.userId },
     })
   }
 

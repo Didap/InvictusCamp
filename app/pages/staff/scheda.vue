@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { isSheetComplete, SHEET_MISSING, staffSheetSchema } from '#shared/schemas/staff'
-import type { StaffSheet, StaffSheetDto, StaffUsefulInfoDto } from '#shared/types/staff'
+import type { StaffSheet, StaffSheetDto, StaffSheetSaved, StaffUsefulInfoDto } from '#shared/types/staff'
 import { residenceForm } from '#shared/schemas/common'
 import { SHIRT_SIZES } from '#shared/utils/constants'
 import { ageOn, isIsoDay, todayIso } from '#shared/utils/dates'
-import { formatAge, formatDay } from '#shared/utils/format'
+import { formatAge, formatDateTime, formatDay } from '#shared/utils/format'
 import { focusFirstError } from '~/utils/errors'
 
 // The personal sheet of an approved staff or v-team member (docs/spec.md 3.4): name, email and phone are the
 // account's (changed from /account); birth, codice fiscale, residence and T-shirt size to fill in; allergies and
-// the other details under the consent to health data (StaffUsefulInfo); the application as it was sent.
+// the other details under the consent to health data (StaffUsefulInfo); the application as it was sent. Once
+// complete, the PDF of the sheet to sign (server/domain/staff-sheets.ts): made again when the data changes.
 const api = useApi()
 const { label } = useEnums()
 const { data } = await useApiFetch<StaffSheetDto>('/api/staff/sheet')
@@ -29,6 +30,9 @@ function sheetForm(sheet: StaffSheet | undefined) {
 const state = reactive(sheetForm(data.value?.sheet))
 
 const complete = computed(() => !data.value || isSheetComplete(data.value.sheet))
+const signature = computed(() => data.value?.signature ?? null)
+/** «Leggi e firma»: a save that makes a new PDF brings the person to it. */
+const signAlert = useTemplateRef<HTMLElement>('signAlert')
 /** The age counts itself from the date being typed. */
 const age = computed(() =>
   isIsoDay(state.birthDate) && state.birthDate <= today
@@ -73,11 +77,16 @@ const saving = ref(false)
 async function save() {
   saving.value = true
   try {
-    const sheet = await api<StaffSheet>('/api/staff/sheet', { method: 'PUT', body: state })
+    const saved = await api<StaffSheetSaved>('/api/staff/sheet', { method: 'PUT', body: state })
+    const before = signature.value?.requestId
     // `data` is shallow: a new object, so what reads the sheet sees it.
-    if (data.value) data.value = { ...data.value, sheet }
-    Object.assign(state, sheetForm(sheet))
-    notifySuccess('Scheda salvata')
+    if (data.value) data.value = { ...data.value, ...saved }
+    Object.assign(state, sheetForm(saved.sheet))
+    if (saved.signature?.status === 'pending' && saved.signature.requestId !== before) {
+      notifySuccess('Scheda salvata', 'Abbiamo preparato il PDF con i tuoi dati: ora firmalo.')
+      await nextTick()
+      signAlert.value?.querySelector('a')?.focus()
+    } else notifySuccess('Scheda salvata')
   } catch (error) {
     notifyError(error, 'Scheda non salvata')
   } finally {
@@ -98,6 +107,31 @@ async function save() {
         title="Completa la tua scheda"
         :description="SHEET_MISSING"
       />
+      <div v-else-if="signature?.status === 'pending'" ref="signAlert">
+        <UAlert
+          class="mb-8"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-pen-line"
+          title="Firma la tua scheda"
+          description="Abbiamo preparato il PDF con i dati che hai salvato. Leggilo e firmalo: per confermare ti mandiamo un codice via email."
+          :actions="[{ label: 'Leggi e firma', to: `/firma/${signature.requestId}`, class: 'pointer-coarse:min-h-11' }]"
+        />
+      </div>
+      <p v-else-if="signature?.status === 'signed'" class="mb-8 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted">
+        <span class="inline-flex items-center gap-2">
+          <UIcon name="i-lucide-file-check" class="size-5 shrink-0 text-success" />
+          Hai firmato la scheda il {{ formatDateTime(signature.signedAt) }}.
+        </span>
+        <ULink
+          :href="`/api/signatures/${signature.requestId}/copy`"
+          external
+          target="_blank"
+          class="font-semibold text-primary underline"
+        >
+          Copia firmata
+        </ULink>
+      </p>
 
       <IcSection title="I tuoi dati">
         <IcDataList :items="account" :columns="2" />

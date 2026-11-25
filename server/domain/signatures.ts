@@ -83,9 +83,12 @@ async function requireDocument(db: DbOrTx, documentId: string, lock?: DocumentLo
   return row
 }
 
-/** A document the gestionale prepares for a family (its release) is not changed by hand. */
-function assertNotGenerated(document: { familyId: string | null }) {
+/** A document the gestionale prepares (a family's release, a staff sheet) is not changed by hand. */
+function assertNotGenerated(document: { familyId: string | null; staffUserId: string | null }) {
   if (document.familyId) throw fail(409, 'È la liberatoria di una famiglia: la prepara e la aggiorna il gestionale')
+  if (document.staffUserId) {
+    throw fail(409, 'È la scheda personale di una persona dello staff: la prepara e la aggiorna il gestionale')
+  }
 }
 
 async function requireSession(db: DbOrTx, sessionId: string): Promise<void> {
@@ -425,7 +428,7 @@ export async function remindRequests(
 /** Cancels a request still to sign: the person can no longer sign it. No email. */
 export async function cancelRequest(db: DbOrTx, input: { requestId: string; actor: Actor }): Promise<void> {
   const [target] = await db
-    .select({ familyId: documents.familyId })
+    .select({ familyId: documents.familyId, staffUserId: documents.staffUserId })
     .from(signatureRequests)
     .innerJoin(documents, eq(documents.id, signatureRequests.documentId))
     .where(eq(signatureRequests.id, input.requestId))

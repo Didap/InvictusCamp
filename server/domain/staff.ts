@@ -3,7 +3,7 @@
 // tests load this module directly. Functions take the client or a transaction; those that produce emails
 // return them, and the handler delivers them after the commit. A review never sends anything by itself:
 // the outcome leaves only from staffOutcomeEmails ("Comunica l’esito").
-import { and, asc, desc, eq, gt, inArray, isNotNull, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import {
   canMoveStaff,
@@ -32,6 +32,7 @@ import type {
   StaffOutcomeTemplate,
   StaffSheet,
   StaffSheetDto,
+  StaffSheetSignature,
   StaffUsefulInfoDto,
 } from '../../shared/types/staff'
 import {
@@ -1258,6 +1259,17 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
 
 // ─── Reads: staff side ─────────────────────────────────────────────────────────────────────────────
 
+/** The PDF of the sheet in force and its signature (staff-sheets.ts): null until the sheet is complete. */
+export async function sheetSignature(db: DbOrTx, userId: string): Promise<StaffSheetSignature | null> {
+  const [row] = await db
+    .select({ requestId: signatureRequests.id, status: signatureRequests.status, signedAt: signatureRequests.signedAt })
+    .from(documents)
+    .innerJoin(signatureRequests, eq(signatureRequests.documentId, documents.id))
+    .where(and(eq(documents.staffUserId, userId), isNull(documents.archivedAt), eq(signatureRequests.userId, userId)))
+    .limit(1)
+  return row ? { ...row, signedAt: iso(row.signedAt) } : null
+}
+
 /**
  * The personal sheet of the signed-in person, from the rows `requireStaff` read: the account's details, the
  * sheet, the health data and the application.
@@ -1267,13 +1279,15 @@ export async function myStaffSheet(
   user: Pick<typeof users.$inferSelect, 'firstName' | 'lastName' | 'email' | 'phone'>,
   profile: ProfileRow,
 ): Promise<StaffSheetDto> {
-  const [[cv], roleOptions] = await Promise.all([
+  const [[cv], roleOptions, signature] = await Promise.all([
     profile.cvFileId ? db.select().from(files).where(eq(files.id, profile.cvFileId)).limit(1) : [],
     staffRoleOptions(db),
+    sheetSignature(db, profile.userId),
   ])
   return {
     account: { firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone },
     sheet: staffSheetOf(profile),
+    signature,
     health: staffUsefulInfo(profile),
     application: {
       team: profile.team,
