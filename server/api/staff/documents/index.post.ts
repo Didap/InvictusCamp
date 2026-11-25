@@ -1,14 +1,13 @@
-import { PDF_ONLY_DOCUMENT_CATEGORIES, staffDocumentSchema } from '#shared/schemas/staff'
+import { staffDocumentSchema, staffDocumentTypes } from '#shared/schemas/staff'
 
-/** Uploads a personal document (PDF, JPG or PNG up to 15 MB; the ID in PDF) with its category and title. */
+/** Uploads a personal document (PDF, JPG or PNG up to 15 MB; CV and ID in PDF) with its category and title. */
 export default defineEventHandler(async event => {
   const { user } = await requireStaff(event)
   const upload = await readUpload(event)
   const input = parseFields(upload.fields, staffDocumentSchema)
-  // The ID is one of the required documents: PDF only, like the CV (the same answer as readUpload).
-  if (PDF_ONLY_DOCUMENT_CATEGORIES.includes(input.category) && upload.mimeType !== 'application/pdf') {
-    throw createError({ statusCode: 415, message: 'Carica un file PDF' })
-  }
+  // The required documents (CV, ID) only in PDF.
+  const accept = staffDocumentTypes(input.category)
+  if (!accept.includes(upload.mimeType)) throw unsupportedType(accept)
   const file = await saveFile({
     data: upload.data,
     originalName: upload.filename,

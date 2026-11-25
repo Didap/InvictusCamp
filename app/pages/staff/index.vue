@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { REQUIRED_DOCUMENT_NAMES, SHEET_MISSING } from '#shared/schemas/staff'
+import { SHEET_MISSING, requiredDocumentsText } from '#shared/schemas/staff'
 import type { StaffHome } from '#shared/types/staff'
-import { andList, formatDayRange, plural } from '#shared/utils/format'
+import { formatDayRange, plural } from '#shared/utils/format'
 
 // The staff home: it follows the application (spec 3.4). Until the approval it is the whole area:
 // registered, the CV to upload (an account made before it was asked at registration); applied, the
@@ -10,6 +10,10 @@ import { andList, formatDayRange, plural } from '#shared/utils/format'
 // convocations for now.
 const { user, session, fetch: fetchSession } = useUserSession()
 const { data: home, refresh } = await useApiFetch<StaffHome>('/api/staff/home')
+const documentsAlert = computed(() => {
+  const missing = home.value?.documentsMissing ?? []
+  return `${missing.length === 1 ? 'Ci serve' : 'Ci servono'} ${requiredDocumentsText(missing)}, in PDF.`
+})
 
 // The approval may come while the tab is open: the session, and with it the menu, catches up.
 watch(
@@ -90,9 +94,7 @@ watch(
           variant="subtle"
           icon="i-lucide-file-up"
           title="Carica i documenti obbligatori"
-          :description="`${home.documentsMissing.length === 1 ? 'Ci serve' : 'Ci servono'} ${andList(
-            home.documentsMissing.map(d => REQUIRED_DOCUMENT_NAMES[d]),
-          )}, in PDF.`"
+          :description="documentsAlert"
           :actions="[
             {
               label: 'Vai ai documenti',

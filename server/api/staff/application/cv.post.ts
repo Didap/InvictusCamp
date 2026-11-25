@@ -9,12 +9,26 @@ const ALREADY_SENT = 'La candidatura è già stata inviata: il CV non si può pi
 export default defineEventHandler(async event => {
   const { user, profile } = await requireStaff(event, 'candidate')
   if (profile.status !== 'registered') throw createError({ statusCode: 409, message: ALREADY_SENT })
-  // Refused when sent meanwhile from another tab.
-  const file = await uploadCv(
-    event,
-    user.id,
-    fileId => useDb().transaction(tx => applyWithCv(tx, user.id, { ip: clientIp(event) }, fileId)),
-    ALREADY_SENT,
-  )
+  const upload = await readUpload(event, { accept: ['application/pdf'] })
+  const file = await saveFile({
+    data: upload.data,
+    originalName: upload.filename,
+    mimeType: upload.mimeType,
+    purpose: 'cv',
+    ownerUserId: user.id,
+    uploadedBy: user.id,
+  })
+  let sent: boolean
+  try {
+    sent = await useDb().transaction(tx => applyWithCv(tx, user.id, { ip: clientIp(event) }, file.id))
+  } catch (error) {
+    await removeFile(file.id)
+    throw error
+  }
+  // Sent meanwhile from another tab.
+  if (!sent) {
+    await removeFile(file.id)
+    throw createError({ statusCode: 409, message: ALREADY_SENT })
+  }
   return toFileDto(file)
 })

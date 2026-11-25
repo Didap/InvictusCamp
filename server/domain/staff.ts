@@ -9,8 +9,10 @@ import {
   canMoveStaff,
   isReviewMove,
   isSheetComplete,
-  missingStaffDocuments,
+  REQUIRED_STAFF_DOCUMENTS,
+  staffDocumentTypes,
   type ConvocationAddInput,
+  type RequiredStaffDocument,
   type ConvocationSendInput,
   type StaffSheetInput,
   type StaffUsefulInfoInput,
@@ -1144,45 +1146,30 @@ async function cvFileOf(db: DbOrTx, cvFileId: string | null): Promise<FileDto | 
   return cv ? toFileDto(cv) : null
 }
 
-/** The required documents not there yet: the CV on the profile, an ID among the documents (in PDF only). */
-function requiredDocumentsMissing(cvFileId: string | null, documents: StaffDocumentDto[]) {
-  return missingStaffDocuments({
-    cv: cvFileId !== null,
-    id_document: documents.some(d => d.category === 'id_document' && d.file.mimeType === 'application/pdf'),
-  })
+/**
+ * The required documents not there yet, in the staff area: each among the documents in a format it is taken in (PDF);
+ * the CV sent with the application counts as the CV.
+ */
+function requiredDocumentsMissing(
+  profile: Pick<ProfileRow, 'status' | 'cvFileId'>,
+  documents: StaffDocumentDto[],
+): RequiredStaffDocument[] {
+  if (!inStaffArea(profile.status)) return []
+  const there = (category: RequiredStaffDocument) =>
+    (category === 'cv' && profile.cvFileId !== null) ||
+    documents.some(
+      d => d.category === category && (staffDocumentTypes(category) as readonly string[]).includes(d.file.mimeType),
+    )
+  return REQUIRED_STAFF_DOCUMENTS.filter(category => !there(category))
 }
 
 /** The documents page of the signed-in person: the CV on the profile, the documents uploaded, what is missing. */
 export async function myStaffDocuments(
   db: DbOrTx,
-  profile: Pick<ProfileRow, 'userId' | 'cvFileId'>,
+  profile: Pick<ProfileRow, 'userId' | 'status' | 'cvFileId'>,
 ): Promise<MyStaffDocuments> {
   const [cv, documents] = await Promise.all([cvFileOf(db, profile.cvFileId), staffDocuments(db, profile.userId)])
-  return { cv, documents, documentsMissing: requiredDocumentsMissing(profile.cvFileId, documents) }
-}
-
-/**
- * The CV from the staff area, for someone without one (invited as approved): the CV sent with an application stays
- * as it was. False when there is one already.
- */
-export async function addStaffCv(
-  db: DbOrTx,
-  input: { userId: string; fileId: string; actor: Actor },
-): Promise<boolean> {
-  const [added] = await db
-    .update(staffProfiles)
-    .set({ cvFileId: input.fileId })
-    .where(and(eq(staffProfiles.userId, input.userId), isNull(staffProfiles.cvFileId)))
-    .returning({ id: staffProfiles.id })
-  if (!added) return false
-  await writeAudit(db, {
-    actorUserId: input.actor.userId,
-    action: 'staff.cv',
-    entityType: 'user',
-    entityId: input.userId,
-    ip: input.actor.ip,
-  })
-  return true
+  return { cv, documents, documentsMissing: requiredDocumentsMissing(profile, documents) }
 }
 
 /** Personal documents of an account, newest first. */
@@ -1319,7 +1306,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     availabilityResetRequestedAt: iso(profile.availabilityResetRequestedAt),
     convocations,
     documents,
-    documentsMissing: inStaffArea(profile.status) ? requiredDocumentsMissing(profile.cvFileId, documents) : [],
+    documentsMissing: requiredDocumentsMissing(profile, documents),
     outcome: {
       template,
       subject: template ? outcomeSubject(template) : '',
@@ -1631,6 +1618,6 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
     upcoming: convocations.filter(c => c.status === 'accepted' && isSessionAhead(c.session, today)),
     availability: { available, total: sessions.length, toConfirm: sessions.filter(session => !session.locked).length },
     sheetComplete,
-    documentsMissing: requiredDocumentsMissing(profile.cvFileId, documents),
+    documentsMissing: requiredDocumentsMissing(profile, documents),
   }
 }

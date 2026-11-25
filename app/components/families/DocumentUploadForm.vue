@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import { isHealthDocument, personalDocumentSchema } from '#shared/schemas/families'
+import { FAMILY_DOCUMENT_CATEGORIES, isHealthDocument, personalDocumentSchema } from '#shared/schemas/families'
 import type { FamilyMemberDto } from '#shared/types/families'
-import {
-  MAX_UPLOAD_BYTES,
-  PERSONAL_DOCUMENT_CATEGORIES,
-  enumLabel,
-  type PersonalDocumentCategory,
-} from '#shared/utils/constants'
+import { MAX_UPLOAD_BYTES, enumLabel, type PersonalDocumentCategory } from '#shared/utils/constants'
 import { fullName, isEmptyCard } from '#shared/utils/format'
 
 // Upload of a personal document of the family: type, title, who it refers to, the file (PDF, JPG or
@@ -46,7 +41,7 @@ const { options } = useEnums()
 const categories = computed(() =>
   options(
     'personalDocumentCategory',
-    props.healthConsent ? undefined : PERSONAL_DOCUMENT_CATEGORIES.filter(category => !isHealthDocument(category)),
+    FAMILY_DOCUMENT_CATEGORIES.filter(category => props.healthConsent || !isHealthDocument(category)),
   ),
 )
 const memberItems = computed(() => [

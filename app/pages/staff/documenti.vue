@@ -1,29 +1,41 @@
 <script setup lang="ts">
-import { PDF_ONLY_DOCUMENT_CATEGORIES, REQUIRED_DOCUMENT_NAMES, STAFF_DOCUMENT_CATEGORIES } from '#shared/schemas/staff'
+import {
+  REQUIRED_STAFF_DOCUMENTS,
+  STAFF_DOCUMENT_CATEGORIES,
+  isRequiredStaffDocument,
+  requiredDocumentsText,
+} from '#shared/schemas/staff'
 import type { MyStaffDocuments, StaffDocumentDto } from '#shared/types/staff'
 import type { PersonalDocumentCategory } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
-import { andList, formatDay } from '#shared/utils/format'
+import { formatDay } from '#shared/utils/format'
 
-// Documents (spec 3.4): the required ones first, the CV and an ID in PDF; what the administration asks to sign
-// (PendingSignatures, documents area); the other personal documents (titles, certificates), each with a category
-// and a title.
+// Documents (spec 3.4): the required ones first, a CV (the application's counts) and an ID, in PDF; what the
+// administration asks to sign (PendingSignatures, documents area); the other personal documents (titles,
+// certificates), each with a category and a title.
 const api = useApi()
 const confirm = useConfirm()
 const { label, options } = useEnums()
 const { data, refresh } = await useApiFetch<MyStaffDocuments>('/api/staff/documents')
 const documents = computed(() => data.value?.documents ?? [])
-const idDocuments = computed(() => documents.value.filter(document => document.category === 'id_document'))
-const others = computed(() => documents.value.filter(document => document.category !== 'id_document'))
 const missing = computed(() => data.value?.documentsMissing ?? [])
-/** One primary action: the upload of the first required document missing. */
-const primary = computed(() => missing.value[0])
+const required = computed(() =>
+  REQUIRED_STAFF_DOCUMENTS.map(category => ({
+    category,
+    name: label('personalDocumentCategory', category),
+    uploaded: documents.value.filter(document => document.category === category),
+    missing: missing.value.includes(category),
+    // One primary action on the page: the upload of the first one missing.
+    primary: missing.value[0] === category,
+  })),
+)
+const others = computed(() => documents.value.filter(document => !isRequiredStaffDocument(document.category)))
 
-/** The ID has its own place among the required documents. */
+/** The required documents have their own place. */
 const categoryItems = computed(() =>
   options(
     'personalDocumentCategory',
-    STAFF_DOCUMENT_CATEGORIES.filter(category => !PDF_ONLY_DOCUMENT_CATEGORIES.includes(category)),
+    STAFF_DOCUMENT_CATEGORIES.filter(category => !isRequiredStaffDocument(category)),
   ).map(option => ({ label: option.label, value: option.value as PersonalDocumentCategory })),
 )
 const upload = reactive({ category: 'certification' as PersonalDocumentCategory, title: '' })
@@ -65,36 +77,19 @@ async function remove(document: StaffDocumentDto) {
       title="Documenti obbligatori"
       :description="
         missing.length
-          ? `Per lavorare con te carica ${andList(missing.map(m => REQUIRED_DOCUMENT_NAMES[m]))}, in PDF.`
+          ? `Per lavorare con te carica ${requiredDocumentsText(missing)}, in PDF.`
           : 'Il curriculum e il documento d’identità, in PDF: ci sono tutti e due.'
       "
     >
       <div class="space-y-6">
-        <div>
-          <h3 class="font-semibold text-highlighted">Curriculum</h3>
-          <template v-if="data.cv">
-            <IcFileLink :file="data.cv" class="mt-2" />
-            <p class="mt-1 text-sm text-muted">
-              È quello che ci hai mandato. Un CV aggiornato caricalo qui sotto, tra gli altri documenti.
-            </p>
-          </template>
-          <template v-else>
-            <p class="mt-1 text-warning">Da caricare</p>
-            <IcFileUpload
-              class="mt-3"
-              endpoint="/api/staff/cv"
-              accept="application/pdf"
-              description="PDF, fino a 15 MB"
-              button-label="Carica il CV"
-              :secondary="primary !== 'cv'"
-              @uploaded="refresh()"
-            />
-          </template>
-        </div>
-        <div>
-          <h3 class="font-semibold text-highlighted">Documento d’identità</h3>
-          <ul v-if="idDocuments.length" class="mt-2 space-y-2">
-            <li v-for="document in idDocuments" :key="document.id" class="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <div v-for="r in required" :key="r.category">
+          <h3 class="font-semibold text-highlighted">{{ r.name }}</h3>
+          <div v-if="r.category === 'cv' && data.cv" class="mt-2">
+            <IcFileLink :file="data.cv" />
+            <p class="mt-1 text-sm text-muted">Inviato con la candidatura.</p>
+          </div>
+          <ul v-if="r.uploaded.length" class="mt-2 space-y-2">
+            <li v-for="document in r.uploaded" :key="document.id" class="flex flex-wrap items-center gap-x-4 gap-y-1">
               <IcFileLink :file="document.file" />
               <UButton
                 class="pointer-coarse:min-h-11"
@@ -109,17 +104,17 @@ async function remove(document: StaffDocumentDto) {
               />
             </li>
           </ul>
-          <p v-if="missing.includes('id_document')" class="mt-1 text-warning">
-            {{ idDocuments.length ? 'Da caricare in PDF' : 'Da caricare' }}
+          <p v-if="r.missing" class="mt-1 text-warning">
+            {{ r.uploaded.length ? 'Da caricare in PDF' : 'Da caricare' }}
           </p>
           <IcFileUpload
             class="mt-3"
             endpoint="/api/staff/documents"
             accept="application/pdf"
-            description="PDF con fronte e retro, fino a 15 MB"
-            :fields="{ category: 'id_document', title: 'Documento d’identità' }"
-            :button-label="idDocuments.length ? 'Carica un altro file' : 'Carica il documento'"
-            :secondary="primary !== 'id_document'"
+            :description="r.category === 'id_document' ? 'PDF con fronte e retro, fino a 15 MB' : 'PDF, fino a 15 MB'"
+            :fields="{ category: r.category, title: r.name }"
+            :button-label="r.missing ? 'Carica il file' : 'Carica una versione aggiornata'"
+            :secondary="!r.primary"
             @uploaded="refresh()"
           />
         </div>
@@ -177,7 +172,7 @@ async function remove(document: StaffDocumentDto) {
           :fields="{ category: upload.category, title: upload.title.trim() }"
           :disabled="!upload.title.trim()"
           button-label="Carica il documento"
-          :secondary="primary !== undefined"
+          :secondary="missing.length > 0"
           @uploaded="uploaded"
         />
         <p v-if="!upload.title.trim()" class="text-sm text-muted">Scrivi il titolo per poter caricare il file.</p>

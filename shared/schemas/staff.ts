@@ -7,13 +7,16 @@ import {
   COORDINATOR_ROLE,
   PERSONAL_DOCUMENT_CATEGORIES,
   SHIRT_SIZES,
+  UPLOAD_MIME_TYPES,
   STAFF_TAG_COLORS,
   STAFF_TEAMS,
   type PersonalDocumentCategory,
   type StaffRole,
+  type UploadMimeType,
   type StaffStatus,
   type StaffTeam,
 } from '../utils/constants'
+import { andList } from '../utils/format'
 import { requiredResidence, zBirthDate, zFiscalCode, zProvince, zRequiredText, zText, zUuid } from './common'
 
 /** The id of a role of `staff_roles` (the server checks it exists). */
@@ -196,20 +199,29 @@ export const STAFF_DOCUMENT_CATEGORIES = PERSONAL_DOCUMENT_CATEGORIES.filter(
   category => category !== 'diagnosis',
 ) as Exclude<PersonalDocumentCategory, 'diagnosis'>[]
 
-/** What every staff and v-team member in the staff area uploads, in PDF (spec 3.4): the CV and an ID. */
-export const REQUIRED_STAFF_DOCUMENTS = ['cv', 'id_document'] as const
+/**
+ * What every staff and v-team member in the staff area uploads (spec 3.4), in PDF only: a CV (the one sent with the
+ * application counts) and an ID. Each has its place on /staff/documenti.
+ */
+export const REQUIRED_STAFF_DOCUMENTS = ['cv', 'id_document'] as const satisfies readonly PersonalDocumentCategory[]
 export type RequiredStaffDocument = (typeof REQUIRED_STAFF_DOCUMENTS)[number]
-export const REQUIRED_DOCUMENT_NAMES: Record<RequiredStaffDocument, string> = {
+const REQUIRED_DOCUMENT_NAMES: Record<RequiredStaffDocument, string> = {
   cv: 'il curriculum',
   id_document: 'il documento d’identità',
 }
 
-/** The categories of personal documents accepted in PDF only: the ID is a required document, like the CV. */
-export const PDF_ONLY_DOCUMENT_CATEGORIES: readonly PersonalDocumentCategory[] = ['id_document']
+/** «il curriculum e il documento d’identità»: the required documents in a sentence. */
+export function requiredDocumentsText(missing: readonly RequiredStaffDocument[]): string {
+  return andList(missing.map(document => REQUIRED_DOCUMENT_NAMES[document]))
+}
 
-/** The required documents still missing, from which of them are there. */
-export function missingStaffDocuments(present: Record<RequiredStaffDocument, boolean>): RequiredStaffDocument[] {
-  return REQUIRED_STAFF_DOCUMENTS.filter(required => !present[required])
+export function isRequiredStaffDocument(category: PersonalDocumentCategory): category is RequiredStaffDocument {
+  return (REQUIRED_STAFF_DOCUMENTS as readonly string[]).includes(category)
+}
+
+/** The formats a staff member's document is taken in: the required ones in PDF only. */
+export function staffDocumentTypes(category: PersonalDocumentCategory): readonly UploadMimeType[] {
+  return isRequiredStaffDocument(category) ? ['application/pdf'] : UPLOAD_MIME_TYPES
 }
 
 /** The text fields sent with the file to POST /api/staff/documents. */

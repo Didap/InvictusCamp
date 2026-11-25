@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { REQUIRED_DOCUMENT_NAMES, isSheetComplete } from '#shared/schemas/staff'
+import { isSheetComplete, requiredDocumentsText } from '#shared/schemas/staff'
 import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
 import { inStaffArea, OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
@@ -249,6 +249,11 @@ const texts = computed(() => {
 const availability = computed(() => {
   const all = person.value?.availability ?? []
   return [...all.filter(s => s.startDate > today), ...all.filter(s => s.startDate <= today).reverse()]
+})
+
+const documentsAlert = computed(() => {
+  const missing = person.value?.documentsMissing ?? []
+  return `${missing.length === 1 ? 'Manca' : 'Mancano'} ${requiredDocumentsText(missing)}`
 })
 
 /** The availability confirmed, and the reset the person asked for: «Riapri la disponibilità». */
@@ -581,9 +586,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
             color="warning"
             variant="subtle"
             icon="i-lucide-file-warning"
-            :title="`${person.documentsMissing.length === 1 ? 'Manca' : 'Mancano'} ${andList(
-              person.documentsMissing.map(d => REQUIRED_DOCUMENT_NAMES[d]),
-            )}`"
+            :title="documentsAlert"
             description="Il curriculum e il documento d’identità in PDF sono obbligatori: la persona li carica dai suoi Documenti."
           />
           <p v-if="!person.documents.length" class="text-muted">Nessun documento caricato.</p>
