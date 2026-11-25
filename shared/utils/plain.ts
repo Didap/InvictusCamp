@@ -23,3 +23,12 @@ function canonical(value: unknown): string {
       : item,
   )
 }
+
+/** The keys whose values differ between two records, whatever their fields (null and missing are the same). */
+export function changedKeys(before: object | null, after: object | null): string[] {
+  const a: Record<string, unknown> = { ...before }
+  const b: Record<string, unknown> = { ...after }
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(
+    key => JSON.stringify(a[key] ?? null) !== JSON.stringify(b[key] ?? null),
+  )
+}

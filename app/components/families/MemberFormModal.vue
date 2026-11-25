@@ -158,7 +158,7 @@ async function save() {
     description="I campi con l’asterisco sono obbligatori."
     :dismissible="!dirty"
     :close="false"
-    :ui="{ content: 'sm:max-w-2xl', wrapper: 'pe-12' }"
+    :ui="{ content: 'sm:max-w-2xl' }"
   >
     <!-- Not the built-in close: it would close at once, without asking about the changes. -->
     <template #actions>
@@ -167,7 +167,7 @@ async function save() {
         color="neutral"
         variant="ghost"
         aria-label="Chiudi"
-        class="absolute end-4 top-4 pointer-coarse:size-11 pointer-coarse:justify-center"
+        class="self-start pointer-coarse:size-11 pointer-coarse:justify-center"
         @click="close"
       />
     </template>

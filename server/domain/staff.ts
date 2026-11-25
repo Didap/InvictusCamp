@@ -44,6 +44,7 @@ import {
   type StaffTeam,
 } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
+import { changedKeys } from '../../shared/utils/plain'
 import { SESSION_EDITABLE_STATUSES, isSessionEditable } from '../../shared/utils/session-status'
 import {
   campSessions,
@@ -99,7 +100,11 @@ export async function saveStaffUsefulInfo(
     // nothing withdraws it.
     .set({ usefulInfo: info, otherInfo, usefulInfoConsentAt: info || otherInfo ? sql`now()` : null })
     .where(eq(staffProfiles.userId, input.userId))
-    .returning()
+    .returning({
+      usefulInfo: staffProfiles.usefulInfo,
+      otherInfo: staffProfiles.otherInfo,
+      usefulInfoConsentAt: staffProfiles.usefulInfoConsentAt,
+    })
   if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
@@ -133,18 +138,11 @@ export async function saveStaffSheet(
   input: { userId: string; value: StaffSheetInput; actor: Actor },
 ): Promise<StaffSheet> {
   // Locked: two saves at once (two tabs) each audit what they changed against what the other left.
-  const [before] = await db
-    .select()
-    .from(staffProfiles)
-    .where(eq(staffProfiles.userId, input.userId))
-    .limit(1)
-    .for('update')
-  if (!before) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
+  const before = await profileOf(db, input.userId, { lock: true })
   const sheet: StaffSheet = { ...input.value, province: input.value.province || null }
-  const previous = staffSheetOf(before)
-  const fields = (Object.keys(sheet) as (keyof StaffSheet)[]).filter(key => sheet[key] !== previous[key])
-  if (!fields.length) return previous
-  const [row] = await db.update(staffProfiles).set(sheet).where(eq(staffProfiles.id, before.id)).returning()
+  const fields = changedKeys(staffSheetOf(before), sheet)
+  if (!fields.length) return sheet
+  await db.update(staffProfiles).set(sheet).where(eq(staffProfiles.id, before.id))
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.sheet',
@@ -153,7 +151,12 @@ export async function saveStaffSheet(
     data: { fields },
     ip: input.actor.ip,
   })
-  return staffSheetOf(row!)
+  return sheet
+}
+
+/** The health data of a staff member for the reserved section of their admin page (the handler audits it). */
+export async function adminStaffHealth(db: DbOrTx, userId: string): Promise<StaffUsefulInfoDto> {
+  return staffUsefulInfo(await profileOf(db, userId))
 }
 
 /** A disabled account leaves the open sessions: its convocations let go of their group and lodging. */
@@ -1255,23 +1258,23 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
 
 // ─── Reads: staff side ─────────────────────────────────────────────────────────────────────────────
 
-/** The personal sheet of the signed-in person, with the account's details and the application. */
-export async function myStaffSheet(db: DbOrTx, userId: string): Promise<StaffSheetDto> {
-  const [[row], roleOptions] = await Promise.all([
-    db
-      .select({ profile: staffProfiles, user: users, cv: files })
-      .from(staffProfiles)
-      .innerJoin(users, eq(users.id, staffProfiles.userId))
-      .leftJoin(files, eq(files.id, staffProfiles.cvFileId))
-      .where(eq(staffProfiles.userId, userId))
-      .limit(1),
+/**
+ * The personal sheet of the signed-in person, from the rows `requireStaff` read: the account's details, the
+ * sheet, the health data and the application.
+ */
+export async function myStaffSheet(
+  db: DbOrTx,
+  user: Pick<typeof users.$inferSelect, 'firstName' | 'lastName' | 'email' | 'phone'>,
+  profile: ProfileRow,
+): Promise<StaffSheetDto> {
+  const [[cv], roleOptions] = await Promise.all([
+    profile.cvFileId ? db.select().from(files).where(eq(files.id, profile.cvFileId)).limit(1) : [],
     staffRoleOptions(db),
   ])
-  if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
-  const { profile, user, cv } = row
   return {
     account: { firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone },
     sheet: staffSheetOf(profile),
+    health: staffUsefulInfo(profile),
     application: {
       team: profile.team,
       roles: roleOptions.filter(role => profile.roles.includes(role.id)),
@@ -1376,6 +1379,7 @@ export async function myConvocations(
 
 /** The home of the signed-in staff member, whatever the status of the application. */
 export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string = todayIso()): Promise<StaffHome> {
+  const sheetComplete = isSheetComplete(staffSheetOf(profile))
   // Before the approval the home is only where the application stands.
   if (!inStaffArea(profile.status)) {
     return {
@@ -1383,7 +1387,7 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       toAnswer: [],
       upcoming: [],
       availability: { available: 0, total: 0 },
-      sheetComplete: null,
+      sheetComplete,
     }
   }
   const [convocations, { sessions }] = await Promise.all([
@@ -1398,6 +1402,6 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       c => c.status === 'accepted' && c.session.endDate >= today && c.session.status !== 'cancelled',
     ),
     availability: { available, total: sessions.length },
-    sheetComplete: isSheetComplete(staffSheetOf(profile)),
+    sheetComplete,
   }
 }

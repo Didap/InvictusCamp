@@ -5,13 +5,7 @@ const emit = defineEmits<{ close: [boolean] }>()
 </script>
 
 <template>
-  <UModal
-    :title="title"
-    :description="description"
-    :close="false"
-    :ui="{ wrapper: 'pe-0' }"
-    @update:open="open => !open && emit('close', false)"
-  >
+  <UModal :title="title" :description="description" :close="false" @update:open="open => !open && emit('close', false)">
     <template #footer>
       <div class="flex w-full flex-wrap justify-end gap-2">
         <UButton color="neutral" variant="outline" :label="cancelLabel ?? 'Annulla'" @click="emit('close', false)" />

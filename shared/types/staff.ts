@@ -20,8 +20,8 @@ import type { IsoDay } from '../utils/dates'
 export type StaffOutcomeTemplate = 'staff.approved' | 'staff.rejected'
 
 /**
- * GET /api/staff/useful-info (the person) and /api/admin/staff/:userId/health (the administration, audited):
- * the details for the canteen and the other ones, under the consent to health data.
+ * The health data of a staff member, under the consent: the details for the canteen and the other ones. In
+ * GET /api/staff/sheet for the person, GET /api/admin/staff/:userId/health for the administration (audited).
  */
 export interface StaffUsefulInfoDto {
   info: UsefulInfo | null
@@ -235,10 +235,11 @@ export interface SessionStaffData {
 
 // ─── Staff side ────────────────────────────────────────────────────────────────────────────────────
 
-/** GET /api/staff/sheet: the personal sheet, with the account's details and the application as it was sent. */
+/** GET /api/staff/sheet: the personal sheet, with the account's details, the health data and the application. */
 export interface StaffSheetDto {
   account: { firstName: string; lastName: string; email: string; phone: string | null }
   sheet: StaffSheet
+  health: StaffUsefulInfoDto
   application: StaffApplicationDto
 }
 
@@ -296,8 +297,8 @@ export interface StaffHome {
   upcoming: MyConvocation[]
   /** Sessions not started yet: how many the person said they can come to, out of how many. */
   availability: { available: number; total: number }
-  /** The personal sheet has every required field; null before the approval, when there is none to fill in. */
-  sheetComplete: boolean | null
+  /** The personal sheet has every required field (the home asks for it once approved). */
+  sheetComplete: boolean
 }
 
 /** A session of /staff/disponibilita with the person's answer. */

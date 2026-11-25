@@ -39,14 +39,15 @@ export function notifySuccess(title: string, description?: string) {
   toast().add({ title, description, color: 'success', icon: 'i-lucide-circle-check' })
 }
 
-/**
- * A form's `@error`: brings the first field with an error into view and puts the focus on its first control.
- * The fields carry `data-field` with their name.
- */
+/** A form's `@error`: brings the first field with an error into view and puts the focus on its control. */
 export function focusFirstError(event: FormErrorEvent) {
-  const name = event.errors[0]?.name
-  const field = name ? document.querySelector<HTMLElement>(`[data-field="${name}"]`) : null
+  const id = event.errors[0]?.id
+  const field = id ? document.getElementById(id) : null
   if (!field) return
   field.scrollIntoView({ block: 'center' })
-  field.querySelector<HTMLElement>('input, textarea, button')?.focus({ preventScroll: true })
+  // A group of choices carries the id on its wrapper: its first control takes the focus.
+  const control = field.matches('input, textarea, button, select')
+    ? field
+    : field.querySelector<HTMLElement>('input, textarea, button')
+  control?.focus({ preventScroll: true })
 }

@@ -6,20 +6,20 @@ import type { StaffUsefulInfoDto } from '#shared/types/staff'
 
 // The health data of the signed-in staff member, with the consent: allergies, diet and notes reach the canteen
 // summary of the sessions they are convoked to (docs/spec.md 3.14); the other details only the administration.
-// On the personal sheet (/staff/scheda).
+// On the personal sheet (/staff/scheda), which loads them with the sheet.
+const data = defineModel<StaffUsefulInfoDto>({ required: true })
 const api = useApi()
 const confirm = useConfirm()
-const { data, refresh } = await useApiFetch<StaffUsefulInfoDto>('/api/staff/useful-info')
 
-const items = computed(() => (data.value && hasStaffHealth(data.value) ? staffHealthItems(data.value) : null))
+const items = computed(() => (hasStaffHealth(data.value) ? staffHealthItems(data.value) : null))
 
 const open = ref(false)
 const saving = ref(false)
 const state = reactive({ info: usefulInfoForm(null), otherInfo: '', consent: false })
 
 function edit() {
-  state.info = usefulInfoForm(data.value?.info)
-  state.otherInfo = data.value?.otherInfo ?? ''
+  state.info = usefulInfoForm(data.value.info)
+  state.otherInfo = data.value.otherInfo ?? ''
   // Never ticked in advance: each save is the consent to what is saved then.
   state.consent = false
   open.value = true
@@ -28,7 +28,7 @@ function edit() {
 /** Saves the form, or with `clear` deletes the details and withdraws the consent, after asking. */
 async function save(clear = false) {
   const body = clear ? { info: {}, otherInfo: '', consent: false } : state
-  if (data.value && hasStaffHealth(data.value) && !hasStaffHealth(body)) {
+  if (items.value && !hasStaffHealth(body)) {
     const ok = await confirm({
       title: 'Cancellare questi dati?',
       description: 'Allergie, preferenze e le altre informazioni vengono cancellate e il consenso viene ritirato.',
@@ -44,7 +44,6 @@ async function save(clear = false) {
     open.value = false
   } catch (error) {
     notifyError(error, 'Dati non salvati')
-    await refresh()
   } finally {
     saving.value = false
   }

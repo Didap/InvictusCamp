@@ -65,7 +65,7 @@ watch(
       <!-- Approved (and inactive): the sheet to complete, convocations, sessions, documents, availability. -->
       <template v-else>
         <UAlert
-          v-if="home.sheetComplete === false"
+          v-if="!home.sheetComplete"
           class="mb-8"
           color="warning"
           variant="subtle"

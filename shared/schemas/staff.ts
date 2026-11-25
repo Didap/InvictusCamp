@@ -14,7 +14,7 @@ import {
   type StaffStatus,
   type StaffTeam,
 } from '../utils/constants'
-import { zBirthDate, zFiscalCode, zPostalCode, zProvince, zRegion, zRequiredText, zText, zUuid } from './common'
+import { requiredResidence, zBirthDate, zFiscalCode, zProvince, zRequiredText, zText, zUuid } from './common'
 
 /** The id of a role of `staff_roles` (the server checks it exists). */
 export const zStaffRole = z.string().trim().min(1).max(64)
@@ -33,11 +33,9 @@ export const staffSheetSchema = z.object({
   birthDate: zBirthDate,
   birthPlace: zRequiredText(100),
   fiscalCode: zFiscalCode,
-  address: zRequiredText(200),
-  city: zRequiredText(100),
-  postalCode: zPostalCode.refine(value => value !== '', { error: 'Campo obbligatorio' }),
-  province: zProvince.optional(),
-  region: zRegion,
+  ...requiredResidence,
+  /** Nullish: the sheet as stored passes it too (isSheetComplete). */
+  province: zProvince.nullish(),
   shirtSize: z.enum(SHIRT_SIZES, { error: 'Scegli la taglia' }),
 })
 export type StaffSheetInput = z.output<typeof staffSheetSchema>
@@ -46,10 +44,9 @@ export type StaffSheetInput = z.output<typeof staffSheetSchema>
 export const SHEET_MISSING =
   'Ci servono la data e il luogo di nascita, il codice fiscale, la residenza e la taglia della maglietta.'
 
-/** Whether a sheet as stored passes the form's schema (null is a field left empty): until then the home asks. */
+/** Whether a sheet as stored passes the form's schema: until then the home asks for it. */
 export function isSheetComplete(sheet: Record<keyof StaffSheetInput, string | null>): boolean {
-  const value = Object.fromEntries(Object.entries(sheet).map(([key, item]) => [key, item ?? undefined]))
-  return staffSheetSchema.safeParse(value).success
+  return staffSheetSchema.safeParse(sheet).success
 }
 
 // ─── Health: canteen and other details ─────────────────────────────────────────────────────────────

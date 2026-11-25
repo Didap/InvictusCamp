@@ -30,7 +30,8 @@ describe('staff personal sheet', () => {
 
     const sheet = await saveStaffSheet(db, { userId: user.id, value: VALUE, actor })
     expect(sheet).toMatchObject({ fiscalCode: 'RSSMRA85T10A562S', province: null, shirtSize: 'L' })
-    const read = await myStaffSheet(db, user.id)
+    const [row] = await db.select().from(t.staffProfiles).where(eq(t.staffProfiles.id, profile.id))
+    const read = await myStaffSheet(db, user, row!)
     expect(read.account).toEqual({
       firstName: user.firstName,
       lastName: user.lastName,
@@ -38,7 +39,7 @@ describe('staff personal sheet', () => {
       phone: user.phone,
     })
     expect(read.sheet).toEqual(sheet)
-    const [row] = await db.select().from(t.staffProfiles).where(eq(t.staffProfiles.id, profile.id))
+    expect(read.health).toEqual({ info: null, otherInfo: null, consentAt: null })
     expect((await staffHome(db, row!)).sheetComplete).toBe(true)
 
     // Saving the same values writes nothing; a new size is one field in the audit, never its value.

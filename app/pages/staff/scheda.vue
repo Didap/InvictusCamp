@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { isSheetComplete, SHEET_MISSING, staffSheetSchema } from '#shared/schemas/staff'
-import type { StaffSheet, StaffSheetDto } from '#shared/types/staff'
-import { SHIRT_SIZES, type ItalianRegion, type ShirtSize } from '#shared/utils/constants'
+import type { StaffSheet, StaffSheetDto, StaffUsefulInfoDto } from '#shared/types/staff'
+import { residenceForm } from '#shared/schemas/common'
+import { SHIRT_SIZES } from '#shared/utils/constants'
 import { ageOn, isIsoDay, todayIso } from '#shared/utils/dates'
 import { formatAge, formatDay } from '#shared/utils/format'
 import { focusFirstError } from '~/utils/errors'
@@ -14,35 +15,20 @@ const { label } = useEnums()
 const { data } = await useApiFetch<StaffSheetDto>('/api/staff/sheet')
 
 const today = todayIso()
-const state = reactive({
-  birthDate: '',
-  birthPlace: '',
-  fiscalCode: '',
-  address: '',
-  city: '',
-  postalCode: '',
-  province: '',
-  region: undefined as ItalianRegion | undefined,
-  shirtSize: undefined as ShirtSize | undefined,
-})
-
-function fill(sheet: StaffSheet) {
-  Object.assign(state, {
-    birthDate: sheet.birthDate ?? '',
-    birthPlace: sheet.birthPlace ?? '',
-    fiscalCode: sheet.fiscalCode ?? '',
-    address: sheet.address ?? '',
-    city: sheet.city ?? '',
-    postalCode: sheet.postalCode ?? '',
-    province: sheet.province ?? '',
-    region: sheet.region ?? undefined,
-    shirtSize: sheet.shirtSize ?? undefined,
-  })
+/** The sheet as the form holds it: '' for an empty text, nothing chosen. */
+function sheetForm(sheet: StaffSheet | undefined) {
+  return {
+    birthDate: sheet?.birthDate ?? '',
+    birthPlace: sheet?.birthPlace ?? '',
+    fiscalCode: sheet?.fiscalCode ?? '',
+    ...residenceForm(sheet),
+    shirtSize: sheet?.shirtSize ?? undefined,
+  }
 }
 // Loaded once: a save updates `data` without overwriting what is being typed.
-if (data.value) fill(data.value.sheet)
+const state = reactive(sheetForm(data.value?.sheet))
 
-const complete = computed(() => (data.value ? isSheetComplete(data.value.sheet) : true))
+const complete = computed(() => !data.value || isSheetComplete(data.value.sheet))
 /** The age counts itself from the date being typed. */
 const age = computed(() =>
   isIsoDay(state.birthDate) && state.birthDate <= today
@@ -78,6 +64,11 @@ const sentOn = computed(() => {
   return at ? `Inviata il ${formatDay(todayIso(new Date(at)), 'long')}` : undefined
 })
 
+/** StaffUsefulInfo saved the health data: `data` is shallow, so a new object. */
+function onHealth(health: StaffUsefulInfoDto) {
+  if (data.value) data.value = { ...data.value, health }
+}
+
 const saving = ref(false)
 async function save() {
   saving.value = true
@@ -85,7 +76,7 @@ async function save() {
     const sheet = await api<StaffSheet>('/api/staff/sheet', { method: 'PUT', body: state })
     // `data` is shallow: a new object, so what reads the sheet sees it.
     if (data.value) data.value = { ...data.value, sheet }
-    fill(sheet)
+    Object.assign(state, sheetForm(sheet))
     notifySuccess('Scheda salvata')
   } catch (error) {
     notifyError(error, 'Scheda non salvata')
@@ -120,14 +111,14 @@ async function save() {
         <IcSection title="Nascita e codice fiscale">
           <div class="space-y-5">
             <div class="grid gap-5 sm:grid-cols-2">
-              <UFormField label="Data di nascita" name="birthDate" data-field="birthDate" required :help="age">
+              <UFormField label="Data di nascita" name="birthDate" required :help="age">
                 <UInput v-model="state.birthDate" type="date" :max="today" min="1900-01-01" class="w-full" />
               </UFormField>
-              <UFormField label="Luogo di nascita" name="birthPlace" data-field="birthPlace" required>
+              <UFormField label="Luogo di nascita" name="birthPlace" required>
                 <UInput v-model="state.birthPlace" class="w-full" />
               </UFormField>
             </div>
-            <UFormField label="Codice fiscale" name="fiscalCode" data-field="fiscalCode" required>
+            <UFormField label="Codice fiscale" name="fiscalCode" required>
               <UInput
                 v-model="state.fiscalCode"
                 maxlength="20"
@@ -145,13 +136,7 @@ async function save() {
         </IcSection>
 
         <IcSection title="Divisa">
-          <UFormField
-            label="Taglia della maglietta"
-            name="shirtSize"
-            data-field="shirtSize"
-            required
-            help="Ci serve per la divisa del camp."
-          >
+          <UFormField label="Taglia della maglietta" name="shirtSize" required help="Ci serve per la divisa del camp.">
             <USelect
               v-model="state.shirtSize"
               :items="[...SHIRT_SIZES]"
@@ -171,7 +156,7 @@ async function save() {
         title="Alimentazione e altre informazioni"
         description="Allergie e preferenze arrivano alla mensa delle sessioni a cui partecipi. Il resto lo legge solo l’amministrazione."
       >
-        <StaffUsefulInfo />
+        <StaffUsefulInfo :model-value="data.health" @update:model-value="onHealth" />
       </IcSection>
 
       <IcSection v-if="application" title="Candidatura" :description="sentOn">
