@@ -84,7 +84,7 @@ import type { DbOrTx } from './db'
 import { withdrawQueuedEmails } from './email-quota'
 import { requestSignatures, signatureRequestEmails } from './signature-requests'
 import { checkLabels, staffRoleOptions } from './staff-labels'
-import { trainingTitlesOf } from './training'
+import { trainingInterestsOf } from './training'
 import { createError } from './errors'
 
 /** What a convocation declined or withdrawn lets go: its activity group and its lodging. */
@@ -1279,7 +1279,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
         .limit(1)
     : []
 
-  const [documents, training] = await Promise.all([staffDocuments(db, userId), trainingTitlesOf(db, userId)])
+  const [documents, training] = await Promise.all([staffDocuments(db, userId), trainingInterestsOf(db, userId)])
   return {
     userId: user.id,
     firstName: user.firstName,

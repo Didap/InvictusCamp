@@ -45,9 +45,7 @@ async function remove(option: TrainingOptionDto) {
   const ok = await confirm({
     title: `Elimini «${option.title}»?`,
     description: people
-      ? people === 1
-        ? '1 persona l’ha spuntata: perdi anche il suo interesse.'
-        : `${people} persone l’hanno spuntata: perdi anche il loro interesse.`
+      ? `${plural(people, 'persona l’ha spuntata', 'persone l’hanno spuntata')}: perdi anche ${people === 1 ? 'il suo' : 'il loro'} interesse.`
       : 'Nessuno l’ha ancora spuntata.',
     confirmLabel: 'Elimina',
     danger: true,
@@ -118,19 +116,26 @@ async function remove(option: TrainingOptionDto) {
             </div>
           </div>
           <p v-if="!option.people.length" class="text-sm text-muted">Ancora nessun interessato.</p>
-          <details v-else>
-            <summary class="cursor-pointer text-sm font-semibold">
-              {{ plural(option.people.length, 'persona interessata', 'persone interessate') }}
-            </summary>
-            <ul class="mt-2 space-y-1">
-              <li v-for="person in option.people" :key="person.userId" class="text-sm">
-                <ULink :to="teamPath(person.team, person.userId)" class="text-primary hover:underline">
-                  {{ person.name }}
-                </ULink>
-                <span class="text-muted"> · {{ label('staffTeam', person.team) }}</span>
-              </li>
-            </ul>
-          </details>
+          <UCollapsible v-else>
+            <UButton
+              :label="plural(option.people.length, 'persona interessata', 'persone interessate')"
+              color="neutral"
+              variant="link"
+              trailing-icon="i-lucide-chevron-down"
+              class="px-0"
+              :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform' }"
+            />
+            <template #content>
+              <ul class="mt-2 space-y-1">
+                <li v-for="person in option.people" :key="person.userId" class="text-sm">
+                  <ULink :to="teamPath(person.team, person.userId)" class="text-primary hover:underline">
+                    {{ person.name }}
+                  </ULink>
+                  <span class="text-muted"> · {{ label('staffTeam', person.team) }}</span>
+                </li>
+              </ul>
+            </template>
+          </UCollapsible>
         </li>
       </ul>
     </IcSection>

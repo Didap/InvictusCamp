@@ -34,16 +34,12 @@ export async function trainingOptionsWithPeople(db: DbOrTx): Promise<TrainingOpt
       .innerJoin(staffProfiles, eq(staffProfiles.userId, users.id))
       .orderBy(asc(users.lastName), asc(users.firstName)),
   ])
-  const people = new Map<string, TrainingOptionDto['people']>()
-  for (const interest of interests) {
-    const person = { userId: interest.userId, name: fullName(interest), team: interest.team }
-    people.set(interest.optionId, [...(people.get(interest.optionId) ?? []), person])
-  }
+  const byOption = Map.groupBy(interests, interest => interest.optionId)
   return options.map(option => ({
     id: option.id,
     title: option.title,
     description: option.description,
-    people: people.get(option.id) ?? [],
+    people: (byOption.get(option.id) ?? []).map(i => ({ userId: i.userId, name: fullName(i), team: i.team })),
   }))
 }
 
@@ -75,6 +71,13 @@ export async function updateTrainingOption(
 
 /** Deletes a proposal and the interests in it (the audit keeps how many). */
 export async function deleteTrainingOption(db: DbOrTx, id: string, actor: Actor): Promise<void> {
+  // Locked first: a tick at the same moment waits, so the count in the audit is the one deleted.
+  const [option] = await db
+    .select({ id: trainingOptions.id })
+    .from(trainingOptions)
+    .where(eq(trainingOptions.id, id))
+    .for('update')
+  if (!option) throw httpError(404, NOT_FOUND)
   const [people] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(trainingInterests)
@@ -126,7 +129,7 @@ export async function setTrainingInterest(
 }
 
 /** The proposals a person is interested in (their admin page). */
-export function trainingTitlesOf(db: DbOrTx, userId: string): Promise<{ id: string; title: string }[]> {
+export function trainingInterestsOf(db: DbOrTx, userId: string): Promise<{ id: string; title: string }[]> {
   return db
     .select({ id: trainingOptions.id, title: trainingOptions.title })
     .from(trainingInterests)
