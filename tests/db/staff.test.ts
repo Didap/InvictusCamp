@@ -27,8 +27,8 @@ import type { Db } from '../../server/domain/db'
 import { makeAdmin, makeDocument, makeSession, makeStaff, t, useTestDb } from './helpers'
 
 const db = useTestDb()
-/** A profile that never confirmed its availability. */
-const UNCONFIRMED = { availabilityConfirmedAt: null, availabilityResetRequestedAt: null }
+/** A profile that never asked to reopen its availability. */
+const UNCONFIRMED = { availabilityResetRequestedAt: null }
 const ctx = { appUrl: 'https://gestionale.test' }
 const TODAY = '2026-11-06'
 

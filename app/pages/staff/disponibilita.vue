@@ -4,8 +4,8 @@ import { dayCount } from '#shared/utils/dates'
 import { formatDateTime, formatDayRange, plural } from '#shared/utils/format'
 
 // Availability (spec 3.5): the sessions not started yet, and for each one whether the person can come to the whole
-// of it. Each answer is saved at once; «Conferma le preferenze» fixes them, and only the administration reopens
-// them, after «Chiedi il reset». A session created after the confirmation can be answered and confirmed in turn.
+// of it. Each answer is saved at once; «Conferma le preferenze» fixes those shown, and only the administration
+// reopens them, after «Chiedi il reset». A session not confirmed yet (new, or with new dates) is confirmed in turn.
 const api = useApi()
 const confirm = useConfirm()
 const { data, refresh } = await useApiFetch<MyAvailability>('/api/staff/availability')
@@ -48,15 +48,21 @@ async function answer(session: MyAvailabilitySession, value: boolean) {
 }
 
 /** «Conferma le preferenze» and «Chiedi il reset»: each asks first, and returns the availability as it is now. */
-async function act(path: 'confirm' | 'reset-request', ask: Parameters<typeof confirm>[0], done: string) {
+async function act(
+  path: 'confirm' | 'reset-request',
+  ask: Parameters<typeof confirm>[0],
+  done: string,
+  body?: Record<string, unknown>,
+) {
   if (!(await confirm(ask))) return
   saving.value = path
   try {
     const url: string = `/api/staff/availability/${path}`
-    data.value = await api<MyAvailability>(url, { method: 'POST' })
+    data.value = await api<MyAvailability>(url, { method: 'POST', body })
     notifySuccess(done)
   } catch (error) {
     notifyError(error, 'Non è stato possibile completare la richiesta')
+    await refresh()
   } finally {
     saving.value = null
   }
@@ -75,6 +81,7 @@ function confirmAll() {
       confirmLabel: 'Conferma le preferenze',
     },
     'Preferenze confermate',
+    { sessionIds: sessions.value.filter(session => !session.locked).map(session => session.id) },
   )
 }
 
@@ -135,7 +142,7 @@ function requestReset() {
         title="Le sessioni"
         :description="
           sessions.length
-            ? `In questa sezione puoi esprimere le tue preferenze. Si tratta di una semplice indicazione di disponibilità, che non costituisce una convocazione ufficiale né comporta alcun vincolo per la Fondazione. In caso di convocazione, riceverai una notifica e un’email ufficiale. Una volta confermate le tue preferenze, per modificare il calendario dovrai richiedere un reset. Ti invitiamo quindi a prenderti tutto il tempo necessario per compilare la sezione con attenzione.${
+            ? `In questa sezione puoi esprimere le tue preferenze. Si tratta di una semplice indicazione di disponibilità, che non costituisce una convocazione ufficiale né comporta alcun vincolo per la Fondazione. In caso di convocazione, riceverai una notifica e un’email ufficiale. Una volta confermate le tue preferenze, per modificare il calendario dovrai richiedere un reset. Ti invitiamo quindi a prenderti tutto il tempo necessario per compilare la sezione con attenzione. «Ci sono» vale per tutta la sessione, dal primo all’ultimo giorno.${
                 available ? ` Ci sei per ${plural(available, 'sessione', 'sessioni')}.` : ''
               }`
             : undefined
@@ -158,13 +165,11 @@ function requestReset() {
                   {{ plural(dayCount(session), 'giorno', 'giorni') }}
                 </p>
                 <p v-if="session.convoked" class="text-sm text-muted">Hai già una convocazione per questa sessione.</p>
-                <p v-else-if="hasLocked && !session.locked" class="text-sm text-muted">
-                  Nuova: indica se ci sei e conferma.
-                </p>
+                <p v-else-if="hasLocked && !session.locked" class="text-sm text-muted">Da confermare.</p>
               </div>
               <USwitch
                 :model-value="session.available"
-                :disabled="session.locked || saving === session.id"
+                :disabled="session.locked || saving !== null"
                 :loading="saving === session.id"
                 label="Ci sono"
                 class="shrink-0 pt-0.5 pointer-coarse:min-h-11"

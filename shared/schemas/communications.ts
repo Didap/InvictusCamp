@@ -160,6 +160,7 @@ export const EMAIL_TEMPLATE_LABELS: Record<string, string> = {
   'family.age_notice': 'Fascia d’età dei ragazzi',
   'staff.convocation': 'Convocazione',
   'staff.convocation_cancelled': 'Convocazione annullata',
+  'staff.availability_reopened': 'Disponibilità riaperta',
   'staff.approved': 'Candidatura approvata',
   'staff.rejected': 'Esito della candidatura',
   'signature.request': 'Documento da firmare',

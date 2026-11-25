@@ -154,6 +154,9 @@ export const staffBulkApproveSchema = z.object({
 /** PUT /api/staff/availability/:sessionId: whether the person can come to the whole session. */
 export const availabilityAnswerSchema = z.object({ available: z.boolean() })
 
+/** «Conferma le preferenze»: the sessions the page showed. */
+export const availabilityConfirmSchema = z.object({ sessionIds: z.array(zUuid).max(500) })
+
 // ─── Convocations ──────────────────────────────────────────────────────────────────────────────────
 
 /** GET /api/admin/staff?team=&sessionId=: one team, and whether each person gave availability for that session. */

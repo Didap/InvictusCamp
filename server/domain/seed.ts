@@ -53,6 +53,7 @@ const TABLES = [
   'programmes',
   'questionnaires',
   'release_texts',
+  'availability_confirmations',
   'session_availability',
   'camp_sessions',
   'staff_profiles',
@@ -1010,9 +1011,13 @@ export async function seedDemo(
   // reset, which the dashboard lists for the administration.
   const asking = staff.find(s => s.status === 'approved' && s.email !== DEMO_ACCOUNTS.staff && s.sessions.length)
   if (asking) {
+    const open = await db.select({ id: t.campSessions.id }).from(t.campSessions)
+    await db
+      .insert(t.availabilityConfirmations)
+      .values(open.map(({ id }) => ({ sessionId: id, userId: asking.userId })))
     await db
       .update(t.staffProfiles)
-      .set({ availabilityConfirmedAt: sql`now()`, availabilityResetRequestedAt: sql`now()` })
+      .set({ availabilityResetRequestedAt: sql`now()` })
       .where(eq(t.staffProfiles.userId, asking.userId))
   }
 

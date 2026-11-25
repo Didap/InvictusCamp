@@ -3,7 +3,7 @@
 // tests load this module directly. Functions take the client or a transaction; those that produce emails
 // return them, and the handler delivers them after the commit. A review never sends anything by itself:
 // the outcome leaves only from staffOutcomeEmails ("Comunica l’esito").
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, max, ne, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import {
   canMoveStaff,
@@ -48,6 +48,7 @@ import { todayIso } from '../../shared/utils/dates'
 import { changedKeys } from '../../shared/utils/plain'
 import { SESSION_EDITABLE_STATUSES, isSessionEditable } from '../../shared/utils/session-status'
 import {
+  availabilityConfirmations,
   campSessions,
   documents,
   emailLog,
@@ -192,10 +193,15 @@ export interface Actor {
 const BEFORE_APPROVAL = 'Potrai indicare la tua disponibilità dopo l’approvazione della candidatura'
 const AVAILABILITY_LOCKED = 'Hai già confermato la tua disponibilità: per cambiarla chiedi il reset all’amministrazione'
 
-/** An answer confirmed: the session existed at the person's last «Conferma le preferenze». */
-function availabilityLocked(confirmedAt: Date | null, sessionCreatedAt: Date): boolean {
-  return confirmedAt !== null && sessionCreatedAt <= confirmedAt
+/** The profile of approved staff, the only ones who answer about availability; `lock` until the commit. */
+async function approvedProfile(db: DbOrTx, userId: string, options: { lock?: boolean } = {}): Promise<ProfileRow> {
+  const profile = await profileOf(db, userId, options)
+  if (profile.status !== 'approved') throw createError({ statusCode: 403, message: BEFORE_APPROVAL })
+  return profile
 }
+
+/** The sessions whose answer the person confirmed (availabilityConfirmations). */
+const confirmationsOf = (userId: string) => eq(availabilityConfirmations.userId, userId)
 const SESSION_CLOSED = 'La sessione è conclusa o annullata: le convocazioni non si possono più cambiare'
 
 const iso = (value: Date | null | undefined) => value?.toISOString() ?? null
@@ -333,6 +339,8 @@ export async function changeStaffStatus(
     })
   }
   const review = isReviewMove(profile.status, input.status)
+  // Out of the approved staff the availability starts over: back in, nothing of it is fixed.
+  if (profile.status === 'approved') await clearAvailabilityConfirmations(db, input.userId)
   const [updated] = await db
     .update(staffProfiles)
     .set({
@@ -510,15 +518,17 @@ export async function setAvailability(
   input: { userId: string; sessionId: string; available: boolean },
   today: string = todayIso(),
 ): Promise<void> {
-  const profile = await profileOf(db, input.userId)
-  if (profile.status !== 'approved') throw createError({ statusCode: 403, message: BEFORE_APPROVAL })
+  // Locked: a confirmation at the same moment comes before or after this answer, never in between.
+  await approvedProfile(db, input.userId, { lock: true })
   const session = await sessionFor(db, input.sessionId)
   if (!isSessionEditable(session.status) || session.startDate <= today) {
     throw createError({ statusCode: 409, message: 'La sessione è già iniziata, conclusa o annullata' })
   }
-  if (availabilityLocked(profile.availabilityConfirmedAt, session.createdAt)) {
-    throw createError({ statusCode: 409, message: AVAILABILITY_LOCKED })
-  }
+  const [confirmed] = await db
+    .select({ id: availabilityConfirmations.id })
+    .from(availabilityConfirmations)
+    .where(and(confirmationsOf(input.userId), eq(availabilityConfirmations.sessionId, input.sessionId)))
+  if (confirmed) throw createError({ statusCode: 409, message: AVAILABILITY_LOCKED })
   if (input.available) {
     await db
       .insert(sessionAvailability)
@@ -532,42 +542,52 @@ export async function setAvailability(
 }
 
 /**
- * «Conferma le preferenze»: the answers given so far are fixed until the administration reopens them; a session
- * created later can still be answered, and confirmed in turn. The audit keeps the sessions the person is in for.
+ * «Conferma le preferenze» for the sessions the person was shown (`sessionIds`, those still open among them): their
+ * answers are fixed until the administration reopens them. A session not among them stays to answer and confirm.
+ * The audit keeps the sessions confirmed and those the person is in for.
  */
 export async function confirmAvailability(
   db: DbOrTx,
-  input: { userId: string; actor: Actor },
+  input: { userId: string; sessionIds: string[]; actor: Actor },
   today: string = todayIso(),
 ): Promise<MyAvailability> {
-  const profile = await profileOf(db, input.userId, { lock: true })
-  if (profile.status !== 'approved') throw createError({ statusCode: 403, message: BEFORE_APPROVAL })
-  const [row] = await db
-    .update(staffProfiles)
-    .set({ availabilityConfirmedAt: sql`now()` })
-    .where(eq(staffProfiles.id, profile.id))
-    .returning()
-  const availability = await myAvailability(db, row!, today)
-  await writeAudit(db, {
-    actorUserId: input.actor.userId,
-    action: 'staff.availability_confirm',
-    entityType: 'user',
-    entityId: input.userId,
-    data: { available: availability.sessions.filter(session => session.available).map(session => session.id) },
-    ip: input.actor.ip,
-  })
-  return availability
+  const profile = await approvedProfile(db, input.userId, { lock: true })
+  const before = await myAvailability(db, profile, today)
+  const shown = new Set(input.sessionIds)
+  const confirmed = before.sessions.filter(session => !session.locked && shown.has(session.id))
+  if (confirmed.length) {
+    await db
+      .insert(availabilityConfirmations)
+      .values(confirmed.map(session => ({ sessionId: session.id, userId: input.userId })))
+      .onConflictDoNothing()
+    await writeAudit(db, {
+      actorUserId: input.actor.userId,
+      action: 'staff.availability_confirm',
+      entityType: 'user',
+      entityId: input.userId,
+      data: {
+        sessions: confirmed.map(session => session.id),
+        available: confirmed.filter(session => session.available).map(session => session.id),
+      },
+      ip: input.actor.ip,
+    })
+  }
+  return myAvailability(db, profile, today)
 }
 
-/** «Chiedi il reset»: once confirmed, the person asks the administration to reopen the availability. */
+/** «Chiedi il reset»: once something is confirmed, the person asks the administration to reopen it. */
 export async function requestAvailabilityReset(
   db: DbOrTx,
   input: { userId: string; actor: Actor },
   today: string = todayIso(),
 ): Promise<MyAvailability> {
-  const profile = await profileOf(db, input.userId, { lock: true })
-  if (profile.status !== 'approved') throw createError({ statusCode: 403, message: BEFORE_APPROVAL })
-  if (!profile.availabilityConfirmedAt) {
+  const profile = await approvedProfile(db, input.userId, { lock: true })
+  const [confirmed] = await db
+    .select({ id: availabilityConfirmations.id })
+    .from(availabilityConfirmations)
+    .where(confirmationsOf(input.userId))
+    .limit(1)
+  if (!confirmed) {
     throw createError({ statusCode: 409, message: 'Non hai ancora confermato la disponibilità: puoi cambiarla tu' })
   }
   if (profile.availabilityResetRequestedAt) return myAvailability(db, profile, today)
@@ -586,28 +606,41 @@ export async function requestAvailabilityReset(
   return myAvailability(db, row!, today)
 }
 
+/** Every confirmation of a person goes, with the reset they asked for: reopened, or out of the approved staff. */
+async function clearAvailabilityConfirmations(db: DbOrTx, userId: string): Promise<number> {
+  const removed = await db
+    .delete(availabilityConfirmations)
+    .where(confirmationsOf(userId))
+    .returning({ id: availabilityConfirmations.id })
+  await db.update(staffProfiles).set({ availabilityResetRequestedAt: null }).where(eq(staffProfiles.userId, userId))
+  return removed.length
+}
+
 /**
- * «Riapri la disponibilità» (administration): the answers stay, the person can change them and confirm again.
- * Returns the email that tells them.
+ * «Riapri la disponibilità» (administration, approved staff with something confirmed): the answers stay, the
+ * person can change them and confirm again. Returns the email that tells them (none to a disabled account).
  */
 export async function reopenAvailability(
   db: DbOrTx,
   input: { userId: string; actor: Actor; ctx: EmailContext },
 ): Promise<EmailMessage[]> {
   const profile = await profileOf(db, input.userId, { lock: true })
-  if (!profile.availabilityConfirmedAt) {
+  if (profile.status !== 'approved') {
+    throw createError({
+      statusCode: 409,
+      message: 'La persona non è nello staff approvato: non c’è niente da riaprire',
+    })
+  }
+  const reopened = await clearAvailabilityConfirmations(db, input.userId)
+  if (!reopened) {
     throw createError({ statusCode: 409, message: 'La disponibilità non è confermata: la persona può già cambiarla' })
   }
-  await db
-    .update(staffProfiles)
-    .set({ availabilityConfirmedAt: null, availabilityResetRequestedAt: null })
-    .where(eq(staffProfiles.id, profile.id))
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.availability_reopen',
     entityType: 'user',
     entityId: input.userId,
-    data: { requested: profile.availabilityResetRequestedAt !== null },
+    data: { requested: profile.availabilityResetRequestedAt !== null, sessions: reopened },
     ip: input.actor.ip,
   })
   const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1)
@@ -1135,6 +1168,10 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     .innerJoin(campSessions, eq(campSessions.id, sessionAvailability.sessionId))
     .where(and(eq(sessionAvailability.userId, userId), ne(campSessions.status, 'cancelled')))
     .orderBy(asc(campSessions.startDate))
+  const [lastConfirmation] = await db
+    .select({ at: max(availabilityConfirmations.createdAt) })
+    .from(availabilityConfirmations)
+    .where(confirmationsOf(userId))
 
   const convocationRows = await db
     .select({
@@ -1218,7 +1255,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     reviewedByName: row.reviewerFirstName ? `${row.reviewerFirstName} ${row.reviewerLastName ?? ''}`.trim() : null,
     reviewNotes: profile.reviewNotes,
     availability,
-    availabilityConfirmedAt: iso(profile.availabilityConfirmedAt),
+    availabilityConfirmedAt: iso(lastConfirmation?.at),
     availabilityResetRequestedAt: iso(profile.availabilityResetRequestedAt),
     convocations,
     documents: await staffDocuments(db, userId),
@@ -1403,36 +1440,44 @@ export async function myStaffSheet(
  */
 export async function myAvailability(
   db: DbOrTx,
-  profile: Pick<ProfileRow, 'userId' | 'status' | 'availabilityConfirmedAt' | 'availabilityResetRequestedAt'>,
+  profile: Pick<ProfileRow, 'userId' | 'status' | 'availabilityResetRequestedAt'>,
   today: string = todayIso(),
 ): Promise<MyAvailability> {
-  const confirmedAt = profile.availabilityConfirmedAt
-  const state = { confirmedAt: iso(confirmedAt), resetRequestedAt: iso(profile.availabilityResetRequestedAt) }
+  const resetRequestedAt = iso(profile.availabilityResetRequestedAt)
   // Only approved staff see the sessions: before approval (or after a rejection) they are not theirs to know.
-  if (profile.status !== 'approved') return { canEdit: false, ...state, sessions: [] }
+  if (profile.status !== 'approved') return { canEdit: false, confirmedAt: null, resetRequestedAt, sessions: [] }
   const rows = await db
     .select({
       session: availabilitySession,
-      createdAt: campSessions.createdAt,
       answer: sessionAvailability.id,
       convocation: sessionStaff.status,
+      confirmedAt: availabilityConfirmations.createdAt,
     })
     .from(campSessions)
     .leftJoin(
       sessionAvailability,
       and(eq(sessionAvailability.sessionId, campSessions.id), eq(sessionAvailability.userId, profile.userId)),
     )
+    .leftJoin(
+      availabilityConfirmations,
+      and(eq(availabilityConfirmations.sessionId, campSessions.id), confirmationsOf(profile.userId)),
+    )
     .leftJoin(sessionStaff, and(eq(sessionStaff.sessionId, campSessions.id), eq(sessionStaff.userId, profile.userId)))
     .where(openForAvailability(today))
     .orderBy(asc(campSessions.startDate))
+  const confirmedAt = rows.reduce<Date | null>(
+    (last, row) => (row.confirmedAt && (!last || row.confirmedAt > last) ? row.confirmedAt : last),
+    null,
+  )
   return {
     canEdit: true,
-    ...state,
+    confirmedAt: iso(confirmedAt),
+    resetRequestedAt,
     sessions: rows.map(row => ({
       ...row.session,
       available: row.answer !== null,
       convoked: row.convocation === 'sent' || row.convocation === 'accepted',
-      locked: availabilityLocked(confirmedAt, row.createdAt),
+      locked: row.confirmedAt !== null,
     })),
   }
 }

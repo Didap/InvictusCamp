@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm'
 import {
   FAILED_EMAIL_DAYS,
   type DashboardDto,
@@ -140,7 +140,13 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
       })
       .from(t.staffProfiles)
       .innerJoin(t.users, eq(t.users.id, t.staffProfiles.userId))
-      .where(isNotNull(t.staffProfiles.availabilityResetRequestedAt))
+      .where(
+        and(
+          isNotNull(t.staffProfiles.availabilityResetRequestedAt),
+          eq(t.staffProfiles.status, 'approved'),
+          ne(t.users.status, 'disabled'),
+        ),
+      )
       .orderBy(asc(t.staffProfiles.availabilityResetRequestedAt)),
   ])
 

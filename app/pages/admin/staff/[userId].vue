@@ -247,26 +247,29 @@ const availability = computed(() => {
 const availabilityNote = computed(() => {
   const at = person.value?.availabilityConfirmedAt
   return at
-    ? `Confermata il ${formatDateTime(at)}: la persona la cambia solo se la riapri.`
-    : 'Le sessioni a cui ha detto che c’è, dal primo all’ultimo giorno. Non ancora confermata.'
+    ? `Ultima conferma il ${formatDateTime(at)}: le sessioni confermate cambiano solo se riapri la disponibilità.`
+    : 'Le sessioni a cui ha detto che c’è, dal primo all’ultimo giorno. Non ancora confermate.'
 })
 const reopening = ref(false)
 async function reopenAvailability() {
+  const emailed = person.value?.accountStatus !== 'disabled'
   const ok = await confirm({
     title: 'Riapri la disponibilità?',
-    description: `${name.value} potrà cambiare le sessioni a cui c’è e confermarle di nuovo. Le risposte date restano. Parte 1 email.`,
-    confirmLabel: 'Riapri e invia 1 email',
+    description: `${name.value} potrà cambiare le sessioni a cui c’è e confermarle di nuovo. Le risposte date restano. ${
+      emailed ? 'Parte 1 email.' : 'L’account è disattivato: non parte nessuna email.'
+    }`,
+    confirmLabel: emailed ? 'Riapri e invia 1 email' : 'Riapri',
   })
   if (!ok) return
   reopening.value = true
   try {
     const url: string = `/api/admin/staff/${userId.value}/availability-reopen`
     await api(url, { method: 'POST' })
-    notifySuccess('Disponibilità riaperta', 'Abbiamo avvisato la persona via email.')
-    await refresh()
+    notifySuccess('Disponibilità riaperta', emailed ? 'Abbiamo avvisato la persona via email.' : undefined)
   } catch (error) {
     notifyError(error, 'Disponibilità non riaperta')
   } finally {
+    await refresh()
     reopening.value = false
   }
 }
@@ -486,7 +489,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
         </IcSection>
 
         <IcSection title="Disponibilità" :description="availabilityNote">
-          <template v-if="person.availabilityConfirmedAt" #actions>
+          <template v-if="person.availabilityConfirmedAt && person.status === 'approved'" #actions>
             <UButton
               label="Riapri la disponibilità"
               icon="i-lucide-calendar-cog"

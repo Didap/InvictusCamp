@@ -176,8 +176,8 @@ watch(
             icon="i-lucide-calendar-plus"
             title="Indica a quali sessioni puoi venire"
             :description="`${
-              home.availability.total === 1 ? 'C’è una sessione' : `Ci sono ${home.availability.total} sessioni`
-            } in programma: ti convochiamo solo per quelle a cui ci sei, dal primo all’ultimo giorno.`"
+              home.availability.toConfirm === 1 ? 'C’è una sessione' : `Ci sono ${home.availability.toConfirm} sessioni`
+            } in programma su cui dirci se ci sei, dal primo all’ultimo giorno: ti convochiamo solo per quelle.`"
             :actions="[
               {
                 label: 'Indica la disponibilità',

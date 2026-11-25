@@ -181,13 +181,16 @@ availability or receive convocations. The administration can move a person to th
   staff and v-team switch "Ci sono" on or off for each one, for the whole session (`session_availability`).
   Taking it back keeps the convocations already received; the administration sees it on them. The page opens
   with the camp's text («In questa sezione puoi esprimere le tue preferenze… non costituisce una convocazione
-  ufficiale né comporta alcun vincolo per la Fondazione…»). Each answer is saved at once; **«Conferma le
-  preferenze»** fixes them (`staff_profiles.availabilityConfirmedAt`, audited `staff.availability_confirm` with
-  the sessions the person is in for): the sessions that existed then can no longer be switched. A session created
-  later can be answered and is confirmed in turn. To change, **«Chiedi il reset»** (`availabilityResetRequestedAt`,
-  audited): the request is in the dashboard's to-do list and on the person's page, where **«Riapri la
-  disponibilità»** (administration only, also without a request) clears both dates, keeps the answers and sends
-  `staff.availability_reopened`. The home asks to confirm while sessions are still open.
+  ufficiale né comporta alcun vincolo per la Fondazione…», then «Ci sono vale per tutta la sessione»). Each answer
+  is saved at once; **«Conferma le preferenze»** fixes the answers of the sessions the page showed
+  (`availability_confirmations`, one row per person and session; audited `staff.availability_confirm` with the
+  sessions confirmed and those the person is in for): they can no longer be switched. A session not confirmed yet
+  (created later, or whose dates the administration changed, which drops its confirmations) is answered and
+  confirmed in turn. To change, **«Chiedi il reset»** (`staff_profiles.availabilityResetRequestedAt`, audited): the
+  request is in the dashboard's to-do list and on the person's page, where **«Riapri la disponibilità»**
+  (administration only, also without a request; approved staff only) drops the confirmations and the request,
+  keeps the answers and sends `staff.availability_reopened`. Leaving the approved staff drops them too. The home
+  asks to confirm while sessions are still open.
 - Staff and v-team of a session are **two tabs**, «Staff» and «V-team» (`?tab=staff`, `?tab=v-team`), each with
   its list, its coordinator, its «Aggiungi persone», its selection and «Invia la convocazione», and «Scrivi ai
   convocati» for that team only. The administration adds people as convocations `draft` with a role for the
@@ -521,6 +524,7 @@ today's count, the expected departures and the queue in Comunicazioni, and the q
 | `session.feedback` | session to `completed` (the end-of-session questionnaire, 3.13) | titolari confirmed |
 | `staff.convocation` | convocation sent | staff member |
 | `staff.convocation_cancelled` | sent convocation cancelled, or its session cancelled | staff member |
+| `staff.availability_reopened` | «Riapri la disponibilità» from the person's page | staff member |
 | `staff.approved` / `staff.rejected` | sent by the administration from the review | candidate |
 | `signature.request` / `signature.reminder` | document assigned / reminder | assignee |
 | `signature.otp` | code requested | signer |

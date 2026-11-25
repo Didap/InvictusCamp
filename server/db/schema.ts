@@ -317,12 +317,7 @@ export const staffProfiles = pgTable(
     reviewedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
     /** Internal notes of the review; never shown to the candidate. */
     reviewNotes: text(),
-    /**
-     * When the person confirmed their availability: the answers for the sessions created before it are fixed until
-     * the administration reopens them (null again). A session created later can be answered and confirmed.
-     */
-    availabilityConfirmedAt: timestamp(tz),
-    /** «Chiedi il reset»: the person asks the administration to reopen the availability. */
+    /** «Chiedi il reset»: the person asks the administration to reopen the availability (availabilityConfirmations). */
     availabilityResetRequestedAt: timestamp(tz),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -458,6 +453,29 @@ export const sessionAvailability = pgTable(
   t => [
     uniqueIndex('session_availability_session_user_key').on(t.sessionId, t.userId),
     index('session_availability_user_idx').on(t.userId),
+  ],
+)
+
+/**
+ * «Conferma le preferenze»: the sessions whose answer (yes or no, in session_availability) a staff member
+ * confirmed, fixed until the administration reopens the availability, the person leaves the approved staff or
+ * the session's dates change.
+ */
+export const availabilityConfirmations = pgTable(
+  'availability_confirmations',
+  {
+    id: pk(),
+    sessionId: uuid()
+      .notNull()
+      .references(() => campSessions.id, { onDelete: 'cascade' }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  t => [
+    uniqueIndex('availability_confirmations_session_user_key').on(t.sessionId, t.userId),
+    index('availability_confirmations_user_idx').on(t.userId),
   ],
 )
 

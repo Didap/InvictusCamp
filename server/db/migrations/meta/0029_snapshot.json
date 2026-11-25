@@ -1,5 +1,5 @@
 {
-  "id": "a3de8cc9-737c-4258-8b45-d933812b37d1",
+  "id": "22b92188-a7b2-4346-bf07-016e3cb82563",
   "prevId": "6cf3ab6f-a25d-4b2e-a2df-04884c22e3e4",
   "version": "7",
   "dialect": "postgresql",
@@ -203,6 +203,109 @@
         "auth_tokens_user_id_users_id_fk": {
           "name": "auth_tokens_user_id_users_id_fk",
           "tableFrom": "auth_tokens",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.availability_confirmations": {
+      "name": "availability_confirmations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "availability_confirmations_session_user_key": {
+          "name": "availability_confirmations_session_user_key",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "availability_confirmations_user_idx": {
+          "name": "availability_confirmations_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "availability_confirmations_session_id_camp_sessions_id_fk": {
+          "name": "availability_confirmations_session_id_camp_sessions_id_fk",
+          "tableFrom": "availability_confirmations",
+          "tableTo": "camp_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "availability_confirmations_user_id_users_id_fk": {
+          "name": "availability_confirmations_user_id_users_id_fk",
+          "tableFrom": "availability_confirmations",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
@@ -3074,12 +3177,6 @@
         "review_notes": {
           "name": "review_notes",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "availability_confirmed_at": {
-          "name": "availability_confirmed_at",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

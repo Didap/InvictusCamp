@@ -49,6 +49,7 @@ import {
   waitingReserves,
 } from '../../shared/utils/slots'
 import {
+  availabilityConfirmations,
   lodgings,
   campSessions,
   holdsPlace,
@@ -773,6 +774,10 @@ export async function updateSession(
   const fields = EDITABLE_FIELDS.filter(field => input.values[field] !== session[field])
   if (!fields.length) return
   await db.update(campSessions).set(input.values).where(eq(campSessions.id, session.id))
+  // New dates: the staff confirmed other ones, so their answers are open again (to change and confirm).
+  if (fields.includes('startDate') || fields.includes('endDate')) {
+    await db.delete(availabilityConfirmations).where(eq(availabilityConfirmations.sessionId, session.id))
+  }
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'session.update',

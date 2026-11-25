@@ -6,6 +6,6 @@ export default defineEventHandler(async event => {
   const { user } = await requireStaff(event, 'approved')
   const sessionId = requireUuidParam(event, 'sessionId')
   const { available } = await parseBody(event, availabilityAnswerSchema)
-  await setAvailability(useDb(), { userId: user.id, sessionId, available })
+  await useDb().transaction(tx => setAvailability(tx, { userId: user.id, sessionId, available }))
   return { available }
 })
