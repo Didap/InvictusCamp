@@ -1,4 +1,13 @@
-import type { UserRole } from '#shared/utils/constants'
+import {
+  EMAIL_ACCESS_RESERVE,
+  EMAIL_DAILY_LIMIT,
+  EMAIL_ORDINARY_LIMIT,
+  EMAIL_QUEUE_END_HOUR,
+  EMAIL_QUEUE_START_HOUR,
+  MAX_UPLOAD_BYTES,
+  type UserRole,
+} from '#shared/utils/constants'
+import { ACCOUNT_ITEM } from '#shared/utils/nav'
 
 // The guide of each role (/guida): what each section of the menu is for, the common tasks step by step and
 // the frequent questions. Plain words for people who are not at ease with a computer: one action per step,
@@ -16,18 +25,14 @@ export interface GuideFaq {
 
 export interface Guide {
   intro: string
-  /** What each page of the menu is for, by its path; the page lists the menu of the role in its order. */
+  /** What each page of the menu (`navFor`) and the account page are for, by path; the page shows them in the menu's order. */
   areas: Record<string, string>
   howTos: GuideHowTo[]
   faqs: GuideFaq[]
 }
 
-/** The account page is in the menu under the name, for every role. */
-export const ACCOUNT_AREA = {
-  label: 'Il mio account',
-  icon: 'i-lucide-user-cog',
-  to: '/account',
-  text: 'Il tuo nome, il telefono e la password. Lo apri premendo il tuo nome, in fondo al menu.',
+const ACCOUNT = {
+  [ACCOUNT_ITEM.to]: 'Il tuo nome, il telefono e la password. Lo apri premendo il tuo nome, in fondo al menu.',
 }
 
 const SIGN_DOCUMENT: GuideHowTo = {
@@ -38,7 +43,7 @@ const SIGN_DOCUMENT: GuideHowTo = {
     'Spunta «Ho letto il documento e lo accetto» e scrivi il tuo nome e cognome.',
     'Premi «Invia il codice»: ti arriva un’email con un codice di 6 cifre, valido 10 minuti.',
     'Scrivi il codice e premi «Firma il documento».',
-    'Fatto: puoi scaricare la copia firmata quando vuoi con «Scarica la copia firmata».',
+    'Fatto. La copia firmata la ritrovi quando vuoi in «Documenti», sotto «Già firmati», con «Copia firmata».',
   ],
 }
 
@@ -54,12 +59,6 @@ const NO_EMAIL: GuideFaq = {
     'Aspetta qualche minuto e guarda anche nella cartella della posta indesiderata (spam). Se non c’è, scrivici: controlliamo l’indirizzo e te la mandiamo di nuovo.',
 }
 
-const CONFIRM_EMAIL: GuideFaq = {
-  question: 'Ho fatto la registrazione ma non riesco a entrare',
-  answer:
-    'Prima di entrare devi confermare il tuo indirizzo email: apri l’email che ti abbiamo mandato e premi il link. Il link vale 48 ore. Se è scaduto o non lo trovi, prova ad accedere: la pagina ti propone «Invia di nuovo il link».',
-}
-
 const CHANGE_ACCOUNT: GuideFaq = {
   question: 'Come cambio il telefono o la password?',
   answer:
@@ -69,7 +68,7 @@ const CHANGE_ACCOUNT: GuideFaq = {
 const CODE: GuideFaq = {
   question: 'Il codice per la firma non funziona',
   answer:
-    'Il codice vale 10 minuti e puoi sbagliarlo al massimo 5 volte. Se è scaduto, premi di nuovo «Invia il codice»: ne arriva uno nuovo, e vale solo l’ultimo.',
+    'Il codice vale 10 minuti e puoi sbagliarlo al massimo 5 volte. Se è scaduto premi «Invia un nuovo codice», che si può usare un minuto dopo l’ultimo: vale solo il codice più recente.',
 }
 
 export const GUIDES: Record<UserRole, Guide> = {
@@ -86,12 +85,14 @@ export const GUIDES: Record<UserRole, Guide> = {
         'Una scheda per ogni persona della famiglia: nome, data di nascita, parentela, informazioni utili come allergie e alimentazione, e il documento di identità.',
       '/famiglia/documenti':
         'I documenti da firmare, come la liberatoria, e i documenti che carichi tu: certificati, documenti di identità, tessera sanitaria.',
+      ...ACCOUNT,
     },
     howTos: [
       {
         title: 'I primi passi dopo la registrazione',
         steps: [
           'Apri «Dati della famiglia» e compila tutto: cognome, telefono, residenza, quante persone siete e le domande del camp.',
+          'Per i ragazzi e le ragazze con patologie o disabilità scrivi il nome e spunta «Acconsento al trattamento dei dati sulla salute dei componenti della mia famiglia»: senza il consenso i dati non si possono confermare.',
           'Premi «Conferma i dati». Il gestionale prepara una scheda per ogni persona che hai indicato.',
           'Apri «Componenti» e completa ogni scheda con «Compila»: nome, cognome, data di nascita e parentela.',
           'In ogni scheda carica il documento di identità con «Carica il documento di identità».',
@@ -104,7 +105,7 @@ export const GUIDES: Record<UserRole, Guide> = {
           'Quando ti invitiamo a una sessione ricevi un’email, e la sessione compare nella Home e in «Sessioni».',
           'Se ci sarete premi «Conferma la partecipazione». Se non potete premi «Rinuncia al posto»: se vuoi, scrivi il motivo.',
           'Rispondi entro la data scritta nell’invito.',
-          'Quando la sessione è confermata ricevi un’altra email. Il programma della settimana lo trovi nella sessione, con «Programma».',
+          'Quando la sessione è confermata ricevi un’altra email. Il programma lo trovi nella sessione, con «Il programma della settimana».',
         ],
       },
       SIGN_DOCUMENT,
@@ -112,14 +113,13 @@ export const GUIDES: Record<UserRole, Guide> = {
         title: 'Rispondere al questionario di fine sessione',
         steps: [
           'Finito il camp ricevi un’email, e in «Sessioni» trovi «Rispondi al questionario».',
-          'Dai un voto da 1 a 5 alle attività e ai servizi, poi scrivi cosa ti è piaciuto e cosa cambieresti. Nessuna domanda è obbligatoria.',
+          'Dai un voto da 1 a 5 alle attività e ai servizi, poi scrivi cosa ti è piaciuto e cosa cambieresti. Puoi saltare le domande che vuoi, ma serve almeno un voto o una risposta.',
           'Premi «Invia le risposte». Ci arrivano senza il nome della famiglia e non si possono più cambiare.',
         ],
       },
     ],
     faqs: [
       PASSWORD,
-      CONFIRM_EMAIL,
       NO_EMAIL,
       {
         question: 'Perché non vedo nessuna sessione?',
@@ -139,12 +139,11 @@ export const GUIDES: Record<UserRole, Guide> = {
       {
         question: 'Chi vede le informazioni sulla salute?',
         answer:
-          'Solo tu e l’amministrazione del camp. Allergie, intolleranze e alimentazione arrivano anche a chi prepara i pasti. Le indichi solo se dai il consenso, e puoi ritirarlo in «Componenti»: in quel caso le cancelliamo.',
+          'Tu e l’amministrazione del camp. Per i pasti, allergie, intolleranze, alimentazione, selettività alimentare e le note delle informazioni utili arrivano con il nome anche a chi cucina. Servono il tuo consenso: lo dai in «Dati della famiglia» e puoi ritirarlo in «Componenti», e in quel caso le cancelliamo.',
       },
       {
         question: 'Quali documenti posso caricare?',
-        answer:
-          'Certificati, diagnosi, documenti di identità e tessera sanitaria, in PDF, JPG o PNG fino a 15 MB. Certificati medici e diagnosi si possono caricare solo dopo aver dato il consenso sui dati di salute.',
+        answer: `Certificati, diagnosi, documenti di identità e tessera sanitaria, in PDF, JPG o PNG fino a ${MAX_UPLOAD_BYTES / 1024 / 1024} MB. Certificati medici e diagnosi si possono caricare solo dopo aver dato il consenso sui dati di salute.`,
       },
       {
         question: 'Dove vedo l’alloggio e il gruppo della mia famiglia?',
@@ -169,6 +168,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       '/staff/sessioni': 'Le sessioni che hai accettato, con il programma della settimana, e quelle già fatte.',
       '/staff/documenti':
         'I documenti da firmare, come la tua scheda o il contratto di una sessione, e quelli che carichi tu.',
+      ...ACCOUNT,
     },
     howTos: [
       {
@@ -184,9 +184,9 @@ export const GUIDES: Record<UserRole, Guide> = {
         title: 'Completare e firmare la scheda personale',
         steps: [
           'Apri «Scheda personale» e compila data e luogo di nascita, codice fiscale, residenza e taglia della maglietta.',
-          'Sotto indica allergie, intolleranze e alimentazione: servono a chi prepara i pasti. «Altro da condividere» lo legge solo l’amministrazione.',
           'Premi «Salva la scheda».',
-          'Il gestionale prepara la scheda in PDF: premi «Firma la tua scheda» e firmala con il codice che ti arriva via email.',
+          'Il gestionale prepara la scheda in PDF: premi «Leggi e firma» e firmala con il codice che ti arriva via email. Se vedi «Prepara il PDF da firmare», premilo prima.',
+          'Più in basso, in «Alimentazione e altre informazioni», premi «Indica allergie e altro»: allergie, intolleranze e alimentazione arrivano a chi prepara i pasti, «Altro da condividere» lo legge solo l’amministrazione. Spunta il consenso e premi «Salva».',
           'Se poi cambi la scheda, il nome o il telefono, la scheda si rifà e va firmata di nuovo.',
         ],
       },
@@ -203,7 +203,7 @@ export const GUIDES: Record<UserRole, Guide> = {
         title: 'Rispondere a una convocazione',
         steps: [
           'Quando ti convochiamo ricevi un’email e la convocazione compare in «Convocazioni».',
-          'Premi «Accetta» se ci sarai, o «Rifiuta» se non puoi: in quel caso scrivi il motivo.',
+          'Se ci sarai premi «Accetta la convocazione» e conferma. Se non puoi premi «Rifiuta»: se vuoi, scrivi il motivo.',
           'Se la sessione ha un contratto, dopo aver accettato lo trovi in «Documenti» da firmare. La convocazione è confermata quando l’hai firmato.',
           'Le sessioni accettate le ritrovi in «Sessioni», con il programma della settimana.',
         ],
@@ -212,7 +212,6 @@ export const GUIDES: Record<UserRole, Guide> = {
     ],
     faqs: [
       PASSWORD,
-      CONFIRM_EMAIL,
       NO_EMAIL,
       {
         question: 'Perché vedo solo la Home?',
@@ -240,7 +239,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       {
         question: 'Chi vede le mie allergie e le mie note?',
         answer:
-          'Allergie, intolleranze e alimentazione arrivano a chi prepara i pasti. «Altro da condividere» lo legge solo l’amministrazione. Li indichi solo se dai il consenso; se salvi la scheda lasciandoli vuoti, il consenso è ritirato.',
+          'Allergie, intolleranze e alimentazione arrivano a chi prepara i pasti. «Altro da condividere» lo legge solo l’amministrazione. Li indichi solo con il consenso; per ritirarlo premi «Cancella i dati e ritira il consenso».',
       },
       CHANGE_ACCOUNT,
       CODE,
@@ -268,6 +267,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       '/admin/feedback': 'Cosa hanno detto le famiglie a fine sessione: voti, commenti e staff.',
       '/admin/utenti':
         'Gli account: inviti una persona, mandi di nuovo un invito o il link per la password, disattivi un account.',
+      ...ACCOUNT,
     },
     howTos: [
       {
@@ -339,13 +339,12 @@ export const GUIDES: Record<UserRole, Guide> = {
       },
       {
         question: 'Perché un’email non è ancora partita?',
-        answer:
-          'Al giorno partono al massimo 100 email. Le email normali usano le prime 80: le altre restano in coda e partono da sole appena si può, fra le 8 e le 20. Le ultime 20 sono tenute per i link di accesso e i codici. Il registro in «Comunicazioni» dice lo stato di ogni email.',
+        answer: `Al giorno partono al massimo ${EMAIL_DAILY_LIMIT} email. Le email normali usano le prime ${EMAIL_ORDINARY_LIMIT}: le altre restano in coda e partono da sole appena si può, fra le ${EMAIL_QUEUE_START_HOUR} e le ${EMAIL_QUEUE_END_HOUR}, più un ultimo giro alle 23:59. Le ultime ${EMAIL_ACCESS_RESERVE} sono tenute per i link di accesso e i codici. Il registro in «Comunicazioni» dice lo stato di ogni email.`,
       },
       {
         question: 'Chi vede i dati sulla salute?',
         answer:
-          'Solo l’amministrazione, nella pagina della famiglia e nella scheda «Mensa» della sessione, e ogni lettura resta registrata. L’elenco delle famiglie e i file scaricati non li mostrano.',
+          'Solo l’amministrazione: nella pagina della famiglia, in quella di ogni persona dello staff e nella scheda «Mensa» della sessione, e ogni lettura resta registrata. L’elenco e il CSV delle famiglie non li mostrano. Il PDF e il CSV della mensa sì, con i nomi, e così i certificati caricati dalle famiglie: mandali solo a chi deve averli.',
       },
       {
         question: 'Come cambio le domande del modulo «Dati della famiglia»?',

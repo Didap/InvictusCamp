@@ -1,7 +1,7 @@
-// The guide of each role (docs/spec.md 3.15): the texts follow the voice of DESIGN.md and point at the role's pages.
+// The guide of each role (docs/spec.md 3.15): the texts follow the voice of DESIGN.md and describe the role's menu.
 import { describe, expect, it } from 'vitest'
 import { GUIDES } from '#shared/content/guide'
-import { ROLE_HOME } from '#shared/utils/routes'
+import { ACCOUNT_ITEM, GUIDE_ITEM, navFor } from '#shared/utils/nav'
 import type { UserRole } from '#shared/utils/constants'
 
 const roles = Object.keys(GUIDES) as UserRole[]
@@ -23,10 +23,12 @@ describe('guide', () => {
     }
   })
 
-  it.each(roles)('%s: describes only pages of its own area', role => {
-    for (const path of Object.keys(GUIDES[role].areas)) {
-      expect(path === ROLE_HOME[role] || path.startsWith(`${ROLE_HOME[role]}/`)).toBe(true)
-    }
+  it.each(roles)('%s: describes every page of its menu and the account, nothing else', role => {
+    const menu = navFor(role, true)
+      .flat()
+      .map(item => item.to)
+      .filter(to => to !== GUIDE_ITEM.to)
+    expect(Object.keys(GUIDES[role].areas).sort()).toEqual([...menu, ACCOUNT_ITEM.to].sort())
   })
 
   it.each(roles)('%s: has steps and questions, every step and answer a sentence', role => {

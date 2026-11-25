@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AccordionItem } from '@nuxt/ui'
-import { ACCOUNT_AREA, GUIDES } from '#shared/content/guide'
+import { GUIDES } from '#shared/content/guide'
+import { ACCOUNT_ITEM, GUIDE_ITEM } from '#shared/utils/nav'
 
 // The guide of the signed-in role (docs/spec.md 3.15): what each section of the menu is for, in the order of
 // the menu, the common tasks step by step and the frequent questions. It lists the role's menu as it is now, so
@@ -10,16 +11,14 @@ const nav = useNav()
 const guide = computed(() => GUIDES[user.value?.role ?? 'family'])
 const showContact = computed(() => user.value?.role !== 'admin')
 
-const areas = computed(() => [
-  ...nav.value
-    .flat()
-    .filter(item => item.to !== '/guida')
+const areas = computed(() =>
+  [...nav.value.flat(), ACCOUNT_ITEM]
+    .filter(item => item.to !== GUIDE_ITEM.to)
     .map(item => {
       const to = String(item.to)
       return { label: String(item.label), icon: String(item.icon), to, text: guide.value.areas[to] }
     }),
-  ACCOUNT_AREA,
-])
+)
 
 const howTos = computed<(AccordionItem & { steps: string[] })[]>(() =>
   guide.value.howTos.map(({ title, steps }) => ({ label: title, icon: 'i-lucide-list-ordered', steps })),

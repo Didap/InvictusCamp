@@ -507,7 +507,9 @@ What the supplier of the meals needs for a session: the **Mensa** tab of the ses
 
 `/guida`, «Guida», the last item of the menu of every role (staff not approved yet too): what each person can do
 in the gestionale, in plain words for people not at ease with a computer. Static text in
-`shared/content/guide.ts`, one guide per role (staff and v-team share one), changed with the flow it describes.
+`shared/content/guide.ts`, one guide per role (staff and v-team share one), changed with the flow it describes;
+the menu it describes is `navFor` (`shared/utils/nav.ts`), and a test checks that every page of it has its text.
+Signed in only: help to sign in stays on the public pages (`/accedi` offers the new confirmation link).
 
 - **Cosa puoi fare**: the role's menu as it is now, in its order, each item with a sentence on what it is for and
   a link to it, then «Il mio account». Staff not approved yet see the home alone, as in the menu.
