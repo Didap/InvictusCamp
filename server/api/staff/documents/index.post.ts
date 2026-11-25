@@ -1,18 +1,10 @@
 import { staffDocumentSchema } from '#shared/schemas/staff'
-import type { ApiIssue } from '#shared/types/api'
 
 /** Uploads a personal document (PDF, JPG or PNG up to 15 MB) with its category and title. */
 export default defineEventHandler(async event => {
-  const { user } = await requireStaff(event, { area: true })
+  const { user } = await requireStaff(event)
   const upload = await readUpload(event)
-  const parsed = staffDocumentSchema.safeParse(upload.fields)
-  if (!parsed.success) {
-    const issues: ApiIssue[] = parsed.error.issues.map(issue => ({
-      path: issue.path.join('.'),
-      message: issue.message,
-    }))
-    throw createError({ statusCode: 400, message: `Dati non validi: ${issues[0]?.message}`, data: { issues } })
-  }
+  const input = parseFields(upload.fields, staffDocumentSchema)
   const file = await saveFile({
     data: upload.data,
     originalName: upload.filename,
@@ -26,8 +18,8 @@ export default defineEventHandler(async event => {
       .insert(tables.personalDocuments)
       .values({
         userId: user.id,
-        category: parsed.data.category,
-        title: parsed.data.title,
+        category: input.category,
+        title: input.title,
         fileId: file.id,
         uploadedBy: user.id,
       })

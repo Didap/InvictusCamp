@@ -217,13 +217,11 @@ export interface SessionStaffData {
 
 /** GET /api/staff/application */
 export interface StaffApplicationDto {
-  status: StaffStatus
   team: StaffTeam
   birthDate: IsoDay | null
   city: string | null
-  roles: StaffRole[]
-  /** The roles the administration created, to name the person's. */
-  roleOptions: { id: StaffRole; name: string }[]
+  /** The person's roles, with the names the administration gave them. */
+  roles: { id: StaffRole; name: string }[]
   qualifications: string | null
   experience: string | null
   motivation: string | null
@@ -268,7 +266,6 @@ export interface MyConvocations {
 /** GET /api/staff/home */
 export interface StaffHome {
   status: StaffStatus
-  appliedAt: string | null
   toAnswer: MyConvocation[]
   /** Accepted convocations of sessions that have not ended. */
   upcoming: MyConvocation[]

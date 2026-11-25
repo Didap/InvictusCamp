@@ -13,7 +13,6 @@ import {
   changeStaffStatus,
   myAvailability,
   myConvocations,
-  replaceCv,
   sendConvocations,
   sessionStaffData,
   setAvailability,
@@ -123,28 +122,17 @@ describe('application', () => {
     expect(await auditActions(user.id)).toEqual(['staff.apply'])
   })
 
-  it('an account without CV sends the application by uploading it', async () => {
+  it('an account without CV sends the application by uploading it, once', async () => {
     const { user } = await makeStaff(db, 'registered')
-    const first = await makeFile(db, user.id)
-    expect(await replaceCv(db, user.id, first.id)).toBeNull()
+    const cv = await makeFile(db, user.id)
+    expect(await applyWithCv(db, user.id, {}, cv.id)).toBe(true)
     const profile = await profileStatus(user.id)
     expect(profile.status).toBe('applied')
-    expect(profile.cvFileId).toBe(first.id)
+    expect(profile.cvFileId).toBe(cv.id)
     expect(await auditActions(user.id)).toContain('staff.apply')
-  })
-
-  it('replacing the CV of a draft returns the old one to delete', async () => {
-    const { user } = await makeStaff(db, 'registered')
-    const first = await makeFile(db, user.id)
-    await db.update(t.staffProfiles).set({ cvFileId: first.id }).where(eq(t.staffProfiles.userId, user.id))
-    const second = await makeFile(db, user.id)
-    expect(await replaceCv(db, user.id, second.id)).toBe(first.id)
-    expect((await profileStatus(user.id)).cvFileId).toBe(second.id)
-  })
-
-  it('the CV of an application already sent cannot change', async () => {
-    const { user } = await makeStaff(db, 'applied')
-    await expect(replaceCv(db, user.id, (await makeFile(db, user.id)).id)).rejects.toMatchObject({ statusCode: 409 })
+    // Sent already: another CV changes nothing.
+    expect(await applyWithCv(db, user.id, {}, (await makeFile(db, user.id)).id)).toBe(false)
+    expect((await profileStatus(user.id)).cvFileId).toBe(cv.id)
   })
 })
 

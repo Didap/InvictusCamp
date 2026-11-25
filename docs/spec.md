@@ -124,7 +124,8 @@ the administration reviews: `approved` or `rejected`, with internal notes never 
 `inactive` when someone is no longer convoked. A `registered` account without CV (made before the CV was asked
 at registration, or invited by the administration) sends the application by uploading it from its home.
 **Until the approval the area is the home alone**: the menu has nothing else, the other pages lead back
-there and the server refuses their documents and canteen data. A password reset confirms the address too, so
+there (the session the client reads carries `staffStatus`, read again at every fetch) and the server refuses
+every staff endpoint but the home and the CV (`requireStaff`, access `area` by default). A password reset confirms the address too, so
 it sends the application like the confirmation link; migration 0026 sent the drafts of the old form that had
 a CV and a confirmed address. The home says «Grazie per la tua richiesta, stiamo valutando la candidatura e presto riceverai
 aggiornamenti», with the staff address (`contact.staffEmail`, staff@), or asks for the CV; not selected, a kind

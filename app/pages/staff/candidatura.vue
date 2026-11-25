@@ -8,17 +8,7 @@ import { formatDay } from '#shared/utils/format'
 const { label, meta } = useEnums()
 const { data: application } = await useApiFetch<StaffApplicationDto>('/api/staff/application')
 
-const roleNames = computed(() =>
-  (application.value?.roleOptions ?? []).filter(role => application.value?.roles.includes(role.id)),
-)
 const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
-
-const SENT_TITLE: Record<string, string> = {
-  applied: 'Candidatura inviata',
-  approved: 'Candidatura approvata',
-  rejected: 'Candidatura non selezionata',
-  inactive: 'Candidatura approvata',
-}
 // Only what the person wrote: an application sent with the CV alone has no birth date nor texts.
 const details = computed(() => {
   const a = application.value
@@ -43,12 +33,7 @@ const texts = computed(() => {
 <template>
   <IcPage title="Candidatura" width="narrow">
     <template v-if="application">
-      <UAlert
-        :color="application.status === 'rejected' ? 'neutral' : 'info'"
-        variant="subtle"
-        :icon="meta('staffStatus', application.status).icon"
-        :title="SENT_TITLE[application.status] ?? 'Candidatura inviata'"
-      >
+      <UAlert color="info" variant="subtle" :icon="meta('staffStatus', 'approved').icon" title="Candidatura approvata">
         <template v-if="application.appliedAt" #description>
           Inviata il {{ dayOf(application.appliedAt) }}.
           <IcContactLine as="span" lead="Se devi correggere qualcosa" />
@@ -57,9 +42,9 @@ const texts = computed(() => {
       <IcSection title="Su di te">
         <IcDataList :items="details" :columns="2" />
       </IcSection>
-      <IcSection v-if="roleNames.length" title="Ruoli">
+      <IcSection v-if="application.roles.length" title="Ruoli">
         <ul class="flex flex-wrap gap-2">
-          <li v-for="role in roleNames" :key="role.id">
+          <li v-for="role in application.roles" :key="role.id">
             <UBadge :label="role.name" color="neutral" variant="outline" size="lg" />
           </li>
         </ul>

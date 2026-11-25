@@ -3,7 +3,7 @@ import { answerConvocation } from '../../../../domain/staff'
 
 /** Declines a convocation, with an optional reason for the administration. */
 export default defineEventHandler(async event => {
-  const { user } = await requireStaff(event, { approved: true })
+  const { user } = await requireStaff(event, 'approved')
   const id = requireUuidParam(event, 'id')
   const { reason } = await parseBody(event, convocationDeclineSchema)
   await useDb().transaction(tx =>

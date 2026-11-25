@@ -33,6 +33,7 @@ import type {
 } from '../../shared/types/staff'
 import {
   OPEN_CONVOCATIONS,
+  inStaffArea,
   type ConvocationStatus,
   type SignatureStatus,
   type StaffRole,
@@ -127,7 +128,6 @@ export interface Actor {
   ip?: string | null
 }
 
-const NOT_EDITABLE = 'La candidatura è già stata inviata: non si può più modificare'
 const BEFORE_APPROVAL = 'Potrai indicare la tua disponibilità dopo l’approvazione della candidatura'
 const SESSION_CLOSED = 'La sessione è conclusa o annullata: le convocazioni non si possono più cambiare'
 
@@ -206,15 +206,25 @@ async function contractRequests(
 // ─── Application ───────────────────────────────────────────────────────────────────────────────────
 
 /**
- * The application is the account with its CV (spec 3.4): registered → applied once the address is
- * confirmed and the CV is there. Sends nothing; false when there was nothing to send.
+ * Sends the application (spec 3.4): registered → applied, once the address is confirmed and the CV is
+ * there. `cvFileId` is the CV that comes with it: an account made before the CV was asked at registration,
+ * or invited, uploads it from its home. Sends nothing; false when there was nothing to send.
  */
-export async function applyWithCv(db: DbOrTx, userId: string, actor: Partial<Actor> = {}): Promise<boolean> {
+export async function applyWithCv(
+  db: DbOrTx,
+  userId: string,
+  actor: Partial<Actor> = {},
+  cvFileId?: string,
+): Promise<boolean> {
   const [applied] = await db
     .update(staffProfiles)
-    .set({ status: 'applied', appliedAt: new Date() })
+    .set({ status: 'applied', appliedAt: new Date(), ...(cvFileId ? { cvFileId } : {}) })
     .where(
-      and(eq(staffProfiles.userId, userId), eq(staffProfiles.status, 'registered'), isNotNull(staffProfiles.cvFileId)),
+      and(
+        eq(staffProfiles.userId, userId),
+        eq(staffProfiles.status, 'registered'),
+        cvFileId ? undefined : isNotNull(staffProfiles.cvFileId),
+      ),
     )
     .returning({ id: staffProfiles.id })
   if (!applied) return false
@@ -226,24 +236,6 @@ export async function applyWithCv(db: DbOrTx, userId: string, actor: Partial<Act
     ip: actor.ip ?? null,
   })
   return true
-}
-
-/**
- * The CV a signed-in person (so with a confirmed address) uploads while the application is not sent yet:
- * an account made before the CV was asked at registration. It sends the application; returns the id of
- * the CV it replaces.
- */
-export async function replaceCv(
-  db: DbOrTx,
-  userId: string,
-  fileId: string,
-  actor: Partial<Actor> = {},
-): Promise<string | null> {
-  const profile = await profileOf(db, userId, { lock: true })
-  if (profile.status !== 'registered') throw createError({ statusCode: 409, message: NOT_EDITABLE })
-  await db.update(staffProfiles).set({ cvFileId: fileId }).where(eq(staffProfiles.id, profile.id))
-  await applyWithCv(db, userId, actor)
-  return profile.cvFileId && profile.cvFileId !== fileId ? profile.cvFileId : null
 }
 
 // ─── Review ────────────────────────────────────────────────────────────────────────────────────────
@@ -1221,12 +1213,10 @@ export async function myApplication(db: DbOrTx, userId: string): Promise<StaffAp
   if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
   const { profile, cv } = row
   return {
-    status: profile.status,
     team: profile.team,
     birthDate: profile.birthDate,
     city: profile.city,
-    roles: profile.roles,
-    roleOptions,
+    roles: roleOptions.filter(role => profile.roles.includes(role.id)),
     qualifications: profile.qualifications,
     experience: profile.experience,
     motivation: profile.motivation,
@@ -1327,6 +1317,10 @@ export async function myConvocations(
 
 /** The home of the signed-in staff member, whatever the status of the application. */
 export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string = todayIso()): Promise<StaffHome> {
+  // Before the approval the home is only where the application stands.
+  if (!inStaffArea(profile.status)) {
+    return { status: profile.status, toAnswer: [], upcoming: [], availability: { available: 0, total: 0 } }
+  }
   const [convocations, { sessions }] = await Promise.all([
     myConvocations(db, profile.userId, { approved: profile.status === 'approved' }),
     myAvailability(db, profile, today),
@@ -1334,7 +1328,6 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
   const available = sessions.filter(session => session.available).length
   return {
     status: profile.status,
-    appliedAt: iso(profile.appliedAt),
     toAnswer: convocations.filter(c => c.answerable),
     upcoming: convocations.filter(
       c => c.status === 'accepted' && c.session.endDate >= today && c.session.status !== 'cancelled',

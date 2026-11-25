@@ -34,7 +34,6 @@ const state = reactive({
   privacy: false,
   cv: null as File | null,
 })
-const touch = useMediaQuery('(pointer: coarse)')
 const loading = ref(false)
 const sentTo = ref<string | null>(null)
 
@@ -82,15 +81,7 @@ async function onSubmit() {
         <IcPasswordInput v-model="state.password" autocomplete="new-password" />
       </UFormField>
       <UFormField label="Il tuo CV" name="cv" required>
-        <UFileUpload
-          v-model="state.cv"
-          accept="application/pdf"
-          :label="touch ? 'Scegli il file dal dispositivo' : 'Trascina qui il file o sceglilo dal dispositivo'"
-          description="PDF, fino a 15 MB"
-          icon="i-lucide-upload"
-          :disabled="loading"
-          class="min-h-36 w-full"
-        />
+        <IcFilePicker v-model="state.cv" accept="application/pdf" description="PDF, fino a 15 MB" :disabled="loading" />
       </UFormField>
       <UFormField name="privacy">
         <UCheckbox v-model="state.privacy">

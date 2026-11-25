@@ -55,7 +55,10 @@ export function useContact(families?: MaybeRefOrGetter<boolean | undefined>) {
     if ((toValue(families) || user.value?.role === 'family') && familiesEmail) {
       return { ...contact, email: familiesEmail, question: 'Ti occorre supporto per la registrazione?' }
     }
-    if (user.value?.role === 'staff' && staffEmail) return { ...contact, email: staffEmail, question: 'Serve aiuto?' }
-    return { ...contact, question: 'Serve aiuto?' }
+    return {
+      ...contact,
+      email: (user.value?.role === 'staff' && staffEmail) || contact.email,
+      question: 'Serve aiuto?',
+    }
   })
 }

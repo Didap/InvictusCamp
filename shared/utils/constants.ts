@@ -31,8 +31,10 @@ export type ParticipationStatus = (typeof PARTICIPATION_STATUSES)[number]
  */
 export const STAFF_STATUSES = ['registered', 'applied', 'approved', 'rejected', 'inactive'] as const
 export type StaffStatus = (typeof STAFF_STATUSES)[number]
-/** Who sees the whole staff area: the others see only the home with where their application stands. */
-export const STAFF_AREA_STATUSES: readonly StaffStatus[] = ['approved', 'inactive']
+/** Who sees the whole staff area (spec 3.4): the others see only the home with where their application stands. */
+export function inStaffArea(status: StaffStatus | null | undefined): boolean {
+  return status === 'approved' || status === 'inactive'
+}
 
 /**
  * A role of staff and v-team: the id of a row of `staff_roles`, which the administration creates, renames

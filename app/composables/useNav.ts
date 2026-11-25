@@ -1,9 +1,9 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
+import { inStaffArea } from '#shared/utils/constants'
 
 /** The sections of the sidebar for the signed-in role. Every area page is listed here. */
 export function useNav() {
-  const { user } = useUserSession()
-  const staff = useStaffStatus()
+  const { user, session } = useUserSession()
   return computed<NavigationMenuItem[][]>(() => {
     switch (user.value?.role) {
       case 'admin':
@@ -32,12 +32,13 @@ export function useNav() {
             { label: 'Documenti', icon: 'i-lucide-folder-open', to: '/famiglia/documenti' },
           ],
         ]
-      case 'staff':
+      case 'staff': {
+        const home = { label: 'Home', icon: 'i-lucide-house', to: '/staff', exact: true }
         // Before the approval the area is the home alone (spec 3.4).
-        if (!staff.inArea.value) return [[{ label: 'Home', icon: 'i-lucide-house', to: '/staff', exact: true }]]
+        if (!inStaffArea(session.value?.staffStatus)) return [[home]]
         return [
           [
-            { label: 'Home', icon: 'i-lucide-house', to: '/staff', exact: true },
+            home,
             { label: 'Candidatura', icon: 'i-lucide-file-user', to: '/staff/candidatura' },
             { label: 'Disponibilità', icon: 'i-lucide-calendar-check', to: '/staff/disponibilita' },
             { label: 'Convocazioni', icon: 'i-lucide-bell-ring', to: '/staff/convocazioni' },
@@ -45,6 +46,7 @@ export function useNav() {
             { label: 'Documenti', icon: 'i-lucide-folder-open', to: '/staff/documenti' },
           ],
         ]
+      }
       default:
         return []
     }

@@ -6,17 +6,15 @@ import { formatDayRange, plural } from '#shared/utils/format'
 // registered, the CV to upload (an account made before it was asked at registration); applied, the
 // notice that we are reviewing it; not selected, a kind message. Approved: convocations to answer, next
 // sessions, documents to sign, availability. Inactive: no convocations for now.
-const { user } = useUserSession()
+const { user, session, fetch: fetchSession } = useUserSession()
 const { data: home, refresh } = await useApiFetch<StaffHome>('/api/staff/home')
 
-// The approval may come while the tab is open: the home brings the menu up to date.
-const staff = useStaffStatus()
+// The approval may come while the tab is open: the session, and with it the menu, catches up.
 watch(
   () => home.value?.status,
   status => {
-    if (status) staff.status.value = status
+    if (status && status !== session.value?.staffStatus) fetchSession()
   },
-  { immediate: true },
 )
 </script>
 
