@@ -141,7 +141,7 @@ export function convocationCancelledEmail(
       'Non devi fare nulla. Se hai domande, scrivi all’amministrazione del camp.',
     ],
     details: sessionDetails(input.session, input.roleName),
-    action: { label: 'Vedi le tue convocazioni', url: appLink(ctx, '/staff/convocazioni') },
+    action: { label: 'Vedi le tue sessioni', url: appLink(ctx, '/staff/sessioni') },
   })
   return {
     to: input.to,

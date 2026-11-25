@@ -1,33 +1,25 @@
 <script setup lang="ts">
 import type { MyConvocations } from '#shared/types/staff'
-import { todayIso } from '#shared/utils/dates'
+import { isConvocationWaiting } from '#shared/utils/session-status'
 
-// Convocations (spec 3.5): the ones to answer first (accept, or decline with a reason), then the
-// accepted ones with the contract to sign, then the history.
+// Convocations (spec 3.5): only the ones waiting for an answer, accept or decline with a reason (an inactive
+// person sees them without the buttons). The sessions accepted, with the contract to sign, are on /staff/sessioni.
 const { data, refresh } = await useApiFetch<MyConvocations>('/api/staff/convocations')
 
-const today = todayIso()
-const items = computed(() => data.value?.items ?? [])
-const toAnswer = computed(() => items.value.filter(c => c.answerable))
-const accepted = computed(() =>
-  items.value.filter(c => c.status === 'accepted' && c.session.endDate >= today && c.session.status !== 'cancelled'),
-)
-const history = computed(() =>
-  items.value.filter(c => !toAnswer.value.includes(c) && !accepted.value.includes(c)).reverse(),
-)
+const waiting = computed(() => (data.value?.items ?? []).filter(isConvocationWaiting))
 </script>
 
 <template>
   <IcPage title="Convocazioni" width="narrow">
     <template v-if="data">
       <UEmpty
-        v-if="!items.length"
+        v-if="!waiting.length"
         icon="i-lucide-bell-ring"
-        :title="data.approved ? 'Nessuna convocazione per ora' : 'Le convocazioni arrivano dopo l’approvazione'"
+        :title="data.approved ? 'Nessuna convocazione da rispondere' : 'Il tuo profilo non è attivo'"
         :description="
           data.approved
-            ? 'Quando l’amministrazione ti convoca per una sessione, la trovi qui e ricevi una email. Tieni aggiornata la tua disponibilità: ti convochiamo nelle date che ci indichi.'
-            : 'Quando la tua candidatura sarà approvata, potrai indicare la disponibilità e ricevere le convocazioni alle sessioni.'
+            ? 'Quando l’amministrazione ti convoca per una sessione, la trovi qui e ricevi un’email: ti convochiamo solo per le sessioni a cui hai detto che ci sei. Quelle che hai accettato sono in Sessioni.'
+            : 'Non ricevi nuove convocazioni. Per tornare attivo scrivi all’amministrazione.'
         "
         :actions="
           data.approved
@@ -39,50 +31,19 @@ const history = computed(() =>
                   class: 'pointer-coarse:min-h-11',
                 },
               ]
-            : [
-                {
-                  label: 'Vedi la scheda personale',
-                  icon: 'i-lucide-id-card',
-                  to: '/staff/scheda',
-                  color: 'neutral',
-                  variant: 'outline',
-                  class: 'pointer-coarse:min-h-11',
-                },
-              ]
+            : []
         "
       />
 
-      <template v-else>
-        <IcSection
-          v-if="toAnswer.length"
-          title="Da rispondere"
-          description="Accetta o rifiuta: l’amministrazione vede subito la tua risposta."
-        >
-          <div class="divide-y divide-default rounded-lg border border-default bg-elevated">
-            <StaffMyConvocation v-for="c in toAnswer" :key="c.id" :convocation="c" @changed="refresh" />
-          </div>
-        </IcSection>
-
-        <IcSection
-          v-if="accepted.length"
-          title="Accettate"
-          description="La presenza è confermata quando il contratto, se previsto, è firmato."
-        >
-          <div class="divide-y divide-default rounded-lg border border-default bg-elevated">
-            <StaffMyConvocation v-for="c in accepted" :key="c.id" :convocation="c" @changed="refresh" />
-          </div>
-        </IcSection>
-
-        <IcSection
-          v-if="history.length"
-          title="Storico"
-          description="Convocazioni rifiutate, annullate o di sessioni passate."
-        >
-          <div class="divide-y divide-default rounded-lg border border-default bg-elevated">
-            <StaffMyConvocation v-for="c in history" :key="c.id" :convocation="c" @changed="refresh" />
-          </div>
-        </IcSection>
-      </template>
+      <IcSection
+        v-else
+        title="Da rispondere"
+        :description="data.approved ? 'Accetta o rifiuta: l’amministrazione vede subito la tua risposta.' : undefined"
+      >
+        <div class="divide-y divide-default rounded-lg border border-default bg-elevated">
+          <StaffMyConvocation v-for="c in waiting" :key="c.id" :convocation="c" @changed="refresh" />
+        </div>
+      </IcSection>
     </template>
   </IcPage>
 </template>
