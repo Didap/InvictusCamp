@@ -579,6 +579,15 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           </ul>
         </IcSection>
 
+        <IcSection title="Formazione" description="Le formazioni proposte che le interessano.">
+          <p v-if="!person.training.length" class="text-muted">Nessuna indicata.</p>
+          <ul v-else class="flex flex-wrap gap-2">
+            <li v-for="title in person.training" :key="title">
+              <UBadge :label="title" color="neutral" variant="outline" size="lg" />
+            </li>
+          </ul>
+        </IcSection>
+
         <IcSection title="Documenti personali" description="Caricati dalla persona: titoli, attestati, documenti.">
           <UAlert
             v-if="person.documentsMissing.length"

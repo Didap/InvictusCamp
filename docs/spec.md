@@ -150,6 +150,10 @@ categories `cv` and `id_document`, in PDF only (a family never has `cv`). The CV
 approved, is uploaded in its place on the page. An ID uploaded earlier as a photo does not count. Until both are
 there the home asks for them, and the person's admin page says which is missing. The other personal documents
 (titles, certificates) keep their categories and formats.
+**Formazione**: the administration proposes trainings (`/admin/formazione`: title, optional description; add, edit,
+delete with its interests; audited `training.*`), and sees who is interested, with a link to each person. Staff and
+v-team in the staff area tick on `/staff/formazione` those that interest them, each tick saved at once
+(`training_interests`); the person's admin page lists them.
 Once the sheet is complete, the gestionale writes its PDF («Scheda personale · Nome Cognome»: the account's
 name, email and phone, birth, codice fiscale, residence, T-shirt size and «Con la firma confermo che i dati di
 questa scheda sono corretti e aggiornati»; no health data) and asks the person to sign it like every document,

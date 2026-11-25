@@ -53,6 +53,8 @@ const TABLES = [
   'programmes',
   'questionnaires',
   'release_texts',
+  'training_interests',
+  'training_options',
   'availability_confirmations',
   'session_availability',
   'camp_sessions',
@@ -812,6 +814,21 @@ export async function seedDemo(
       actor: { userId: demoStaff.userId },
     })
   }
+
+  // «Formazione»: three proposals, the demo account interested in the first.
+  const training = await db
+    .insert(t.trainingOptions)
+    .values([
+      {
+        title: 'Primo soccorso pediatrico (BLSD)',
+        description: 'Corso con certificazione, una giornata.',
+        position: 0,
+      },
+      { title: 'Comunicazione aumentativa alternativa (CAA)', description: null, position: 1 },
+      { title: 'Gestione dei comportamenti problema', description: null, position: 2 },
+    ])
+    .returning({ id: t.trainingOptions.id })
+  if (demoStaff) await db.insert(t.trainingInterests).values({ optionId: training[0]!.id, userId: demoStaff.userId })
 
   // Sessions
   const sessionValues = (values: Omit<typeof t.campSessions.$inferInsert, 'location' | 'createdBy'>) => ({
