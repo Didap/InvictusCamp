@@ -9,6 +9,7 @@ import {
   canMoveStaff,
   isReviewMove,
   isSheetComplete,
+  missingStaffDocuments,
   type ConvocationAddInput,
   type ConvocationSendInput,
   type StaffSheetInput,
@@ -30,6 +31,7 @@ import type {
   StaffHome,
   StaffListItem,
   StaffOutcomeTemplate,
+  MyStaffDocuments,
   StaffSheet,
   StaffSheetDto,
   StaffSheetSignature,
@@ -1136,6 +1138,39 @@ async function availableFor(db: DbOrTx, sessionId: string): Promise<Set<string>>
 }
 
 /** Personal documents of an account, newest first. */
+/** The documents page of the signed-in person: the CV on the profile and the documents uploaded. */
+export async function myStaffDocuments(
+  db: DbOrTx,
+  profile: Pick<ProfileRow, 'userId' | 'cvFileId'>,
+): Promise<MyStaffDocuments> {
+  const [[cv], documents] = await Promise.all([
+    profile.cvFileId ? db.select().from(files).where(eq(files.id, profile.cvFileId)).limit(1) : [],
+    staffDocuments(db, profile.userId),
+  ])
+  return { cv: cv ? toFileDto(cv) : null, documents }
+}
+
+/**
+ * A new CV (PDF) from the staff area: it takes the place of the one on the profile, sent with the application or
+ * missing for someone invited as approved. Returns the file it replaces, to remove after the commit.
+ */
+export async function replaceStaffCv(
+  db: DbOrTx,
+  input: { userId: string; fileId: string; actor: Actor },
+): Promise<string | null> {
+  const profile = await profileOf(db, input.userId, { lock: true })
+  await db.update(staffProfiles).set({ cvFileId: input.fileId }).where(eq(staffProfiles.id, profile.id))
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.cv',
+    entityType: 'user',
+    entityId: input.userId,
+    data: { replaced: profile.cvFileId !== null },
+    ip: input.actor.ip,
+  })
+  return profile.cvFileId
+}
+
 export async function staffDocuments(db: DbOrTx, userId: string): Promise<StaffDocumentDto[]> {
   const rows = await db
     .select({ document: personalDocuments, file: files })
@@ -1564,11 +1599,17 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       upcoming: [],
       availability: { available: 0, total: 0, toConfirm: 0 },
       sheetComplete,
+      documentsMissing: [],
     }
   }
-  const [convocations, { sessions }] = await Promise.all([
+  const [convocations, { sessions }, [idDocument]] = await Promise.all([
     myConvocations(db, profile.userId, { approved: profile.status === 'approved' }),
     myAvailability(db, profile, today),
+    db
+      .select({ id: personalDocuments.id })
+      .from(personalDocuments)
+      .where(and(eq(personalDocuments.userId, profile.userId), eq(personalDocuments.category, 'id_document')))
+      .limit(1),
   ])
   const available = sessions.filter(session => session.available).length
   return {
@@ -1577,5 +1618,6 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
     upcoming: convocations.filter(c => c.status === 'accepted' && isSessionAhead(c.session, today)),
     availability: { available, total: sessions.length, toConfirm: sessions.filter(session => !session.locked).length },
     sheetComplete,
+    documentsMissing: missingStaffDocuments(profile.cvFileId !== null, idDocument ? ['id_document'] : []),
   }
 }

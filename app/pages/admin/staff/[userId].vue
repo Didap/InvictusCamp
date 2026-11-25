@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { isSheetComplete } from '#shared/schemas/staff'
+import { REQUIRED_DOCUMENT_NAMES, isSheetComplete, missingStaffDocuments } from '#shared/schemas/staff'
 import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
 import { inStaffArea, OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
-import { formatAge, formatDateTime, formatDay, formatDayRange, formatTown, fullName } from '#shared/utils/format'
+import {
+  andList,
+  formatAge,
+  formatDateTime,
+  formatDay,
+  formatDayRange,
+  formatTown,
+  fullName,
+} from '#shared/utils/format'
 import { TEAM_SLUG, teamOfSlug, teamPath } from '#shared/utils/routes'
 
 // One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, personal
@@ -241,6 +249,17 @@ const texts = computed(() => {
 const availability = computed(() => {
   const all = person.value?.availability ?? []
   return [...all.filter(s => s.startDate > today), ...all.filter(s => s.startDate <= today).reverse()]
+})
+
+/** The required documents (CV, ID) still missing, once the person is in the staff area. */
+const documentsMissing = computed(() => {
+  const p = person.value
+  return p && inStaffArea(p.status)
+    ? missingStaffDocuments(
+        p.cv !== null,
+        p.documents.map(d => d.category),
+      )
+    : []
 })
 
 /** The availability confirmed, and the reset the person asked for: «Riapri la disponibilità». */
@@ -567,6 +586,15 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
         </IcSection>
 
         <IcSection title="Documenti personali" description="Caricati dalla persona: titoli, attestati, documenti.">
+          <UAlert
+            v-if="documentsMissing.length"
+            class="mb-4"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-file-warning"
+            :title="`Manca ${andList(documentsMissing.map(d => REQUIRED_DOCUMENT_NAMES[d]))}`"
+            description="Il curriculum e il documento d’identità in PDF sono obbligatori: la persona li carica dai suoi Documenti."
+          />
           <p v-if="!person.documents.length" class="text-muted">Nessun documento caricato.</p>
           <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
             <li v-for="doc in person.documents" :key="doc.id" class="space-y-1 px-4 py-3">

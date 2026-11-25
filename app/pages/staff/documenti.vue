@@ -1,23 +1,35 @@
 <script setup lang="ts">
-import { STAFF_DOCUMENT_CATEGORIES } from '#shared/schemas/staff'
-import type { StaffDocumentDto } from '#shared/types/staff'
+import { REQUIRED_DOCUMENT_NAMES, STAFF_DOCUMENT_CATEGORIES, missingStaffDocuments } from '#shared/schemas/staff'
+import type { MyStaffDocuments, StaffDocumentDto } from '#shared/types/staff'
 import type { PersonalDocumentCategory } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
-import { formatDay } from '#shared/utils/format'
+import { andList, formatDay } from '#shared/utils/format'
 
-// Documents: what the administration asks to sign (PendingSignatures, documents area) and the personal
-// documents the person uploads (titles, certificates, ID), each with a category and a title.
+// Documents (spec 3.4): the required ones first, the CV and an ID in PDF; what the administration asks to sign
+// (PendingSignatures, documents area); the other personal documents (titles, certificates), each with a category
+// and a title.
 const api = useApi()
 const confirm = useConfirm()
 const { label, options } = useEnums()
-const { data, refresh } = await useApiFetch<StaffDocumentDto[]>('/api/staff/documents')
-const documents = computed(() => data.value ?? [])
+const { data, refresh } = await useApiFetch<MyStaffDocuments>('/api/staff/documents')
+const documents = computed(() => data.value?.documents ?? [])
+const idDocuments = computed(() => documents.value.filter(document => document.category === 'id_document'))
+const others = computed(() => documents.value.filter(document => document.category !== 'id_document'))
+const missing = computed(() =>
+  data.value
+    ? missingStaffDocuments(
+        data.value.cv !== null,
+        documents.value.map(document => document.category),
+      )
+    : [],
+)
 
+/** The ID has its own place among the required documents. */
 const categoryItems = computed(() =>
-  options('personalDocumentCategory', STAFF_DOCUMENT_CATEGORIES).map(option => ({
-    label: option.label,
-    value: option.value as PersonalDocumentCategory,
-  })),
+  options(
+    'personalDocumentCategory',
+    STAFF_DOCUMENT_CATEGORIES.filter(category => category !== 'id_document'),
+  ).map(option => ({ label: option.label, value: option.value as PersonalDocumentCategory })),
 )
 const upload = reactive({ category: 'certification' as PersonalDocumentCategory, title: '' })
 const uploadKey = ref(0)
@@ -53,18 +65,73 @@ async function remove(document: StaffDocumentDto) {
 
 <template>
   <IcPage title="Documenti" width="narrow">
+    <IcSection
+      v-if="data"
+      title="Documenti obbligatori"
+      :description="
+        missing.length
+          ? `Ci servono per lavorare con te: carica ${andList(missing.map(m => REQUIRED_DOCUMENT_NAMES[m]))}, in PDF.`
+          : 'Il curriculum e il documento d’identità, in PDF: ci sono tutti e due.'
+      "
+    >
+      <div class="space-y-6">
+        <div>
+          <h3 class="font-semibold text-highlighted">Curriculum</h3>
+          <IcFileLink v-if="data.cv" :file="data.cv" class="mt-2" />
+          <p v-else class="mt-1 text-warning">Da caricare</p>
+          <IcFileUpload
+            class="mt-3"
+            endpoint="/api/staff/cv"
+            accept="application/pdf"
+            description="PDF, fino a 15 MB"
+            :button-label="data.cv ? 'Sostituisci il CV' : 'Carica il CV'"
+            @uploaded="refresh()"
+          />
+        </div>
+        <div>
+          <h3 class="font-semibold text-highlighted">Documento d’identità</h3>
+          <ul v-if="idDocuments.length" class="mt-2 space-y-2">
+            <li v-for="document in idDocuments" :key="document.id" class="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <IcFileLink :file="document.file" :label="document.title" />
+              <UButton
+                class="pointer-coarse:min-h-11"
+                icon="i-lucide-trash-2"
+                label="Elimina"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :loading="removing === document.id"
+                :aria-label="`Elimina ${document.title}`"
+                @click="remove(document)"
+              />
+            </li>
+          </ul>
+          <p v-else class="mt-1 text-warning">Da caricare</p>
+          <IcFileUpload
+            class="mt-3"
+            endpoint="/api/staff/documents"
+            accept="application/pdf"
+            description="PDF con fronte e retro, fino a 15 MB"
+            :fields="{ category: 'id_document', title: 'Documento d’identità' }"
+            :button-label="idDocuments.length ? 'Carica un altro documento' : 'Carica il documento'"
+            @uploaded="refresh()"
+          />
+        </div>
+      </div>
+    </IcSection>
+
     <IcSection title="Da firmare" description="I documenti che l’amministrazione ti chiede di leggere e firmare.">
       <DocumentsPendingSignatures />
     </IcSection>
 
     <IcSection
       title="I tuoi documenti"
-      description="Titoli, attestati, certificati e documento d’identità che vuoi condividere con l’amministrazione."
+      description="Titoli, attestati e certificati che vuoi condividere con l’amministrazione."
     >
-      <p v-if="!documents.length" class="text-muted">Non hai ancora caricato documenti.</p>
+      <p v-if="!others.length" class="text-muted">Non hai ancora caricato altri documenti.</p>
       <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
         <li
-          v-for="document in documents"
+          v-for="document in others"
           :key="document.id"
           class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3"
         >

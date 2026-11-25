@@ -196,6 +196,19 @@ export const STAFF_DOCUMENT_CATEGORIES = PERSONAL_DOCUMENT_CATEGORIES.filter(
   category => category !== 'diagnosis',
 ) as Exclude<PersonalDocumentCategory, 'diagnosis'>[]
 
+/** What every staff and v-team member in the staff area uploads, in PDF (spec 3.4): the CV and an ID. */
+export const REQUIRED_STAFF_DOCUMENTS = ['cv', 'id_document'] as const
+export type RequiredStaffDocument = (typeof REQUIRED_STAFF_DOCUMENTS)[number]
+export const REQUIRED_DOCUMENT_NAMES: Record<RequiredStaffDocument, string> = {
+  cv: 'il curriculum',
+  id_document: 'il documento d’identità',
+}
+
+/** The required documents still missing, from the CV on the profile and the categories of the documents uploaded. */
+export function missingStaffDocuments(hasCv: boolean, categories: readonly string[]): RequiredStaffDocument[] {
+  return REQUIRED_STAFF_DOCUMENTS.filter(required => (required === 'cv' ? !hasCv : !categories.includes(required)))
+}
+
 /** The text fields sent with the file to POST /api/staff/documents. */
 export const staffDocumentSchema = z.object({
   category: z.enum(PERSONAL_DOCUMENT_CATEGORIES).refine(value => value !== 'diagnosis', {

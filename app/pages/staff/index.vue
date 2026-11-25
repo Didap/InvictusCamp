@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { SHEET_MISSING } from '#shared/schemas/staff'
+import { REQUIRED_DOCUMENT_NAMES, SHEET_MISSING } from '#shared/schemas/staff'
 import type { StaffHome } from '#shared/types/staff'
-import { formatDayRange, plural } from '#shared/utils/format'
+import { andList, formatDayRange, plural } from '#shared/utils/format'
 
 // The staff home: it follows the application (spec 3.4). Until the approval it is the whole area:
 // registered, the CV to upload (an account made before it was asked at registration); applied, the
@@ -76,6 +76,25 @@ watch(
             {
               label: 'Compila la scheda',
               to: '/staff/scheda',
+              class: 'pointer-coarse:min-h-11',
+              color: 'neutral',
+              variant: 'outline',
+            },
+          ]"
+        />
+
+        <UAlert
+          v-if="home.documentsMissing.length"
+          class="mb-8"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-file-up"
+          title="Carica i documenti obbligatori"
+          :description="`Ci servono ${andList(home.documentsMissing.map(d => REQUIRED_DOCUMENT_NAMES[d]))}, in PDF.`"
+          :actions="[
+            {
+              label: 'Vai ai documenti',
+              to: '/staff/documenti',
               class: 'pointer-coarse:min-h-11',
               color: 'neutral',
               variant: 'outline',
