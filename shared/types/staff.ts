@@ -2,13 +2,13 @@ import type { UsefulInfo } from './domain'
 // DTOs of the staff area (applications, review, availability, convocations). Dates are ISO days,
 // instants ISO strings. Never a raw `users` row.
 import type { FileDto } from './api'
+import type { MySignatureItem } from './documents'
 import type {
   ConvocationStatus,
   ItalianRegion,
   PersonalDocumentCategory,
   SessionStatus,
   ShirtSize,
-  SignatureStatus,
   StaffRole,
   StaffStatus,
   StaffTagColor,
@@ -249,16 +249,8 @@ export interface StaffSheetSaved {
   signature: StaffSheetSignature | null
 }
 
-/**
- * The PDF of the sheet in force (server/domain/staff-sheets.ts) and its signature: null while there is none (the
- * sheet incomplete, or complete but never saved since, or archived). Signed on /firma/:requestId, the signed copy
- * at /api/signatures/:requestId/copy.
- */
-export interface StaffSheetSignature {
-  requestId: string
-  status: SignatureStatus
-  signedAt: string | null
-}
+/** The PDF of the sheet in force and its signature request (`id`); null when there is none. */
+export type StaffSheetSignature = Pick<MySignatureItem, 'id' | 'status' | 'signedAt'>
 
 /** The application as it was sent, read only. */
 export interface StaffApplicationDto {

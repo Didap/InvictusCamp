@@ -1,9 +1,8 @@
 import { eq } from 'drizzle-orm'
 import type { DbOrTx } from '../domain/db'
 import { familyRelease } from '../domain/releases'
+import type { Actor } from '../domain/staff'
 import { staffSheetDocument } from '../domain/staff-sheets'
-
-type Actor = { userId: string; ip: string | null }
 
 /**
  * After the sheet of a staff member, or their name or phone, changes: the PDF of the sheet to sign

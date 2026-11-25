@@ -1259,10 +1259,10 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
 
 // ─── Reads: staff side ─────────────────────────────────────────────────────────────────────────────
 
-/** The PDF of the sheet in force and its signature (staff-sheets.ts): null while there is none to sign. */
+/** The signature of the sheet's PDF in force (staff-sheets.ts). */
 export async function sheetSignature(db: DbOrTx, userId: string): Promise<StaffSheetSignature | null> {
   const [row] = await db
-    .select({ requestId: signatureRequests.id, status: signatureRequests.status, signedAt: signatureRequests.signedAt })
+    .select({ id: signatureRequests.id, status: signatureRequests.status, signedAt: signatureRequests.signedAt })
     .from(documents)
     .innerJoin(signatureRequests, eq(signatureRequests.documentId, documents.id))
     .where(and(eq(documents.staffUserId, userId), isNull(documents.archivedAt), eq(signatureRequests.userId, userId)))

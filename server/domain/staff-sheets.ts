@@ -13,10 +13,9 @@ import { writeAudit } from './audit'
 import { sha256 } from './crypto'
 import type { DbOrTx } from './db'
 import { textPdf, type PdfBlock } from './pdf'
-import { requestSignatures, signatureRequestEmails } from './signature-requests'
-import { setDocumentArchived } from './signatures'
+import { signatureRequestEmails } from './signature-requests'
+import { createGeneratedDocument, setDocumentArchived } from './signatures'
 import { staffSheetOf, type Actor } from './staff'
-import { storeFile } from './storage'
 
 const PREPARED = 'Preparata dal gestionale con i dati della scheda personale.'
 
@@ -78,45 +77,29 @@ export async function staffSheetDocument(
     .where(and(eq(documents.staffUserId, input.userId), isNull(documents.archivedAt)))
   const parsed = inStaffArea(profile.status) ? staffSheetSchema.safeParse(staffSheetOf(profile)) : null
   const data: SheetInput | null = parsed?.success ? { account, sheet: parsed.data } : null
-  const digest = data && sha256(JSON.stringify(data))
-  if (!current && !data) return []
-  if (current && current.digest === digest) return []
+  const source = data && { data, digest: sha256(JSON.stringify(data)) }
+  if (current?.digest === source?.digest) return []
   // The PDF in force no longer matches the sheet: it goes, and a new one comes while the sheet is complete.
   if (current) await setDocumentArchived(db, { documentId: current.id, archived: true, actor: input.actor })
-  if (!data) return []
+  if (!source) return []
 
   const title = `Scheda personale · ${fullName(account)}`
-  const file = await storeFile(db, input.uploadsDir, {
-    data: await textPdf(title, sheetBlocks(data), PREPARED),
-    originalName: `${title}.pdf`,
-    mimeType: 'application/pdf',
-    purpose: 'document',
-    ownerUserId: input.userId,
+  const { documentId, requestIds } = await createGeneratedDocument(db, input.uploadsDir, {
+    owner: { staffUserId: input.userId },
+    signerId: input.userId,
+    title,
+    description: PREPARED,
+    category: 'other',
+    pdf: await textPdf(title, sheetBlocks(source.data), PREPARED),
+    sourceDigest: source.digest,
   })
-  const [document] = await db
-    .insert(documents)
-    .values({
-      title,
-      description: PREPARED,
-      category: 'other',
-      fileId: file.id,
-      requiresSignature: true,
-      staffUserId: input.userId,
-      sourceDigest: digest,
-    })
-    .returning({ id: documents.id })
-  const requests = await requestSignatures(db, { documentId: document!.id, userIds: [input.userId] })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.sheet_document',
     entityType: 'user',
     entityId: input.userId,
-    data: { documentId: document!.id, replaced: current?.id ?? null },
+    data: { documentId, replaced: current?.id ?? null },
     ip: input.actor.ip ?? null,
   })
-  return signatureRequestEmails(
-    db,
-    input.ctx,
-    requests.map(request => request.id),
-  )
+  return signatureRequestEmails(db, input.ctx, requestIds)
 }

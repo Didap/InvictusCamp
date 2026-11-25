@@ -109,7 +109,7 @@ describe('staff personal sheet', () => {
     // The phone of the account changes: a new PDF, the old one archived and its signature cancelled.
     await db.update(t.users).set({ phone: '+39 333 000 1111' }).where(eq(t.users.id, user.id))
     expect(await staffSheetDocument(db, input)).toHaveLength(1)
-    const [old] = await db.select().from(t.signatureRequests).where(eq(t.signatureRequests.id, signature!.requestId))
+    const [old] = await db.select().from(t.signatureRequests).where(eq(t.signatureRequests.id, signature!.id))
     expect(old!.status).toBe('cancelled')
     await expect(setDocumentArchived(db, { documentId: document!.id, archived: false, actor })).rejects.toMatchObject({
       statusCode: 409,
@@ -122,7 +122,7 @@ describe('staff personal sheet', () => {
     const [profile] = await db.select().from(t.staffProfiles).where(eq(t.staffProfiles.userId, user.id))
     const { signature: renewed } = await myStaffSheet(db, user, profile!)
     expect(renewed).toMatchObject({ status: 'pending' })
-    expect(renewed!.requestId).not.toBe(signature!.requestId)
+    expect(renewed!.id).not.toBe(signature!.id)
   })
 
   it('asks no signature before the approval', async () => {

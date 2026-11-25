@@ -83,7 +83,10 @@ async function requireDocument(db: DbOrTx, documentId: string, lock?: DocumentLo
   return row
 }
 
-/** A document the gestionale prepares (a family's release, a staff sheet) is not changed by hand. */
+// A document the gestionale prepares for one person has its owner: a family's release (releases.ts) or a staff
+// member's sheet (staff-sheets.ts). Never changed, assigned or restored by hand.
+const NOT_GENERATED = and(isNull(documents.familyId), isNull(documents.staffUserId))
+
 function assertNotGenerated(document: { familyId: string | null; staffUserId: string | null }) {
   if (document.familyId) throw fail(409, 'È la liberatoria di una famiglia: la prepara e la aggiorna il gestionale')
   if (document.staffUserId) {
@@ -154,6 +157,47 @@ export async function createDocument(
     ip: input.actor.ip,
   })
   return row!.id
+}
+
+/**
+ * Stores the PDF the gestionale prepared for one person, records it with its owner and the digest of what it was
+ * written from, and asks `signerId` to sign it. The caller archives the one it replaces first, audits, and
+ * emails the requests (signatureRequestEmails).
+ */
+export async function createGeneratedDocument(
+  db: DbOrTx,
+  uploadsDir: string,
+  input: {
+    owner: { familyId: string } | { staffUserId: string }
+    signerId: string
+    title: string
+    description: string
+    category: DocumentCategory
+    pdf: Uint8Array
+    sourceDigest: string
+  },
+): Promise<{ documentId: string; requestIds: string[] }> {
+  const file = await storeFile(db, uploadsDir, {
+    data: input.pdf,
+    originalName: `${input.title}.pdf`,
+    mimeType: 'application/pdf',
+    purpose: 'document',
+    ownerUserId: input.signerId,
+  })
+  const [document] = await db
+    .insert(documents)
+    .values({
+      ...input.owner,
+      title: input.title,
+      description: input.description,
+      category: input.category,
+      fileId: file.id,
+      requiresSignature: true,
+      sourceDigest: input.sourceDigest,
+    })
+    .returning({ id: documents.id })
+  const requests = await requestSignatures(db, { documentId: document!.id, userIds: [input.signerId] })
+  return { documentId: document!.id, requestIds: requests.map(request => request.id) }
 }
 
 async function signedCount(db: DbOrTx, documentId: string): Promise<number> {
@@ -1172,8 +1216,7 @@ export async function documentOptions(db: DbOrTx): Promise<DocumentOptions> {
       sessionId: documents.sessionId,
     })
     .from(documents)
-    // A release or a staff sheet is one person's own: never assigned (assertNotGenerated).
-    .where(and(isNull(documents.archivedAt), isNull(documents.familyId), isNull(documents.staffUserId)))
+    .where(and(isNull(documents.archivedAt), NOT_GENERATED))
     .orderBy(desc(documents.createdAt))
   return {
     sessions,

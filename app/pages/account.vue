@@ -2,20 +2,16 @@
 import { z } from 'zod'
 import { accountSchema, changePasswordSchema } from '#shared/schemas/auth'
 import type { AccountDto } from '#shared/types/api'
+import type { UserRole } from '#shared/utils/constants'
 import { formatDateTime } from '#shared/utils/format'
 
 const api = useApi()
 const { fetch: refreshSession, user } = useUserSession()
-/** What a change makes again, to sign: the staff sheet (name, phone), the family's release (the holder's name). */
-const signedWith = computed(() => {
-  if (user.value?.role === 'staff') {
-    return 'Nome, cognome e telefono sono nella tua scheda personale: se li cambi, ti chiediamo di firmarla di nuovo.'
-  }
-  if (user.value?.role === 'family') {
-    return 'Il tuo nome è nella liberatoria della famiglia: se lo cambi, ti chiediamo di firmarla di nuovo.'
-  }
-  return null
-})
+const SIGNED_WITH: Partial<Record<UserRole, string>> = {
+  staff: 'Nome, cognome e telefono sono nella tua scheda personale: se li cambi, ti chiediamo di firmarla di nuovo.',
+  family: 'Il tuo nome è nella liberatoria della famiglia: se lo cambi, ti chiediamo di firmarla di nuovo.',
+}
+const signedWith = computed(() => (user.value ? SIGNED_WITH[user.value.role] : undefined))
 const { data: account, refresh } = await useApiFetch<AccountDto>('/api/account')
 
 const profile = reactive({ firstName: '', lastName: '', phone: '' })
