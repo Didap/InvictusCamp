@@ -169,7 +169,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       '/staff/convocazioni': 'Le convocazioni a cui devi ancora rispondere: le accetti o le rifiuti.',
       '/staff/sessioni': 'Le sessioni che hai accettato, con il programma della settimana, e quelle già fatte.',
       '/staff/documenti':
-        'I documenti da firmare, come la tua scheda o il contratto di una sessione, e quelli che carichi tu.',
+        'I documenti obbligatori (CV e documento d’identità, in PDF), quelli da firmare, come la tua scheda o il contratto di una sessione, e quelli che carichi tu.',
       ...ACCOUNT,
     },
     howTos: [
@@ -190,6 +190,15 @@ export const GUIDES: Record<UserRole, Guide> = {
           'Il gestionale prepara la scheda in PDF: premi «Leggi e firma» e firmala con il codice che ti arriva via email. Se vedi «Prepara il PDF da firmare», premilo prima.',
           'Più in basso, in «Alimentazione e altre informazioni», premi «Indica allergie e altro»: allergie, intolleranze e alimentazione arrivano a chi prepara i pasti, «Altro da condividere» lo legge solo l’amministrazione. Spunta il consenso e premi «Salva».',
           'Se poi cambi la scheda, il nome o il telefono, la scheda si rifà e va firmata di nuovo.',
+        ],
+      },
+      {
+        title: 'Caricare il CV e il documento d’identità',
+        steps: [
+          'Apri «Documenti»: in alto, sotto «Documenti obbligatori», trovi il CV e il documento d’identità.',
+          'Il CV mandato con la candidatura vale già. Se ne hai uno più recente premi «Carica una versione aggiornata».',
+          `Per il documento d’identità premi «Carica il file» e scegli un PDF con fronte e retro, fino a ${formatBytes(MAX_UPLOAD_BYTES)}. Una foto non vale.`,
+          'Finché manca qualcosa, la Home te lo ricorda.',
         ],
       },
       {
