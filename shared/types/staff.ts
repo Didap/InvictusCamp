@@ -167,6 +167,9 @@ export interface StaffDetail {
   reviewNotes: string | null
   /** Sessions the person said they can come to, by date. */
   availability: AvailabilitySession[]
+  /** When the person confirmed the availability, and asked to reopen it: «Riapri la disponibilità». */
+  availabilityConfirmedAt: string | null
+  availabilityResetRequestedAt: string | null
   convocations: StaffConvocationSummary[]
   documents: StaffDocumentDto[]
   outcome: StaffOutcome
@@ -304,8 +307,11 @@ export interface StaffHome {
   toAnswer: MyConvocation[]
   /** Accepted convocations of sessions that have not ended. */
   upcoming: MyConvocation[]
-  /** Sessions not started yet: how many the person said they can come to, out of how many. */
-  availability: { available: number; total: number }
+  /**
+   * Sessions not started yet: how many the person said they can come to, out of how many, and how many are
+   * still to confirm.
+   */
+  availability: { available: number; total: number; toConfirm: number }
   /** The personal sheet has every required field (the home asks for it once approved). */
   sheetComplete: boolean
 }
@@ -315,12 +321,17 @@ export interface MyAvailabilitySession extends AvailabilitySession {
   available: boolean
   /** The person has a convocation to it (sent or accepted): the availability stays, it no longer matters. */
   convoked: boolean
+  /** Confirmed: the answer changes only after the administration reopens the availability. */
+  locked: boolean
 }
 
 /** GET /api/staff/availability */
 export interface MyAvailability {
   /** Answers can be given and changed (approved staff only). */
   canEdit: boolean
+  /** The last «Conferma le preferenze», and the reset asked since, if any. */
+  confirmedAt: string | null
+  resetRequestedAt: string | null
   /** The sessions not started yet, by date. */
   sessions: MyAvailabilitySession[]
 }

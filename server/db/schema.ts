@@ -317,6 +317,13 @@ export const staffProfiles = pgTable(
     reviewedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
     /** Internal notes of the review; never shown to the candidate. */
     reviewNotes: text(),
+    /**
+     * When the person confirmed their availability: the answers for the sessions created before it are fixed until
+     * the administration reopens them (null again). A session created later can be answered and confirmed.
+     */
+    availabilityConfirmedAt: timestamp(tz),
+    /** «Chiedi il reset»: the person asks the administration to reopen the availability. */
+    availabilityResetRequestedAt: timestamp(tz),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

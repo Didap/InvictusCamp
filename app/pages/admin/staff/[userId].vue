@@ -243,6 +243,34 @@ const availability = computed(() => {
   return [...all.filter(s => s.startDate > today), ...all.filter(s => s.startDate <= today).reverse()]
 })
 
+/** The availability confirmed, and the reset the person asked for: «Riapri la disponibilità». */
+const availabilityNote = computed(() => {
+  const at = person.value?.availabilityConfirmedAt
+  return at
+    ? `Confermata il ${formatDateTime(at)}: la persona la cambia solo se la riapri.`
+    : 'Le sessioni a cui ha detto che c’è, dal primo all’ultimo giorno. Non ancora confermata.'
+})
+const reopening = ref(false)
+async function reopenAvailability() {
+  const ok = await confirm({
+    title: 'Riapri la disponibilità?',
+    description: `${name.value} potrà cambiare le sessioni a cui c’è e confermarle di nuovo. Le risposte date restano. Parte 1 email.`,
+    confirmLabel: 'Riapri e invia 1 email',
+  })
+  if (!ok) return
+  reopening.value = true
+  try {
+    const url: string = `/api/admin/staff/${userId.value}/availability-reopen`
+    await api(url, { method: 'POST' })
+    notifySuccess('Disponibilità riaperta', 'Abbiamo avvisato la persona via email.')
+    await refresh()
+  } catch (error) {
+    notifyError(error, 'Disponibilità non riaperta')
+  } finally {
+    reopening.value = false
+  }
+}
+
 function convocationNote(c: StaffDetail['convocations'][number]): string {
   if (c.status === 'sent' && c.sentAt) return `Inviata il ${dayOf(c.sentAt)}`
   if ((c.status === 'accepted' || c.status === 'declined') && c.respondedAt) {
@@ -457,7 +485,27 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           </div>
         </IcSection>
 
-        <IcSection title="Disponibilità" description="Le sessioni a cui ha detto che c’è, dal primo all’ultimo giorno.">
+        <IcSection title="Disponibilità" :description="availabilityNote">
+          <template v-if="person.availabilityConfirmedAt" #actions>
+            <UButton
+              label="Riapri la disponibilità"
+              icon="i-lucide-calendar-cog"
+              color="neutral"
+              variant="outline"
+              :loading="reopening"
+              class="pointer-coarse:min-h-11"
+              @click="reopenAvailability"
+            />
+          </template>
+          <UAlert
+            v-if="person.availabilityResetRequestedAt"
+            class="mb-4"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-calendar-clock"
+            :title="`Ha chiesto di cambiare la disponibilità il ${formatDateTime(person.availabilityResetRequestedAt)}`"
+            description="Riaprila e la persona potrà modificarla: riceve un’email che la avvisa."
+          />
           <p v-if="!availability.length" class="text-muted">
             {{
               person.status === 'approved'

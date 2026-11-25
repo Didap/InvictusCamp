@@ -179,7 +179,15 @@ availability or receive convocations. The administration can move a person to th
 
 - `/staff/disponibilita` lists the sessions not started yet (neither concluded nor cancelled), by date: approved
   staff and v-team switch "Ci sono" on or off for each one, for the whole session (`session_availability`).
-  Taking it back keeps the convocations already received; the administration sees it on them.
+  Taking it back keeps the convocations already received; the administration sees it on them. The page opens
+  with the camp's text («In questa sezione puoi esprimere le tue preferenze… non costituisce una convocazione
+  ufficiale né comporta alcun vincolo per la Fondazione…»). Each answer is saved at once; **«Conferma le
+  preferenze»** fixes them (`staff_profiles.availabilityConfirmedAt`, audited `staff.availability_confirm` with
+  the sessions the person is in for): the sessions that existed then can no longer be switched. A session created
+  later can be answered and is confirmed in turn. To change, **«Chiedi il reset»** (`availabilityResetRequestedAt`,
+  audited): the request is in the dashboard's to-do list and on the person's page, where **«Riapri la
+  disponibilità»** (administration only, also without a request) clears both dates, keeps the answers and sends
+  `staff.availability_reopened`. The home asks to confirm while sessions are still open.
 - Staff and v-team of a session are **two tabs**, «Staff» and «V-team» (`?tab=staff`, `?tab=v-team`), each with
   its list, its coordinator, its «Aggiungi persone», its selection and «Invia la convocazione», and «Scrivi ai
   convocati» for that team only. The administration adds people as convocations `draft` with a role for the

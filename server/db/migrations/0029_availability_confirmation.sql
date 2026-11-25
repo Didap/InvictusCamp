@@ -1,0 +1,2 @@
+ALTER TABLE "staff_profiles" ADD COLUMN "availability_confirmed_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "staff_profiles" ADD COLUMN "availability_reset_requested_at" timestamp with time zone;

@@ -1006,6 +1006,15 @@ export async function seedDemo(
   const demoSessions: Record<DemoSession, string> = { june: june.id, july: july.id, september: september.id }
   const answers = staff.flatMap(s => s.sessions.map(key => ({ sessionId: demoSessions[key], userId: s.userId })))
   if (answers.length) await db.insert(t.sessionAvailability).values(answers)
+  // The demo account has still to confirm its preferences; another approved person confirmed them and asks for a
+  // reset, which the dashboard lists for the administration.
+  const asking = staff.find(s => s.status === 'approved' && s.email !== DEMO_ACCOUNTS.staff && s.sessions.length)
+  if (asking) {
+    await db
+      .update(t.staffProfiles)
+      .set({ availabilityConfirmedAt: sql`now()`, availabilityResetRequestedAt: sql`now()` })
+      .where(eq(t.staffProfiles.userId, asking.userId))
+  }
 
   const byName = (first: string) => staff.find(s => s.firstName === first)!
   const convoke = async (sessionId: string, rows: [string, ConvocationStatus, StaffRole][]) => {

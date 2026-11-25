@@ -27,6 +27,8 @@ import type { Db } from '../../server/domain/db'
 import { makeAdmin, makeDocument, makeSession, makeStaff, t, useTestDb } from './helpers'
 
 const db = useTestDb()
+/** A profile that never confirmed its availability. */
+const UNCONFIRMED = { availabilityConfirmedAt: null, availabilityResetRequestedAt: null }
 const ctx = { appUrl: 'https://gestionale.test' }
 const TODAY = '2026-11-06'
 
@@ -303,18 +305,20 @@ describe('availability', () => {
     const { user } = await makeStaff(db, 'approved')
     await setAvailability(db, { userId: user.id, sessionId: june.id, available: true }, TODAY)
     await db.insert(t.sessionStaff).values({ sessionId: june.id, userId: user.id, status: 'sent' })
-    const mine = await myAvailability(db, { userId: user.id, status: 'approved' }, TODAY)
+    const mine = await myAvailability(db, { ...UNCONFIRMED, userId: user.id, status: 'approved' }, TODAY)
     expect(mine.canEdit).toBe(true)
     expect(mine.sessions.map(s => [s.id, s.available, s.convoked])).toEqual([
       [june.id, true, true],
       [july.id, false, false],
     ])
     const home = await staffHome(db, await profileStatus(user.id), TODAY)
-    expect(home.availability).toEqual({ available: 1, total: 2 })
+    expect(home.availability).toEqual({ available: 1, total: 2, toConfirm: 2 })
 
     // Before approval the sessions are not shown at all.
-    expect(await myAvailability(db, { userId: user.id, status: 'applied' }, TODAY)).toEqual({
+    expect(await myAvailability(db, { ...UNCONFIRMED, userId: user.id, status: 'applied' }, TODAY)).toEqual({
       canEdit: false,
+      confirmedAt: null,
+      resetRequestedAt: null,
       sessions: [],
     })
   })

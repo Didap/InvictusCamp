@@ -147,18 +147,23 @@ watch(
           <p v-if="!home.availability.total" class="max-w-prose text-muted">
             Non ci sono sessioni in programma: quando l’amministrazione le prepara, indichi qui a quali puoi venire.
           </p>
-          <div v-else-if="home.availability.available" class="flex flex-wrap items-center justify-between gap-3">
+          <div
+            v-else-if="home.availability.available || !home.availability.toConfirm"
+            class="flex flex-wrap items-center justify-between gap-3"
+          >
             <p class="max-w-prose">
               Ci sei per
               <span class="font-semibold text-highlighted">{{
                 plural(home.availability.available, 'sessione', 'sessioni')
               }}</span>
-              su {{ home.availability.total }} in programma.
+              su {{ home.availability.total }} in programma.<template v-if="home.availability.toConfirm">
+                Quando hai finito, conferma le tue preferenze.</template
+              >
             </p>
             <UButton
               class="pointer-coarse:min-h-11"
               to="/staff/disponibilita"
-              label="Aggiorna la disponibilità"
+              :label="home.availability.toConfirm ? 'Conferma la disponibilità' : 'Vedi la disponibilità'"
               icon="i-lucide-calendar-check"
               color="neutral"
               variant="outline"

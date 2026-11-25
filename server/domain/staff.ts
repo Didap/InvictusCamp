@@ -61,6 +61,7 @@ import {
   users,
 } from '../db/schema'
 import {
+  availabilityReopenedEmail,
   convocationCancelledEmail,
   convocationEmail,
   defaultOutcomeMessage,
@@ -189,6 +190,12 @@ export interface Actor {
 }
 
 const BEFORE_APPROVAL = 'Potrai indicare la tua disponibilità dopo l’approvazione della candidatura'
+const AVAILABILITY_LOCKED = 'Hai già confermato la tua disponibilità: per cambiarla chiedi il reset all’amministrazione'
+
+/** An answer confirmed: the session existed at the person's last «Conferma le preferenze». */
+function availabilityLocked(confirmedAt: Date | null, sessionCreatedAt: Date): boolean {
+  return confirmedAt !== null && sessionCreatedAt <= confirmedAt
+}
 const SESSION_CLOSED = 'La sessione è conclusa o annullata: le convocazioni non si possono più cambiare'
 
 const iso = (value: Date | null | undefined) => value?.toISOString() ?? null
@@ -509,6 +516,9 @@ export async function setAvailability(
   if (!isSessionEditable(session.status) || session.startDate <= today) {
     throw createError({ statusCode: 409, message: 'La sessione è già iniziata, conclusa o annullata' })
   }
+  if (availabilityLocked(profile.availabilityConfirmedAt, session.createdAt)) {
+    throw createError({ statusCode: 409, message: AVAILABILITY_LOCKED })
+  }
   if (input.available) {
     await db
       .insert(sessionAvailability)
@@ -519,6 +529,90 @@ export async function setAvailability(
       .delete(sessionAvailability)
       .where(and(eq(sessionAvailability.sessionId, input.sessionId), eq(sessionAvailability.userId, input.userId)))
   }
+}
+
+/**
+ * «Conferma le preferenze»: the answers given so far are fixed until the administration reopens them; a session
+ * created later can still be answered, and confirmed in turn. The audit keeps the sessions the person is in for.
+ */
+export async function confirmAvailability(
+  db: DbOrTx,
+  input: { userId: string; actor: Actor },
+  today: string = todayIso(),
+): Promise<MyAvailability> {
+  const profile = await profileOf(db, input.userId, { lock: true })
+  if (profile.status !== 'approved') throw createError({ statusCode: 403, message: BEFORE_APPROVAL })
+  const [row] = await db
+    .update(staffProfiles)
+    .set({ availabilityConfirmedAt: sql`now()` })
+    .where(eq(staffProfiles.id, profile.id))
+    .returning()
+  const availability = await myAvailability(db, row!, today)
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.availability_confirm',
+    entityType: 'user',
+    entityId: input.userId,
+    data: { available: availability.sessions.filter(session => session.available).map(session => session.id) },
+    ip: input.actor.ip,
+  })
+  return availability
+}
+
+/** «Chiedi il reset»: once confirmed, the person asks the administration to reopen the availability. */
+export async function requestAvailabilityReset(
+  db: DbOrTx,
+  input: { userId: string; actor: Actor },
+  today: string = todayIso(),
+): Promise<MyAvailability> {
+  const profile = await profileOf(db, input.userId, { lock: true })
+  if (profile.status !== 'approved') throw createError({ statusCode: 403, message: BEFORE_APPROVAL })
+  if (!profile.availabilityConfirmedAt) {
+    throw createError({ statusCode: 409, message: 'Non hai ancora confermato la disponibilità: puoi cambiarla tu' })
+  }
+  if (profile.availabilityResetRequestedAt) return myAvailability(db, profile, today)
+  const [row] = await db
+    .update(staffProfiles)
+    .set({ availabilityResetRequestedAt: sql`now()` })
+    .where(eq(staffProfiles.id, profile.id))
+    .returning()
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.availability_reset_request',
+    entityType: 'user',
+    entityId: input.userId,
+    ip: input.actor.ip,
+  })
+  return myAvailability(db, row!, today)
+}
+
+/**
+ * «Riapri la disponibilità» (administration): the answers stay, the person can change them and confirm again.
+ * Returns the email that tells them.
+ */
+export async function reopenAvailability(
+  db: DbOrTx,
+  input: { userId: string; actor: Actor; ctx: EmailContext },
+): Promise<EmailMessage[]> {
+  const profile = await profileOf(db, input.userId, { lock: true })
+  if (!profile.availabilityConfirmedAt) {
+    throw createError({ statusCode: 409, message: 'La disponibilità non è confermata: la persona può già cambiarla' })
+  }
+  await db
+    .update(staffProfiles)
+    .set({ availabilityConfirmedAt: null, availabilityResetRequestedAt: null })
+    .where(eq(staffProfiles.id, profile.id))
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.availability_reopen',
+    entityType: 'user',
+    entityId: input.userId,
+    data: { requested: profile.availabilityResetRequestedAt !== null },
+    ip: input.actor.ip,
+  })
+  const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1)
+  if (!user || user.status === 'disabled') return []
+  return [availabilityReopenedEmail(input.ctx, { to: user.email, toUserId: user.id, firstName: user.firstName })]
 }
 
 // ─── Convocations ──────────────────────────────────────────────────────────────────────────────────
@@ -1124,6 +1218,8 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     reviewedByName: row.reviewerFirstName ? `${row.reviewerFirstName} ${row.reviewerLastName ?? ''}`.trim() : null,
     reviewNotes: profile.reviewNotes,
     availability,
+    availabilityConfirmedAt: iso(profile.availabilityConfirmedAt),
+    availabilityResetRequestedAt: iso(profile.availabilityResetRequestedAt),
     convocations,
     documents: await staffDocuments(db, userId),
     outcome: {
@@ -1307,13 +1403,20 @@ export async function myStaffSheet(
  */
 export async function myAvailability(
   db: DbOrTx,
-  profile: Pick<ProfileRow, 'userId' | 'status'>,
+  profile: Pick<ProfileRow, 'userId' | 'status' | 'availabilityConfirmedAt' | 'availabilityResetRequestedAt'>,
   today: string = todayIso(),
 ): Promise<MyAvailability> {
+  const confirmedAt = profile.availabilityConfirmedAt
+  const state = { confirmedAt: iso(confirmedAt), resetRequestedAt: iso(profile.availabilityResetRequestedAt) }
   // Only approved staff see the sessions: before approval (or after a rejection) they are not theirs to know.
-  if (profile.status !== 'approved') return { canEdit: false, sessions: [] }
+  if (profile.status !== 'approved') return { canEdit: false, ...state, sessions: [] }
   const rows = await db
-    .select({ session: availabilitySession, answer: sessionAvailability.id, convocation: sessionStaff.status })
+    .select({
+      session: availabilitySession,
+      createdAt: campSessions.createdAt,
+      answer: sessionAvailability.id,
+      convocation: sessionStaff.status,
+    })
     .from(campSessions)
     .leftJoin(
       sessionAvailability,
@@ -1324,10 +1427,12 @@ export async function myAvailability(
     .orderBy(asc(campSessions.startDate))
   return {
     canEdit: true,
+    ...state,
     sessions: rows.map(row => ({
       ...row.session,
       available: row.answer !== null,
       convoked: row.convocation === 'sent' || row.convocation === 'accepted',
+      locked: availabilityLocked(confirmedAt, row.createdAt),
     })),
   }
 }
@@ -1400,7 +1505,7 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       status: profile.status,
       toAnswer: [],
       upcoming: [],
-      availability: { available: 0, total: 0 },
+      availability: { available: 0, total: 0, toConfirm: 0 },
       sheetComplete,
     }
   }
@@ -1415,7 +1520,7 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
     upcoming: convocations.filter(
       c => c.status === 'accepted' && c.session.endDate >= today && c.session.status !== 'cancelled',
     ),
-    availability: { available, total: sessions.length },
+    availability: { available, total: sessions.length, toConfirm: sessions.filter(session => !session.locked).length },
     sheetComplete,
   }
 }
