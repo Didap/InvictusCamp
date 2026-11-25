@@ -205,6 +205,9 @@ availability or receive convocations. The administration can move a person to th
   session has a contract document (`campSessions.contractDocumentId`), a signature request is created
   (`requestSignatures`) and `signature.request` is sent. The convocation reads **Confermata** when accepted
   and the contract (if any) is signed.
+- `/staff/convocazioni` shows only the convocations to answer, no history. `/staff/sessioni` has no calendar: an
+  alert for each accepted session whose contract is still to sign, «Le tue prossime sessioni confermate» and
+  «Sessioni fatte» (ended, not cancelled), each with its programme once readable.
 - Cancelling a convocation (`cancelled`) sends `staff.convocation_cancelled` if it had been sent.
 
 ### 3.6 Documents and signatures
