@@ -175,8 +175,8 @@ export interface StaffDetail {
   documents: StaffDocumentDto[]
   /** The required documents (CV, ID in PDF) not there yet, once in the staff area. */
   documentsMissing: RequiredStaffDocument[]
-  /** The trainings of «Formazione» the person is interested in, by title. */
-  training: string[]
+  /** The trainings of «Formazione» the person is interested in. */
+  training: { id: string; title: string }[]
   outcome: StaffOutcome
 }
 

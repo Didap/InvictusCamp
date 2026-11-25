@@ -333,7 +333,6 @@ export const trainingOptions = pgTable('training_options', {
   id: pk(),
   title: text().notNull(),
   description: text(),
-  position: integer().notNull().default(0),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 })

@@ -32,10 +32,15 @@ describe('training', () => {
     ])
     const [first] = await trainingOptionsWithPeople(db)
     expect(first).toMatchObject({ id: blsd, people: [{ userId: user.id, team: 'staff' }] })
-    expect((await staffDetail(db, user.id)).training).toEqual(['BLSD'])
+    expect((await staffDetail(db, user.id)).training).toEqual([{ id: blsd, title: 'BLSD' }])
 
     await updateTrainingOption(db, blsd, { title: 'Primo soccorso (BLSD)', description: null }, actor)
-    expect((await staffDetail(db, user.id)).training).toEqual(['Primo soccorso (BLSD)'])
+    expect((await staffDetail(db, user.id)).training).toEqual([{ id: blsd, title: 'Primo soccorso (BLSD)' }])
+    const [renamed] = await db.select().from(t.auditLog).where(eq(t.auditLog.action, 'training.update'))
+    expect(renamed!.data).toEqual({ from: 'BLSD', to: 'Primo soccorso (BLSD)', description: false })
+    // The same values again: nothing to write, nothing to audit.
+    await updateTrainingOption(db, blsd, { title: 'Primo soccorso (BLSD)', description: null }, actor)
+    expect(await db.$count(t.auditLog, eq(t.auditLog.action, 'training.update'))).toBe(1)
     await setTrainingInterest(db, { userId: user.id, optionId: blsd, interested: false })
     await setTrainingInterest(db, { userId: user.id, optionId: caa, interested: true })
 

@@ -6,6 +6,6 @@ export default defineEventHandler(async event => {
   const { user } = await requireStaff(event)
   const optionId = requireUuidParam(event, 'id')
   const { interested } = await parseBody(event, trainingInterestSchema)
-  await setTrainingInterest(useDb(), { userId: user.id, optionId, interested })
+  await useDb().transaction(tx => setTrainingInterest(tx, { userId: user.id, optionId, interested }))
   return { interested }
 })

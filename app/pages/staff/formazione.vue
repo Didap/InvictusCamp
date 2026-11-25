@@ -7,9 +7,10 @@ const api = useApi()
 const { data, refresh } = await useApiFetch<MyTrainingOption[]>('/api/staff/training')
 const options = computed(() => data.value ?? [])
 
-const saving = ref<string | null>(null)
+/** The proposals being saved: each checkbox waits for its own answer. */
+const saving = ref(new Set<string>())
 async function toggle(option: MyTrainingOption, interested: boolean) {
-  saving.value = option.id
+  saving.value.add(option.id)
   try {
     const url: string = `/api/staff/training/${option.id}`
     await api(url, { method: 'PUT', body: { interested } })
@@ -19,7 +20,7 @@ async function toggle(option: MyTrainingOption, interested: boolean) {
     notifyError(error, 'Preferenza non salvata')
     await refresh()
   } finally {
-    saving.value = null
+    saving.value.delete(option.id)
   }
 }
 </script>
@@ -41,12 +42,15 @@ async function toggle(option: MyTrainingOption, interested: boolean) {
         <li v-for="option in options" :key="option.id" class="px-4 py-3">
           <UCheckbox
             :model-value="option.interested"
-            :disabled="saving === option.id"
+            :disabled="saving.has(option.id)"
             :label="option.title"
-            :description="option.description ?? undefined"
             class="pointer-coarse:min-h-11"
             @update:model-value="value => toggle(option, value === true)"
-          />
+          >
+            <template v-if="option.description" #description>
+              <span class="whitespace-pre-line">{{ option.description }}</span>
+            </template>
+          </UCheckbox>
         </li>
       </ul>
     </IcSection>

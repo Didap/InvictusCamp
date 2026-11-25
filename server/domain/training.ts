@@ -11,7 +11,8 @@ import type { DbOrTx } from './db'
 import { httpError, type Actor } from './users'
 
 const NOT_FOUND = 'Proposta di formazione non trovata'
-const ORDER = [asc(trainingOptions.position), asc(trainingOptions.createdAt)]
+/** In the order they were added; the seed adds several at once. */
+const ORDER = [asc(trainingOptions.createdAt), asc(trainingOptions.title)]
 
 /** The proposals with who is interested, for the administration. */
 export async function trainingOptionsWithPeople(db: DbOrTx): Promise<TrainingOptionDto[]> {
@@ -33,23 +34,23 @@ export async function trainingOptionsWithPeople(db: DbOrTx): Promise<TrainingOpt
       .innerJoin(staffProfiles, eq(staffProfiles.userId, users.id))
       .orderBy(asc(users.lastName), asc(users.firstName)),
   ])
+  const people = new Map<string, TrainingOptionDto['people']>()
+  for (const interest of interests) {
+    const person = { userId: interest.userId, name: fullName(interest), team: interest.team }
+    people.set(interest.optionId, [...(people.get(interest.optionId) ?? []), person])
+  }
   return options.map(option => ({
     id: option.id,
     title: option.title,
     description: option.description,
-    people: interests
-      .filter(interest => interest.optionId === option.id)
-      .map(interest => ({ userId: interest.userId, name: fullName(interest), team: interest.team })),
+    people: people.get(option.id) ?? [],
   }))
 }
 
 export async function createTrainingOption(db: DbOrTx, input: TrainingOptionInput, actor: Actor): Promise<string> {
-  const [last] = await db
-    .select({ position: sql<number | null>`max(${trainingOptions.position})` })
-    .from(trainingOptions)
   const [row] = await db
     .insert(trainingOptions)
-    .values({ title: input.title, description: input.description, position: (last?.position ?? -1) + 1 })
+    .values({ title: input.title, description: input.description })
     .returning({ id: trainingOptions.id })
   await audit(db, 'create', row!.id, { title: input.title }, actor)
   return row!.id
@@ -61,13 +62,15 @@ export async function updateTrainingOption(
   input: TrainingOptionInput,
   actor: Actor,
 ): Promise<void> {
-  const [row] = await db
+  const [before] = await db.select().from(trainingOptions).where(eq(trainingOptions.id, id)).for('update')
+  if (!before) throw httpError(404, NOT_FOUND)
+  if (before.title === input.title && before.description === input.description) return
+  await db
     .update(trainingOptions)
     .set({ title: input.title, description: input.description })
     .where(eq(trainingOptions.id, id))
-    .returning({ id: trainingOptions.id })
-  if (!row) throw httpError(404, NOT_FOUND)
-  await audit(db, 'update', id, { title: input.title }, actor)
+  const data = { from: before.title, to: input.title, description: before.description !== input.description }
+  await audit(db, 'update', id, data, actor)
 }
 
 /** Deletes a proposal and the interests in it (the audit keeps how many). */
@@ -102,7 +105,7 @@ export async function myTraining(db: DbOrTx, userId: string): Promise<MyTraining
   }))
 }
 
-/** Interested in a proposal, or not any more. */
+/** Interested in a proposal, or not any more; the proposal held until the commit, so a delete waits. */
 export async function setTrainingInterest(
   db: DbOrTx,
   input: { userId: string; optionId: string; interested: boolean },
@@ -111,6 +114,7 @@ export async function setTrainingInterest(
     .select({ id: trainingOptions.id })
     .from(trainingOptions)
     .where(eq(trainingOptions.id, input.optionId))
+    .for('share')
   if (!option) throw httpError(404, NOT_FOUND)
   if (input.interested) {
     await db.insert(trainingInterests).values({ optionId: input.optionId, userId: input.userId }).onConflictDoNothing()
@@ -121,15 +125,14 @@ export async function setTrainingInterest(
   }
 }
 
-/** The titles of the proposals a person is interested in (their admin page). */
-export async function trainingTitlesOf(db: DbOrTx, userId: string): Promise<string[]> {
-  const rows = await db
-    .select({ title: trainingOptions.title })
+/** The proposals a person is interested in (their admin page). */
+export function trainingTitlesOf(db: DbOrTx, userId: string): Promise<{ id: string; title: string }[]> {
+  return db
+    .select({ id: trainingOptions.id, title: trainingOptions.title })
     .from(trainingInterests)
     .innerJoin(trainingOptions, eq(trainingOptions.id, trainingInterests.optionId))
     .where(eq(trainingInterests.userId, userId))
     .orderBy(...ORDER)
-  return rows.map(row => row.title)
 }
 
 function audit(

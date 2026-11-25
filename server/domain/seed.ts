@@ -822,10 +822,9 @@ export async function seedDemo(
       {
         title: 'Primo soccorso pediatrico (BLSD)',
         description: 'Corso con certificazione, una giornata.',
-        position: 0,
       },
-      { title: 'Comunicazione aumentativa alternativa (CAA)', description: null, position: 1 },
-      { title: 'Gestione dei comportamenti problema', description: null, position: 2 },
+      { title: 'Comunicazione aumentativa alternativa (CAA)', description: null },
+      { title: 'Gestione dei comportamenti problema', description: null },
     ])
     .returning({ id: t.trainingOptions.id })
   if (demoStaff) await db.insert(t.trainingInterests).values({ optionId: training[0]!.id, userId: demoStaff.userId })

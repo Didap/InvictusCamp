@@ -26,6 +26,7 @@ export const PAGES = {
     '/admin/staff/{staff}',
     '/admin/staff/{candidate}',
     '/admin/v-team',
+    '/admin/formazione',
     '/admin/v-team/{volunteer}',
     '/admin/documenti',
     '/admin/documenti/{document}',
@@ -53,6 +54,7 @@ export const PAGES = {
     '/staff/sessioni',
     '/staff/programma/{sessionPast}',
     '/staff/documenti',
+    '/staff/formazione',
     '/firma/{signature}',
   ],
   // Before the approval the area is the home alone: the other pages lead back there.

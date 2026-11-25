@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { trainingOptionSchema } from '#shared/schemas/staff'
 import type { TrainingOptionDto } from '#shared/types/staff'
-import { OF_TEAM } from '#shared/utils/constants'
 import { plural } from '#shared/utils/format'
 import { teamPath } from '#shared/utils/routes'
 import { focusFirstError } from '~/utils/errors'
@@ -10,7 +9,8 @@ import { focusFirstError } from '~/utils/errors'
 // interested; for each one who is.
 const api = useApi()
 const confirm = useConfirm()
-const { data, refresh } = await useApiFetch<TrainingOptionDto[]>('/api/admin/training')
+const { label } = useEnums()
+const { data, error, refresh } = await useApiFetch<TrainingOptionDto[]>('/api/admin/training')
 const options = computed(() => data.value ?? [])
 
 const editing = ref<TrainingOptionDto | null>(null)
@@ -45,7 +45,9 @@ async function remove(option: TrainingOptionDto) {
   const ok = await confirm({
     title: `Elimini «${option.title}»?`,
     description: people
-      ? `${plural(people, 'persona l’ha spuntata', 'persone l’hanno spuntata')}: perdi anche il loro interesse.`
+      ? people === 1
+        ? '1 persona l’ha spuntata: perdi anche il suo interesse.'
+        : `${people} persone l’hanno spuntata: perdi anche il loro interesse.`
       : 'Nessuno l’ha ancora spuntata.',
     confirmLabel: 'Elimina',
     danger: true,
@@ -72,8 +74,16 @@ async function remove(option: TrainingOptionDto) {
       title="Le proposte"
       description="Le formazioni che proponi: staff e v-team spuntano quelle che li interessano, dalla loro pagina «Formazione»."
     >
+      <UAlert
+        v-if="error"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-circle-alert"
+        title="Non riesco a caricare le proposte"
+        description="Ricarica la pagina tra poco."
+      />
       <UEmpty
-        v-if="!options.length"
+        v-else-if="!options.length"
         icon="i-lucide-graduation-cap"
         title="Nessuna proposta"
         description="Aggiungi le formazioni che il camp potrebbe organizzare: le persone dello staff ti dicono quali le interessano."
@@ -117,7 +127,7 @@ async function remove(option: TrainingOptionDto) {
                 <ULink :to="teamPath(person.team, person.userId)" class="text-primary hover:underline">
                   {{ person.name }}
                 </ULink>
-                <span class="text-muted"> · {{ OF_TEAM[person.team] }}</span>
+                <span class="text-muted"> · {{ label('staffTeam', person.team) }}</span>
               </li>
             </ul>
           </details>
