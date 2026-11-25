@@ -366,7 +366,9 @@ export const healthConsentSchema = z.object({ given: z.boolean() })
 
 /** The text fields that come with an upload (multipart): POST /api/family/documents. */
 export const personalDocumentSchema = z.object({
-  category: z.enum(PERSONAL_DOCUMENT_CATEGORIES, { error: 'Scegli il tipo di documento' }),
+  category: z
+    .enum(PERSONAL_DOCUMENT_CATEGORIES, { error: 'Scegli il tipo di documento' })
+    .refine(category => FAMILY_DOCUMENT_CATEGORIES.includes(category), { error: 'Scegli il tipo di documento' }),
   title: zRequiredText(150),
   familyMemberId: z.preprocess(blankAsMissing, zUuid.optional()),
 })
@@ -374,6 +376,11 @@ export type PersonalDocumentInput = z.output<typeof personalDocumentSchema>
 
 /** Documents that carry health data: a family uploads them only with the consent, withdrawing it deletes them. */
 export const HEALTH_DOCUMENT_CATEGORIES: readonly PersonalDocumentCategory[] = ['medical_certificate', 'diagnosis']
+
+/** The categories of a family's documents: the CV is the staff's. */
+export const FAMILY_DOCUMENT_CATEGORIES: readonly PersonalDocumentCategory[] = PERSONAL_DOCUMENT_CATEGORIES.filter(
+  category => category !== 'cv',
+)
 
 export function isHealthDocument(category: PersonalDocumentCategory): boolean {
   return HEALTH_DOCUMENT_CATEGORIES.includes(category)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SHEET_MISSING } from '#shared/schemas/staff'
+import { SHEET_MISSING, requiredDocumentsText } from '#shared/schemas/staff'
 import type { StaffHome } from '#shared/types/staff'
 import { formatDayRange, plural } from '#shared/utils/format'
 
@@ -10,6 +10,10 @@ import { formatDayRange, plural } from '#shared/utils/format'
 // convocations for now.
 const { user, session, fetch: fetchSession } = useUserSession()
 const { data: home, refresh } = await useApiFetch<StaffHome>('/api/staff/home')
+const documentsAlert = computed(() => {
+  const missing = home.value?.documentsMissing ?? []
+  return `${missing.length === 1 ? 'Ci serve' : 'Ci servono'} ${requiredDocumentsText(missing)}, in PDF.`
+})
 
 // The approval may come while the tab is open: the session, and with it the menu, catches up.
 watch(
@@ -76,6 +80,25 @@ watch(
             {
               label: 'Compila la scheda',
               to: '/staff/scheda',
+              class: 'pointer-coarse:min-h-11',
+              color: 'neutral',
+              variant: 'outline',
+            },
+          ]"
+        />
+
+        <UAlert
+          v-if="home.documentsMissing.length"
+          class="mb-8"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-file-up"
+          title="Carica i documenti obbligatori"
+          :description="documentsAlert"
+          :actions="[
+            {
+              label: 'Vai ai documenti',
+              to: '/staff/documenti',
               class: 'pointer-coarse:min-h-11',
               color: 'neutral',
               variant: 'outline',

@@ -131,6 +131,7 @@ export const PERSONAL_DOCUMENT_CATEGORIES = [
   'id_document',
   'health_card',
   'certification',
+  'cv',
   'other',
 ] as const
 export type PersonalDocumentCategory = (typeof PERSONAL_DOCUMENT_CATEGORIES)[number]
@@ -381,6 +382,7 @@ const personalDocumentCategory: Record<PersonalDocumentCategory, EnumMeta> = {
   id_document: { label: 'Documento d’identità', icon: 'i-lucide-id-card', color: 'neutral' },
   health_card: { label: 'Tessera sanitaria', icon: 'i-lucide-credit-card', color: 'neutral' },
   certification: { label: 'Attestato o titolo', icon: 'i-lucide-award', color: 'neutral' },
+  cv: { label: 'Curriculum', icon: 'i-lucide-file-user', color: 'neutral' },
   other: { label: 'Altro', icon: 'i-lucide-file', color: 'neutral' },
 }
 

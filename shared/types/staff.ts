@@ -1,6 +1,7 @@
 import type { UsefulInfo } from './domain'
 // DTOs of the staff area (applications, review, availability, convocations). Dates are ISO days,
 // instants ISO strings. Never a raw `users` row.
+import type { RequiredStaffDocument } from '../schemas/staff'
 import type { FileDto } from './api'
 import type { MySignatureItem } from './documents'
 import type {
@@ -172,6 +173,8 @@ export interface StaffDetail {
   availabilityResetRequestedAt: string | null
   convocations: StaffConvocationSummary[]
   documents: StaffDocumentDto[]
+  /** The required documents (CV, ID in PDF) not there yet, once in the staff area. */
+  documentsMissing: RequiredStaffDocument[]
   outcome: StaffOutcome
 }
 
@@ -314,6 +317,16 @@ export interface StaffHome {
   availability: { available: number; total: number; toConfirm: number }
   /** The personal sheet has every required field (the home asks for it once approved). */
   sheetComplete: boolean
+  /** The required documents not uploaded yet (CV, ID): the home asks for them once in the staff area. */
+  documentsMissing: RequiredStaffDocument[]
+}
+
+/** GET /api/staff/documents: the CV (on the profile) and the documents the person uploaded. */
+export interface MyStaffDocuments {
+  cv: FileDto | null
+  documents: StaffDocumentDto[]
+  /** The required documents not there yet: an ID counts only in PDF. */
+  documentsMissing: RequiredStaffDocument[]
 }
 
 /** A session of /staff/disponibilita with the person's answer. */
