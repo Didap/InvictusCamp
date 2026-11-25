@@ -42,21 +42,14 @@ export const staffSheetSchema = z.object({
 })
 export type StaffSheetInput = z.output<typeof staffSheetSchema>
 
-/** The fields of the sheet the person has to fill in: the province is optional. */
-const SHEET_REQUIRED = [
-  'birthDate',
-  'birthPlace',
-  'fiscalCode',
-  'address',
-  'city',
-  'postalCode',
-  'region',
-  'shirtSize',
-] as const
+/** What the home and the sheet say while the sheet is incomplete. */
+export const SHEET_MISSING =
+  'Ci servono la data e il luogo di nascita, il codice fiscale, la residenza e la taglia della maglietta.'
 
-/** Whether a sheet as stored has every required field: until then the home asks for it. */
-export function isSheetComplete(sheet: Record<(typeof SHEET_REQUIRED)[number], string | null>): boolean {
-  return SHEET_REQUIRED.every(key => sheet[key])
+/** Whether a sheet as stored passes the form's schema (null is a field left empty): until then the home asks. */
+export function isSheetComplete(sheet: Record<keyof StaffSheetInput, string | null>): boolean {
+  const value = Object.fromEntries(Object.entries(sheet).map(([key, item]) => [key, item ?? undefined]))
+  return staffSheetSchema.safeParse(value).success
 }
 
 // ─── Health: canteen and other details ─────────────────────────────────────────────────────────────

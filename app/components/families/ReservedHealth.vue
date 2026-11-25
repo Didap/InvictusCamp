@@ -18,7 +18,7 @@ const withHealth = (health: AdminFamilyHealth) => health.members.filter(hasHealt
 
 <template>
   <IcReservedHealth
-    :key="familyId"
+    :id="familyId"
     v-slot="{ data }"
     :load="load"
     :consent-at="consentAt"

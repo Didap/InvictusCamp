@@ -139,7 +139,8 @@ region) and the T-shirt size «per la divisa» (XS to 3XL). Saving is audited (`
 the fields that changed, never their values. Under it, «Alimentazione e altre informazioni»: allergies and
 intolerances, food preference and notes with the lists of the families (3.8), which reach the canteen (3.14),
 and «Altro da condividere» (dyscalculia, dysgraphia, colour blindness…), which only the administration reads
-(`staff_profiles.otherInfo`): both are health data under one consent, saving nothing withdraws it. Last, the
+(`staff_profiles.otherInfo`): both are health data under one consent, given again at every save (the box starts
+empty, the date is the last save's); saving nothing withdraws it. Last, the
 application as it was sent (team, roles, the older texts, CV). Until the sheet is complete the home asks for
 it. The administration sees the sheet on the person's page, the health data in a reserved section opened on
 demand and audited (`staff.health_view`), as for families.

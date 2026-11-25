@@ -20,7 +20,8 @@ const state = reactive({ info: usefulInfoForm(null), otherInfo: '', consent: fal
 function edit() {
   state.info = usefulInfoForm(data.value?.info)
   state.otherInfo = data.value?.otherInfo ?? ''
-  state.consent = Boolean(data.value?.consentAt)
+  // Never ticked in advance: each save is the consent to what is saved then.
+  state.consent = false
   open.value = true
 }
 

@@ -3,9 +3,9 @@ import { formatDateTime } from '#shared/utils/format'
 
 // The reserved section of an admin page (a family, a staff member): health data stays closed until the
 // administration opens it (`load` asks the endpoint, which records the reading) and never leaves the section.
-// Without the consent there is nothing to open. The slot shows what was loaded. Keyed by the person, so
-// another one starts closed.
-const props = defineProps<{ load: () => Promise<T>; consentAt: string | null; noConsent: string }>()
+// Without the consent there is nothing to open. The slot shows what was loaded. `id` is whose data it is:
+// another person starts closed.
+const props = defineProps<{ id: string; load: () => Promise<T>; consentAt: string | null; noConsent: string }>()
 defineSlots<{ default(props: { data: T }): unknown }>()
 
 const data = shallowRef<T | null>(null)
@@ -21,6 +21,13 @@ async function show() {
     loading.value = false
   }
 }
+
+watch(
+  () => props.id,
+  () => {
+    data.value = null
+  },
+)
 </script>
 
 <template>

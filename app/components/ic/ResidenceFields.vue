@@ -51,7 +51,13 @@ const hint = computed(() => (props.required ? undefined : 'Facoltativo'))
         hint="Facoltativo"
         help="La sigla, per esempio TA."
       >
-        <UInput v-model="residence.province" maxlength="2" autocomplete="off" class="w-full uppercase" />
+        <UInput
+          v-model="residence.province"
+          maxlength="2"
+          autocomplete="off"
+          class="w-full"
+          :ui="{ base: 'uppercase' }"
+        />
       </UFormField>
     </div>
   </div>

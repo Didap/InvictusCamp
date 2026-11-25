@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { isSheetComplete, staffSheetSchema } from '#shared/schemas/staff'
+import { isSheetComplete, SHEET_MISSING, staffSheetSchema } from '#shared/schemas/staff'
 import type { StaffSheet, StaffSheetDto } from '#shared/types/staff'
 import { SHIRT_SIZES, type ItalianRegion, type ShirtSize } from '#shared/utils/constants'
 import { ageOn, isIsoDay, todayIso } from '#shared/utils/dates'
@@ -61,7 +61,8 @@ const account = computed(() => {
   ]
 })
 
-const application = computed(() => data.value?.application)
+/** Someone the administration invited as approved never applied: no section for them. */
+const application = computed(() => (data.value?.application.appliedAt ? data.value.application : null))
 // Only what the person wrote: an application sent with the CV alone has no texts.
 const texts = computed(() => {
   const a = application.value
@@ -82,7 +83,8 @@ async function save() {
   saving.value = true
   try {
     const sheet = await api<StaffSheet>('/api/staff/sheet', { method: 'PUT', body: state })
-    if (data.value) data.value.sheet = sheet
+    // `data` is shallow: a new object, so what reads the sheet sees it.
+    if (data.value) data.value = { ...data.value, sheet }
     fill(sheet)
     notifySuccess('Scheda salvata')
   } catch (error) {
@@ -103,7 +105,7 @@ async function save() {
         variant="subtle"
         icon="i-lucide-id-card"
         title="Completa la tua scheda"
-        description="Ci servono la data e il luogo di nascita, il codice fiscale, la residenza e la taglia della maglietta."
+        :description="SHEET_MISSING"
       />
 
       <IcSection title="I tuoi dati">
@@ -131,7 +133,8 @@ async function save() {
                 maxlength="20"
                 autocomplete="off"
                 spellcheck="false"
-                class="w-full uppercase sm:max-w-xs"
+                class="w-full sm:max-w-xs"
+                :ui="{ base: 'uppercase' }"
               />
             </UFormField>
           </div>

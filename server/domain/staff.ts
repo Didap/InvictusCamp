@@ -95,12 +95,9 @@ export async function saveStaffUsefulInfo(
   const otherInfo = input.value.otherInfo?.trim() || null
   const [row] = await db
     .update(staffProfiles)
-    // The consent keeps the day it was first given; saving nothing withdraws it.
-    .set({
-      usefulInfo: info,
-      otherInfo,
-      usefulInfoConsentAt: info || otherInfo ? sql`coalesce(${staffProfiles.usefulInfoConsentAt}, now())` : null,
-    })
+    // Every save with data is the consent given again (the box starts empty), to what is saved now; saving
+    // nothing withdraws it.
+    .set({ usefulInfo: info, otherInfo, usefulInfoConsentAt: info || otherInfo ? sql`now()` : null })
     .where(eq(staffProfiles.userId, input.userId))
     .returning()
   if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
@@ -135,7 +132,13 @@ export async function saveStaffSheet(
   db: DbOrTx,
   input: { userId: string; value: StaffSheetInput; actor: Actor },
 ): Promise<StaffSheet> {
-  const [before] = await db.select().from(staffProfiles).where(eq(staffProfiles.userId, input.userId)).limit(1)
+  // Locked: two saves at once (two tabs) each audit what they changed against what the other left.
+  const [before] = await db
+    .select()
+    .from(staffProfiles)
+    .where(eq(staffProfiles.userId, input.userId))
+    .limit(1)
+    .for('update')
   if (!before) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
   const sheet: StaffSheet = { ...input.value, province: input.value.province || null }
   const previous = staffSheetOf(before)
@@ -1380,7 +1383,7 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       toAnswer: [],
       upcoming: [],
       availability: { available: 0, total: 0 },
-      sheetComplete: true,
+      sheetComplete: null,
     }
   }
   const [convocations, { sessions }] = await Promise.all([

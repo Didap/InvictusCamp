@@ -200,14 +200,14 @@ const contacts = computed(() => {
   ]
 })
 
-/** Whether the person still has to fill in the sheet: they can once approved. */
-const sheetNote = computed(() => {
-  const p = person.value
-  if (!p || isSheetComplete(p.sheet)) return undefined
-  return inStaffArea(p.status)
+/** The sheet is the approved person's to fill in: a candidate has at most what the older form asked. */
+const withSheet = computed(() => inStaffArea(person.value?.status))
+/** Said only while the approved person still has something to fill in. */
+const sheetNote = computed(() =>
+  person.value && withSheet.value && !isSheetComplete(person.value.sheet)
     ? 'Non ancora completa: la compila la persona.'
-    : 'La persona la compila dopo l’approvazione.'
-})
+    : undefined,
+)
 
 /** The personal sheet the person fills in once approved (/staff/scheda). */
 const sheet = computed(() => {
@@ -224,7 +224,7 @@ const sheet = computed(() => {
     { label: 'Indirizzo', value: s.address },
     { label: 'Città', value: formatTown(s) },
     { label: 'Regione', value: s.region },
-  ]
+  ].filter(item => withSheet.value || item.value)
 })
 
 const texts = computed(() => {
@@ -429,10 +429,10 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
       </aside>
 
       <div class="min-w-0 lg:order-1">
-        <IcSection title="Scheda personale" :description="sheetNote">
+        <IcSection v-if="withSheet || sheet.length" title="Scheda personale" :description="sheetNote">
           <div class="space-y-6">
             <IcDataList :items="sheet" :columns="2" />
-            <StaffReservedHealth :user-id="person.userId" :consent-at="person.healthConsentAt" />
+            <StaffReservedHealth v-if="withSheet" :user-id="person.userId" :consent-at="person.healthConsentAt" />
           </div>
         </IcSection>
 

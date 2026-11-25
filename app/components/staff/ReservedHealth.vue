@@ -16,7 +16,7 @@ function load() {
 
 <template>
   <IcReservedHealth
-    :key="userId"
+    :id="userId"
     v-slot="{ data }"
     :load="load"
     :consent-at="consentAt"

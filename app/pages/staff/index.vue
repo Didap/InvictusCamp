@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SHEET_MISSING } from '#shared/schemas/staff'
 import type { StaffHome } from '#shared/types/staff'
 import { formatDayRange, plural } from '#shared/utils/format'
 
@@ -64,13 +65,13 @@ watch(
       <!-- Approved (and inactive): the sheet to complete, convocations, sessions, documents, availability. -->
       <template v-else>
         <UAlert
-          v-if="!home.sheetComplete"
+          v-if="home.sheetComplete === false"
           class="mb-8"
           color="warning"
           variant="subtle"
           icon="i-lucide-id-card"
           title="Completa la tua scheda personale"
-          description="Ci servono la data e il luogo di nascita, il codice fiscale, la residenza e la taglia della maglietta."
+          :description="SHEET_MISSING"
           :actions="[
             {
               label: 'Compila la scheda',

@@ -296,8 +296,8 @@ export interface StaffHome {
   upcoming: MyConvocation[]
   /** Sessions not started yet: how many the person said they can come to, out of how many. */
   availability: { available: number; total: number }
-  /** The personal sheet has every required field (approved and inactive only; true before). */
-  sheetComplete: boolean
+  /** The personal sheet has every required field; null before the approval, when there is none to fill in. */
+  sheetComplete: boolean | null
 }
 
 /** A session of /staff/disponibilita with the person's answer. */
