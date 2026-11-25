@@ -22,6 +22,7 @@ useHead({
 const schema = registerStaffSchema.extend({
   cv: z
     .instanceof(File, { error: 'Carica il tuo CV in PDF' })
+    .refine(file => file.type === 'application/pdf', { error: 'Il CV va caricato in PDF' })
     .refine(file => file.size <= MAX_UPLOAD_BYTES, { error: 'Il file supera 15 MB' }),
 })
 const state = reactive({

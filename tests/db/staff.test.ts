@@ -133,6 +133,15 @@ describe('application', () => {
     expect(await auditActions(user.id)).toContain('staff.apply')
   })
 
+  it('replacing the CV of a draft returns the old one to delete', async () => {
+    const { user } = await makeStaff(db, 'registered')
+    const first = await makeFile(db, user.id)
+    await db.update(t.staffProfiles).set({ cvFileId: first.id }).where(eq(t.staffProfiles.userId, user.id))
+    const second = await makeFile(db, user.id)
+    expect(await replaceCv(db, user.id, second.id)).toBe(first.id)
+    expect((await profileStatus(user.id)).cvFileId).toBe(second.id)
+  })
+
   it('the CV of an application already sent cannot change', async () => {
     const { user } = await makeStaff(db, 'applied')
     await expect(replaceCv(db, user.id, (await makeFile(db, user.id)).id)).rejects.toMatchObject({ statusCode: 409 })
@@ -351,11 +360,7 @@ describe('team', () => {
     const { user } = await makeStaff(db, 'registered')
     await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.userId, user.id))
     expect((await staffDetail(db, user.id)).team).toBe('volunteer')
-    // While the application is a draft the choice is the person's.
-    await expect(
-      setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } }),
-    ).rejects.toMatchObject({ statusCode: 409 })
-    await db.update(t.staffProfiles).set({ status: 'applied' }).where(eq(t.staffProfiles.userId, user.id))
+    // Even before the application arrives: a wrong link is fixed by the administration.
     await setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } })
     await setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } })
     expect((await staffDetail(db, user.id)).team).toBe('staff')

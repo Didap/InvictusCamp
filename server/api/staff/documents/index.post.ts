@@ -3,7 +3,7 @@ import type { ApiIssue } from '#shared/types/api'
 
 /** Uploads a personal document (PDF, JPG or PNG up to 15 MB) with its category and title. */
 export default defineEventHandler(async event => {
-  const { user } = await requireStaff(event)
+  const { user } = await requireStaff(event, { area: true })
   const upload = await readUpload(event)
   const parsed = staffDocumentSchema.safeParse(upload.fields)
   if (!parsed.success) {

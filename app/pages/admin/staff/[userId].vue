@@ -169,7 +169,7 @@ const statusLine = computed(() => {
   const by = p.reviewedByName ? ` da ${p.reviewedByName}` : ''
   switch (p.status) {
     case 'registered':
-      return 'Ha creato l’account e non ha ancora inviato la candidatura: potrai valutarla dopo l’invio.'
+      return 'Ha creato l’account: la candidatura arriva quando conferma l’email e c’è il CV.'
     case 'applied':
       return `Candidatura inviata il ${dayOf(p.appliedAt)}: da valutare.`
     case 'approved':
@@ -270,29 +270,17 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
             <p class="text-sm text-muted">{{ statusLine }}</p>
             <UFormField
               label="Squadra"
-              :help="
-                person.status === 'registered'
-                  ? 'La sceglie la persona nella candidatura, finché non la invia.'
-                  : 'Scelta nella candidatura. Se la cambi, la persona passa all’altro elenco.'
-              "
+              help="Dal link con cui si è candidata. Se la cambi, la persona passa all’altro elenco."
             >
               <USelect
                 :model-value="person.team"
                 :items="teamItems"
                 :loading="savingTeam"
-                :disabled="person.status === 'registered'"
                 class="w-full"
                 @update:model-value="value => changeTeam(value as StaffTeam)"
               />
             </UFormField>
-            <UFormField
-              label="Ruoli"
-              :help="
-                person.status === 'registered'
-                  ? 'Li sceglie la persona nella candidatura, finché non la invia.'
-                  : 'Scelti nella candidatura: li cambi tu quando vuoi.'
-              "
-            >
+            <UFormField label="Ruoli" help="Li dai tu, e li cambi quando vuoi.">
               <USelectMenu
                 :model-value="person.roles"
                 :items="roleItems"
@@ -300,7 +288,6 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
                 multiple
                 placeholder="Nessun ruolo"
                 :loading="savingLabels === 'roles'"
-                :disabled="person.status === 'registered'"
                 class="w-full"
                 @update:model-value="value => saveLabels('roles', value as string[])"
               />

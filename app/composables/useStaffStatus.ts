@@ -7,11 +7,12 @@ import { STAFF_AREA_STATUSES, type StaffStatus } from '#shared/utils/constants'
  */
 export function useStaffStatus() {
   const { user } = useUserSession()
+  const api = useApi()
   const status = useState<StaffStatus | null>(`staff-status:${user.value?.id ?? ''}`, () => null)
   const inArea = computed(() => status.value !== null && STAFF_AREA_STATUSES.includes(status.value))
 
   async function load(): Promise<StaffStatus> {
-    status.value ??= (await $fetch<{ status: StaffStatus }>('/api/staff/status')).status
+    status.value ??= (await api<{ status: StaffStatus }>('/api/staff/status')).status
     return status.value
   }
 

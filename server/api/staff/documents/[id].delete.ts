@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 
 /** Deletes one of the person's own personal documents (the file goes with it). */
 export default defineEventHandler(async event => {
-  const { user } = await requireStaff(event)
+  const { user } = await requireStaff(event, { area: true })
   const id = requireUuidParam(event, 'id')
   const { personalDocuments } = tables
   const [document] = await useDb()

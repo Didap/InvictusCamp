@@ -329,18 +329,12 @@ export async function approveApplications(
   return { approved: waiting.length, skipped: userIds.length - waiting.length }
 }
 
-/**
- * Moves a person between staff and v-team; their convocations keep the role they have. While the
- * application is a draft the team is the person's choice, in the form.
- */
+/** Moves a person between staff and v-team; their convocations keep the role they have. */
 export async function setStaffTeam(
   db: DbOrTx,
   input: { userId: string; team: StaffTeam; actor: Actor },
 ): Promise<void> {
   const profile = await profileOf(db, input.userId, { lock: true })
-  if (profile.status === 'registered') {
-    throw createError({ statusCode: 409, message: 'La squadra la sceglie la persona, finché non invia la candidatura' })
-  }
   if (profile.team === input.team) return
   await db.update(staffProfiles).set({ team: input.team }).where(eq(staffProfiles.id, profile.id))
   await writeAudit(db, {
@@ -353,18 +347,12 @@ export async function setStaffTeam(
   })
 }
 
-/**
- * The roles the administration gives a person (docs/spec.md 3.4); while the application is a draft they are
- * the person's choice, in the form. Convocations keep the role they have.
- */
+/** The roles the administration gives a person (docs/spec.md 3.4). Convocations keep the role they have. */
 export async function setStaffRoles(
   db: DbOrTx,
   input: { userId: string; roles: string[]; actor: Actor },
 ): Promise<void> {
   const profile = await profileOf(db, input.userId, { lock: true })
-  if (profile.status === 'registered') {
-    throw createError({ statusCode: 409, message: 'I ruoli li sceglie la persona, finché non invia la candidatura' })
-  }
   await saveLabels(db, profile, 'roles', await checkLabels(db, 'role', input.roles), input.actor)
 }
 

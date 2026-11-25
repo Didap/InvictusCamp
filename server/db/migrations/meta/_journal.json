@@ -183,6 +183,13 @@
       "when": 1795432269804,
       "tag": "0025_email_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795601920769,
+      "tag": "0026_candidature_with_cv",
+      "breakpoints": true
     }
   ]
 }
