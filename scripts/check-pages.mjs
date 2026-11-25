@@ -47,7 +47,7 @@ export const PAGES = {
   ],
   staff: [
     '/staff',
-    '/staff/candidatura',
+    '/staff/scheda',
     '/staff/disponibilita',
     '/staff/convocazioni',
     '/staff/sessioni',
@@ -55,7 +55,8 @@ export const PAGES = {
     '/staff/documenti',
     '/firma/{signature}',
   ],
-  candidato: ['/staff', '/staff/candidatura'],
+  // Before the approval the area is the home alone: the other pages lead back there.
+  candidato: ['/staff'],
 }
 
 if (!LOCAL) {

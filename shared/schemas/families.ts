@@ -8,7 +8,6 @@ import type { DisabilityInfo, FormAnswers, UsefulInfo } from '../types/domain'
 import {
   FAMILY_FORM_STATUSES,
   GUEST_AGE,
-  ITALIAN_REGIONS,
   MEMBER_KINDS,
   MEMBER_RELATIONSHIPS,
   PERSONAL_DOCUMENT_CATEGORIES,
@@ -17,32 +16,22 @@ import {
   type PersonalDocumentCategory,
 } from '../utils/constants'
 import { missingRelationship } from '../utils/format'
+import { changedKeys } from '../utils/plain'
 import {
   blankAsMissing,
   zBirthDate,
   zListQuery,
   zPersonName,
   zPhone,
+  zPostalCode,
+  zProvince,
+  zRegion,
+  requiredResidence,
   zRequiredPhone,
   zRequiredText,
   zText,
   zUuid,
 } from './common'
-
-/** An Italian province as its two-letter code ("TA"); empty is allowed. */
-const zProvince = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^([A-Z]{2})?$/, { error: 'Scrivi la sigla di due lettere, per esempio TA' })
-
-/** A CAP: five digits; empty is allowed. */
-const zPostalCode = z
-  .string()
-  .trim()
-  .regex(/^(\d{5})?$/, { error: 'Il CAP ha cinque cifre, per esempio 74024' })
-
-const zRegion = z.enum(ITALIAN_REGIONS, { error: 'Scegli la regione' })
 
 /** Family name, residence and phone, as the administration edits them on the family's behalf. */
 export const familyProfileSchema = z.object({
@@ -136,10 +125,7 @@ export function countCards(cards: { kind: MemberKind; hasDisability: boolean }[]
  */
 export const familyDataFieldsSchema = familyProfileSchema.extend({
   phone: zRequiredPhone,
-  address: zRequiredText(200),
-  city: zRequiredText(100),
-  postalCode: zPostalCode.refine(value => value !== '', { error: 'Campo obbligatorio' }),
-  region: zRegion,
+  ...requiredResidence,
   composition: familyCompositionSchema,
   /**
    * The first names of the young people with a condition added by this save, in order: their cards are born
@@ -362,15 +348,6 @@ export function normalizeHealth(
 
 export function hasHealthData(health: MemberHealth): boolean {
   return health.hasDisability || Boolean(health.disability) || Boolean(health.info)
-}
-
-/** The keys whose values differ between two records, whatever their fields. */
-function changedKeys(before: object | null, after: object | null): string[] {
-  const a: Record<string, unknown> = { ...before }
-  const b: Record<string, unknown> = { ...after }
-  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(
-    key => JSON.stringify(a[key] ?? null) !== JSON.stringify(b[key] ?? null),
-  )
 }
 
 /** The names (never the values) of the health fields that differ: the data of `member.health_update`. */

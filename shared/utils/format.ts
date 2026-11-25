@@ -192,6 +192,16 @@ export function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }
 
+/** The town of a residence: "74024 Maruggio (TA)", what is missing left out. */
+export function formatTown(residence: {
+  postalCode: string | null
+  city: string | null
+  province: string | null
+}): string {
+  const { postalCode, city, province } = residence
+  return [postalCode, city, province ? `(${province})` : null].filter(Boolean).join(' ')
+}
+
 /** "1 anno", "9 anni". */
 export function formatAge(age: number): string {
   return age === 1 ? '1 anno' : `${age} anni`

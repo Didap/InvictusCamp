@@ -6,7 +6,6 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
   addConvocations,
-  saveApplicationDraft,
   sessionStaffData,
   setStaffRoles,
   setStaffTags,
@@ -100,7 +99,7 @@ describe('roles', () => {
     await renameStaffRole(db, COORDINATOR_ROLE, { name: 'Coordinatore' }, { userId: admin.id })
   })
 
-  it('a role that does not exist is refused in the application, on a person and on a convocation', async () => {
+  it('a role that does not exist is refused on a person and on a convocation', async () => {
     const admin = await makeAdmin(db)
     await expect(checkLabels(db, 'role', ['other', 'chef'])).rejects.toMatchObject({ statusCode: 409 })
     expect(await checkLabels(db, 'role', ['other', 'other'])).toEqual(['other'])
@@ -120,21 +119,8 @@ describe('roles', () => {
 })
 
 describe('roles of a person', () => {
-  it('a role deleted while the application form is open is left out of the draft', async () => {
+  it('are the administration’s, audited', async () => {
     const admin = await makeAdmin(db)
-    const id = await createStaffRole(db, { name: unique('Autista') }, { userId: admin.id })
-    const { user } = await makeStaff(db, 'registered')
-    await deleteStaffLabel(db, 'role', id, { userId: admin.id })
-    await saveApplicationDraft(db, user.id, { roles: [id, 'other'] })
-    expect((await profile(user.id)).roles).toEqual(['other'])
-  })
-
-  it('are the administration’s once the application is sent, audited', async () => {
-    const admin = await makeAdmin(db)
-    const draft = await makeStaff(db, 'registered')
-    await expect(
-      setStaffRoles(db, { userId: draft.user.id, roles: ['other'], actor: { userId: admin.id } }),
-    ).rejects.toMatchObject({ statusCode: 409 })
 
     const { user } = await makeStaff(db, 'applied')
     await setStaffRoles(db, { userId: user.id, roles: ['group_lead', 'other'], actor: { userId: admin.id } })

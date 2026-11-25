@@ -2,10 +2,13 @@ import type { UsefulInfo } from './domain'
 // DTOs of the staff area (applications, review, availability, convocations). Dates are ISO days,
 // instants ISO strings. Never a raw `users` row.
 import type { FileDto } from './api'
+import type { MySignatureItem } from './documents'
 import type {
   ConvocationStatus,
+  ItalianRegion,
   PersonalDocumentCategory,
   SessionStatus,
+  ShirtSize,
   StaffRole,
   StaffStatus,
   StaffTagColor,
@@ -17,10 +20,27 @@ import type { IsoDay } from '../utils/dates'
 /** The outcome emails of a review, sent only by an explicit action of the administration. */
 export type StaffOutcomeTemplate = 'staff.approved' | 'staff.rejected'
 
-/** GET /api/staff/useful-info: what the canteen knows about the signed-in staff member. */
+/**
+ * The health data of a staff member, under the consent: the details for the canteen and the other ones. In
+ * GET /api/staff/sheet for the person, GET /api/admin/staff/:userId/health for the administration (audited).
+ */
 export interface StaffUsefulInfoDto {
   info: UsefulInfo | null
+  otherInfo: string | null
   consentAt: string | null
+}
+
+/** The personal sheet as stored (/staff/scheda): null where it is not filled in. */
+export interface StaffSheet {
+  birthDate: IsoDay | null
+  birthPlace: string | null
+  fiscalCode: string | null
+  address: string | null
+  city: string | null
+  postalCode: string | null
+  province: string | null
+  region: ItalianRegion | null
+  shirtSize: ShirtSize | null
 }
 
 /**
@@ -130,8 +150,9 @@ export interface StaffDetail {
   createdAt: string
   status: StaffStatus
   team: StaffTeam
-  birthDate: IsoDay | null
-  city: string | null
+  sheet: StaffSheet
+  /** When the person consented to health data: the reserved section opens only then. */
+  healthConsentAt: string | null
   roles: StaffRole[]
   /** Ids of the tags of the «Valutazione»: never shown to the person. */
   tags: string[]
@@ -146,6 +167,9 @@ export interface StaffDetail {
   reviewNotes: string | null
   /** Sessions the person said they can come to, by date. */
   availability: AvailabilitySession[]
+  /** When the person confirmed the availability, and asked to reopen it: «Riapri la disponibilità». */
+  availabilityConfirmedAt: string | null
+  availabilityResetRequestedAt: string | null
   convocations: StaffConvocationSummary[]
   documents: StaffDocumentDto[]
   outcome: StaffOutcome
@@ -215,17 +239,27 @@ export interface SessionStaffData {
 
 // ─── Staff side ────────────────────────────────────────────────────────────────────────────────────
 
-/** GET /api/staff/application */
+/** GET /api/staff/sheet: the personal sheet, with the account's details, the health data and the application. */
+export interface StaffSheetDto extends StaffSheetSaved {
+  account: { firstName: string; lastName: string; email: string; phone: string | null }
+  health: StaffUsefulInfoDto
+  application: StaffApplicationDto
+}
+
+/** PUT /api/staff/sheet: the sheet as saved and the signature of its PDF, perhaps a new one to sign. */
+export interface StaffSheetSaved {
+  sheet: StaffSheet
+  signature: StaffSheetSignature | null
+}
+
+/** The PDF of the sheet in force and its signature request (`id`); null when there is none. */
+export type StaffSheetSignature = Pick<MySignatureItem, 'id' | 'status' | 'signedAt'>
+
+/** The application as it was sent, read only. */
 export interface StaffApplicationDto {
-  status: StaffStatus
-  /** The application can still be changed (until it is sent). */
-  editable: boolean
   team: StaffTeam
-  birthDate: IsoDay | null
-  city: string | null
-  roles: StaffRole[]
-  /** The roles the administration created, to choose from. */
-  roleOptions: { id: StaffRole; name: string }[]
+  /** The person's roles, with the names the administration gave them. */
+  roles: { id: StaffRole; name: string }[]
   qualifications: string | null
   experience: string | null
   motivation: string | null
@@ -270,14 +304,16 @@ export interface MyConvocations {
 /** GET /api/staff/home */
 export interface StaffHome {
   status: StaffStatus
-  appliedAt: string | null
-  /** What the application still lacks (labels of APPLICATION_CHECKLIST), while it has not been sent. */
-  missing: string[]
   toAnswer: MyConvocation[]
   /** Accepted convocations of sessions that have not ended. */
   upcoming: MyConvocation[]
-  /** Sessions not started yet: how many the person said they can come to, out of how many. */
-  availability: { available: number; total: number }
+  /**
+   * Sessions not started yet: how many the person said they can come to, out of how many, and how many are
+   * still to confirm.
+   */
+  availability: { available: number; total: number; toConfirm: number }
+  /** The personal sheet has every required field (the home asks for it once approved). */
+  sheetComplete: boolean
 }
 
 /** A session of /staff/disponibilita with the person's answer. */
@@ -285,12 +321,17 @@ export interface MyAvailabilitySession extends AvailabilitySession {
   available: boolean
   /** The person has a convocation to it (sent or accepted): the availability stays, it no longer matters. */
   convoked: boolean
+  /** Confirmed: the answer changes only after the administration reopens the availability. */
+  locked: boolean
 }
 
 /** GET /api/staff/availability */
 export interface MyAvailability {
   /** Answers can be given and changed (approved staff only). */
   canEdit: boolean
+  /** The last «Conferma le preferenze», and the reset asked since, if any. */
+  confirmedAt: string | null
+  resetRequestedAt: string | null
   /** The sessions not started yet, by date. */
   sessions: MyAvailabilitySession[]
 }

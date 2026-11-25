@@ -65,24 +65,16 @@ export async function staffLabels(db: DbOrTx): Promise<StaffLabels> {
 }
 
 /**
- * The ids without repeats, all existing: one deleted meanwhile is refused (409), or left out with
- * `dropMissing` (the application form, which still shows what the person ticked before). The rows stay
- * locked until the commit, so a delete running at the same time waits and then strips what was saved.
+ * The ids without repeats, all existing: one deleted meanwhile is refused (409). The rows stay locked
+ * until the commit, so a delete running at the same time waits and then strips what was saved.
  */
-export async function checkLabels(
-  db: DbOrTx,
-  kind: Kind,
-  ids: readonly string[],
-  options: { dropMissing?: boolean } = {},
-): Promise<string[]> {
+export async function checkLabels(db: DbOrTx, kind: Kind, ids: readonly string[]): Promise<string[]> {
   const unique = [...new Set(ids)]
   if (!unique.length) return unique
   const { table, missing } = KINDS[kind]
-  const found = new Set(
-    (await db.select({ id: table.id }).from(table).where(inArray(table.id, unique)).for('share')).map(row => row.id),
-  )
-  if (found.size !== unique.length && !options.dropMissing) throw httpError(409, missing)
-  return unique.filter(id => found.has(id))
+  const found = await db.select({ id: table.id }).from(table).where(inArray(table.id, unique)).for('share')
+  if (found.length !== unique.length) throw httpError(409, missing)
+  return unique
 }
 
 /** A name is unique whatever the case (the index on lower(name)): the same name twice is a 409. */

@@ -6,14 +6,13 @@ import { describe, expect, it } from 'vitest'
 import {
   addConvocations,
   answerConvocation,
+  applyWithCv,
   approveApplications,
   cancelConvocation,
   cancelSessionConvocations,
   changeStaffStatus,
   myAvailability,
   myConvocations,
-  replaceCv,
-  saveApplicationDraft,
   sendConvocations,
   sessionStaffData,
   setAvailability,
@@ -23,24 +22,15 @@ import {
   staffHome,
   staffList,
   staffOutcomeEmails,
-  submitApplication,
 } from '../../server/domain/staff'
 import type { Db } from '../../server/domain/db'
 import { makeAdmin, makeDocument, makeSession, makeStaff, t, useTestDb } from './helpers'
 
 const db = useTestDb()
+/** A profile that never asked to reopen its availability. */
+const UNCONFIRMED = { availabilityResetRequestedAt: null }
 const ctx = { appUrl: 'https://gestionale.test' }
 const TODAY = '2026-11-06'
-
-const APPLICATION = {
-  team: 'staff' as const,
-  birthDate: '1995-04-10',
-  city: 'Lecce',
-  roles: ['group_lead', 'other'] as ('group_lead' | 'other')[],
-  qualifications: 'Laurea in scienze dell’educazione',
-  experience: 'Tre estati in un centro estivo inclusivo',
-  motivation: 'Voglio esserci',
-}
 
 /** A file record without bytes (the domain never reads them here). */
 async function makeFile(database: Db, ownerUserId: string) {
@@ -116,58 +106,35 @@ async function acceptedInSessions(...values: Partial<typeof t.campSessions.$infe
 }
 
 describe('application', () => {
-  it('is saved as a draft, then sent once with the CV', async () => {
+  it('reaches the administration with the CV once the address is confirmed, once', async () => {
     const { user } = await makeStaff(db, 'registered')
-    await saveApplicationDraft(db, user.id, { city: 'Lecce', roles: ['group_lead', 'group_lead'] })
-    let profile = await profileStatus(user.id)
-    expect(profile.city).toBe('Lecce')
-    expect(profile.roles).toEqual(['group_lead'])
-    expect(profile.status).toBe('registered')
+    expect(await applyWithCv(db, user.id)).toBe(false)
+    expect((await profileStatus(user.id)).status).toBe('registered')
 
-    await expect(submitApplication(db, user.id, APPLICATION)).rejects.toMatchObject({ statusCode: 400 })
-    const cv = await makeFile(db, user.id)
-    expect(await replaceCv(db, user.id, cv.id)).toBeNull()
-    await submitApplication(db, user.id, APPLICATION)
-
-    profile = await profileStatus(user.id)
+    await db
+      .update(t.staffProfiles)
+      .set({ cvFileId: (await makeFile(db, user.id)).id })
+      .where(eq(t.staffProfiles.userId, user.id))
+    expect(await applyWithCv(db, user.id)).toBe(true)
+    const profile = await profileStatus(user.id)
     expect(profile.status).toBe('applied')
     expect(profile.appliedAt).toBeInstanceOf(Date)
-    expect(profile.roles).toEqual(['group_lead', 'other'])
-    expect(await auditActions(user.id)).toContain('staff.apply')
+    // A second confirmation link changes nothing.
+    expect(await applyWithCv(db, user.id)).toBe(false)
+    expect(await auditActions(user.id)).toEqual(['staff.apply'])
   })
 
-  it('cannot change after it is sent', async () => {
-    const { user } = await makeStaff(db, 'applied')
-    await expect(saveApplicationDraft(db, user.id, { city: 'Bari' })).rejects.toMatchObject({ statusCode: 409 })
-    await expect(replaceCv(db, user.id, (await makeFile(db, user.id)).id)).rejects.toMatchObject({ statusCode: 409 })
-    await expect(submitApplication(db, user.id, APPLICATION)).rejects.toMatchObject({ statusCode: 409 })
-  })
-
-  it('replacing the CV returns the old one to delete', async () => {
+  it('an account without CV sends the application by uploading it, once', async () => {
     const { user } = await makeStaff(db, 'registered')
-    const first = await makeFile(db, user.id)
-    const second = await makeFile(db, user.id)
-    await replaceCv(db, user.id, first.id)
-    expect(await replaceCv(db, user.id, second.id)).toBe(first.id)
-    expect((await profileStatus(user.id)).cvFileId).toBe(second.id)
-  })
-
-  it('the home lists what is missing while it is not sent', async () => {
-    const { user, profile } = await makeStaff(db, 'registered')
-    const home = await staffHome(db, profile, TODAY)
-    expect(home.missing).toEqual([
-      'Data di nascita',
-      'Città',
-      'Ruoli',
-      'Titoli e qualifiche',
-      'Esperienze',
-      'Motivazione',
-      'CV in PDF',
-    ])
-    await saveApplicationDraft(db, user.id, { city: 'Lecce', roles: ['activity_lead'] })
-    const after = await staffHome(db, await profileStatus(user.id), TODAY)
-    expect(after.missing).not.toContain('Città')
-    expect(after.missing).not.toContain('Ruoli')
+    const cv = await makeFile(db, user.id)
+    expect(await applyWithCv(db, user.id, {}, cv.id)).toBe(true)
+    const profile = await profileStatus(user.id)
+    expect(profile.status).toBe('applied')
+    expect(profile.cvFileId).toBe(cv.id)
+    expect(await auditActions(user.id)).toContain('staff.apply')
+    // Sent already: another CV changes nothing.
+    expect(await applyWithCv(db, user.id, {}, (await makeFile(db, user.id)).id)).toBe(false)
+    expect((await profileStatus(user.id)).cvFileId).toBe(cv.id)
   })
 })
 
@@ -338,18 +305,20 @@ describe('availability', () => {
     const { user } = await makeStaff(db, 'approved')
     await setAvailability(db, { userId: user.id, sessionId: june.id, available: true }, TODAY)
     await db.insert(t.sessionStaff).values({ sessionId: june.id, userId: user.id, status: 'sent' })
-    const mine = await myAvailability(db, { userId: user.id, status: 'approved' }, TODAY)
+    const mine = await myAvailability(db, { ...UNCONFIRMED, userId: user.id, status: 'approved' }, TODAY)
     expect(mine.canEdit).toBe(true)
     expect(mine.sessions.map(s => [s.id, s.available, s.convoked])).toEqual([
       [june.id, true, true],
       [july.id, false, false],
     ])
     const home = await staffHome(db, await profileStatus(user.id), TODAY)
-    expect(home.availability).toEqual({ available: 1, total: 2 })
+    expect(home.availability).toEqual({ available: 1, total: 2, toConfirm: 2 })
 
     // Before approval the sessions are not shown at all.
-    expect(await myAvailability(db, { userId: user.id, status: 'applied' }, TODAY)).toEqual({
+    expect(await myAvailability(db, { ...UNCONFIRMED, userId: user.id, status: 'applied' }, TODAY)).toEqual({
       canEdit: false,
+      confirmedAt: null,
+      resetRequestedAt: null,
       sessions: [],
     })
   })
@@ -378,16 +347,12 @@ describe('availability', () => {
 })
 
 describe('team', () => {
-  it('is chosen in the application and changed by the administration, audited', async () => {
+  it('comes with the application and is changed by the administration, audited', async () => {
     const admin = await makeAdmin(db)
     const { user } = await makeStaff(db, 'registered')
-    await saveApplicationDraft(db, user.id, { team: 'volunteer' })
+    await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.userId, user.id))
     expect((await staffDetail(db, user.id)).team).toBe('volunteer')
-    // While the application is a draft the choice is the person's.
-    await expect(
-      setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } }),
-    ).rejects.toMatchObject({ statusCode: 409 })
-    await db.update(t.staffProfiles).set({ status: 'applied' }).where(eq(t.staffProfiles.userId, user.id))
+    // Even before the application arrives: a wrong link is fixed by the administration.
     await setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } })
     await setStaffTeam(db, { userId: user.id, team: 'staff', actor: { userId: admin.id } })
     expect((await staffDetail(db, user.id)).team).toBe('staff')

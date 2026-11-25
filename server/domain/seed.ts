@@ -24,6 +24,7 @@ import { familyNameOf } from '../../shared/utils/format'
 import * as t from '../db/schema'
 import type { Db, DbOrTx } from './db'
 import { textPdf } from './pdf'
+import { staffSheetDocument } from './staff-sheets'
 import { storeFile } from './storage'
 
 export const DEMO_PASSWORD = 'invictus-demo'
@@ -52,6 +53,7 @@ const TABLES = [
   'programmes',
   'questionnaires',
   'release_texts',
+  'availability_confirmations',
   'session_availability',
   'camp_sessions',
   'staff_profiles',
@@ -768,6 +770,18 @@ export async function seedDemo(
         : null,
       motivation: applied ? 'Voglio contribuire a un’estate inclusiva per le famiglie del camp (esempio).' : null,
       cvFileId: cv?.id ?? null,
+      // The demo account has its personal sheet filled in (/staff/scheda); the others still have to.
+      ...(s.email === DEMO_ACCOUNTS.staff
+        ? {
+            birthPlace: 'Lecce',
+            fiscalCode: 'BNCCHR04A50E506U',
+            address: 'Via Templari 12',
+            postalCode: '73100',
+            province: 'LE',
+            region: 'Puglia' as const,
+            shirtSize: 'M' as const,
+          }
+        : {}),
       // Some canteen details of the approved staff, with the consent.
       ...(s.status === 'approved' && index % 3 === 1
         ? {
@@ -785,6 +799,17 @@ export async function seedDemo(
       firstName: user.firstName,
       status: s.status,
       sessions: s.sessions,
+    })
+  }
+  // The demo account's sheet is complete: its PDF waits for the signature, as after a save. The seed sends no
+  // email, so the address of the links does not matter.
+  const demoStaff = staff.find(s => s.email === DEMO_ACCOUNTS.staff)
+  if (demoStaff) {
+    await staffSheetDocument(db, {
+      userId: demoStaff.userId,
+      ctx: { appUrl: 'http://localhost' },
+      uploadsDir: options.uploadsDir,
+      actor: { userId: demoStaff.userId },
     })
   }
 
@@ -982,6 +1007,19 @@ export async function seedDemo(
   const demoSessions: Record<DemoSession, string> = { june: june.id, july: july.id, september: september.id }
   const answers = staff.flatMap(s => s.sessions.map(key => ({ sessionId: demoSessions[key], userId: s.userId })))
   if (answers.length) await db.insert(t.sessionAvailability).values(answers)
+  // The demo account has still to confirm its preferences; another approved person confirmed them and asks for a
+  // reset, which the dashboard lists for the administration.
+  const asking = staff.find(s => s.status === 'approved' && s.email !== DEMO_ACCOUNTS.staff && s.sessions.length)
+  if (asking) {
+    const open = await db.select({ id: t.campSessions.id }).from(t.campSessions)
+    await db
+      .insert(t.availabilityConfirmations)
+      .values(open.map(({ id }) => ({ sessionId: id, userId: asking.userId })))
+    await db
+      .update(t.staffProfiles)
+      .set({ availabilityResetRequestedAt: sql`now()` })
+      .where(eq(t.staffProfiles.userId, asking.userId))
+  }
 
   const byName = (first: string) => staff.find(s => s.firstName === first)!
   const convoke = async (sessionId: string, rows: [string, ConvocationStatus, StaffRole][]) => {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { familyProfileSchema } from '#shared/schemas/families'
 import type { FamilyProfileDto } from '#shared/types/families'
-import type { ItalianRegion } from '#shared/utils/constants'
+import { residenceForm } from '#shared/schemas/common'
 import { surnameOf } from '#shared/utils/format'
 
 // The family's name, residence and phone, changed by the administration on the family's behalf
@@ -12,25 +12,13 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ saved: [] }>()
 
-const state = reactive({
-  name: '',
-  address: '',
-  city: '',
-  postalCode: '',
-  province: '',
-  region: undefined as ItalianRegion | undefined,
-  phone: '',
-})
+const state = reactive({ name: '', ...residenceForm(null), phone: '' })
 watch(
   () => props.family,
   family => {
     Object.assign(state, {
       name: surnameOf(family.name),
-      address: family.address ?? '',
-      city: family.city ?? '',
-      postalCode: family.postalCode ?? '',
-      province: family.province ?? '',
-      region: family.region ?? undefined,
+      ...residenceForm(family),
       phone: family.phone ?? '',
     })
   },
@@ -65,7 +53,7 @@ async function save() {
     >
       <UInput v-model="state.name" class="w-full" />
     </UFormField>
-    <FamiliesResidenceFields v-model="state" />
+    <IcResidenceFields v-model="state" />
     <UFormField label="Telefono" name="phone" hint="Facoltativo">
       <UInput v-model="state.phone" type="tel" autocomplete="tel" class="w-full" />
     </UFormField>

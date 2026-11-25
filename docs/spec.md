@@ -43,7 +43,7 @@ Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova
 `/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/feedback` (3.13), `/admin/utenti`.
 
 Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
-`/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`, `/famiglia/questionario/:sessionId` (3.13). Staff: `/staff` (home), `/staff/candidatura`,
+`/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`, `/famiglia/questionario/:sessionId` (3.13). Staff: `/staff` (home), `/staff/scheda`,
 `/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`,
 `/staff/programma/:sessionId`.
 Everyone: `/account`, `/firma/:requestId`.
@@ -57,9 +57,11 @@ Everyone: `/account`, `/firma/:requestId`.
   email confirms the address (48 h).
   Sign-in is refused until the address is confirmed. The "Partecipa" or "Iscriviti" button of the camp's
   website links here. Once in, the first thing to do is the family data (3.8).
-- A staff member registers at `/candidati`: user `staff` and a `staff_profiles` row `registered`; same
-  confirmation. `/candidati?squadra=v-team` (the v-team link of «Accedi») gives the row the v-team, which the
-  application can still change. The application itself is completed inside the platform (3.4).
+- A staff member applies at `/candidati` with name, surname, email, phone, password and the CV as PDF: user
+  `staff` and a `staff_profiles` row `registered` with the CV; same confirmation, and confirming the address
+  sends the application (3.4). `/candidati?squadra=v-team` (the v-team link of «Accedi») gives the row the
+  v-team.
+- Passwords have at least 8 characters.
 - The administration invites any role (`/admin/utenti`): user `invited` without password and an
   invitation email (7 days). Choosing the password activates the account. For a family the invitation also
   creates the `families` row; for staff the profile (`registered`, or `approved` when the administration
@@ -117,17 +119,47 @@ sessione avviene al cambio di stato": the status change is the moment invitation
 
 ### 3.4 Staff application and review
 
-`registered` → (the person completes and sends the application: team (staff or v-team), birth date, city,
-roles, qualifications, experience, motivation, CV as PDF) → `applied` → the administration reviews: `approved` or `rejected`,
-with internal notes never shown to the person → `inactive` when someone is no longer convoked.
+`registered` → (the address confirmed, with the CV: the application is the account and the CV) → `applied` →
+the administration reviews: `approved` or `rejected`, with internal notes never shown to the person →
+`inactive` when someone is no longer convoked. A `registered` account without CV (made before the CV was asked
+at registration, or invited by the administration) sends the application by uploading it from its home.
+**Until the approval the area is the home alone**: the menu has nothing else, the other pages lead back
+there (the session the client reads carries `staffStatus`, read again at every fetch) and the server refuses
+every staff endpoint but the home and the CV (`requireStaff`, access `area` by default). A password reset confirms the address too, so
+it sends the application like the confirmation link; migration 0026 sent the drafts of the old form that had
+a CV and a confirmed address. The home says «Grazie per la tua richiesta, stiamo valutando la candidatura e presto riceverai
+aggiornamenti», with the staff address (`contact.staffEmail`, staff@), or asks for the CV; not selected, a kind
+message. Applications sent with the older, longer form keep birth date, city, roles and texts.
+
+Once approved, «Scheda personale» (`/staff/scheda`, staff and v-team alike) takes the place of the application
+page. Name, surname, email and phone are the account's, read only (changed from `/account`). To fill in, all
+required but the province: birth date (the age counts itself as it is typed), birthplace, codice fiscale
+(checked with its control letter, omocodia included), residence (street and number, city, CAP, province,
+region) and the T-shirt size «per la divisa» (XS to 3XL). Saving is audited (`staff.sheet`) with the names of
+the fields that changed, never their values. Under it, «Alimentazione e altre informazioni»: allergies and
+intolerances, food preference and notes with the lists of the families (3.8), which reach the canteen (3.14),
+and «Altro da condividere» (dyscalculia, dysgraphia, colour blindness…), which only the administration reads
+(`staff_profiles.otherInfo`): both are health data under one consent, given again at every save (the box starts
+empty, the date is the last save's); saving nothing withdraws it. Last, the
+application as it was sent (team, roles, the older texts, CV). Until the sheet is complete the home asks for
+it. The administration sees the sheet on the person's page, the health data in a reserved section opened on
+demand and audited (`staff.health_view`), as for families.
+Once the sheet is complete, the gestionale writes its PDF («Scheda personale · Nome Cognome»: the account's
+name, email and phone, birth, codice fiscale, residence, T-shirt size and «Con la firma confermo che i dati di
+questa scheda sono corretti e aggiornati»; no health data) and asks the person to sign it like every document,
+with the code by email (3.6): the email «Hai un documento da firmare», «Firma la tua scheda» on the sheet and the
+document among those to sign. A change of the sheet, or of name or phone from `/account`, makes it again: the
+old one archived, its signature cancelled if still to sign (audited, `staff.sheet_document`). Like a family's
+release it is never edited, assigned or restored by hand (`documents.staffUserId`); the administration finds it
+in Documenti and in «Firme» on the person's page.
 The outcome email (`staff.approved` / `staff.rejected`) is **not automatic**: the administration sends it
 from the dashboard when it chooses, with a message it can edit. Until approved, a staff member cannot give
 availability or receive convocations. The administration can move a person to the other team from their page
 (audited).
 
 - **Roles** are a list the administration keeps ("Ruoli e valutazione" in `/admin/staff`, table `staff_roles`):
-  it creates, renames and deletes them. The application offers them; once it is sent, the administration
-  changes a person's roles from their page (audited, `staff.roles`). Deleting a role takes it away from every
+  it creates, renames and deletes them, and gives them to people from their page once the application is
+  sent (audited, `staff.roles`). Deleting a role takes it away from every
   person and convocation that has it. Migration 0023 keeps the four roles of the old fixed list with their keys:
   `coordinator` is the coordinator of the base of a session (3.5), so it can be renamed but not deleted;
   `group_lead` comes first among the staff who can lead an activity group (3.12).
@@ -137,8 +169,7 @@ availability or receive convocations. The administration can move a person to th
 - **Staff and v-team are two separate lists**, two items of the menu: `/admin/staff` and `/admin/v-team`, each
   with the pages of its people (`/admin/staff/:userId`, `/admin/v-team/:userId`). A person's page opened under
   the other team (an old link, the users list, a change of team) moves to the list of their team. The
-  application is one for both: the team comes from the link (`/candidati?squadra=v-team`) or the person's
-  choice. Roles and Valutazione are the same for both lists. The Panoramica has a tile of applications to
+  application is one for both: the team comes from the link (`/candidati?squadra=v-team`). Roles and Valutazione are the same for both lists. The Panoramica has a tile of applications to
   review for each list.
 - Each list shows name, roles, city, age and Valutazione; status, application date and availability are on
   each person's page. Filters: search, role, age (ranges of years at today), availability (at least one
@@ -148,7 +179,18 @@ availability or receive convocations. The administration can move a person to th
 
 - `/staff/disponibilita` lists the sessions not started yet (neither concluded nor cancelled), by date: approved
   staff and v-team switch "Ci sono" on or off for each one, for the whole session (`session_availability`).
-  Taking it back keeps the convocations already received; the administration sees it on them.
+  Taking it back keeps the convocations already received; the administration sees it on them. The page opens
+  with the camp's text («In questa sezione puoi esprimere le tue preferenze… non costituisce una convocazione
+  ufficiale né comporta alcun vincolo per la Fondazione…», then «Ci sono vale per tutta la sessione»). Each answer
+  is saved at once; **«Conferma le preferenze»** fixes the answers of the sessions the page showed
+  (`availability_confirmations`, one row per person and session; audited `staff.availability_confirm` with the
+  sessions confirmed and those the person is in for): they can no longer be switched. A session not confirmed yet
+  (created later, or whose dates the administration changed, which drops its confirmations) is answered and
+  confirmed in turn. To change, **«Chiedi il reset»** (`staff_profiles.availabilityResetRequestedAt`, audited): the
+  request is in the dashboard's to-do list and on the person's page, where **«Riapri la disponibilità»**
+  (administration only, also without a request; approved staff only) drops the confirmations and the request,
+  keeps the answers and sends `staff.availability_reopened`. Leaving the approved staff drops them too. The home
+  asks to confirm while sessions are still open.
 - Staff and v-team of a session are **two tabs**, «Staff» and «V-team» (`?tab=staff`, `?tab=v-team`), each with
   its list, its coordinator, its «Aggiungi persone», its selection and «Invia la convocazione», and «Scrivi ai
   convocati» for that team only. The administration adds people as convocations `draft` with a role for the
@@ -265,7 +307,7 @@ availability or receive convocations. The administration can move a person to th
   release with the members (name, birth date, relationship; never health data) as a PDF document of the family
   (category consent, `documents.familyId`, `sourceDigest` = digest of its data, a dot, digest of its text) for the
   account holder to sign in Documenti (audited `family.release`). When those data change (the family's or the
-  administration's edits), a new release with the text in force replaces it: the old one is archived and its
+  administration's edits, the holder's name from `/account`), a new release with the text in force replaces it: the old one is archived and its
   pending signature cancelled; cards no longer complete archive it until they are. A release is never assigned
   to anyone else nor restored once archived.
 - **The release text** (`/admin/famiglie/liberatoria`, from the Famiglie list; table `release_texts`, audited
@@ -449,8 +491,8 @@ What the supplier of the meals needs for a session: the **Mensa** tab of the ses
 - **Needs**: allergies and intolerances («senza lattosio», «senza glutine»…) and food preferences
   («vegetariana»…), each with how many and who, by name; then «Da sapere»: the food selectivity of the young
   people with a condition and the other notes. They come from «Informazioni utili» of the cards (3.8) and, for
-  the staff, from «Per la mensa» on their home (`staff_profiles.usefulInfo`, with a consent of their own:
-  saving nothing withdraws it).
+  the staff, from their personal sheet (3.4, `staff_profiles.usefulInfo`, with a consent of their own: saving
+  nothing withdraws it; «Altro da condividere» never reaches the canteen).
 - «Genera PDF per il fornitore» (the primary action) downloads an A4 PDF: the session and its dates, «Totale
   pasti» with the groups, each need with how many and who by first and last name, then «Da sapere». «Copia il
   testo» copies «Totale pasti 72 (persone a ogni pasto: 60 di 12 famiglie, 10 dello staff e 2 del v-team) di
@@ -482,6 +524,7 @@ today's count, the expected departures and the queue in Comunicazioni, and the q
 | `session.feedback` | session to `completed` (the end-of-session questionnaire, 3.13) | titolari confirmed |
 | `staff.convocation` | convocation sent | staff member |
 | `staff.convocation_cancelled` | sent convocation cancelled, or its session cancelled | staff member |
+| `staff.availability_reopened` | «Riapri la disponibilità» from the person's page | staff member |
 | `staff.approved` / `staff.rejected` | sent by the administration from the review | candidate |
 | `signature.request` / `signature.reminder` | document assigned / reminder | assignee |
 | `signature.otp` | code requested | signer |

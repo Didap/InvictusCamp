@@ -3,16 +3,15 @@
 // tests load this module directly. Functions take the client or a transaction; those that produce emails
 // return them, and the handler delivers them after the commit. A review never sends anything by itself:
 // the outcome leaves only from staffOutcomeEmails ("Comunica l’esito").
-import { and, asc, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, max, ne, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import {
-  applicationMissing,
   canMoveStaff,
   isReviewMove,
+  isSheetComplete,
   type ConvocationAddInput,
   type ConvocationSendInput,
-  type StaffApplicationDraft,
-  type StaffApplicationInput,
+  type StaffSheetInput,
   type StaffUsefulInfoInput,
 } from '../../shared/schemas/staff'
 import { normalizeUsefulInfo } from '../../shared/schemas/families'
@@ -25,17 +24,20 @@ import type {
   MyConvocation,
   SessionConvocation,
   SessionStaffData,
-  StaffApplicationDto,
   StaffConvocationSummary,
   StaffDetail,
   StaffDocumentDto,
   StaffHome,
   StaffListItem,
   StaffOutcomeTemplate,
+  StaffSheet,
+  StaffSheetDto,
+  StaffSheetSignature,
   StaffUsefulInfoDto,
 } from '../../shared/types/staff'
 import {
   OPEN_CONVOCATIONS,
+  inStaffArea,
   type ConvocationStatus,
   type SignatureStatus,
   type StaffRole,
@@ -43,8 +45,10 @@ import {
   type StaffTeam,
 } from '../../shared/utils/constants'
 import { todayIso } from '../../shared/utils/dates'
+import { changedKeys } from '../../shared/utils/plain'
 import { SESSION_EDITABLE_STATUSES, isSessionEditable } from '../../shared/utils/session-status'
 import {
+  availabilityConfirmations,
   campSessions,
   documents,
   emailLog,
@@ -58,6 +62,7 @@ import {
   users,
 } from '../db/schema'
 import {
+  availabilityReopenedEmail,
   convocationCancelledEmail,
   convocationEmail,
   defaultOutcomeMessage,
@@ -75,31 +80,86 @@ import { createError } from './errors'
 /** What a convocation declined or withdrawn lets go: its activity group and its lodging. */
 const LEAVE_SESSION = { activityGroup: null, lodgingId: null } as const
 
-/** Saves the canteen details of a staff member with the consent, or clears both; audited without the values. */
+/** The health data of a staff member as the person and the administration read it. */
+export function staffUsefulInfo(
+  profile: Pick<ProfileRow, 'usefulInfo' | 'otherInfo' | 'usefulInfoConsentAt'>,
+): StaffUsefulInfoDto {
+  return { info: profile.usefulInfo, otherInfo: profile.otherInfo, consentAt: iso(profile.usefulInfoConsentAt) }
+}
+
+/**
+ * Saves the health data of a staff member (canteen details and other ones) with the consent, or clears them
+ * and the consent; audited without the values.
+ */
 export async function saveStaffUsefulInfo(
   db: DbOrTx,
   input: { userId: string; value: StaffUsefulInfoInput; actor: Actor },
 ): Promise<StaffUsefulInfoDto> {
   const info = normalizeUsefulInfo(input.value.info)
+  const otherInfo = input.value.otherInfo?.trim() || null
   const [row] = await db
     .update(staffProfiles)
-    // The consent keeps the day it was first given; saving nothing withdraws it.
-    .set({
-      usefulInfo: info,
-      usefulInfoConsentAt: info ? sql`coalesce(${staffProfiles.usefulInfoConsentAt}, now())` : null,
-    })
+    // Every save with data is the consent given again (the box starts empty), to what is saved now; saving
+    // nothing withdraws it.
+    .set({ usefulInfo: info, otherInfo, usefulInfoConsentAt: info || otherInfo ? sql`now()` : null })
     .where(eq(staffProfiles.userId, input.userId))
-    .returning({ consentAt: staffProfiles.usefulInfoConsentAt })
+    .returning({
+      usefulInfo: staffProfiles.usefulInfo,
+      otherInfo: staffProfiles.otherInfo,
+      usefulInfoConsentAt: staffProfiles.usefulInfoConsentAt,
+    })
   if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.useful_info',
     entityType: 'user',
     entityId: input.userId,
-    data: { fields: info ? Object.keys(info) : [] },
+    data: { fields: [...(info ? Object.keys(info) : []), ...(otherInfo ? ['otherInfo'] : [])] },
     ip: input.actor.ip,
   })
-  return { info, consentAt: row.consentAt?.toISOString() ?? null }
+  return staffUsefulInfo(row)
+}
+
+/** The personal sheet of a profile row. */
+export function staffSheetOf(profile: ProfileRow): StaffSheet {
+  return {
+    birthDate: profile.birthDate,
+    birthPlace: profile.birthPlace,
+    fiscalCode: profile.fiscalCode,
+    address: profile.address,
+    city: profile.city,
+    postalCode: profile.postalCode,
+    province: profile.province,
+    region: profile.region,
+    shirtSize: profile.shirtSize,
+  }
+}
+
+/** Saves the personal sheet of a staff member; the audit names the fields that changed, never their values. */
+export async function saveStaffSheet(
+  db: DbOrTx,
+  input: { userId: string; value: StaffSheetInput; actor: Actor },
+): Promise<StaffSheet> {
+  // Locked: two saves at once (two tabs) each audit what they changed against what the other left.
+  const before = await profileOf(db, input.userId, { lock: true })
+  const sheet: StaffSheet = { ...input.value, province: input.value.province || null }
+  const fields = changedKeys(staffSheetOf(before), sheet)
+  if (!fields.length) return sheet
+  await db.update(staffProfiles).set(sheet).where(eq(staffProfiles.id, before.id))
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.sheet',
+    entityType: 'user',
+    entityId: input.userId,
+    data: { fields },
+    ip: input.actor.ip,
+  })
+  return sheet
+}
+
+/** The health data of a staff member for the reserved section of their admin page (the handler audits it). */
+export async function adminStaffHealth(db: DbOrTx, userId: string): Promise<StaffUsefulInfoDto> {
+  return staffUsefulInfo(await profileOf(db, userId))
 }
 
 /** A disabled account leaves the open sessions: its convocations let go of their group and lodging. */
@@ -130,8 +190,33 @@ export interface Actor {
   ip?: string | null
 }
 
-const NOT_EDITABLE = 'La candidatura è già stata inviata: non si può più modificare'
 const BEFORE_APPROVAL = 'Potrai indicare la tua disponibilità dopo l’approvazione della candidatura'
+const AVAILABILITY_LOCKED = 'Hai già confermato la tua disponibilità: per cambiarla chiedi il reset all’amministrazione'
+
+/** The profile of approved staff, the only ones who answer about availability; `lock` until the commit. */
+async function approvedProfile(db: DbOrTx, userId: string, options: { lock?: boolean } = {}): Promise<ProfileRow> {
+  const profile = await profileOf(db, userId, options)
+  if (profile.status !== 'approved') throw createError({ statusCode: 403, message: BEFORE_APPROVAL })
+  return profile
+}
+
+/**
+ * The last «Conferma le preferenze» among the sessions still open for availability: what the person sees fixed, can
+ * ask to reopen, and the administration reopens. Null when none is fixed.
+ */
+async function lastOpenConfirmation(db: DbOrTx, userId: string, today: string): Promise<Date | null> {
+  const [row] = await db
+    .select({ at: max(availabilityConfirmations.createdAt) })
+    .from(availabilityConfirmations)
+    .innerJoin(campSessions, eq(campSessions.id, availabilityConfirmations.sessionId))
+    .where(and(eq(availabilityConfirmations.userId, userId), openForAvailability(today)))
+  return row?.at ?? null
+}
+
+/** New dates for a session: the staff confirmed other ones, so their answers are open again (sessions.ts). */
+export async function reopenSessionAvailability(db: DbOrTx, sessionId: string): Promise<void> {
+  await db.delete(availabilityConfirmations).where(eq(availabilityConfirmations.sessionId, sessionId))
+}
 const SESSION_CLOSED = 'La sessione è conclusa o annullata: le convocazioni non si possono più cambiare'
 
 const iso = (value: Date | null | undefined) => value?.toISOString() ?? null
@@ -208,48 +293,29 @@ async function contractRequests(
 
 // ─── Application ───────────────────────────────────────────────────────────────────────────────────
 
-/** Saves what the person wrote so far; only while the application has not been sent. */
-export async function saveApplicationDraft(db: DbOrTx, userId: string, input: StaffApplicationDraft): Promise<void> {
-  const profile = await profileOf(db, userId, { lock: true })
-  if (profile.status !== 'registered') throw createError({ statusCode: 409, message: NOT_EDITABLE })
-  const values: Partial<typeof staffProfiles.$inferInsert> = {}
-  if (input.team !== undefined) values.team = input.team
-  if (input.birthDate !== undefined) values.birthDate = input.birthDate
-  if (input.city !== undefined) values.city = input.city || null
-  if (input.roles !== undefined) values.roles = await checkLabels(db, 'role', input.roles, { dropMissing: true })
-  if (input.qualifications !== undefined) values.qualifications = input.qualifications || null
-  if (input.experience !== undefined) values.experience = input.experience || null
-  if (input.motivation !== undefined) values.motivation = input.motivation || null
-  if (Object.keys(values).length) await db.update(staffProfiles).set(values).where(eq(staffProfiles.id, profile.id))
-}
-
-/** Attaches an uploaded CV while the application is open; returns the id of the CV it replaces. */
-export async function replaceCv(db: DbOrTx, userId: string, fileId: string): Promise<string | null> {
-  const profile = await profileOf(db, userId, { lock: true })
-  if (profile.status !== 'registered') throw createError({ statusCode: 409, message: NOT_EDITABLE })
-  await db.update(staffProfiles).set({ cvFileId: fileId }).where(eq(staffProfiles.id, profile.id))
-  return profile.cvFileId && profile.cvFileId !== fileId ? profile.cvFileId : null
-}
-
-/** registered → applied: the whole application, with the CV already uploaded. Sends nothing. */
-export async function submitApplication(
+/**
+ * Sends the application (spec 3.4): registered → applied, once the address is confirmed and the CV is
+ * there. `cvFileId` is the CV that comes with it: an account made before the CV was asked at registration,
+ * or invited, uploads it from its home. Sends nothing; false when there was nothing to send.
+ */
+export async function applyWithCv(
   db: DbOrTx,
   userId: string,
-  input: StaffApplicationInput,
   actor: Partial<Actor> = {},
-): Promise<void> {
-  const profile = await profileOf(db, userId, { lock: true })
-  if (profile.status !== 'registered') throw createError({ statusCode: 409, message: NOT_EDITABLE })
-  if (!profile.cvFileId) {
-    throw createError({ statusCode: 400, message: 'Carica il tuo CV in PDF prima di inviare la candidatura' })
-  }
-  // A role deleted while the form was open is left out; the application still needs one.
-  const roles = await checkLabels(db, 'role', input.roles, { dropMissing: true })
-  if (!roles.length) throw createError({ statusCode: 400, message: 'Scegli almeno un ruolo' })
-  await db
+  cvFileId?: string,
+): Promise<boolean> {
+  const [applied] = await db
     .update(staffProfiles)
-    .set({ ...input, roles, status: 'applied', appliedAt: new Date() })
-    .where(eq(staffProfiles.id, profile.id))
+    .set({ status: 'applied', appliedAt: new Date(), ...(cvFileId ? { cvFileId } : {}) })
+    .where(
+      and(
+        eq(staffProfiles.userId, userId),
+        eq(staffProfiles.status, 'registered'),
+        cvFileId ? undefined : isNotNull(staffProfiles.cvFileId),
+      ),
+    )
+    .returning({ id: staffProfiles.id })
+  if (!applied) return false
   await writeAudit(db, {
     actorUserId: userId,
     action: 'staff.apply',
@@ -257,6 +323,7 @@ export async function submitApplication(
     entityId: userId,
     ip: actor.ip ?? null,
   })
+  return true
 }
 
 // ─── Review ────────────────────────────────────────────────────────────────────────────────────────
@@ -287,10 +354,14 @@ export async function changeStaffStatus(
     })
   }
   const review = isReviewMove(profile.status, input.status)
+  // Out of the approved staff the availability starts over: back in, nothing of it is fixed.
+  const leaving = profile.status === 'approved'
+  if (leaving) await db.delete(availabilityConfirmations).where(eq(availabilityConfirmations.userId, input.userId))
   const [updated] = await db
     .update(staffProfiles)
     .set({
       status: input.status,
+      ...(leaving ? { availabilityResetRequestedAt: null } : {}),
       ...(input.notes !== undefined ? { reviewNotes: input.notes?.trim() || null } : {}),
       ...(review ? { reviewedAt: new Date(), reviewedBy: input.actor.userId } : {}),
     })
@@ -342,18 +413,12 @@ export async function approveApplications(
   return { approved: waiting.length, skipped: userIds.length - waiting.length }
 }
 
-/**
- * Moves a person between staff and v-team; their convocations keep the role they have. While the
- * application is a draft the team is the person's choice, in the form.
- */
+/** Moves a person between staff and v-team; their convocations keep the role they have. */
 export async function setStaffTeam(
   db: DbOrTx,
   input: { userId: string; team: StaffTeam; actor: Actor },
 ): Promise<void> {
   const profile = await profileOf(db, input.userId, { lock: true })
-  if (profile.status === 'registered') {
-    throw createError({ statusCode: 409, message: 'La squadra la sceglie la persona, finché non invia la candidatura' })
-  }
   if (profile.team === input.team) return
   await db.update(staffProfiles).set({ team: input.team }).where(eq(staffProfiles.id, profile.id))
   await writeAudit(db, {
@@ -366,18 +431,12 @@ export async function setStaffTeam(
   })
 }
 
-/**
- * The roles the administration gives a person (docs/spec.md 3.4); while the application is a draft they are
- * the person's choice, in the form. Convocations keep the role they have.
- */
+/** The roles the administration gives a person (docs/spec.md 3.4). Convocations keep the role they have. */
 export async function setStaffRoles(
   db: DbOrTx,
   input: { userId: string; roles: string[]; actor: Actor },
 ): Promise<void> {
   const profile = await profileOf(db, input.userId, { lock: true })
-  if (profile.status === 'registered') {
-    throw createError({ statusCode: 409, message: 'I ruoli li sceglie la persona, finché non invia la candidatura' })
-  }
   await saveLabels(db, profile, 'roles', await checkLabels(db, 'role', input.roles), input.actor)
 }
 
@@ -476,12 +535,19 @@ export async function setAvailability(
   input: { userId: string; sessionId: string; available: boolean },
   today: string = todayIso(),
 ): Promise<void> {
-  const profile = await profileOf(db, input.userId)
-  if (profile.status !== 'approved') throw createError({ statusCode: 403, message: BEFORE_APPROVAL })
+  // Locked: a confirmation at the same moment comes before or after this answer, never in between.
+  await approvedProfile(db, input.userId, { lock: true })
   const session = await sessionFor(db, input.sessionId)
   if (!isSessionEditable(session.status) || session.startDate <= today) {
     throw createError({ statusCode: 409, message: 'La sessione è già iniziata, conclusa o annullata' })
   }
+  const [confirmed] = await db
+    .select({ id: availabilityConfirmations.id })
+    .from(availabilityConfirmations)
+    .where(
+      and(eq(availabilityConfirmations.userId, input.userId), eq(availabilityConfirmations.sessionId, input.sessionId)),
+    )
+  if (confirmed) throw createError({ statusCode: 409, message: AVAILABILITY_LOCKED })
   if (input.available) {
     await db
       .insert(sessionAvailability)
@@ -492,6 +558,99 @@ export async function setAvailability(
       .delete(sessionAvailability)
       .where(and(eq(sessionAvailability.sessionId, input.sessionId), eq(sessionAvailability.userId, input.userId)))
   }
+}
+
+/**
+ * «Conferma le preferenze» for the sessions the person was shown (`sessionIds`, those still open among them): their
+ * answers are fixed until the administration reopens them. A session not among them stays to answer and confirm.
+ * The audit keeps the sessions confirmed and those the person is in for.
+ */
+export async function confirmAvailability(
+  db: DbOrTx,
+  input: { userId: string; sessionIds: string[]; actor: Actor },
+  today: string = todayIso(),
+): Promise<void> {
+  const profile = await approvedProfile(db, input.userId, { lock: true })
+  const shown = new Set(input.sessionIds)
+  const confirmed = (await myAvailability(db, profile, today)).sessions.filter(
+    session => !session.locked && shown.has(session.id),
+  )
+  if (!confirmed.length) return
+  await db
+    .insert(availabilityConfirmations)
+    .values(confirmed.map(session => ({ sessionId: session.id, userId: input.userId })))
+    .onConflictDoNothing()
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.availability_confirm',
+    entityType: 'user',
+    entityId: input.userId,
+    data: {
+      sessions: confirmed.map(session => session.id),
+      available: confirmed.filter(session => session.available).map(session => session.id),
+    },
+    ip: input.actor.ip,
+  })
+}
+
+/** «Chiedi il reset»: once something is confirmed, the person asks the administration to reopen it. */
+export async function requestAvailabilityReset(
+  db: DbOrTx,
+  input: { userId: string; actor: Actor },
+  today: string = todayIso(),
+): Promise<void> {
+  const profile = await approvedProfile(db, input.userId, { lock: true })
+  if (!(await lastOpenConfirmation(db, input.userId, today))) {
+    throw createError({ statusCode: 409, message: 'Non hai ancora confermato la disponibilità: puoi cambiarla tu' })
+  }
+  if (profile.availabilityResetRequestedAt) return
+  await db
+    .update(staffProfiles)
+    .set({ availabilityResetRequestedAt: sql`now()` })
+    .where(eq(staffProfiles.id, profile.id))
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.availability_reset_request',
+    entityType: 'user',
+    entityId: input.userId,
+    ip: input.actor.ip,
+  })
+}
+
+/**
+ * «Riapri la disponibilità» (administration, approved staff with something fixed): the answers stay, the person
+ * can change them and confirm again. Returns the email that tells them (none to a disabled account).
+ */
+export async function reopenAvailability(
+  db: DbOrTx,
+  input: { userId: string; actor: Actor; ctx: EmailContext },
+  today: string = todayIso(),
+): Promise<EmailMessage[]> {
+  const profile = await profileOf(db, input.userId, { lock: true })
+  if (profile.status !== 'approved') {
+    throw createError({
+      statusCode: 409,
+      message: 'La persona non è nello staff approvato: non c’è niente da riaprire',
+    })
+  }
+  if (!(await lastOpenConfirmation(db, input.userId, today))) {
+    throw createError({ statusCode: 409, message: 'La disponibilità non è confermata: la persona può già cambiarla' })
+  }
+  await db.delete(availabilityConfirmations).where(eq(availabilityConfirmations.userId, input.userId))
+  if (profile.availabilityResetRequestedAt) {
+    await db.update(staffProfiles).set({ availabilityResetRequestedAt: null }).where(eq(staffProfiles.id, profile.id))
+  }
+  await writeAudit(db, {
+    actorUserId: input.actor.userId,
+    action: 'staff.availability_reopen',
+    entityType: 'user',
+    entityId: input.userId,
+    data: { requested: profile.availabilityResetRequestedAt !== null },
+    ip: input.actor.ip,
+  })
+  const [user] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1)
+  if (!user || user.status === 'disabled') return []
+  return [availabilityReopenedEmail(input.ctx, { to: user.email, toUserId: user.id, firstName: user.firstName })]
 }
 
 // ─── Convocations ──────────────────────────────────────────────────────────────────────────────────
@@ -1008,12 +1167,15 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
   if (!row) throw createError({ statusCode: 404, message: 'Persona dello staff non trovata' })
   const { user, profile, cv } = row
 
-  const availability: AvailabilitySession[] = await db
-    .select(availabilitySession)
-    .from(sessionAvailability)
-    .innerJoin(campSessions, eq(campSessions.id, sessionAvailability.sessionId))
-    .where(and(eq(sessionAvailability.userId, userId), ne(campSessions.status, 'cancelled')))
-    .orderBy(asc(campSessions.startDate))
+  const [availability, confirmedAt]: [AvailabilitySession[], Date | null] = await Promise.all([
+    db
+      .select(availabilitySession)
+      .from(sessionAvailability)
+      .innerJoin(campSessions, eq(campSessions.id, sessionAvailability.sessionId))
+      .where(and(eq(sessionAvailability.userId, userId), ne(campSessions.status, 'cancelled')))
+      .orderBy(asc(campSessions.startDate)),
+    lastOpenConfirmation(db, userId, todayIso()),
+  ])
 
   const convocationRows = await db
     .select({
@@ -1084,8 +1246,8 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     createdAt: user.createdAt.toISOString(),
     status: profile.status,
     team: profile.team,
-    birthDate: profile.birthDate,
-    city: profile.city,
+    sheet: staffSheetOf(profile),
+    healthConsentAt: iso(profile.usefulInfoConsentAt),
     roles: profile.roles,
     tags: profile.tags,
     qualifications: profile.qualifications,
@@ -1097,6 +1259,8 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     reviewedByName: row.reviewerFirstName ? `${row.reviewerFirstName} ${row.reviewerLastName ?? ''}`.trim() : null,
     reviewNotes: profile.reviewNotes,
     availability,
+    availabilityConfirmedAt: iso(confirmedAt),
+    availabilityResetRequestedAt: iso(profile.availabilityResetRequestedAt),
     convocations,
     documents: await staffDocuments(db, userId),
     outcome: {
@@ -1232,32 +1396,45 @@ export async function sessionStaffData(db: DbOrTx, sessionId: string): Promise<S
 
 // ─── Reads: staff side ─────────────────────────────────────────────────────────────────────────────
 
-/** The application of the signed-in person. */
-export async function myApplication(db: DbOrTx, userId: string): Promise<StaffApplicationDto> {
-  const [[row], roleOptions] = await Promise.all([
-    db
-      .select({ profile: staffProfiles, cv: files })
-      .from(staffProfiles)
-      .leftJoin(files, eq(files.id, staffProfiles.cvFileId))
-      .where(eq(staffProfiles.userId, userId))
-      .limit(1),
+/** The signature of the sheet's PDF in force (staff-sheets.ts). */
+export async function sheetSignature(db: DbOrTx, userId: string): Promise<StaffSheetSignature | null> {
+  const [row] = await db
+    .select({ id: signatureRequests.id, status: signatureRequests.status, signedAt: signatureRequests.signedAt })
+    .from(documents)
+    .innerJoin(signatureRequests, eq(signatureRequests.documentId, documents.id))
+    .where(and(eq(documents.staffUserId, userId), isNull(documents.archivedAt), eq(signatureRequests.userId, userId)))
+    .limit(1)
+  return row ? { ...row, signedAt: iso(row.signedAt) } : null
+}
+
+/**
+ * The personal sheet of the signed-in person, from the rows `requireStaff` read: the account's details, the
+ * sheet, the health data and the application.
+ */
+export async function myStaffSheet(
+  db: DbOrTx,
+  user: Pick<typeof users.$inferSelect, 'firstName' | 'lastName' | 'email' | 'phone'>,
+  profile: ProfileRow,
+): Promise<StaffSheetDto> {
+  const [[cv], roleOptions, signature] = await Promise.all([
+    profile.cvFileId ? db.select().from(files).where(eq(files.id, profile.cvFileId)).limit(1) : [],
     staffRoleOptions(db),
+    sheetSignature(db, profile.userId),
   ])
-  if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
-  const { profile, cv } = row
   return {
-    status: profile.status,
-    editable: profile.status === 'registered',
-    team: profile.team,
-    birthDate: profile.birthDate,
-    city: profile.city,
-    roles: profile.roles,
-    roleOptions,
-    qualifications: profile.qualifications,
-    experience: profile.experience,
-    motivation: profile.motivation,
-    cv: cv ? toFileDto(cv) : null,
-    appliedAt: iso(profile.appliedAt),
+    account: { firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone },
+    sheet: staffSheetOf(profile),
+    signature,
+    health: staffUsefulInfo(profile),
+    application: {
+      team: profile.team,
+      roles: roleOptions.filter(role => profile.roles.includes(role.id)),
+      qualifications: profile.qualifications,
+      experience: profile.experience,
+      motivation: profile.motivation,
+      cv: cv ? toFileDto(cv) : null,
+      appliedAt: iso(profile.appliedAt),
+    },
   }
 }
 
@@ -1267,27 +1444,47 @@ export async function myApplication(db: DbOrTx, userId: string): Promise<StaffAp
  */
 export async function myAvailability(
   db: DbOrTx,
-  profile: Pick<ProfileRow, 'userId' | 'status'>,
+  profile: Pick<ProfileRow, 'userId' | 'status' | 'availabilityResetRequestedAt'>,
   today: string = todayIso(),
 ): Promise<MyAvailability> {
+  const resetRequestedAt = iso(profile.availabilityResetRequestedAt)
   // Only approved staff see the sessions: before approval (or after a rejection) they are not theirs to know.
-  if (profile.status !== 'approved') return { canEdit: false, sessions: [] }
+  if (profile.status !== 'approved') return { canEdit: false, confirmedAt: null, resetRequestedAt, sessions: [] }
   const rows = await db
-    .select({ session: availabilitySession, answer: sessionAvailability.id, convocation: sessionStaff.status })
+    .select({
+      session: availabilitySession,
+      answer: sessionAvailability.id,
+      convocation: sessionStaff.status,
+      confirmedAt: availabilityConfirmations.createdAt,
+    })
     .from(campSessions)
     .leftJoin(
       sessionAvailability,
       and(eq(sessionAvailability.sessionId, campSessions.id), eq(sessionAvailability.userId, profile.userId)),
     )
+    .leftJoin(
+      availabilityConfirmations,
+      and(
+        eq(availabilityConfirmations.sessionId, campSessions.id),
+        eq(availabilityConfirmations.userId, profile.userId),
+      ),
+    )
     .leftJoin(sessionStaff, and(eq(sessionStaff.sessionId, campSessions.id), eq(sessionStaff.userId, profile.userId)))
     .where(openForAvailability(today))
     .orderBy(asc(campSessions.startDate))
+  const confirmedAt = rows.reduce<Date | null>(
+    (last, row) => (row.confirmedAt && (!last || row.confirmedAt > last) ? row.confirmedAt : last),
+    null,
+  )
   return {
     canEdit: true,
+    confirmedAt: iso(confirmedAt),
+    resetRequestedAt,
     sessions: rows.map(row => ({
       ...row.session,
       available: row.answer !== null,
       convoked: row.convocation === 'sent' || row.convocation === 'accepted',
+      locked: row.confirmedAt !== null,
     })),
   }
 }
@@ -1353,6 +1550,17 @@ export async function myConvocations(
 
 /** The home of the signed-in staff member, whatever the status of the application. */
 export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string = todayIso()): Promise<StaffHome> {
+  const sheetComplete = isSheetComplete(staffSheetOf(profile))
+  // Before the approval the home is only where the application stands.
+  if (!inStaffArea(profile.status)) {
+    return {
+      status: profile.status,
+      toAnswer: [],
+      upcoming: [],
+      availability: { available: 0, total: 0, toConfirm: 0 },
+      sheetComplete,
+    }
+  }
   const [convocations, { sessions }] = await Promise.all([
     myConvocations(db, profile.userId, { approved: profile.status === 'approved' }),
     myAvailability(db, profile, today),
@@ -1360,12 +1568,11 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
   const available = sessions.filter(session => session.available).length
   return {
     status: profile.status,
-    appliedAt: iso(profile.appliedAt),
-    missing: profile.status === 'registered' ? applicationMissing(profile) : [],
     toAnswer: convocations.filter(c => c.answerable),
     upcoming: convocations.filter(
       c => c.status === 'accepted' && c.session.endDate >= today && c.session.status !== 'cancelled',
     ),
-    availability: { available, total: sessions.length },
+    availability: { available, total: sessions.length, toConfirm: sessions.filter(session => !session.locked).length },
+    sheetComplete,
   }
 }

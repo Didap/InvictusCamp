@@ -41,9 +41,9 @@ const history = computed(() =>
               ]
             : [
                 {
-                  label: 'Vedi la candidatura',
-                  icon: 'i-lucide-file-user',
-                  to: '/staff/candidatura',
+                  label: 'Vedi la scheda personale',
+                  icon: 'i-lucide-id-card',
+                  to: '/staff/scheda',
                   color: 'neutral',
                   variant: 'outline',
                   class: 'pointer-coarse:min-h-11',

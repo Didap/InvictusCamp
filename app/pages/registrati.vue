@@ -75,7 +75,7 @@ const contact = useContact(true)
       <UFormField label="Telefono" name="phone" required>
         <UInput v-model="state.phone" type="tel" autocomplete="tel" size="lg" class="w-full" />
       </UFormField>
-      <UFormField label="Password" name="password" help="Almeno 10 caratteri." required>
+      <UFormField label="Password" name="password" help="Almeno 8 caratteri." required>
         <IcPasswordInput v-model="state.password" autocomplete="new-password" />
       </UFormField>
       <UFormField name="privacy">

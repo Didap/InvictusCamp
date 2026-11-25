@@ -25,9 +25,16 @@ export type ParticipationKind = (typeof PARTICIPATION_KINDS)[number]
 export const PARTICIPATION_STATUSES = ['selected', 'invited', 'confirmed', 'declined', 'cancelled'] as const
 export type ParticipationStatus = (typeof PARTICIPATION_STATUSES)[number]
 
-/** registered (account only) → applied (candidatura inviata) → approved / rejected; inactive = no longer called. */
+/**
+ * registered (account, address or CV still missing) → applied (candidatura inviata) → approved / rejected;
+ * inactive = no longer called.
+ */
 export const STAFF_STATUSES = ['registered', 'applied', 'approved', 'rejected', 'inactive'] as const
 export type StaffStatus = (typeof STAFF_STATUSES)[number]
+/** Who sees the whole staff area (spec 3.4): the others see only the home with where their application stands. */
+export function inStaffArea(status: StaffStatus | null | undefined): boolean {
+  return status === 'approved' || status === 'inactive'
+}
 
 /**
  * A role of staff and v-team: the id of a row of `staff_roles`, which the administration creates, renames
@@ -83,7 +90,7 @@ export type MemberKind = (typeof MEMBER_KINDS)[number]
 export const FAMILY_FORM_STATUSES = ['draft', 'submitted'] as const
 export type FamilyFormStatus = (typeof FAMILY_FORM_STATUSES)[number]
 
-/** The regions of Italy, for the family's residence. */
+/** The regions of Italy, for the residence of a family or of a staff member. */
 export const ITALIAN_REGIONS = [
   'Abruzzo',
   'Basilicata',
@@ -107,6 +114,10 @@ export const ITALIAN_REGIONS = [
   'Veneto',
 ] as const
 export type ItalianRegion = (typeof ITALIAN_REGIONS)[number]
+
+/** The T-shirt sizes of the staff's uniform (the personal sheet, /staff/scheda). */
+export const SHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'] as const
+export type ShirtSize = (typeof SHIRT_SIZES)[number]
 
 export const DOCUMENT_CATEGORIES = ['contract', 'consent', 'regulation', 'privacy', 'other'] as const
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number]

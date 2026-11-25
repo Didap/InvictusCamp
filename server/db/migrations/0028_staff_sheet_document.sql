@@ -1,0 +1,3 @@
+ALTER TABLE "documents" ADD COLUMN "staff_user_id" uuid;--> statement-breakpoint
+ALTER TABLE "documents" ADD CONSTRAINT "documents_staff_user_id_users_id_fk" FOREIGN KEY ("staff_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "documents_staff_sheet_key" ON "documents" USING btree ("staff_user_id") WHERE "documents"."archived_at" is null;

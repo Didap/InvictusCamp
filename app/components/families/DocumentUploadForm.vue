@@ -49,8 +49,6 @@ const categories = computed(() =>
     props.healthConsent ? undefined : PERSONAL_DOCUMENT_CATEGORIES.filter(category => !isHealthDocument(category)),
   ),
 )
-// Nothing to drag on a touch screen: the drop zone only opens the file picker there.
-const touch = useMediaQuery('(pointer: coarse)')
 const memberItems = computed(() => [
   { value: WHOLE_FAMILY, label: 'Tutta la famiglia' },
   // A card still to fill in has no name to put on a document.
@@ -122,15 +120,7 @@ async function upload() {
       <UInput v-model="state.title" class="w-full" />
     </UFormField>
     <UFormField label="File" name="file" required>
-      <UFileUpload
-        v-model="state.file"
-        accept="application/pdf,image/jpeg,image/png"
-        :label="touch ? 'Scegli il file dal dispositivo' : 'Trascina qui il file o sceglilo dal dispositivo'"
-        description="PDF, JPG o PNG, fino a 15 MB"
-        icon="i-lucide-upload"
-        :disabled="uploading"
-        class="min-h-36 w-full"
-      />
+      <IcFilePicker v-model="state.file" :disabled="uploading" />
     </UFormField>
     <div class="flex justify-end">
       <UButton

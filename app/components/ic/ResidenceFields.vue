@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ITALIAN_REGIONS, type ItalianRegion } from '#shared/utils/constants'
 
-// The residence of a family, inside the parent's UForm (which validates it): required in the family
-// data form (/famiglia/profilo), optional when the administration edits it (FamilyDataForm).
+// A residence, inside the parent's UForm (which validates it): required in the family data form
+// (/famiglia/profilo) and in the staff's personal sheet (/staff/scheda), optional when the administration
+// edits a family (FamilyDataForm).
 const residence = defineModel<{
   address: string
   city: string
@@ -16,14 +17,14 @@ const hint = computed(() => (props.required ? undefined : 'Facoltativo'))
 
 <template>
   <div class="space-y-5">
-    <UFormField label="Via e numero civico" name="address" data-field="address" :required="required" :hint="hint">
+    <UFormField label="Via e numero civico" name="address" :required="required" :hint="hint">
       <UInput v-model="residence.address" autocomplete="street-address" class="w-full" />
     </UFormField>
     <div class="grid gap-5 sm:grid-cols-[1fr_10rem]">
-      <UFormField label="Città" name="city" data-field="city" :required="required" :hint="hint">
+      <UFormField label="Città" name="city" :required="required" :hint="hint">
         <UInput v-model="residence.city" autocomplete="address-level2" class="w-full" />
       </UFormField>
-      <UFormField label="CAP" name="postalCode" data-field="postalCode" :required="required" :hint="hint">
+      <UFormField label="CAP" name="postalCode" :required="required" :hint="hint">
         <UInput
           v-model="residence.postalCode"
           inputmode="numeric"
@@ -34,7 +35,7 @@ const hint = computed(() => (props.required ? undefined : 'Facoltativo'))
       </UFormField>
     </div>
     <div class="grid gap-5 sm:grid-cols-[1fr_10rem]">
-      <UFormField label="Regione" name="region" data-field="region" :required="required" :hint="hint">
+      <UFormField label="Regione" name="region" :required="required" :hint="hint">
         <USelect
           v-model="residence.region"
           :items="[...ITALIAN_REGIONS]"
@@ -43,14 +44,14 @@ const hint = computed(() => (props.required ? undefined : 'Facoltativo'))
           class="w-full"
         />
       </UFormField>
-      <UFormField
-        label="Provincia"
-        name="province"
-        data-field="province"
-        hint="Facoltativo"
-        help="La sigla, per esempio TA."
-      >
-        <UInput v-model="residence.province" maxlength="2" autocomplete="off" class="w-full uppercase" />
+      <UFormField label="Provincia" name="province" hint="Facoltativo" help="La sigla, per esempio TA.">
+        <UInput
+          v-model="residence.province"
+          maxlength="2"
+          autocomplete="off"
+          class="w-full"
+          :ui="{ base: 'uppercase' }"
+        />
       </UFormField>
     </div>
   </div>
