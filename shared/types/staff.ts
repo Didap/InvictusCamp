@@ -175,6 +175,8 @@ export interface StaffDetail {
   documents: StaffDocumentDto[]
   /** The required documents (CV, ID in PDF) not there yet, once in the staff area. */
   documentsMissing: RequiredStaffDocument[]
+  /** The trainings of «Formazione» the person is interested in. */
+  training: Pick<TrainingOption, 'id' | 'title'>[]
   outcome: StaffOutcome
 }
 
@@ -353,4 +355,23 @@ export interface MyAvailability {
 export interface AcceptResult {
   /** The contract to sign now, if the session has one. */
   signatureRequestId: string | null
+}
+
+// ─── Formazione ────────────────────────────────────────────────────────────────────────────────────
+
+/** A training proposed in «Formazione». */
+export interface TrainingOption {
+  id: string
+  title: string
+  description: string | null
+}
+
+/** GET /api/admin/training: a training proposed, with who is interested. */
+export interface TrainingOptionDto extends TrainingOption {
+  people: { userId: string; name: string; team: StaffTeam }[]
+}
+
+/** GET /api/staff/training: a training proposed, and whether the signed-in person is interested. */
+export interface MyTrainingOption extends TrainingOption {
+  interested: boolean
 }

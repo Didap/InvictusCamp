@@ -170,6 +170,8 @@ export const GUIDES: Record<UserRole, Guide> = {
       '/staff/sessioni': 'Le sessioni che hai accettato, con il programma della settimana, e quelle già fatte.',
       '/staff/documenti':
         'I documenti obbligatori (CV e documento d’identità, in PDF), quelli da firmare, come la tua scheda o il contratto di una sessione, e quelli che carichi tu.',
+      '/staff/formazione':
+        'Le formazioni che propone l’amministrazione: spunta quelle che ti interessano, ogni spunta si salva da sola.',
       ...ACCOUNT,
     },
     howTos: [
@@ -272,6 +274,7 @@ export const GUIDES: Record<UserRole, Guide> = {
         'Tutte le famiglie con i loro dati, le schede e i documenti. Da qui modifichi anche il modulo «Dati della famiglia» e il testo della liberatoria.',
       '/admin/staff': 'Le persone dello staff: candidature da valutare, schede, ruoli, valutazione e disponibilità.',
       '/admin/v-team': 'Come lo staff, per i volontari del v-team.',
+      '/admin/formazione': 'Le formazioni che proponi a staff e v-team, e chi è interessato a ognuna.',
       '/admin/documenti': 'Carichi un PDF, lo assegni da firmare e segui chi ha firmato.',
       '/admin/comunicazioni':
         'Le email a famiglie e staff, i modelli da cui partire e il registro di tutte le email partite.',

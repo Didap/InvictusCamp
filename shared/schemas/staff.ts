@@ -17,7 +17,16 @@ import {
   type StaffTeam,
 } from '../utils/constants'
 import { andList } from '../utils/format'
-import { requiredResidence, zBirthDate, zFiscalCode, zProvince, zRequiredText, zText, zUuid } from './common'
+import {
+  requiredResidence,
+  zBirthDate,
+  zFiscalCode,
+  zOptionalText,
+  zProvince,
+  zRequiredText,
+  zText,
+  zUuid,
+} from './common'
 
 /** The id of a role of `staff_roles` (the server checks it exists). */
 export const zStaffRole = z.string().trim().min(1).max(64)
@@ -127,6 +136,13 @@ export const staffTagsSchema = z.object({ tags: z.array(zUuid).max(STAFF_LABELS_
 /** POST /api/admin/staff/roles, PUT /api/admin/staff/roles/:id: a role of staff and v-team. */
 export const staffRoleInputSchema = z.object({ name: zRequiredText(60) })
 export type StaffRoleInput = z.infer<typeof staffRoleInputSchema>
+
+/** POST /api/admin/training, PUT /api/admin/training/:id: a training proposed in «Formazione». */
+export const trainingOptionSchema = z.object({ title: zRequiredText(120), description: zOptionalText(500) })
+export type TrainingOptionInput = z.infer<typeof trainingOptionSchema>
+
+/** PUT /api/staff/training/:id: interested or not. */
+export const trainingInterestSchema = z.object({ interested: z.boolean() })
 
 /** POST /api/admin/staff/tags, PUT /api/admin/staff/tags/:id: a tag of the «Valutazione». */
 export const staffTagInputSchema = z.object({ name: zRequiredText(40), color: z.enum(STAFF_TAG_COLORS) })

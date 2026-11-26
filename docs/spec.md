@@ -37,14 +37,15 @@ Public: `/accedi`, `/registrati` (family), `/candidati` (staff), `/password-dime
 
 Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova`, `/admin/sessioni/:id`
 (tabs Panoramica, Famiglie, Alloggi, Gruppi, Mensa, Staff, V-team, Programma, Documenti, Comunicazioni), `/admin/famiglie`,
-`/admin/famiglie/:id`, `/admin/staff`, `/admin/staff/:userId`, `/admin/v-team`, `/admin/v-team/:userId` (3.4),
+`/admin/famiglie/:id`, `/admin/staff`, `/admin/staff/:userId`, `/admin/v-team`, `/admin/v-team/:userId`,
+`/admin/formazione` (3.4),
 `/admin/documenti`, `/admin/documenti/:id`,
 `/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/programma`,
 `/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/feedback` (3.13), `/admin/utenti`.
 
 Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
 `/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`, `/famiglia/questionario/:sessionId` (3.13). Staff: `/staff` (home), `/staff/scheda`,
-`/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`,
+`/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`, `/staff/formazione`,
 `/staff/programma/:sessionId`.
 Everyone: `/account`, `/firma/:requestId`, `/guida` (3.15).
 
@@ -144,12 +145,6 @@ empty, the date is the last save's); saving nothing withdraws it. Last, the
 application as it was sent (team, roles, the older texts, CV). Until the sheet is complete the home asks for
 it. The administration sees the sheet on the person's page, the health data in a reserved section opened on
 demand and audited (`staff.health_view`), as for families.
-**Required documents** (`/staff/documenti`, «Documenti obbligatori» first): a CV and an ID, personal documents of
-categories `cv` and `id_document`, in PDF only (a family never has `cv`). The CV sent with the application
-(`staff_profiles.cvFileId`) counts as the CV and stays as it was; an updated one, or the first for someone invited as
-approved, is uploaded in its place on the page. An ID uploaded earlier as a photo does not count. Until both are
-there the home asks for them, and the person's admin page says which is missing. The other personal documents
-(titles, certificates) keep their categories and formats.
 Once the sheet is complete, the gestionale writes its PDF («Scheda personale · Nome Cognome»: the account's
 name, email and phone, birth, codice fiscale, residence, T-shirt size and «Con la firma confermo che i dati di
 questa scheda sono corretti e aggiornati»; no health data) and asks the person to sign it like every document,
@@ -158,6 +153,16 @@ document among those to sign. A change of the sheet, or of name or phone from `/
 old one archived, its signature cancelled if still to sign (audited, `staff.sheet_document`). Like a family's
 release it is never edited, assigned or restored by hand (`documents.staffUserId`); the administration finds it
 in Documenti and in «Firme» on the person's page.
+**Required documents** (`/staff/documenti`, «Documenti obbligatori» first): a CV and an ID, personal documents of
+categories `cv` and `id_document`, in PDF only (a family never has `cv`). The CV sent with the application
+(`staff_profiles.cvFileId`) counts as the CV and stays as it was; an updated one, or the first for someone invited as
+approved, is uploaded in its place on the page. An ID uploaded earlier as a photo does not count. Until both are
+there the home asks for them, and the person's admin page says which is missing. The other personal documents
+(titles, certificates) keep their categories and formats.
+**Formazione**: the administration proposes trainings (`/admin/formazione`: title, optional description; add, edit,
+delete with its interests; audited `training.*`), and sees who is interested, with a link to each person. Staff and
+v-team in the staff area tick on `/staff/formazione` those that interest them, each tick saved at once
+(`training_interests`); the person's admin page lists them.
 The outcome email (`staff.approved` / `staff.rejected`) is **not automatic**: the administration sends it
 from the dashboard when it chooses, with a message it can edit. Until approved, a staff member cannot give
 availability or receive convocations. The administration can move a person to the other team from their page
