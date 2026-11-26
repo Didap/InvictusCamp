@@ -33,7 +33,7 @@ type Kind = keyof typeof KINDS
 const holds = (kind: Kind, id: string) => sql`${staffProfiles[KINDS[kind].field]} @> jsonb_build_array(${id}::text)`
 
 /** The roles in their order: the choices of the application and of the admin pages. */
-export function staffRoleOptions(db: DbOrTx) {
+function staffRoleOptions(db: DbOrTx) {
   return db
     .select({ id: staffRoles.id, name: staffRoles.name })
     .from(staffRoles)

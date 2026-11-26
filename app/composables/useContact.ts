@@ -20,7 +20,7 @@ export function contactParts(contact: ContactConfig, lead?: string): ContactPart
   const phone = contact.phone?.trim()
   const hours = contact.hours?.trim()
   const start = (verb: string) => (lead ? `${lead}, ${verb}` : verb.charAt(0).toUpperCase() + verb.slice(1))
-  if (!email && !phone) return [{ text: `${start('scrivi')} all’amministrazione del camp.` }]
+  if (!email && !phone) return [{ text: `${start('scrivici')}.` }]
   const parts: ContactPart[] = []
   if (email) parts.push({ text: `${start('scrivi a')} ` }, { text: email, href: `mailto:${email}` })
   if (phone) {

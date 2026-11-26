@@ -28,7 +28,7 @@ const message = computed(() => {
   if (item.status === 'cancelled') {
     return item.sessionStatus === 'cancelled'
       ? 'La sessione è stata annullata e non si terrà.'
-      : 'La partecipazione della tua famiglia è stata annullata dall’amministrazione del camp.'
+      : 'La partecipazione della tua famiglia è stata annullata.'
   }
   if (item.status === 'declined') {
     return `Hai rinunciato${item.respondedAt ? ` il ${formatDay(todayIso(new Date(item.respondedAt)), 'long')}` : ''}.`
@@ -148,7 +148,7 @@ async function confirmPlace() {
       :answers="['declined']"
       :submit-label="item.kind === 'slot' ? 'Rinuncia al posto' : 'Esci dalla lista'"
       :loading="saving"
-      reason-help="Se vuoi, scrivi il motivo: lo legge solo l’amministrazione del camp. Non servono dettagli sulla salute."
+      reason-help="Se vuoi, scrivi il motivo: lo leggono solo gli organizzatori del camp. Non servono dettagli sulla salute."
       @submit="answer"
     >
       <template #description>

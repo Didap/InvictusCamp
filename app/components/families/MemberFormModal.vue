@@ -228,7 +228,7 @@ async function save() {
             <template v-if="withCondition">
               <p class="max-w-prose text-sm text-muted">
                 Scegli tutte le risposte che valgono: servono al camp per organizzare il soggiorno. Le vedete solo voi e
-                l’amministrazione, e non finiscono mai nelle email.
+                chi organizza il camp, e non finiscono mai nelle email.
               </p>
               <UFormField
                 v-for="field in DISABILITY_FIELDS"

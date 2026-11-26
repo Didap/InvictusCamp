@@ -142,7 +142,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       {
         question: 'Chi vede le informazioni sulla salute?',
         answer:
-          'Tu e l’amministrazione del camp. Per i pasti, allergie, intolleranze, alimentazione, selettività alimentare e le note delle informazioni utili arrivano con il nome anche a chi cucina. Servono il tuo consenso: lo dai in «Dati della famiglia» e puoi ritirarlo in «Componenti», e in quel caso le cancelliamo.',
+          'Tu e chi organizza il camp. Per i pasti, allergie, intolleranze, alimentazione, selettività alimentare e le note delle informazioni utili arrivano con il nome anche a chi cucina. Servono il tuo consenso: lo dai in «Dati della famiglia» e puoi ritirarlo in «Componenti», e in quel caso le cancelliamo.',
       },
       {
         question: 'Quali documenti posso caricare?',
@@ -151,7 +151,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       {
         question: 'Dove vedo l’alloggio e il gruppo della mia famiglia?',
         answer:
-          'Li organizza l’amministrazione e prima della sessione non compaiono nel gestionale. Finita la sessione li ritrovi nelle sessioni passate, in fondo a «Sessioni».',
+          'Li organizziamo noi e prima della sessione non compaiono nel gestionale. Finita la sessione li ritrovi nelle sessioni passate, in fondo a «Sessioni».',
       },
       CHANGE_ACCOUNT,
       CODE,
@@ -163,17 +163,17 @@ export const GUIDES: Record<UserRole, Guide> = {
     areas: {
       '/staff': 'La tua pagina iniziale: ti dice a che punto è la candidatura e cosa resta da fare.',
       '/staff/scheda':
-        'I tuoi dati per il camp: nascita, codice fiscale, residenza, taglia della maglietta, allergie e alimentazione. Quando è completa la firmi.',
+        'I tuoi dati per il camp: nascita, codice fiscale, residenza, taglia della maglietta, formula contrattuale (per lo staff), allergie e alimentazione. Quando è completa la firmi.',
       '/staff/disponibilita':
-        'Le sessioni in programma: per ognuna dici «Ci sono» se puoi esserci per tutta la sessione, poi confermi le tue preferenze.',
+        'Le sessioni in programma: per ognuna attivi «Sono disponibile» se puoi esserci per tutta la sessione, poi confermi le tue preferenze.',
       '/staff/convocazioni': 'Le convocazioni a cui devi ancora rispondere: le accetti o le rifiuti.',
       '/staff/sessioni': 'Le sessioni che hai accettato, con il programma della settimana, e quelle già fatte.',
       '/staff/documenti':
-        'I documenti obbligatori (CV e documento d’identità, in PDF), quelli da firmare, come la tua scheda o il contratto di una sessione, e quelli che carichi tu.',
+        'I documenti obbligatori (CV e documento d’identità), quelli da firmare, come la tua scheda o il contratto di una sessione, e quelli che carichi tu, tutti in PDF.',
       '/staff/formazione':
-        'Le formazioni che propone l’amministrazione: spunta quelle che ti interessano, ogni spunta si salva da sola.',
+        'Le formazioni che proponiamo: spunta quelle che ti interessano, ogni spunta si salva da sola.',
       '/staff/risorse':
-        'I documenti che l’amministrazione ti chiede di leggere e accettare, come il regolamento, e quelli da consultare.',
+        'I documenti che ti chiediamo di leggere e accettare, come il regolamento, e quelli da consultare.',
       ...ACCOUNT,
     },
     howTos: [
@@ -189,10 +189,10 @@ export const GUIDES: Record<UserRole, Guide> = {
       {
         title: 'Completare e firmare la scheda personale',
         steps: [
-          'Apri «Scheda personale» e compila data e luogo di nascita, codice fiscale, residenza e taglia della maglietta.',
+          'Apri «Scheda personale» e in «Altri dati anagrafici» compila data e luogo di nascita, codice fiscale e residenza.',
+          'In «Info utili per la nostra collaborazione» scegli la taglia e, se sei nello staff, la formula contrattuale. Allergie, intolleranze, preferenze alimentari e altre informazioni sono facoltative: se le indichi, spunta il consenso.',
           'Premi «Salva la scheda».',
           'Il gestionale prepara la scheda in PDF: premi «Leggi e firma» e firmala con il codice che ti arriva via email. Se vedi «Prepara il PDF da firmare», premilo prima.',
-          'Più in basso, in «Alimentazione e altre informazioni», premi «Indica allergie e altro»: allergie, intolleranze e alimentazione arrivano a chi prepara i pasti, «Altro da condividere» lo legge solo l’amministrazione. Spunta il consenso e premi «Salva».',
           'Se poi cambi la scheda, il nome o il telefono, la scheda si rifà e va firmata di nuovo.',
         ],
       },
@@ -209,9 +209,9 @@ export const GUIDES: Record<UserRole, Guide> = {
         title: 'Dare la disponibilità',
         steps: [
           'Apri «Disponibilità»: trovi le sessioni che non sono ancora iniziate.',
-          'Attiva «Ci sono» per ogni sessione in cui puoi esserci. Vale per tutta la sessione, non per una parte.',
+          'Attiva «Sono disponibile» per ogni sessione in cui puoi esserci. Vale per tutta la sessione, non per una parte.',
           'Ogni risposta si salva da sola. Quando hai finito premi «Conferma le preferenze»: da quel momento non si possono più cambiare.',
-          'Se devi cambiarle premi «Chiedi il reset». Quando l’amministrazione riapre la disponibilità ricevi un’email.',
+          'Se devi cambiarle premi «Chiedi il reset». Quando riapriamo la disponibilità ricevi un’email.',
         ],
       },
       {
@@ -234,18 +234,18 @@ export const GUIDES: Record<UserRole, Guide> = {
           'Le altre sezioni si aprono quando la candidatura è approvata. Fino ad allora la Home ti dice a che punto è.',
       },
       {
-        question: 'Se dico «Ci sono» vuol dire che mi avete convocato?',
+        question: 'Se dico «Sono disponibile» vuol dire che mi avete convocato?',
         answer:
           'No. È una preferenza: non è una convocazione e non ti impegna. La convocazione arriva a parte, con un’email.',
       },
       {
         question: 'Ho confermato le preferenze e voglio cambiarle',
         answer:
-          'In «Disponibilità» premi «Chiedi il reset». Quando l’amministrazione riapre la disponibilità ricevi un’email: cambi le risposte e le confermi di nuovo.',
+          'In «Disponibilità» premi «Chiedi il reset». Quando riapriamo la disponibilità ricevi un’email: cambi le risposte e le confermi di nuovo.',
       },
       {
         question: 'Posso esserci solo per una parte della sessione?',
-        answer: 'No, «Ci sono» vale per tutta la sessione. Per un caso particolare scrivici.',
+        answer: 'No, «Sono disponibile» vale per tutta la sessione. Per un caso particolare scrivici.',
       },
       {
         question: 'Dove trovo il programma della settimana?',
@@ -254,7 +254,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       {
         question: 'Chi vede le mie allergie e le mie note?',
         answer:
-          'Allergie, intolleranze e alimentazione arrivano a chi prepara i pasti. «Altro da condividere» lo legge solo l’amministrazione. Li indichi solo con il consenso; per ritirarlo premi «Cancella i dati e ritira il consenso».',
+          'Allergie, intolleranze e preferenze alimentari arrivano con il tuo nome a chi prepara i pasti. Le allergie non alimentari e le altre informazioni le leggono solo gli organizzatori del camp. Le indichi solo con il consenso; per ritirarlo premi «Cancella queste informazioni e ritira il consenso».',
       },
       CHANGE_ACCOUNT,
       CODE,
@@ -303,15 +303,15 @@ export const GUIDES: Record<UserRole, Guide> = {
         title: 'Valutare una candidatura',
         steps: [
           'La Panoramica ti dice quante candidature aspettano, per lo staff e per il v-team.',
-          'Apri la persona da «Staff» o «V-team»: trovi i suoi dati e il CV.',
-          'Approva o rifiuta la candidatura. Le note interne la persona non le vede mai.',
+          'Apri la persona da «Staff» o «V-team»: il CV è in «Documenti personali».',
+          'In «Stato» premi «Approva la candidatura» o «Non selezionare»: approvata, la persona entra nell’area staff. Le note interne la persona non le vede mai.',
           'L’email con l’esito non parte da sola: la mandi tu quando vuoi, con un messaggio che puoi cambiare.',
         ],
       },
       {
         title: 'Convocare staff e v-team',
         steps: [
-          'Nella sessione apri la scheda «Staff» o «V-team» e premi «Aggiungi persone»: ti propone chi ha detto «Ci sono» per quella sessione.',
+          'Nella sessione apri la scheda «Staff» o «V-team» e premi «Aggiungi persone»: ti propone chi ha indicato la disponibilità per quella sessione.',
           'Dai a ognuno il ruolo nella sessione, coordinatore compreso.',
           'Seleziona le persone e premi «Invia la convocazione»: ricevono un’email e rispondono dal loro account.',
           'Se la sessione ha un contratto, chi accetta lo riceve da firmare. La convocazione è confermata quando l’ha firmato.',
@@ -371,7 +371,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       {
         question: 'Chi vede i dati sulla salute?',
         answer:
-          'Solo l’amministrazione: nella pagina della famiglia, in quella di ogni persona dello staff e nella scheda «Mensa» della sessione, e ogni lettura resta registrata. L’elenco e il CSV delle famiglie non li mostrano. Il PDF e il CSV della mensa sì, con i nomi, e così i certificati caricati dalle famiglie: mandali solo a chi deve averli.',
+          'Solo gli admin: nella pagina della famiglia, in quella di ogni persona dello staff e nella scheda «Mensa» della sessione, e ogni lettura resta registrata. L’elenco e il CSV delle famiglie non li mostrano. Il PDF e il CSV della mensa sì, con i nomi, e così i certificati caricati dalle famiglie: mandali solo a chi deve averli.',
       },
       {
         question: 'Come cambio le domande del modulo «Dati della famiglia»?',

@@ -16,7 +16,7 @@ import type {
   StaffStatus,
   StaffTeam,
 } from '../../shared/utils/constants'
-import { CALENDAR_2027, calendarTitle } from '../../shared/content/calendar-2027'
+import { CALENDAR_2027, calendarTitle, sessionName } from '../../shared/content/calendar-2027'
 import { FEEDBACK_OTHER_ITEMS } from '../../shared/content/feedback-form'
 import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '../../shared/utils/constants'
@@ -611,7 +611,7 @@ function slug(value: string): string {
 }
 
 const LOREM = [
-  'Il presente documento è un esempio generato per provare il gestionale di Invictus Camp. Il testo definitivo sarà fornito dall’amministrazione del camp.',
+  'Il presente documento è un esempio generato per provare il gestionale di Invictus Camp. Il testo definitivo sarà fornito da Invictus Camp.',
   'Le parti si impegnano a rispettare le regole del camp, la riservatezza delle informazioni sulle famiglie ospiti e le indicazioni del personale.',
   'Firmando questo documento si dichiara di averlo letto per intero e di accettarne il contenuto.',
 ]
@@ -770,11 +770,6 @@ export async function seedDemo(
       birthDate: `${2004 - index * 3}-0${(index % 9) + 1}-1${index % 9}`,
       roles: s.roles,
       tags: s.status === 'approved' ? demoTags(index) : [],
-      qualifications: applied ? 'Laurea e attestati del settore (esempio).' : null,
-      experience: applied
-        ? 'Esperienze con bambini e ragazzi con disabilità in centri estivi e associazioni (esempio).'
-        : null,
-      motivation: applied ? 'Voglio contribuire a un’estate inclusiva per le famiglie del camp (esempio).' : null,
       cvFileId: cv?.id ?? null,
       // The demo account has its personal sheet filled in (/staff/scheda); the others still have to.
       ...(s.email === DEMO_ACCOUNTS.staff
@@ -786,12 +781,14 @@ export async function seedDemo(
             province: 'LE',
             region: 'Puglia' as const,
             shirtSize: 'M' as const,
+            contractType: 'occasional' as const,
           }
         : {}),
-      // Some canteen details of the approved staff, with the consent.
+      // Some health details of the approved staff, with the consent.
       ...(s.status === 'approved' && index % 3 === 1
         ? {
             usefulInfo: DEMO_USEFUL_INFO[index % DEMO_USEFUL_INFO.length] ?? { diet: 'vegetarian' },
+            ...(index % 2 ? { nonFoodAllergies: { allergies: ['dust_mites'] } } : {}),
             usefulInfoConsentAt: new Date(),
           }
         : {}),
@@ -1042,25 +1039,27 @@ export async function seedDemo(
   }
 
   const byName = (first: string) => staff.find(s => s.firstName === first)!
-  const convoke = async (sessionId: string, rows: [string, ConvocationStatus, StaffRole][]) => {
+  // The message an admin writes with the convocation names the session, as the camp numbers them.
+  const convoke = async (session: { id: string; title: string }, rows: [string, ConvocationStatus, StaffRole][]) => {
+    const message = `Ti aspettiamo al camp per ${sessionName(session.title)}.`
     await db.insert(t.sessionStaff).values(
       rows.map(([first, status, role]) => ({
-        sessionId,
+        sessionId: session.id,
         userId: byName(first).userId,
         role,
         status,
         sentAt: status === 'draft' ? null : new Date('2026-10-28T09:00:00Z'),
         respondedAt: status === 'accepted' || status === 'declined' ? new Date('2026-10-30T09:00:00Z') : null,
-        message: status === 'draft' ? null : 'Ti aspettiamo al camp per la settimana di fine giugno.',
+        message: status === 'draft' ? null : message,
       })),
     )
   }
-  await convoke(past.id, [
+  await convoke(past, [
     ['Chiara', 'accepted', 'group_lead'],
     ['Martina', 'accepted', 'group_lead'],
     ['Lorenzo', 'accepted', 'activity_lead'],
   ])
-  await convoke(june.id, [
+  await convoke(june, [
     ['Chiara', 'sent', 'group_lead'],
     ['Martina', 'accepted', 'group_lead'],
     ['Andrea', 'accepted', 'activity_lead'],
@@ -1071,7 +1070,7 @@ export async function seedDemo(
     ['Giulia', 'accepted', 'coordinator'],
     ['Matteo', 'sent', 'other'],
   ])
-  await convoke(july.id, [
+  await convoke(july, [
     ['Andrea', 'draft', 'activity_lead'],
     ['Simone', 'draft', 'group_lead'],
   ])

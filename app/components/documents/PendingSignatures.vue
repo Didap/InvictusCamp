@@ -44,7 +44,7 @@ function dueText(item: MySignatureItem): string {
       v-else-if="!items.length"
       icon="i-lucide-file-check"
       title="Nessun documento da firmare"
-      description="Quando l’amministrazione ti chiederà di leggere o firmare un documento, lo troverai qui e riceverai un’email."
+      description="Quando ti chiederemo di leggere o firmare un documento, lo troverai qui e riceverai un’email."
     />
 
     <template v-else>

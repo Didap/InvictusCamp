@@ -2,10 +2,11 @@
 // the gestionale writes it with the account's details and asks the person to sign it in Documenti, with the code
 // by email like every signature. When the data changes the PDF is made again and the old one archived (its pending
 // signature cancelled), as the families' releases (releases.ts). No health data in it: allergies and the other
-// details stay in the reserved section of the admin page. Explicit imports only, so the database tests can load it.
+// details stay in the reserved section of the admin page; the contract formula only for the staff. Explicit imports
+// only, so the database tests can load it.
 import { and, eq, isNull } from 'drizzle-orm'
 import { staffSheetSchema, type StaffSheetInput } from '../../shared/schemas/staff'
-import { inStaffArea } from '../../shared/utils/constants'
+import { enumLabel, inStaffArea } from '../../shared/utils/constants'
 import { formatDay, formatTown, fullName } from '../../shared/utils/format'
 import { documents, staffProfiles, users } from '../db/schema'
 import type { EmailContext, EmailMessage } from '../emails/types'
@@ -41,6 +42,12 @@ function sheetBlocks({ account, sheet }: SheetInput): PdfBlock[] {
     ...field('Regione', sheet.region),
     { heading: 'Divisa' },
     ...field('Taglia della maglietta', sheet.shirtSize),
+    ...(sheet.contractType
+      ? [
+          { heading: 'Collaborazione' },
+          ...field('Formula contrattuale', enumLabel('staffContract', sheet.contractType)),
+        ]
+      : []),
     { heading: 'Dichiarazione' },
     'Con la firma confermo che i dati di questa scheda sono corretti e aggiornati.',
   ]
@@ -75,7 +82,7 @@ export async function staffSheetDocument(
     .select({ id: documents.id, digest: documents.sourceDigest })
     .from(documents)
     .where(and(eq(documents.staffUserId, input.userId), isNull(documents.archivedAt)))
-  const parsed = inStaffArea(profile.status) ? staffSheetSchema.safeParse(staffSheetOf(profile)) : null
+  const parsed = inStaffArea(profile.status) ? staffSheetSchema(profile.team).safeParse(staffSheetOf(profile)) : null
   const data: SheetInput | null = parsed?.success ? { account, sheet: parsed.data } : null
   const source = data && { data, digest: sha256(JSON.stringify(data)) }
   if (current?.digest === source?.digest) return []

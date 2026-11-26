@@ -2,18 +2,22 @@
 import {
   REQUIRED_STAFF_DOCUMENTS,
   STAFF_DOCUMENT_CATEGORIES,
+  STAFF_DOCUMENT_TYPES,
   isRequiredStaffDocument,
   requiredDocumentsText,
 } from '#shared/schemas/staff'
 import type { MyStaffDocuments, StaffDocumentDto } from '#shared/types/staff'
-import type { PersonalDocumentCategory } from '#shared/utils/constants'
+import { MAX_UPLOAD_BYTES, type PersonalDocumentCategory } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
-import { formatDay } from '#shared/utils/format'
+import { formatBytes, formatDay } from '#shared/utils/format'
 
 // Documents (spec 3.4): the required ones first, a CV (the application's counts) and an ID, in PDF; what the
 // administration asks to sign (PendingSignatures, documents area); the other personal documents (titles,
-// certificates), each with a category and a title.
+// certificates), each with a category and a title, in PDF too.
 const api = useApi()
+/** Every staff document in PDF (the server checks it too). */
+const ACCEPT = STAFF_DOCUMENT_TYPES.join(',')
+const UP_TO = `fino a ${formatBytes(MAX_UPLOAD_BYTES)}`
 const confirm = useConfirm()
 const { label, options } = useEnums()
 const { data, refresh } = await useApiFetch<MyStaffDocuments>('/api/staff/documents')
@@ -52,7 +56,7 @@ const removing = ref<string | null>(null)
 async function remove(document: StaffDocumentDto) {
   const ok = await confirm({
     title: `Elimini «${document.title}» (${document.file.originalName})?`,
-    description: 'Il file viene cancellato e l’amministrazione non lo vede più.',
+    description: 'Il file viene cancellato e non lo vediamo più.',
     confirmLabel: 'Elimina',
     danger: true,
   })
@@ -110,8 +114,8 @@ async function remove(document: StaffDocumentDto) {
           <IcFileUpload
             class="mt-3"
             endpoint="/api/staff/documents"
-            accept="application/pdf"
-            :description="r.category === 'id_document' ? 'PDF con fronte e retro, fino a 15 MB' : 'PDF, fino a 15 MB'"
+            :accept="ACCEPT"
+            :description="r.category === 'id_document' ? `PDF con fronte e retro, ${UP_TO}` : `PDF, ${UP_TO}`"
             :fields="{ category: r.category, title: r.name }"
             :button-label="r.missing ? 'Carica il file' : 'Carica una versione aggiornata'"
             :secondary="!r.primary"
@@ -121,14 +125,11 @@ async function remove(document: StaffDocumentDto) {
       </div>
     </IcSection>
 
-    <IcSection title="Da firmare" description="I documenti che l’amministrazione ti chiede di leggere e firmare.">
+    <IcSection title="Da firmare" description="I documenti che ti chiediamo di leggere e firmare.">
       <DocumentsPendingSignatures />
     </IcSection>
 
-    <IcSection
-      title="I tuoi documenti"
-      description="Titoli, attestati e certificati che vuoi condividere con l’amministrazione."
-    >
+    <IcSection title="I tuoi documenti" description="Titoli, attestati e certificati che vuoi condividere con noi.">
       <p v-if="!others.length" class="text-muted">Non hai ancora caricato altri documenti.</p>
       <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
         <li
@@ -156,7 +157,7 @@ async function remove(document: StaffDocumentDto) {
       </ul>
     </IcSection>
 
-    <IcSection title="Carica un documento" description="PDF, JPG o PNG, fino a 15 MB.">
+    <IcSection title="Carica un documento">
       <div class="space-y-5">
         <div class="grid gap-5 sm:grid-cols-2">
           <UFormField label="Tipo di documento" required>
@@ -171,6 +172,8 @@ async function remove(document: StaffDocumentDto) {
           endpoint="/api/staff/documents"
           :fields="{ category: upload.category, title: upload.title.trim() }"
           :disabled="!upload.title.trim()"
+          :accept="ACCEPT"
+          :description="`PDF, ${UP_TO}`"
           button-label="Carica il documento"
           :secondary="missing.length > 0"
           @uploaded="uploaded"

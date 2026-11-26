@@ -144,7 +144,7 @@ async function save() {
         `Abbiamo creato ${plural(result.cardsCreated, 'scheda', 'schede')}: completale con i dati di ogni persona. ${removed}`.trim(),
       )
       await navigateTo('/famiglia/membri')
-    } else notifySuccess(title, removed || (firstTime ? undefined : 'L’amministrazione vede già i dati nuovi.'))
+    } else notifySuccess(title, removed || (firstTime ? undefined : 'Vediamo già i dati nuovi.'))
   } catch (error) {
     notifyError(error, 'Dati non salvati')
     if (apiErrorData(error)?.reason === 'form_changed') await reloadQuestions()
@@ -181,7 +181,7 @@ async function save() {
       variant="subtle"
       icon="i-lucide-file-check"
       :title="`Confermati il ${formatDateTime(profile.formSubmittedAt)}`"
-      description="Puoi cambiarli quando vuoi: quando salvi, l’amministrazione vede quelli nuovi."
+      description="Puoi cambiarli quando vuoi: quando salvi, vediamo subito quelli nuovi."
     />
 
     <UAlert
@@ -254,8 +254,8 @@ async function save() {
             <p class="flex max-w-prose items-start gap-2 text-sm">
               <UIcon name="i-lucide-lock" class="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
               Indicare ragazzi e ragazze con patologie o disabilità è un dato sulla salute: lo vedono solo la tua
-              famiglia e l’amministrazione del camp, e non finisce mai nelle email. Puoi ritirare il consenso quando
-              vuoi dalla pagina Componenti.
+              famiglia e chi organizza il camp, e non finisce mai nelle email. Puoi ritirare il consenso quando vuoi
+              dalla pagina Componenti.
             </p>
             <UFormField name="healthConsent">
               <FamiliesHealthConsentCheckbox v-model="state.healthConsent" />

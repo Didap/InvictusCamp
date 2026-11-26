@@ -71,6 +71,12 @@ export function calendarTitle(session: CalendarSession): string {
   return `Sessione ${session.number} · ${session.label}`
 }
 
+/** A session in a sentence: «la sessione 7» for one of the calendar, its title in quotes otherwise. */
+export function sessionName(title: string): string {
+  const number = calendarNumber(title)
+  return number ? `la sessione ${number}` : `«${title}»`
+}
+
 /** The number calendarTitle put in a title («Sessione 7 · …»), or null. */
 export function calendarNumber(title: string): number | null {
   const number = Number(/^Sessione (\d+)\b/.exec(title)?.[1])

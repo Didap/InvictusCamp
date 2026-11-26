@@ -109,15 +109,15 @@ const SESSION_INVITE_BODY = paragraphs(
   'Conferma la partecipazione o rinuncia dal gestionale. Se rinunci, il posto passa a un’altra famiglia in attesa.',
 )
 const SIGN_BODY = paragraphs(
-  'l’amministrazione di Invictus Camp ti chiede di leggere e firmare il documento «{documento}».',
+  'ti chiediamo di leggere e firmare il documento «{documento}».',
   'La firma si fa nel gestionale: ti invieremo via email un codice per confermarla.',
 )
 const READ_BODY = paragraphs(
-  'l’amministrazione di Invictus Camp ti chiede di leggere il documento «{documento}».',
+  'ti chiediamo di leggere il documento «{documento}».',
   'Quando lo hai letto, confermalo nel gestionale: basta un clic.',
 )
-const REMOVED_AFTER = 'Se pensi che sia un errore o vuoi saperne di più, contatta l’amministrazione del camp.'
-const NOTHING_TO_DO = 'Non devi fare nulla. Se hai domande, scrivi all’amministrazione del camp.'
+const REMOVED_AFTER = 'Se pensi che sia un errore o vuoi saperne di più, contattaci.'
+const NOTHING_TO_DO = 'Non devi fare nulla. Se hai domande, scrivici.'
 
 export const AUTOMATIC_EMAILS = {
   // ─── Sessions ──────────────────────────────────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ export const AUTOMATIC_EMAILS = {
       title: 'La sessione è stata annullata',
       body: paragraphs(
         'ci dispiace: «{sessione}» è stata annullata e non si terrà.',
-        'Per qualsiasi domanda contatta l’amministrazione del camp. Ti scriveremo quando ci saranno nuove sessioni.',
+        'Per qualsiasi domanda contattaci. Ti scriveremo quando ci saranno nuove sessioni.',
       ),
     }),
   },
@@ -235,10 +235,7 @@ export const AUTOMATIC_EMAILS = {
       subject: 'Partecipazione annullata: {sessione}',
       preheader: 'Un aggiornamento sulla tua partecipazione a «{sessione}».',
       title: 'Un aggiornamento sulla tua partecipazione',
-      body: paragraphs(
-        'la partecipazione della tua famiglia a «{sessione}» è stata annullata dall’amministrazione del camp.',
-        REMOVED_AFTER,
-      ),
+      body: paragraphs('la partecipazione della tua famiglia a «{sessione}» è stata annullata.', REMOVED_AFTER),
     }),
   },
   'session.reserve_removed': {
@@ -268,7 +265,7 @@ export const AUTOMATIC_EMAILS = {
       title: 'Com’è andata al camp?',
       body: paragraphs(
         'grazie per aver partecipato a «{sessione}».',
-        'Ci aiuti a preparare le prossime sessioni? Dai un voto alle attività e, se vuoi, scrivici cosa ti è piaciuto e cosa cambieresti. Bastano pochi minuti e le risposte arrivano all’amministrazione senza il nome della tua famiglia.',
+        'Ci aiuti a preparare le prossime sessioni? Dai un voto alle attività e, se vuoi, scrivici cosa ti è piaciuto e cosa cambieresti. Bastano pochi minuti e le risposte ci arrivano senza il nome della tua famiglia.',
       ),
       actionLabel: 'Rispondi al questionario',
     }),
@@ -288,7 +285,7 @@ export const AUTOMATIC_EMAILS = {
       body: paragraphs(
         'grazie per aver completato i dati della tua famiglia.',
         `Il camp è pensato per ragazzi e ragazze tra i ${GUEST_AGE.min} e i ${GUEST_AGE.max} anni. Dalle date di nascita che hai inserito, nessuno dei ragazzi per cui chiedete di partecipare rientra in questa fascia.`,
-        'La tua richiesta resta registrata: l’amministrazione la valuta e ti scrive. Se una data di nascita è sbagliata, puoi correggerla dalla pagina Componenti.',
+        'La tua richiesta resta registrata: la valutiamo e ti scriviamo. Se una data di nascita è sbagliata, puoi correggerla dalla pagina Componenti.',
       ),
       actionLabel: 'Apri i componenti',
       after: 'Lo staff di Invictus Camp',
@@ -307,7 +304,7 @@ export const AUTOMATIC_EMAILS = {
       subject: 'Convocazione per «{sessione}»',
       preheader: 'Una convocazione per «{sessione}»: rispondi dal gestionale.',
       title: 'Ti convochiamo per una sessione del camp',
-      body: 'l’amministrazione di Invictus Camp ti convoca per la sessione «{sessione}».',
+      body: 'ti convochiamo per la sessione «{sessione}».',
       actionLabel: 'Rispondi alla convocazione',
       after:
         'Puoi accettare o rifiutare dal gestionale. Se accetti, ti chiederemo di firmare il contratto della sessione.',
@@ -323,10 +320,7 @@ export const AUTOMATIC_EMAILS = {
       subject: 'Convocazione annullata: «{sessione}»',
       preheader: 'La convocazione per «{sessione}» è stata annullata.',
       title: 'Convocazione annullata',
-      body: paragraphs(
-        'l’amministrazione di Invictus Camp ha annullato la tua convocazione per la sessione «{sessione}».',
-        NOTHING_TO_DO,
-      ),
+      body: paragraphs('abbiamo annullato la tua convocazione per la sessione «{sessione}».', NOTHING_TO_DO),
       actionLabel: 'Vedi le tue sessioni',
     }),
   },
@@ -340,10 +334,7 @@ export const AUTOMATIC_EMAILS = {
       subject: 'Sessione annullata: «{sessione}»',
       preheader: 'La sessione «{sessione}» è stata annullata.',
       title: 'Sessione annullata',
-      body: paragraphs(
-        'l’amministrazione di Invictus Camp ha annullato la sessione «{sessione}»: la tua convocazione non vale più.',
-        NOTHING_TO_DO,
-      ),
+      body: paragraphs('abbiamo annullato la sessione «{sessione}»: la tua convocazione non vale più.', NOTHING_TO_DO),
       actionLabel: 'Vedi le tue sessioni',
     }),
   },
@@ -358,7 +349,7 @@ export const AUTOMATIC_EMAILS = {
       preheader: 'Puoi cambiare la tua disponibilità e confermarla di nuovo.',
       title: 'Puoi cambiare la tua disponibilità',
       body: paragraphs(
-        'l’amministrazione di Invictus Camp ha riaperto la tua disponibilità: puoi cambiare le sessioni a cui ci sei.',
+        'abbiamo riaperto la tua disponibilità: puoi cambiare le sessioni per cui sei disponibile.',
         'Quando hai finito, confermala di nuovo.',
       ),
       actionLabel: 'Vai alla disponibilità',
@@ -478,7 +469,7 @@ export const AUTOMATIC_EMAILS = {
         'La copia firmata, con la pagina che certifica la firma, resta sempre disponibile nel gestionale.',
       ),
       actionLabel: 'Scarica la copia firmata',
-      footnote: 'Se non hai firmato tu questo documento, avvisa subito l’amministrazione del camp.',
+      footnote: 'Se non hai firmato tu questo documento, avvisaci subito.',
     }),
   },
   'signature.otp': {
@@ -493,7 +484,7 @@ export const AUTOMATIC_EMAILS = {
       preheader: 'Il codice per confermare la tua firma. Vale 10 minuti.',
       title: 'Il codice per confermare la firma',
       body: 'per firmare «{documento}» inserisci questo codice nel gestionale. Vale 10 minuti.',
-      footnote: 'Se non stai firmando un documento, non usare il codice e avvisa l’amministrazione del camp.',
+      footnote: 'Se non stai firmando un documento, non usare il codice e avvisaci.',
     }),
   },
 

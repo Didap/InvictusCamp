@@ -1,22 +1,27 @@
 // Schemas of the staff area, shared by the forms (UForm) and the API (parseBody), plus the small rules
 // both sides need: the moves of a review (docs/spec.md 3.4, 3.5).
 import { z } from 'zod'
-import type { UsefulInfo } from '../types/domain'
-import { normalizeUsefulInfo, usefulInfoSchema } from './families'
+import { NON_FOOD_ALLERGIES } from '../content/member-form'
+import type { NonFoodAllergies, UsefulInfo } from '../types/domain'
+import { compact, normalizeUsefulInfo, picked, usefulInfoForm, usefulInfoSchema, zChoices } from './families'
 import {
   COORDINATOR_ROLE,
   PERSONAL_DOCUMENT_CATEGORIES,
   SHIRT_SIZES,
-  UPLOAD_MIME_TYPES,
+  STAFF_CONTRACTS,
   STAFF_TAG_COLORS,
   STAFF_TEAMS,
   type PersonalDocumentCategory,
+  type StaffContract,
   type StaffRole,
   type UploadMimeType,
   type StaffStatus,
+  type UserStatus,
   type StaffTeam,
+  inStaffArea,
 } from '../utils/constants'
 import { andList } from '../utils/format'
+import { changedKeys } from '../utils/plain'
 import {
   requiredResidence,
   zBirthDate,
@@ -37,11 +42,8 @@ const zRoles = z.array(zStaffRole).max(STAFF_LABELS_MAX)
 
 // ─── The personal sheet ────────────────────────────────────────────────────────────────────────────
 
-/**
- * PUT /api/staff/sheet: the personal sheet of an approved staff or v-team member (/staff/scheda). Name,
- * email and phone are the account's; everything here is required, the province apart.
- */
-export const staffSheetSchema = z.object({
+/** The fields of the sheet everyone fills in: required, the province apart. */
+const sheetFields = z.object({
   birthDate: zBirthDate,
   birthPlace: zRequiredText(100),
   fiscalCode: zFiscalCode,
@@ -50,35 +52,145 @@ export const staffSheetSchema = z.object({
   province: zProvince.nullish(),
   shirtSize: z.enum(SHIRT_SIZES, { error: 'Scegli la taglia' }),
 })
-export type StaffSheetInput = z.output<typeof staffSheetSchema>
+export type StaffSheetInput = z.output<typeof sheetFields> & { contractType?: StaffContract | null }
 
-/** What the home and the sheet say while the sheet is incomplete. */
-export const SHEET_MISSING =
-  'Ci servono la data e il luogo di nascita, il codice fiscale, la residenza e la taglia della maglietta.'
-
-/** Whether a sheet as stored passes the form's schema: until then the home asks for it. */
-export function isSheetComplete(sheet: Record<keyof StaffSheetInput, string | null>): boolean {
-  return staffSheetSchema.safeParse(sheet).success
-}
-
-// ─── Health: canteen and other details ─────────────────────────────────────────────────────────────
-
-/** Whether there is health data to keep: «Informazioni utili» or the other details. */
-export function hasStaffHealth(value: { info?: UsefulInfo | null; otherInfo?: string | null }): boolean {
-  return Boolean(normalizeUsefulInfo(value.info) || value.otherInfo?.trim())
+/** The contract formula is asked of the staff: the v-team volunteer. */
+export function asksContract(team: StaffTeam): boolean {
+  return team === 'staff'
 }
 
 /**
- * PUT /api/staff/useful-info: allergies, diet and notes for the canteen, and the other details the camp should
- * know. Health data: saving anything needs the consent, saving nothing withdraws it.
+ * The personal sheet of an approved staff or v-team member, as the form sends it and as stored once complete
+ * (isSheetComplete, its PDF): the staff's has the contract formula, a field of its own so its error comes with the
+ * others; the v-team's has none, so a formula left there is dropped.
  */
-export const staffUsefulInfoSchema = z
-  .object({ info: usefulInfoSchema, otherInfo: zText(2000).optional(), consent: z.boolean().default(false) })
-  .refine(value => value.consent || !hasStaffHealth(value), {
-    path: ['consent'],
-    error: 'Per salvare questi dati serve il tuo consenso',
+const SHEET_SCHEMAS: Record<StaffTeam, z.ZodType<StaffSheetInput>> = {
+  staff: sheetFields.extend({ contractType: z.enum(STAFF_CONTRACTS, { error: 'Scegli la formula contrattuale' }) }),
+  volunteer: sheetFields,
+}
+export function staffSheetSchema(team: StaffTeam): z.ZodType<StaffSheetInput> {
+  return SHEET_SCHEMAS[team]
+}
+
+/** What the home and the sheet say while the sheet is incomplete. */
+export function sheetMissing(team: StaffTeam): string {
+  const fields = ['la data e il luogo di nascita', 'il codice fiscale', 'la residenza', 'la taglia della maglietta']
+  return `Ci servono ${andList(asksContract(team) ? [...fields, 'la formula contrattuale'] : fields)}.`
+}
+
+/** Whether a sheet as stored passes the form's schema: until then the home asks for it. */
+export function isSheetComplete(sheet: Record<keyof StaffSheetInput, string | null>, team: StaffTeam): boolean {
+  return staffSheetSchema(team).safeParse(sheet).success
+}
+
+/**
+ * Whether moving a person to the team `to` gives their sheet a new PDF to sign, with its email: to the v-team the
+ * formula goes (setStaffTeam) and a sheet complete without it is written again (server/domain/staff-sheets.ts); a
+ * disabled account gets no email. The confirmation of the move says it; a database test holds it to the server.
+ */
+export function teamMoveSendsSheet(
+  person: { status: StaffStatus; accountStatus: UserStatus; sheet: Record<keyof StaffSheetInput, string | null> },
+  to: StaffTeam,
+): boolean {
+  return (
+    inStaffArea(person.status) &&
+    person.accountStatus !== 'disabled' &&
+    !asksContract(to) &&
+    isSheetComplete({ ...person.sheet, contractType: null }, to)
+  )
+}
+
+// ─── Health: allergies, diet and other details ─────────────────────────────────────────────────────
+
+const nonFoodAllergiesSchema = z.object({
+  allergies: zChoices(NON_FOOD_ALLERGIES).optional(),
+  other: zText(500).optional(),
+})
+
+/** The allergies not to food as stored: choices in the order of the list, empty values dropped, null for none. */
+export function normalizeNonFoodAllergies(value: NonFoodAllergies | null | undefined): NonFoodAllergies | null {
+  return compact<NonFoodAllergies>({
+    allergies: picked(NON_FOOD_ALLERGIES, value?.allergies),
+    other: value?.other?.trim(),
   })
-export type StaffUsefulInfoInput = z.output<typeof staffUsefulInfoSchema>
+}
+
+/** The health answers of a staff member, as stored or as typed. */
+export interface StaffHealthValue {
+  info?: UsefulInfo | null
+  nonFoodAllergies?: NonFoodAllergies | null
+  otherInfo?: string | null
+}
+
+/** Whether there is health data to keep: «Informazioni utili», the allergies not to food, the other details. */
+export function hasStaffHealth(value: StaffHealthValue): boolean {
+  return Boolean(
+    normalizeUsefulInfo(value.info) || normalizeNonFoodAllergies(value.nonFoodAllergies) || value.otherInfo?.trim(),
+  )
+}
+
+/** The health answers that differ, as the families' (healthChangedFields): `info.allergies`, `otherInfo`… */
+export function staffHealthChanges(before: StaffHealthValue, after: StaffHealthValue): string[] {
+  return [
+    ...changedKeys(normalizeUsefulInfo(before.info), normalizeUsefulInfo(after.info)).map(key => `info.${key}`),
+    ...changedKeys(
+      normalizeNonFoodAllergies(before.nonFoodAllergies),
+      normalizeNonFoodAllergies(after.nonFoodAllergies),
+    ).map(key => `nonFoodAllergies.${key}`),
+    ...((before.otherInfo?.trim() || null) !== (after.otherInfo?.trim() || null) ? ['otherInfo'] : []),
+  ]
+}
+
+/**
+ * Health data saved new or changed needs the consent ticked then; the same answers keep the consent given, and
+ * none withdraws it. The form, the schema and the server (against the row locked) all ask this.
+ */
+export function needsHealthConsent(value: StaffHealthValue, stored: StaffHealthValue): boolean {
+  return hasStaffHealth(value) && staffHealthChanges(stored, value).length > 0
+}
+export const HEALTH_CONSENT_NEEDED = 'Per salvare questi dati serve il tuo consenso'
+
+/**
+ * The health answers of the personal sheet: allergies, diet and notes for the canteen (the notes are the «Altro»
+ * of the food allergies), the allergies not to food and the other details the camp should know, with the consent
+ * box. DELETE /api/staff/useful-info withdraws the consent.
+ */
+export const staffHealthSchema = z.object({
+  info: usefulInfoSchema,
+  nonFoodAllergies: nonFoodAllergiesSchema.optional(),
+  otherInfo: zText(2000).optional(),
+  consent: z.boolean().default(false),
+})
+export type StaffHealthInput = z.output<typeof staffHealthSchema>
+
+/**
+ * PUT /api/staff/sheet: the sheet and the health answers, saved together from /staff/scheda (name, email and phone
+ * are the account's). `stored` is the health data as saved, to tell whether the consent is needed.
+ */
+export function staffSheetFormSchema(team: StaffTeam, stored: StaffHealthValue) {
+  return staffSheetSchema(team).and(
+    z.object({
+      health: staffHealthSchema.refine(health => health.consent || !needsHealthConsent(health, stored), {
+        path: ['consent'],
+        error: HEALTH_CONSENT_NEEDED,
+      }),
+    }),
+  )
+}
+
+/** The health data as the form of /staff/scheda holds it: every field present, the consent box empty. */
+export function staffHealthForm(health: StaffHealthValue) {
+  return {
+    info: usefulInfoForm(health.info),
+    nonFoodAllergies: {
+      allergies: [...(health.nonFoodAllergies?.allergies ?? [])],
+      other: health.nonFoodAllergies?.other ?? '',
+    },
+    otherInfo: health.otherInfo ?? '',
+    consent: false,
+  }
+}
+export type StaffHealthForm = ReturnType<typeof staffHealthForm>
 
 /**
  * Where a person sits in the base of a session (spec 3.5): a coordinator (one per team), or one of the
@@ -235,10 +347,8 @@ export function isRequiredStaffDocument(category: PersonalDocumentCategory): cat
   return (REQUIRED_STAFF_DOCUMENTS as readonly string[]).includes(category)
 }
 
-/** The formats a staff member's document is taken in: the required ones in PDF only. */
-export function staffDocumentTypes(category: PersonalDocumentCategory): readonly UploadMimeType[] {
-  return isRequiredStaffDocument(category) ? ['application/pdf'] : UPLOAD_MIME_TYPES
-}
+/** A staff member's documents are taken in PDF only, the required ones and the others (the docx of 26/11/2026). */
+export const STAFF_DOCUMENT_TYPES = ['application/pdf'] as const satisfies readonly UploadMimeType[]
 
 /** The text fields sent with the file to POST /api/staff/documents. */
 export const staffDocumentSchema = z.object({

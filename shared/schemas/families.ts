@@ -226,7 +226,7 @@ export function questionsToAnswer(answers: FormAnswers, questions: readonly Form
 /** One of the keys of `options`; typed as a string, so a form can hold it before it is checked. */
 const zChoice = (options: readonly Choice[]) =>
   z.string().refine(value => options.some(option => option.value === value), { error: 'Scelta non valida' })
-const zChoices = (options: readonly Choice[]) => z.array(zChoice(options)).max(options.length)
+export const zChoices = (options: readonly Choice[]) => z.array(zChoice(options)).max(options.length)
 const zDetail = zText(2000).optional()
 
 export const disabilityInfoSchema = z.object({
@@ -302,12 +302,12 @@ export type MemberInput = z.output<typeof memberSchema>
 export const NO_HEALTH: MemberHealth = { hasDisability: false, disability: null, info: null }
 
 /** The keys picked, in the order of the options, each once. */
-function picked(options: readonly Choice[], chosen: readonly string[] | undefined): string[] {
+export function picked(options: readonly Choice[], chosen: readonly string[] | undefined): string[] {
   return options.flatMap(option => (chosen?.includes(option.value) ? [option.value] : []))
 }
 
 /** Only what has a value; null when nothing has. */
-function compact<T extends object>(value: T): T | null {
+export function compact<T extends object>(value: T): T | null {
   const entries = Object.entries(value).filter(([, item]) => isAnswered(item))
   return entries.length ? (Object.fromEntries(entries) as T) : null
 }

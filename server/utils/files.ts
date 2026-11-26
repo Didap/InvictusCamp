@@ -35,7 +35,7 @@ const UPLOADS_PER_HOUR = 60
  * message when something is wrong.
  */
 /** The answer to a file in a format the upload does not take. */
-export function unsupportedType(accept: readonly UploadMimeType[]) {
+function unsupportedType(accept: readonly UploadMimeType[]) {
   const onlyPdf = accept.length === 1 && accept[0] === 'application/pdf'
   return createError({
     statusCode: 415,

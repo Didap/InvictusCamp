@@ -38,6 +38,13 @@ export interface UsefulInfo {
   notes?: string
 }
 
+/** A staff member's allergies and intolerances that are not to food (dust mites, cat hair…): never to the canteen. */
+export interface NonFoodAllergies {
+  allergies?: string[]
+  /** «Altro»: what the list does not have. */
+  other?: string
+}
+
 /** Who a communication from the dashboard goes to (resolved by server/domain/audiences.ts). */
 export type Audience =
   | { type: 'all_families' }

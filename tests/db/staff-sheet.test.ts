@@ -1,13 +1,22 @@
 // The personal sheet of the staff against a real database (docs/spec.md 3.4): saved and read back, audited by the
-// names of the fields that changed, asked for by the home until complete; the other details under the consent;
-// once complete, its PDF to sign, made again when the data changes.
+// names of the fields that changed, asked for by the home until complete; the contract formula of the staff only;
+// the health data under the consent; once complete, its PDF to sign, made again when the data changes.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq, isNull } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
 import { assignDocument, documentDetail, setDocumentArchived } from '../../server/domain/signatures'
-import { myStaffSheet, saveStaffSheet, saveStaffUsefulInfo, sheetSignature, staffHome } from '../../server/domain/staff'
+import {
+  myStaffSheet,
+  saveStaffSheet,
+  saveStaffUsefulInfo,
+  setStaffTeam,
+  sheetSignature,
+  staffHome,
+  staffSheetOf,
+} from '../../server/domain/staff'
+import { teamMoveSendsSheet } from '../../shared/schemas/staff'
 import { staffSheetDocument } from '../../server/domain/staff-sheets'
 import { makeStaff, t, useTestDb } from './helpers'
 
@@ -26,6 +35,7 @@ const VALUE = {
   province: '',
   region: 'Puglia' as const,
   shirtSize: 'L' as const,
+  contractType: 'vat_number' as const,
 }
 
 const auditOf = (action: string) =>
@@ -48,7 +58,8 @@ describe('staff personal sheet', () => {
       phone: user.phone,
     })
     expect(read.sheet).toEqual(sheet)
-    expect(read.health).toEqual({ info: null, otherInfo: null, consentAt: null })
+    expect(read.team).toBe('staff')
+    expect(read.health).toEqual({ info: null, nonFoodAllergies: null, otherInfo: null, consentAt: null })
     expect((await staffHome(db, row!)).sheetComplete).toBe(true)
 
     // Saving the same values writes nothing; a new size is one field in the audit, never its value.
@@ -60,22 +71,70 @@ describe('staff personal sheet', () => {
     expect(JSON.stringify(audits)).not.toContain('RSSMRA85T10A562S')
   })
 
-  it('keeps the other details under the consent, out of the canteen details', async () => {
+  it('leaves the contract formula to the staff: a v-team volunteer has none', async () => {
+    const { user, profile } = await makeStaff(db)
+    await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.id, profile.id))
+    const actor = { userId: user.id, ip: null }
+    expect(await saveStaffSheet(db, { userId: user.id, value: VALUE, actor })).toMatchObject({ contractType: null })
+    const [row] = await db.select().from(t.staffProfiles).where(eq(t.staffProfiles.id, profile.id))
+    expect(row!.contractType).toBeNull()
+    expect((await staffHome(db, row!)).sheetComplete).toBe(true)
+
+    // Moved to the staff, the formula is asked; moved back, the one chosen goes.
+    await setStaffTeam(db, { userId: user.id, team: 'staff', actor })
+    await saveStaffSheet(db, { userId: user.id, value: VALUE, actor })
+    await setStaffTeam(db, { userId: user.id, team: 'volunteer', actor })
+    const [moved] = await db.select().from(t.staffProfiles).where(eq(t.staffProfiles.id, profile.id))
+    expect(moved!.contractType).toBeNull()
+  })
+
+  it('keeps the health data under the consent, the consent of when it was given while nothing changes', async () => {
     const { user } = await makeStaff(db)
     const actor = { userId: user.id, ip: null }
-    const saved = await saveStaffUsefulInfo(db, {
-      userId: user.id,
-      value: { info: {}, otherInfo: ' Daltonismo ', consent: true },
-      actor,
-    })
-    expect(saved).toMatchObject({ info: null, otherInfo: 'Daltonismo' })
+    const value = {
+      info: { allergies: ['gluten'], notes: ' Fragole ' },
+      nonFoodAllergies: { allergies: ['cat_hair'], other: '' },
+      otherInfo: ' Daltonismo ',
+      consent: true,
+    }
+    const saved = await saveStaffUsefulInfo(db, { userId: user.id, value, actor })
     expect(saved.consentAt).not.toBeNull()
-    expect((await auditOf('staff.useful_info')).at(-1)?.data).toEqual({ fields: ['otherInfo'] })
+    expect(saved).toMatchObject({
+      info: { allergies: ['gluten'], notes: 'Fragole' },
+      nonFoodAllergies: { allergies: ['cat_hair'] },
+      otherInfo: 'Daltonismo',
+    })
+    expect(saved.consentAt).not.toBeNull()
+    expect((await auditOf('staff.useful_info')).at(-1)?.data).toEqual({
+      fields: ['info.allergies', 'info.notes', 'nonFoodAllergies.allergies', 'otherInfo'],
+    })
+    expect(JSON.stringify(await auditOf('staff.useful_info'))).not.toContain('Daltonismo')
 
-    // Saving nothing clears both and withdraws the consent.
-    expect(
-      await saveStaffUsefulInfo(db, { userId: user.id, value: { info: {}, otherInfo: '', consent: false }, actor }),
-    ).toEqual({ info: null, otherInfo: null, consentAt: null })
+    // The same data again (as the sheet sends it at every save, the box empty): nothing written, the consent of
+    // before.
+    const audits = (await auditOf('staff.useful_info')).length
+    expect(await saveStaffUsefulInfo(db, { userId: user.id, value: { ...value, consent: false }, actor })).toEqual(
+      saved,
+    )
+    expect(await auditOf('staff.useful_info')).toHaveLength(audits)
+
+    // Changed data needs the consent ticked again.
+    await expect(
+      saveStaffUsefulInfo(db, {
+        userId: user.id,
+        value: { ...value, otherInfo: 'Discalculia', consent: false },
+        actor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 })
+
+    // Saving nothing clears everything and withdraws the consent.
+    expect(await saveStaffUsefulInfo(db, { userId: user.id, value: { info: {}, consent: false }, actor })).toEqual({
+      info: null,
+      nonFoodAllergies: null,
+      otherInfo: null,
+      consentAt: null,
+    })
+    expect((await auditOf('staff.useful_info')).at(-1)?.data).toMatchObject({ withdrawn: true })
   })
 
   it('prepares the PDF to sign once the sheet is complete, and makes it again when the data changes', async () => {
@@ -128,6 +187,27 @@ describe('staff personal sheet', () => {
     const { signature: renewed } = await myStaffSheet(db, user, profile!)
     expect(renewed).toMatchObject({ status: 'pending' })
     expect(renewed!.id).not.toBe(signature!.id)
+  })
+
+  it('says beforehand whether a team move sends the sheet to sign again, as the server does', async () => {
+    const { user, profile } = await makeStaff(db)
+    const actor = { userId: user.id, ip: null }
+    const input = { userId: user.id, ctx, uploadsDir, actor }
+    await saveStaffSheet(db, { userId: user.id, value: VALUE, actor })
+    expect(await staffSheetDocument(db, input)).toHaveLength(1)
+    const person = async () => {
+      const [row] = await db.select().from(t.staffProfiles).where(eq(t.staffProfiles.id, profile.id))
+      return { status: row!.status, accountStatus: user.status, sheet: staffSheetOf(row!) }
+    }
+    // To the v-team the formula goes: a new PDF to sign, and its email.
+    expect(teamMoveSendsSheet(await person(), 'volunteer')).toBe(true)
+    await setStaffTeam(db, { userId: user.id, team: 'volunteer', actor })
+    expect(await staffSheetDocument(db, input)).toHaveLength(1)
+    // Back to the staff: the formula is still to choose, the PDF goes and nothing is sent.
+    expect(teamMoveSendsSheet(await person(), 'staff')).toBe(false)
+    await setStaffTeam(db, { userId: user.id, team: 'staff', actor })
+    expect(await staffSheetDocument(db, input)).toEqual([])
+    expect(await sheetSignature(db, user.id)).toBeNull()
   })
 
   it('asks no signature before the approval', async () => {

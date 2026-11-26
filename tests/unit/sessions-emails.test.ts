@@ -65,7 +65,7 @@ describe('session emails', () => {
   })
 
   it('tell a reserve it left the list, a titolare that the participation was cancelled', () => {
-    expect(all[6]!.text).toContain('è stata annullata dall’amministrazione')
+    expect(all[6]!.text).toContain('è stata annullata.')
     expect(all[7]!.text).toContain('non è più nella lista di riserva')
   })
 })

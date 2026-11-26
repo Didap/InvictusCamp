@@ -35,7 +35,7 @@ async function toggle(option: MyTrainingOption, interested: boolean) {
         v-if="!options.length"
         icon="i-lucide-graduation-cap"
         title="Ancora nessuna proposta"
-        description="Quando l’amministrazione propone delle formazioni, le trovi qui."
+        description="Quando proponiamo delle formazioni, le trovi qui."
         variant="naked"
       />
       <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">

@@ -18,7 +18,7 @@ useHead({ title: () => (notFound.value ? 'Pagina non trovata · Invictus Camp' :
           {{
             notFound
               ? 'L’indirizzo potrebbe essere sbagliato, oppure la pagina non esiste più.'
-              : 'Riprova tra qualche istante. Se il problema continua, scrivi all’amministrazione del camp.'
+              : 'Riprova tra qualche istante. Se il problema continua, scrivici.'
           }}
         </p>
         <UButton class="mt-8" size="lg" label="Torna alla home" @click="clearError({ redirect: '/' })" />

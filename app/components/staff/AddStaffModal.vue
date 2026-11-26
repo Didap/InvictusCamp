@@ -80,7 +80,7 @@ async function add() {
   <UModal
     v-model:open="open"
     :title="`Aggiungi persone ${OF_TEAM[team]}`"
-    description="Qui trovi solo chi ha detto che c’è per tutta la sessione. Scegli le persone e il ruolo che avranno: le aggiungi come convocazioni da inviare, nessuna email parte adesso."
+    description="Qui trovi solo chi ha indicato la disponibilità per tutta la sessione. Scegli le persone e il ruolo che avranno: le aggiungi come convocazioni da inviare, nessuna email parte adesso."
     :ui="{ content: 'sm:max-w-3xl' }"
   >
     <template #body>

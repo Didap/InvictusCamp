@@ -242,7 +242,7 @@ async function confirmRead() {
         :actions="[{ label: 'Torna ai tuoi documenti', to: back, color: 'neutral', variant: 'outline' }]"
       >
         <template #description>
-          L’amministrazione ha annullato la richiesta. <IcContactLine as="span" lead="Se hai dubbi" />
+          La richiesta è stata annullata. <IcContactLine as="span" lead="Se hai dubbi" />
         </template>
       </UAlert>
 

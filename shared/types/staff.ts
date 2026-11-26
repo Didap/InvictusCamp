@@ -1,4 +1,4 @@
-import type { UsefulInfo } from './domain'
+import type { NonFoodAllergies, UsefulInfo } from './domain'
 // DTOs of the staff area (applications, review, availability, convocations). Dates are ISO days,
 // instants ISO strings. Never a raw `users` row.
 import type { RequiredStaffDocument } from '../schemas/staff'
@@ -10,6 +10,7 @@ import type {
   PersonalDocumentCategory,
   SessionStatus,
   ShirtSize,
+  StaffContract,
   StaffRole,
   StaffStatus,
   StaffTagColor,
@@ -27,6 +28,7 @@ export type StaffOutcomeTemplate = 'staff.approved' | 'staff.rejected'
  */
 export interface StaffUsefulInfoDto {
   info: UsefulInfo | null
+  nonFoodAllergies: NonFoodAllergies | null
   otherInfo: string | null
   consentAt: string | null
 }
@@ -42,6 +44,7 @@ export interface StaffSheet {
   province: string | null
   region: ItalianRegion | null
   shirtSize: ShirtSize | null
+  contractType: StaffContract | null
 }
 
 /**
@@ -157,9 +160,6 @@ export interface StaffDetail {
   roles: StaffRole[]
   /** Ids of the tags of the «Valutazione»: never shown to the person. */
   tags: string[]
-  qualifications: string | null
-  experience: string | null
-  motivation: string | null
   cv: FileDto | null
   appliedAt: string | null
   reviewedAt: string | null
@@ -244,33 +244,21 @@ export interface SessionStaffData {
 
 // ─── Staff side ────────────────────────────────────────────────────────────────────────────────────
 
-/** GET /api/staff/sheet: the personal sheet, with the account's details, the health data and the application. */
+/** GET /api/staff/sheet: the personal sheet, with the account's details and the team (the formula is the staff's). */
 export interface StaffSheetDto extends StaffSheetSaved {
   account: { firstName: string; lastName: string; email: string; phone: string | null }
-  health: StaffUsefulInfoDto
-  application: StaffApplicationDto
+  team: StaffTeam
 }
 
-/** PUT /api/staff/sheet: the sheet as saved and the signature of its PDF, perhaps a new one to sign. */
+/** PUT /api/staff/sheet: the sheet and the health data as saved, and the signature of its PDF, perhaps a new one. */
 export interface StaffSheetSaved {
   sheet: StaffSheet
+  health: StaffUsefulInfoDto
   signature: StaffSheetSignature | null
 }
 
 /** The PDF of the sheet in force and its signature request (`id`); null when there is none. */
 export type StaffSheetSignature = Pick<MySignatureItem, 'id' | 'status' | 'signedAt'>
-
-/** The application as it was sent, read only. */
-export interface StaffApplicationDto {
-  team: StaffTeam
-  /** The person's roles, with the names the administration gave them. */
-  roles: { id: StaffRole; name: string }[]
-  qualifications: string | null
-  experience: string | null
-  motivation: string | null
-  cv: FileDto | null
-  appliedAt: string | null
-}
 
 /** A convocation of the signed-in staff member (drafts are never shown). */
 export interface MyConvocation {
@@ -317,8 +305,9 @@ export interface StaffHome {
    * still to confirm.
    */
   availability: { available: number; total: number; toConfirm: number }
-  /** The personal sheet has every required field (the home asks for it once approved). */
+  /** The personal sheet has every required field (the home asks for it once approved, sheetMissing(team)). */
   sheetComplete: boolean
+  team: StaffTeam
   /** The required documents not uploaded yet (CV, ID): the home asks for them once in the staff area. */
   documentsMissing: RequiredStaffDocument[]
 }

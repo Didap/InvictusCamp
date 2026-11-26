@@ -123,12 +123,7 @@ function onSubmit(event: FormSubmitEvent<z.output<typeof programmeBlockSchema>>)
         >
           <UTextarea v-model="state.note" :rows="2" :maxlength="500" autoresize class="w-full" />
         </UFormField>
-        <UFormField
-          label="Nota interna"
-          name="staffNote"
-          hint="Facoltativo"
-          help="La leggono l’amministrazione e lo staff, mai le famiglie."
-        >
+        <UFormField label="Nota interna" name="staffNote" hint="Facoltativo" help="La legge lo staff, mai le famiglie.">
           <UTextarea v-model="state.staffNote" :rows="2" :maxlength="500" autoresize class="w-full" />
         </UFormField>
         <UCheckbox

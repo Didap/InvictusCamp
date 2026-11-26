@@ -83,7 +83,7 @@ const where = (c: MyConvocation) =>
             color="info"
             variant="subtle"
             icon="i-lucide-file-clock"
-            :title="`Il contratto per «${c.session.title}» arriverà dall’amministrazione`"
+            :title="`Il contratto per «${c.session.title}» arriverà presto`"
             :description="`${where(c)}. Ti avvisiamo per email quando è pronto da firmare.`"
           />
         </template>

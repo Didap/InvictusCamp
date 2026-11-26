@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { isSheetComplete, SHEET_MISSING, staffSheetSchema } from '#shared/schemas/staff'
+import { INLINE_CHOICES_UI } from '#shared/content/member-form'
+import {
+  asksContract,
+  hasStaffHealth,
+  isSheetComplete,
+  needsHealthConsent,
+  sheetMissing,
+  staffHealthForm,
+  staffSheetFormSchema,
+  staffSheetSchema,
+} from '#shared/schemas/staff'
 import type {
   StaffSheet,
   StaffSheetDto,
@@ -8,20 +18,24 @@ import type {
   StaffUsefulInfoDto,
 } from '#shared/types/staff'
 import { residenceForm } from '#shared/schemas/common'
-import { SHIRT_SIZES } from '#shared/utils/constants'
+import { SHIRT_SIZES, STAFF_CONTRACTS, type StaffContract } from '#shared/utils/constants'
 import { ageOn, isIsoDay, todayIso } from '#shared/utils/dates'
-import { formatAge, formatDateTime, formatDay } from '#shared/utils/format'
+import { formatAge, formatDateTime } from '#shared/utils/format'
 import { focusFirstError } from '~/utils/errors'
 
 // The personal sheet of an approved staff or v-team member (docs/spec.md 3.4): name, email and phone are the
-// account's (changed from /account); birth, codice fiscale, residence and T-shirt size to fill in; allergies and
-// the other details under the consent to health data (StaffUsefulInfo); the application as it was sent. Once
-// complete, the PDF of the sheet to sign (server/domain/staff-sheets.ts): made again when the data changes.
+// account's (changed from /account); «Altri dati anagrafici» (birth, codice fiscale, residence) and «Info utili per
+// la nostra collaborazione» (T-shirt size, the staff's contract formula, the health data under the consent) in one
+// form, saved together. Once complete, the PDF of the sheet to sign (server/domain/staff-sheets.ts): made again when
+// its data changes; the health data never goes in it.
 const api = useApi()
-const { label } = useEnums()
 const { data } = await useApiFetch<StaffSheetDto>('/api/staff/sheet')
 
+const team = computed(() => data.value?.team ?? 'staff')
+const stored = computed(() => data.value?.health ?? {})
+const schema = computed(() => staffSheetFormSchema(team.value, stored.value))
 const today = todayIso()
+
 /** The sheet as the form holds it: '' for an empty text, nothing chosen. */
 function sheetForm(sheet: StaffSheet | undefined) {
   return {
@@ -30,12 +44,20 @@ function sheetForm(sheet: StaffSheet | undefined) {
     fiscalCode: sheet?.fiscalCode ?? '',
     ...residenceForm(sheet),
     shirtSize: sheet?.shirtSize ?? undefined,
+    contractType: sheet?.contractType ?? undefined,
   }
 }
 // Loaded once: a save updates `data` without overwriting what is being typed.
-const state = reactive(sheetForm(data.value?.sheet))
+const state = reactive({ ...sheetForm(data.value?.sheet), health: staffHealthForm(stored.value) })
+const needsConsent = computed(() => needsHealthConsent(state.health, stored.value))
+// The health answers saved anew (a save, a withdrawal): the fields start again from them, «Altro» too.
+const healthKey = ref(0)
+watch(stored, health => {
+  state.health = staffHealthForm(health)
+  healthKey.value++
+})
 
-const complete = computed(() => !data.value || isSheetComplete(data.value.sheet))
+const complete = computed(() => !data.value || isSheetComplete(data.value.sheet, team.value))
 const signature = computed(() => data.value?.signature ?? null)
 /** The age counts itself from the date being typed. */
 const age = computed(() =>
@@ -55,30 +77,16 @@ const account = computed(() => {
   ]
 })
 
-/** Someone the administration invited as approved never applied: no section for them. */
-const application = computed(() => (data.value?.application.appliedAt ? data.value.application : null))
-// Only what the person wrote: an application sent with the CV alone has no texts.
-const texts = computed(() => {
-  const a = application.value
-  if (!a) return []
-  return [
-    { label: 'Titoli e qualifiche', value: a.qualifications },
-    { label: 'Esperienze', value: a.experience },
-    { label: 'Motivazione', value: a.motivation },
-  ].filter(item => item.value)
-})
-const sentOn = computed(() => {
-  const at = application.value?.appliedAt
-  return at ? `Inviata il ${formatDay(todayIso(new Date(at)), 'long')}` : undefined
-})
-
-/** StaffUsefulInfo saved the health data: `data` is shallow, so a new object. */
-function onHealth(health: StaffUsefulInfoDto) {
-  if (data.value) data.value = { ...data.value, health }
+const SIZE_ITEMS = SHIRT_SIZES.map(size => ({ value: size, label: size }))
+/** The formula as the person says it (the admin pages and the PDF use ENUM_META.staffContract). */
+const CONTRACT_CHOICE: Record<StaffContract, string> = {
+  vat_number: 'Ho partita IVA',
+  occasional: 'Collaborazione occasionale',
 }
+const CONTRACT_ITEMS = STAFF_CONTRACTS.map(value => ({ value, label: CONTRACT_CHOICE[value] }))
 
 /** The sheet as the server keeps it, to tell a change from a different spelling (a lower-case codice fiscale). */
-const normalized = (value: unknown) => JSON.stringify(staffSheetSchema.safeParse(value).data)
+const normalized = (value: unknown) => JSON.stringify(staffSheetSchema(team.value).safeParse(value).data)
 const confirm = useConfirm()
 const saving = ref(false)
 
@@ -106,10 +114,23 @@ async function save() {
   ) {
     return
   }
+  // Health data the person had and the form no longer has: deleted, with the consent.
+  if (
+    data.value?.health.consentAt &&
+    !hasStaffHealth(state.health) &&
+    !(await confirm({
+      title: 'Cancellare allergie e altre informazioni?',
+      description: 'Le informazioni che avevi indicato vengono cancellate e il consenso viene ritirato.',
+      confirmLabel: 'Cancella e salva',
+      danger: true,
+    }))
+  ) {
+    return
+  }
   saving.value = true
   try {
     const result = await api<StaffSheetSaved>('/api/staff/sheet', { method: 'PUT', body: state })
-    if (data.value) data.value = { ...data.value, sheet: result.sheet }
+    if (data.value) data.value = { ...data.value, sheet: result.sheet, health: result.health }
     Object.assign(state, sheetForm(result.sheet))
     await showSignature(result.signature, 'Scheda salvata')
   } catch (error) {
@@ -119,7 +140,29 @@ async function save() {
   }
 }
 
-/** A complete sheet with no PDF in force: saved before the PDFs came, or archived by the administration. */
+/** Withdraws the consent and deletes the health data at once, whatever the rest of the sheet. */
+const withdrawing = ref(false)
+async function withdraw() {
+  const ok = await confirm({
+    title: 'Ritirare il consenso?',
+    description: 'Allergie, preferenze e le altre informazioni che hai indicato vengono cancellate.',
+    confirmLabel: 'Cancella e ritira il consenso',
+    danger: true,
+  })
+  if (!ok) return
+  withdrawing.value = true
+  try {
+    const health = await api<StaffUsefulInfoDto>('/api/staff/useful-info', { method: 'DELETE' })
+    if (data.value) data.value = { ...data.value, health }
+    notifySuccess('Consenso ritirato', 'Le informazioni sono state cancellate.')
+  } catch (error) {
+    notifyError(error, 'Consenso non ritirato')
+  } finally {
+    withdrawing.value = false
+  }
+}
+
+/** A complete sheet with no PDF in force: saved before the PDFs came, or archived from the admin pages. */
 async function preparePdf() {
   saving.value = true
   try {
@@ -160,7 +203,7 @@ const signPrompt = computed(() => {
         variant="subtle"
         icon="i-lucide-id-card"
         title="Completa la tua scheda"
-        :description="SHEET_MISSING"
+        :description="sheetMissing(team)"
       />
       <UAlert
         v-else-if="signature?.status !== 'signed'"
@@ -189,8 +232,8 @@ const signPrompt = computed(() => {
         </p>
       </IcSection>
 
-      <UForm :schema="staffSheetSchema" :state="state" @submit="save" @error="focusFirstError">
-        <IcSection title="Nascita e codice fiscale">
+      <UForm :schema="schema" :state="state" @submit="save" @error="focusFirstError">
+        <IcSection title="Altri dati anagrafici">
           <div class="space-y-5">
             <div class="grid gap-5 sm:grid-cols-2">
               <UFormField label="Data di nascita" name="birthDate" required :help="age">
@@ -210,61 +253,60 @@ const signPrompt = computed(() => {
                 :ui="{ base: 'uppercase' }"
               />
             </UFormField>
+            <IcResidenceFields v-model="state" required />
           </div>
         </IcSection>
 
-        <IcSection title="Residenza">
-          <IcResidenceFields v-model="state" required />
-        </IcSection>
-
-        <IcSection title="Divisa">
-          <UFormField label="Taglia della maglietta" name="shirtSize" required help="Ci serve per la divisa del camp.">
-            <USelect
-              v-model="state.shirtSize"
-              :items="[...SHIRT_SIZES]"
-              placeholder="Scegli"
-              class="w-full sm:max-w-40"
+        <IcSection
+          title="Info utili per la nostra collaborazione"
+          description="Allergie, intolleranze e preferenze alimentari arrivano con il tuo nome a chi prepara i pasti delle sessioni a cui partecipi. Le altre informazioni le leggono solo gli organizzatori del camp e non finiscono mai nel PDF della scheda."
+        >
+          <div class="space-y-6">
+            <UFormField
+              label="Qual è la taglia che ti senti più comoda?"
+              name="shirtSize"
+              required
+              help="Ci occorre per preparare la tua divisa."
+            >
+              <URadioGroup
+                v-model="state.shirtSize"
+                :items="SIZE_ITEMS"
+                legend="Taglia"
+                orientation="horizontal"
+                :ui="INLINE_CHOICES_UI"
+              />
+            </UFormField>
+            <UFormField v-if="asksContract(team)" label="Formula contrattuale" name="contractType" required>
+              <URadioGroup
+                v-model="state.contractType"
+                :items="CONTRACT_ITEMS"
+                legend="Formula contrattuale"
+                orientation="horizontal"
+                :ui="INLINE_CHOICES_UI"
+              />
+            </UFormField>
+            <StaffHealthFields
+              :key="healthKey"
+              v-model="state.health"
+              :consent-at="data.health.consentAt"
+              :needs-consent="needsConsent"
             />
-          </UFormField>
+            <UButton
+              v-if="data.health.consentAt"
+              label="Cancella queste informazioni e ritira il consenso"
+              color="error"
+              variant="ghost"
+              :loading="withdrawing"
+              class="-ms-2.5 pointer-coarse:min-h-11"
+              @click="withdraw"
+            />
+          </div>
         </IcSection>
 
         <div class="flex justify-end">
           <UButton type="submit" label="Salva la scheda" :loading="saving" class="pointer-coarse:min-h-11" />
         </div>
       </UForm>
-
-      <IcSection
-        class="mt-10"
-        title="Alimentazione e altre informazioni"
-        description="Allergie e preferenze arrivano alla mensa delle sessioni a cui partecipi. Il resto lo legge solo l’amministrazione."
-      >
-        <StaffUsefulInfo :model-value="data.health" @update:model-value="onHealth" />
-      </IcSection>
-
-      <IcSection v-if="application" title="Candidatura" :description="sentOn">
-        <div class="space-y-6">
-          <IcDataList :items="[{ label: 'Squadra', value: label('staffTeam', application.team) }]" />
-          <div v-if="application.roles.length">
-            <h3 class="text-sm font-semibold text-muted">Ruoli</h3>
-            <ul class="mt-2 flex flex-wrap gap-2">
-              <li v-for="role in application.roles" :key="role.id">
-                <UBadge :label="role.name" color="neutral" variant="outline" size="lg" />
-              </li>
-            </ul>
-          </div>
-          <dl v-if="texts.length" class="space-y-5">
-            <div v-for="item in texts" :key="item.label">
-              <dt class="text-sm font-semibold text-muted">{{ item.label }}</dt>
-              <dd class="mt-1 max-w-prose whitespace-pre-line">{{ item.value }}</dd>
-            </div>
-          </dl>
-          <div>
-            <h3 class="text-sm font-semibold text-muted">Curriculum</h3>
-            <IcFileLink v-if="application.cv" :file="application.cv" class="mt-2" />
-            <p v-else class="mt-1 text-dimmed">Non caricato</p>
-          </div>
-        </div>
-      </IcSection>
     </template>
   </IcPage>
 </template>

@@ -44,7 +44,7 @@ const { data, error, refresh } = await useApiFetch<ProgrammeView>(() => props.ur
         v-if="!data.content"
         icon="i-lucide-calendar-clock"
         title="Il programma non è ancora pronto"
-        description="Lo trovi qui appena l’amministrazione lo prepara."
+        description="Lo trovi qui appena è pronto."
       />
       <ProgrammeWeek v-else :content="data.content" :dates="rangeDays(data.session)" />
     </template>

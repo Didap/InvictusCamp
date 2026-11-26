@@ -18,7 +18,7 @@ export default defineEventHandler(async (event): Promise<LoginResult> => {
     throw createError({ statusCode: 401, message: 'Email o password non corretti' })
   }
   if (user.status === 'disabled') {
-    throw createError({ statusCode: 403, message: 'Questo account è disattivato: contatta l’amministrazione del camp' })
+    throw createError({ statusCode: 403, message: 'Questo account è disattivato: contatta Invictus Camp' })
   }
   if (!user.emailVerifiedAt) {
     throw createError({

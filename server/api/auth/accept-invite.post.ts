@@ -12,7 +12,7 @@ export default defineEventHandler(async event => {
   const invalid = () =>
     createError({
       statusCode: 400,
-      message: 'L’invito non è valido o è scaduto: chiedi all’amministrazione del camp di inviarne uno nuovo',
+      message: 'L’invito non è valido o è scaduto: chiedi a Invictus Camp di inviarne uno nuovo',
     })
   const user = await useDb().transaction(async tx => {
     const userId = await consumeToken(tx, token, 'invite')

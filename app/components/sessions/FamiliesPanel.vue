@@ -372,7 +372,7 @@ async function remove(item: SessionFamilyItem) {
         :answers="answerOptions"
         submit-label="Registra la risposta"
         :loading="busy"
-        reason-help="Lo legge solo l’amministrazione."
+        reason-help="La famiglia non lo vede."
         @submit="saveAnswer"
       />
     </template>

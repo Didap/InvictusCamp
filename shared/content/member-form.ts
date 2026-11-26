@@ -17,8 +17,11 @@ export const HEALTH_LABELS = {
   allergies: 'Allergie e intolleranze',
   diet: 'Preferenze alimentari',
   infoNotes: 'Altre note da segnalare',
-  /** A staff member's details beyond the canteen (dyscalculia, colour blindness…). */
-  staffOther: 'Altro da condividere',
+  /** A staff member's allergies: the food ones (with «Altro», `notes`) and the others. */
+  foodAllergies: 'Allergie e intolleranze alimentari',
+  nonFoodAllergies: 'Allergie e intolleranze non alimentari',
+  /** A staff member's details beyond allergies and diet (dyscalculia, colour blindness…). */
+  staffOther: 'Altre informazioni',
 } as const
 
 /** The 14 allergens of EU Regulation 1169/2011, lactose with milk. `canteen` is how the canteen lists them. */
@@ -44,6 +47,17 @@ export const DIETS: (Choice & { canteen: string })[] = [
   { value: 'vegetarian', label: 'Vegetariana', canteen: 'vegetariana' },
   { value: 'vegan', label: 'Vegana', canteen: 'vegana' },
   { value: 'no_pork', label: 'Senza carne di maiale', canteen: 'senza maiale' },
+]
+
+/** A staff member's allergies and intolerances not to food, with «Altro» for the rest: never to the canteen. */
+export const NON_FOOD_ALLERGIES: Choice[] = [
+  { value: 'dust_mites', label: 'Acari della polvere' },
+  { value: 'cat_hair', label: 'Pelo di gatto' },
+  { value: 'dog_hair', label: 'Pelo di cane' },
+  { value: 'pollen', label: 'Pollini' },
+  { value: 'insect_stings', label: 'Punture di insetti' },
+  { value: 'latex', label: 'Lattice' },
+  { value: 'nickel', label: 'Nichel' },
 ]
 
 /** The details of a young person with a condition, each a list of choices (at least one). */
@@ -121,20 +135,50 @@ export type DisabilityChoiceKey = (typeof DISABILITY_CHOICES)[number]['key']
 
 /** A list of choices in two columns from the tablet up, the legend for screen readers only. */
 export const CHOICES_UI = { legend: 'sr-only', fieldset: 'grid gap-2 sm:grid-cols-2' }
+/** A short list of choices on one line, wrapping, the legend for screen readers only. */
+export const INLINE_CHOICES_UI = { legend: 'sr-only', fieldset: 'flex-wrap gap-x-4 gap-y-2' }
 
-/** «Informazioni utili» as label and value, for the family's and the staff's views. */
+/** The food preference as a form offers it: «Nessuna» first. */
+export const DIET_ITEMS: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
+
+/** «Informazioni utili» as label and value, for the family's views. */
 export function usefulInfoItems(info: { allergies?: string[]; diet?: string; notes?: string } | null) {
-  const allergies = info?.allergies?.map(value => choiceLabel(ALLERGIES, value))
   return [
-    { label: HEALTH_LABELS.allergies, value: allergies?.length ? allergies.join(', ') : 'Nessuna indicata' },
-    { label: HEALTH_LABELS.diet, value: info?.diet ? choiceLabel(DIETS, info.diet) : 'Nessuna indicata' },
+    { label: HEALTH_LABELS.allergies, value: choicesWithOther(ALLERGIES, info?.allergies) },
+    dietItem(info),
     { label: HEALTH_LABELS.infoNotes, value: info?.notes ?? null },
   ]
 }
 
-/** A staff member's health data as label and value: «Informazioni utili» and the other details. */
-export function staffHealthItems(health: { info: Parameters<typeof usefulInfoItems>[0]; otherInfo: string | null }) {
-  return [...usefulInfoItems(health.info), { label: HEALTH_LABELS.staffOther, value: health.otherInfo }]
+/**
+ * A staff member's health data as label and value: allergies with what they wrote in «Altro» (for food, the
+ * notes of «Informazioni utili»), diet, the other details.
+ */
+export function staffHealthItems(health: {
+  info: { allergies?: string[]; diet?: string; notes?: string } | null
+  nonFoodAllergies: { allergies?: string[]; other?: string } | null
+  otherInfo: string | null
+}) {
+  const { info, nonFoodAllergies: nonFood } = health
+  return [
+    { label: HEALTH_LABELS.foodAllergies, value: choicesWithOther(ALLERGIES, info?.allergies, info?.notes) },
+    dietItem(info),
+    {
+      label: HEALTH_LABELS.nonFoodAllergies,
+      value: choicesWithOther(NON_FOOD_ALLERGIES, nonFood?.allergies, nonFood?.other),
+    },
+    { label: HEALTH_LABELS.staffOther, value: health.otherInfo },
+  ]
+}
+
+function dietItem(info: { diet?: string } | null) {
+  return { label: HEALTH_LABELS.diet, value: info?.diet ? choiceLabel(DIETS, info.diet) : 'Nessuna indicata' }
+}
+
+/** «Glutine (celiachia), Fragole»: the choices, then what was written in «Altro». */
+function choicesWithOther(options: readonly Choice[], chosen: string[] | undefined, other?: string): string {
+  const all = [...(chosen ?? []).map(value => choiceLabel(options, value)), ...(other ? [other] : [])]
+  return all.length ? all.join(', ') : 'Nessuna indicata'
 }
 
 /** The label of a stored choice; an unknown key (an option removed since) shows as it is. */

@@ -142,7 +142,7 @@ function onSubmit(event: FormSubmitEvent<SessionInput>) {
       label="Note interne"
       name="notes"
       hint="Facoltativo"
-      help="Solo per l’amministrazione: famiglie e staff non le vedono."
+      help="Note interne: famiglie e staff non le vedono."
     >
       <UTextarea v-model="state.notes" :rows="3" autoresize class="w-full" />
     </UFormField>

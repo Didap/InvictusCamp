@@ -111,8 +111,8 @@ async function send() {
 
       <form v-else class="grid gap-10" @submit.prevent="send">
         <p class="text-pretty">
-          Raccontaci com’è andata. Ogni domanda è facoltativa: rispondi solo a quelle che vuoi. Le risposte arrivano
-          all’amministrazione del camp senza il nome della tua famiglia e, una volta inviate, non si possono cambiare.
+          Raccontaci com’è andata. Ogni domanda è facoltativa: rispondi solo a quelle che vuoi. Le risposte ci arrivano
+          senza il nome della tua famiglia e, una volta inviate, non si possono cambiare.
         </p>
 
         <IcSection v-for="group in groups" :key="group.title" :title="group.title" :description="group.description">

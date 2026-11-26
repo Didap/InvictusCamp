@@ -4,8 +4,8 @@ import { dayCount } from '#shared/utils/dates'
 import { formatDateTime, formatDayRange, plural } from '#shared/utils/format'
 
 // Availability (spec 3.5): the sessions not started yet, and for each one whether the person can come to the whole
-// of it. Each answer is saved at once; «Conferma le preferenze» fixes those shown, and only the administration
-// reopens them, after «Chiedi il reset». A session not confirmed yet (new, or with new dates) is confirmed in turn.
+// of it. Each answer is saved at once; «Conferma le preferenze» fixes those shown, and only an admin reopens them,
+// after «Chiedi il reset». A session not confirmed yet (new, or with new dates) is confirmed in turn.
 const api = useApi()
 const confirm = useConfirm()
 const { data, refresh } = await useApiFetch<MyAvailability>('/api/staff/availability')
@@ -14,13 +14,16 @@ const sessions = computed(() => data.value?.sessions ?? [])
 const available = computed(() => sessions.value.filter(session => session.available).length)
 const hasOpen = computed(() => sessions.value.some(session => !session.locked))
 
-/** The camp's words on what availability is (the docx of 25 November 2026). */
-const INTRO =
-  'In questa sezione puoi esprimere le tue preferenze. Si tratta di una semplice indicazione di disponibilità, che non costituisce una convocazione ufficiale né comporta alcun vincolo per la Fondazione. In caso di convocazione, riceverai una notifica e un’email ufficiale. Una volta confermate le tue preferenze, per modificare il calendario dovrai richiedere un reset. Ti invitiamo quindi a prenderti tutto il tempo necessario per compilare la sezione con attenzione. «Ci sono» vale per tutta la sessione, dal primo all’ultimo giorno.'
-const intro = computed(() =>
-  sessions.value.length
-    ? `${INTRO}${available.value ? ` Ci sei per ${plural(available.value, 'sessione', 'sessioni')}.` : ''}`
-    : undefined,
+/** The camp's words on what availability is (the docx of 25 November 2026), a paragraph each. */
+const INTRO = [
+  'In questa sezione puoi esprimere le tue preferenze. Si tratta di una semplice indicazione di disponibilità, che non costituisce una convocazione ufficiale né comporta alcun vincolo per la Fondazione. In caso di convocazione, riceverai una notifica e un’email ufficiale.',
+  'Una volta confermate le tue preferenze, per modificare il calendario dovrai richiedere un reset. Ti invitiamo quindi a prenderti tutto il tempo necessario per compilare la sezione con attenzione.',
+  '«Sono disponibile» vale per tutta la sessione, dal primo all’ultimo giorno.',
+]
+const chosen = computed(() =>
+  available.value
+    ? `Hai indicato ${plural(available.value, 'sessione', 'sessioni')}`
+    : 'Non hai indicato nessuna sessione',
 )
 
 const saving = ref<string | null>(null)
@@ -29,7 +32,7 @@ async function answer(session: MyAvailabilitySession, value: boolean) {
     const ok = await confirm({
       title: `Togli la disponibilità per ${session.title}?`,
       description:
-        'Hai già una convocazione per questa sessione: resta com’è, ma l’amministrazione vedrà che hai tolto la disponibilità.',
+        'Hai già una convocazione per questa sessione: resta com’è, ma vedremo che hai tolto la disponibilità.',
       confirmLabel: 'Togli la disponibilità',
       danger: true,
     })
@@ -58,11 +61,7 @@ async function answer(session: MyAvailabilitySession, value: boolean) {
 async function confirmAll() {
   const ok = await confirm({
     title: 'Confermi le tue preferenze?',
-    description: `${
-      available.value
-        ? `Ci sei per ${plural(available.value, 'sessione', 'sessioni')}`
-        : 'Non ci sei per nessuna sessione'
-    }. Dopo la conferma, per cambiarle dovrai chiedere un reset all’amministrazione.`,
+    description: `${chosen.value}. Dopo la conferma, per cambiarle dovrai chiedere un reset.`,
     confirmLabel: 'Conferma le preferenze',
   })
   if (!ok) return
@@ -82,8 +81,7 @@ async function confirmAll() {
 async function requestReset() {
   const ok = await confirm({
     title: 'Chiedi il reset della disponibilità?',
-    description:
-      'L’amministrazione riceve la richiesta: quando riapre la tua disponibilità ti mandiamo un’email e puoi cambiarla.',
+    description: 'Quando riapriamo la tua disponibilità ti mandiamo un’email e puoi cambiarla.',
     confirmLabel: 'Chiedi il reset',
   })
   if (!ok) return
@@ -121,10 +119,10 @@ async function requestReset() {
       >
         <template #description>
           <template v-if="data.resetRequestedAt">
-            Hai chiesto il reset il {{ formatDateTime(data.resetRequestedAt) }}: quando l’amministrazione riapre la
-            disponibilità ti mandiamo un’email.
+            Hai chiesto il reset il {{ formatDateTime(data.resetRequestedAt) }}: quando riapriamo la disponibilità ti
+            mandiamo un’email.
           </template>
-          <template v-else>Per cambiarle chiedi il reset all’amministrazione.</template>
+          <template v-else>Per cambiarle chiedi il reset.</template>
         </template>
         <template v-if="!data.resetRequestedAt" #actions>
           <UButton
@@ -138,17 +136,25 @@ async function requestReset() {
         </template>
       </UAlert>
 
-      <IcSection title="Le sessioni" :description="intro">
+      <IcSection title="Le sessioni">
         <UEmpty
           v-if="!sessions.length"
           icon="i-lucide-calendar"
           title="Nessuna sessione in programma"
-          description="Quando l’amministrazione prepara le prossime sessioni, le trovi qui per indicare la tua disponibilità."
+          description="Quando prepariamo le prossime sessioni, le trovi qui per indicare la tua disponibilità."
           variant="naked"
         />
         <template v-else>
+          <div class="space-y-3 rounded-lg bg-muted px-4 py-4 sm:px-5">
+            <p v-for="paragraph in INTRO" :key="paragraph" class="max-w-prose">{{ paragraph }}</p>
+          </div>
+          <p class="mt-8 mb-3 font-semibold text-highlighted" aria-live="polite">{{ chosen }}</p>
           <ul class="divide-y divide-default rounded-lg border border-default bg-elevated">
-            <li v-for="session in sessions" :key="session.id" class="flex items-start justify-between gap-4 px-4 py-3">
+            <li
+              v-for="session in sessions"
+              :key="session.id"
+              class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+            >
               <div class="min-w-0 flex-1">
                 <p class="font-semibold text-highlighted">{{ session.title }}</p>
                 <p class="text-sm text-muted">
@@ -162,9 +168,9 @@ async function requestReset() {
                 :model-value="session.available"
                 :disabled="session.locked || saving !== null"
                 :loading="saving === session.id"
-                label="Ci sono"
+                label="Sono disponibile"
                 class="shrink-0 pt-0.5 pointer-coarse:min-h-11"
-                :aria-label="`Ci sono per ${session.title}`"
+                :aria-label="`Sono disponibile per ${session.title}`"
                 @update:model-value="value => answer(session, value)"
               />
             </li>

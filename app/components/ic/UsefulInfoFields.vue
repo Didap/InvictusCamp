@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { ALLERGIES, CHOICES_UI, DIETS, HEALTH_LABELS, type Choice } from '#shared/content/member-form'
+import { ALLERGIES, CHOICES_UI, DIET_ITEMS, HEALTH_LABELS, INLINE_CHOICES_UI } from '#shared/content/member-form'
 import type { UsefulInfoForm } from '#shared/schemas/families'
 
 // «Informazioni utili»: allergies and intolerances, one food preference, other notes. The fields of a family
-// member's card and of the staff's canteen details; `name` prefixes the form field names (errors land there).
+// member's card; `name` prefixes the form field names (errors land there).
 const info = defineModel<UsefulInfoForm>({ required: true })
 defineProps<{ name: string }>()
-
-const DIET_ITEMS: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
 </script>
 
 <template>
@@ -21,7 +19,7 @@ const DIET_ITEMS: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
         :items="DIET_ITEMS"
         :legend="HEALTH_LABELS.diet"
         orientation="horizontal"
-        :ui="{ legend: 'sr-only', fieldset: 'flex-wrap gap-x-4 gap-y-2' }"
+        :ui="INLINE_CHOICES_UI"
       />
     </UFormField>
     <UFormField :label="HEALTH_LABELS.infoNotes" :name="`${name}.notes`" hint="Facoltativo">
