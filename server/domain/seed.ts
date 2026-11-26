@@ -40,6 +40,9 @@ export const DEMO_ACCOUNTS = {
 
 const TABLES = [
   'audit_log',
+  'contact_group_members',
+  'contact_groups',
+  'contacts',
   'email_log',
   'feedback_archives',
   'feedback_responses',

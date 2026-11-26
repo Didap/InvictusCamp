@@ -232,6 +232,13 @@
       "when": 1795688959914,
       "tag": "0032_automatic_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795691707038,
+      "tag": "0033_contacts",
+      "breakpoints": true
     }
   ]
 }

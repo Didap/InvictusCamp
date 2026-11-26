@@ -202,6 +202,10 @@ export type LodgingFeature = (typeof LODGING_FEATURES)[number]
 export const LODGING_LOCATIONS = ['melina', 'nu_suennu', 'torricella', 'invictus_camp'] as const
 export type LodgingLocation = (typeof LODGING_LOCATIONS)[number]
 
+/** Who a contact of the «Anagrafica» is for the camp (docs/spec.md 3.16): with or without an account. */
+export const CONTACT_KINDS = ['family', 'staff', 'volunteer', 'supporter', 'partner', 'other'] as const
+export type ContactKind = (typeof CONTACT_KINDS)[number]
+
 /** Uploads: 15 MB, PDF or images. Documents to sign are PDF only. */
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 export const UPLOAD_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'] as const
@@ -466,6 +470,25 @@ const lodgingLocation: Record<LodgingLocation, EnumMeta> = {
   invictus_camp: { label: 'Alloggi Invictus Camp', icon: 'i-lucide-map-pin', color: 'neutral' },
 }
 
+const contactKind: Record<ContactKind, EnumMeta> = {
+  family: { label: 'Famiglia', icon: 'i-lucide-heart-handshake', color: 'secondary' },
+  staff: { label: 'Staff', icon: 'i-lucide-id-card', color: 'info' },
+  volunteer: { label: 'V-team', icon: 'i-lucide-hand-heart', color: 'success', description: 'Volontari' },
+  supporter: {
+    label: 'Sostenitore',
+    icon: 'i-lucide-gift',
+    color: 'warning',
+    description: 'Donatori e amici del camp',
+  },
+  partner: {
+    label: 'Ente o partner',
+    icon: 'i-lucide-building-2',
+    color: 'primary',
+    description: 'Scuole, associazioni, aziende',
+  },
+  other: { label: 'Altro', icon: 'i-lucide-user', color: 'neutral' },
+}
+
 const staffTagColor: Record<StaffTagColor, EnumMeta> = {
   neutral: { label: 'Sabbia', icon: 'i-lucide-circle', color: 'neutral' },
   info: { label: 'Azzurro', icon: 'i-lucide-circle', color: 'info' },
@@ -504,6 +527,7 @@ export const ENUM_META = {
   emailStatus,
   lodgingFeature,
   lodgingLocation,
+  contactKind,
 } as const
 
 export type EnumName = keyof typeof ENUM_META
