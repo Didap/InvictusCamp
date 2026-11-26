@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { calendarNumber } from '#shared/content/calendar-2027'
 import type { DeliveryReport } from '#shared/types/communications'
 import type { SessionConvocation } from '#shared/types/staff'
 import { fullName } from '#shared/utils/format'
@@ -18,6 +19,11 @@ watch(open, value => {
 })
 
 const count = computed(() => props.convocations.length)
+/** An example that names the session as the camp numbers them («la sessione 7»). */
+const placeholder = computed(() => {
+  const number = calendarNumber(props.sessionTitle)
+  return `Per esempio: Ti aspettiamo al camp per ${number ? `la sessione ${number}` : `«${props.sessionTitle}»`}.`
+})
 const title = computed(() => (count.value === 1 ? 'Invia la convocazione' : `Invia ${count.value} convocazioni`))
 const description = computed(() =>
   count.value === 1
@@ -75,7 +81,14 @@ async function send() {
           hint="Facoltativo"
           help="Compare nella email e nel gestionale, insieme a sessione, date, luogo e ruolo."
         >
-          <UTextarea v-model="message" :rows="4" :maxlength="2000" autoresize class="w-full" />
+          <UTextarea
+            v-model="message"
+            :rows="4"
+            :maxlength="2000"
+            :placeholder="placeholder"
+            autoresize
+            class="w-full"
+          />
         </UFormField>
       </div>
     </template>

@@ -183,7 +183,7 @@ async function saveNotes() {
         <DocumentsUserSignatures :user-id="family.referent.userId" />
       </IcSection>
 
-      <IcSection title="Note interne" description="Visibili solo all’amministrazione, mai alla famiglia.">
+      <IcSection title="Note interne" description="La famiglia non le vede mai.">
         <UForm :schema="adminNotesSchema" :state="notes" class="max-w-prose space-y-4" @submit="saveNotes">
           <UFormField label="Note" name="adminNotes" hint="Facoltativo">
             <UTextarea v-model="notes.adminNotes" autoresize :rows="4" class="w-full" />

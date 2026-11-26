@@ -290,7 +290,7 @@ const description = computed(() =>
           :title="`Nessuna persona ${OF_TEAM[team]} convocata`"
           :description="
             editable
-              ? 'Aggiungi chi ha detto che c’è per questa sessione. Le convocazioni partono solo quando le invii.'
+              ? 'Aggiungi chi ha indicato la disponibilità per questa sessione. Le convocazioni partono solo quando le invii.'
               : undefined
           "
         />

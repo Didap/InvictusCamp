@@ -12,7 +12,7 @@ useHead({ title: 'Informativa privacy · Invictus Camp' })
       variant="subtle"
       icon="i-lucide-file-warning"
       title="Testo provvisorio"
-      description="Il testo definitivo dell’informativa (titolare, finalità, basi giuridiche, conservazione, diritti) va fornito dall’amministrazione del camp prima dell’apertura al pubblico."
+      description="Il testo definitivo dell’informativa (titolare, finalità, basi giuridiche, conservazione, diritti) va fornito da Invictus Camp prima dell’apertura al pubblico."
     />
     <div class="mt-6 space-y-4 text-default">
       <p>
@@ -21,7 +21,7 @@ useHead({ title: 'Informativa privacy · Invictus Camp' })
         e sulla disabilità dei componenti.
       </p>
       <p>
-        Le informazioni sulla salute sono visibili solo alla famiglia e all’amministrazione del camp. Ogni accesso alle
+        Le informazioni sulla salute sono visibili solo alla famiglia e a chi organizza il camp. Ogni accesso alle
         azioni sensibili viene registrato.
       </p>
     </div>

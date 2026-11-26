@@ -119,6 +119,10 @@ export type ItalianRegion = (typeof ITALIAN_REGIONS)[number]
 export const SHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'] as const
 export type ShirtSize = (typeof SHIRT_SIZES)[number]
 
+/** How a member of the staff works with the camp, asked in the personal sheet; not the v-team, who volunteer. */
+export const STAFF_CONTRACTS = ['vat_number', 'occasional'] as const
+export type StaffContract = (typeof STAFF_CONTRACTS)[number]
+
 export const DOCUMENT_CATEGORIES = ['contract', 'consent', 'regulation', 'privacy', 'other'] as const
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number]
 
@@ -314,6 +318,11 @@ const staffStatus: Record<StaffStatus, EnumMeta> = {
   inactive: { label: 'Non attivo', icon: 'i-lucide-pause', color: 'neutral', description: 'Non viene più convocato' },
 }
 
+const staffContract: Record<StaffContract, EnumMeta> = {
+  vat_number: { label: 'Partita IVA', icon: 'i-lucide-briefcase', color: 'neutral' },
+  occasional: { label: 'Collaborazione occasionale', icon: 'i-lucide-handshake', color: 'neutral' },
+}
+
 const staffTeam: Record<StaffTeam, EnumMeta> = {
   staff: { label: 'Staff', icon: 'i-lucide-id-card', color: 'neutral' },
   volunteer: { label: 'V-team', icon: 'i-lucide-hand-heart', color: 'neutral', description: 'Volontari' },
@@ -325,7 +334,7 @@ const staffAvailability: Record<'available' | 'missing', EnumMeta> = {
     label: 'Disponibile',
     icon: 'i-lucide-calendar-check',
     color: 'success',
-    description: 'Ha detto che c’è per tutta la sessione',
+    description: 'Disponibile per tutta la sessione',
   },
   missing: {
     label: 'Senza disponibilità',
@@ -514,6 +523,7 @@ export const ENUM_META = {
   participationStatus,
   staffStatus,
   staffTeam,
+  staffContract,
   staffTagColor,
   staffAvailability,
   convocationStatus,

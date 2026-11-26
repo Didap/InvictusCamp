@@ -844,7 +844,7 @@ async function storeSignedCopy(
   try {
     data = await buildSignedPdf(input.original, input.certificate)
   } catch {
-    throw fail(500, 'Non riesco a preparare la copia firmata di questo PDF: avvisa l’amministrazione del camp')
+    throw fail(500, 'Non riesco a preparare la copia firmata di questo PDF: avvisa Invictus Camp')
   }
   return storeFile(db, uploadsDir, {
     data,

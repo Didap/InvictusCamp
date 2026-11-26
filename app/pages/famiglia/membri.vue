@@ -210,7 +210,7 @@ async function remove(member: OwnFamilyMember) {
     <UModal
       v-model:open="idOpen"
       :title="`${idDocument.label} di ${idMember ? title(idMember) : ''}`"
-      description="Lo vedete solo voi e l’amministrazione del camp. Lo ritrovi nella pagina Documenti."
+      description="Lo vedete solo voi e chi organizza il camp. Lo ritrovi nella pagina Documenti."
     >
       <template #body>
         <FamiliesDocumentUploadForm

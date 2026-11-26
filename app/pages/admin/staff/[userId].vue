@@ -212,7 +212,7 @@ const contacts = computed(() => {
 const withSheet = computed(() => inStaffArea(person.value?.status))
 /** Said only while the approved person still has something to fill in. */
 const sheetNote = computed(() =>
-  person.value && withSheet.value && !isSheetComplete(person.value.sheet)
+  person.value && withSheet.value && !isSheetComplete(person.value.sheet, person.value.team)
     ? 'Non ancora completa: la compila la persona.'
     : undefined,
 )
@@ -229,6 +229,9 @@ const sheet = computed(() => {
     { label: 'Luogo di nascita', value: s.birthPlace },
     { label: 'Codice fiscale', value: s.fiscalCode },
     { label: 'Taglia della maglietta', value: s.shirtSize },
+    ...(person.value?.team === 'staff'
+      ? [{ label: 'Formula contrattuale', value: s.contractType && label('staffContract', s.contractType) }]
+      : []),
     { label: 'Indirizzo', value: s.address },
     { label: 'Città', value: formatTown(s) },
     { label: 'Regione', value: s.region },
@@ -261,14 +264,14 @@ const availabilityNote = computed(() => {
   const at = person.value?.availabilityConfirmedAt
   return at
     ? `Ultima conferma il ${dayOf(at)}: le sessioni confermate cambiano solo se riapri la disponibilità.`
-    : 'Le sessioni a cui ha detto che c’è, dal primo all’ultimo giorno. Non ancora confermate.'
+    : 'Le sessioni per cui ha indicato la disponibilità, dal primo all’ultimo giorno. Non ancora confermate.'
 })
 const reopening = ref(false)
 async function reopenAvailability() {
   const emailed = person.value?.accountStatus !== 'disabled'
   const ok = await confirm({
     title: 'Riapri la disponibilità?',
-    description: `${name.value} potrà cambiare le sessioni a cui c’è e confermarle di nuovo. Le risposte date restano. ${
+    description: `${name.value} potrà cambiare le sessioni per cui è disponibile e confermarle di nuovo. Le risposte date restano. ${
       emailed ? 'Parte 1 email.' : 'L’account è disattivato: non parte nessuna email.'
     }`,
     confirmLabel: emailed ? 'Riapri e invia 1 email' : 'Riapri',

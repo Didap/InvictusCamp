@@ -113,7 +113,7 @@ const when = computed(() => {
       variant="subtle"
       icon="i-lucide-info"
       title="Sull’età dei ragazzi che accogliamo"
-      :description="`Il camp è pensato per ragazzi e ragazze tra i ${GUEST_AGE.min} e i ${GUEST_AGE.max} anni, e dalle date di nascita che hai inserito nessuno rientra in questa fascia. La tua richiesta resta registrata: l’amministrazione la valuta e ti scrive.`"
+      :description="`Il camp è pensato per ragazzi e ragazze tra i ${GUEST_AGE.min} e i ${GUEST_AGE.max} anni, e dalle date di nascita che hai inserito nessuno rientra in questa fascia. La tua richiesta resta registrata: la valutiamo e ti scriviamo.`"
       :actions="[
         { label: 'Controlla le date di nascita', to: '/famiglia/membri', color: 'neutral', variant: 'outline' },
       ]"

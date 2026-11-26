@@ -239,6 +239,13 @@
       "when": 1795691707038,
       "tag": "0033_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795710992762,
+      "tag": "0034_staff_sheet_info",
+      "breakpoints": true
     }
   ]
 }

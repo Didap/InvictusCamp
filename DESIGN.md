@@ -122,7 +122,9 @@ inputs, badges); panels are `rounded-lg` (8px). No shadows on panels; floating l
 Italian, the "tu" form for the person using the account ("la tua famiglia"); the family questionnaire may
 speak to the family as "voi". Short sentences, active verbs on buttons ("Invia la convocazione", "Chiama
 la riserva", "Firma il documento"). No em dashes, no exclamation marks, no "ops". Errors say what happened
-and what to do. People-first language: "persona con disabilità", never "disabile" as a noun.
+and what to do. People-first language: "persona con disabilità", never "disabile" as a noun. The camp
+speaks as "noi" ("ti convochiamo", "lo leggono solo gli organizzatori del camp"), never as "l'amministrazione":
+the word stays only as the name of the admin role.
 
 ## 7. Do's and Don'ts
 

@@ -17,7 +17,14 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
-import type { Audience, DisabilityInfo, UsefulInfo, FormAnswers, ProgrammeContent } from '../../shared/types/domain'
+import type {
+  Audience,
+  DisabilityInfo,
+  FormAnswers,
+  NonFoodAllergies,
+  ProgrammeContent,
+  UsefulInfo,
+} from '../../shared/types/domain'
 import type { FeedbackArchive } from '../../shared/types/feedback'
 import type { FamilyFormContent } from '../../shared/content/family-form'
 import type { EmailTexts } from '../../shared/utils/automatic-emails'
@@ -39,6 +46,7 @@ import type {
   ProgrammeGroup,
   SessionStatus,
   ShirtSize,
+  StaffContract,
   SignatureStatus,
   StaffResourceMode,
   StaffRole,
@@ -299,6 +307,8 @@ export const staffProfiles = pgTable(
     region: text().$type<ItalianRegion>(),
     /** For the uniform. */
     shirtSize: text().$type<ShirtSize>(),
+    /** Partita IVA or collaborazione occasionale: asked of the staff only, the v-team volunteer. */
+    contractType: text().$type<StaffContract>(),
     /** Ids of `staff_roles`: chosen in the application, then given by the administration. */
     roles: jsonb().$type<StaffRole[]>().notNull().default([]),
     /** Ids of `staff_tags`: the «Valutazione» of the administration, never shown to the person. */
@@ -307,14 +317,19 @@ export const staffProfiles = pgTable(
     experience: text(),
     motivation: text(),
     cvFileId: uuid().references(() => files.id, { onDelete: 'set null' }),
-    /** Allergies, diet, notes for the canteen (health data): kept only with `usefulInfoConsentAt`. */
+    /**
+     * Allergies, diet, notes for the canteen (health data): kept only with `usefulInfoConsentAt`. The notes are
+     * the «Altro» of the food allergies.
+     */
     usefulInfo: jsonb().$type<UsefulInfo>(),
+    /** Allergies not to food (dust mites, cat hair…): health data under the same consent, never to the canteen. */
+    nonFoodAllergies: jsonb().$type<NonFoodAllergies>(),
     /**
      * What makes the camp more welcoming for the person (dyscalculia, colour blindness…): health data under the
      * same consent, read by the administration only, never by the canteen.
      */
     otherInfo: text(),
-    /** The consent to health data: `usefulInfo` and `otherInfo`. */
+    /** The consent to health data: `usefulInfo`, `nonFoodAllergies` and `otherInfo`. */
     usefulInfoConsentAt: timestamp(tz),
     appliedAt: timestamp(tz),
     reviewedAt: timestamp(tz),

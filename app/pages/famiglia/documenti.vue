@@ -11,7 +11,7 @@ const { data: members } = await useApiFetch<FamilyMembersResponse>('/api/family/
 async function remove(document: PersonalDocumentDto) {
   const ok = await confirm({
     title: `Eliminare «${document.title}»?`,
-    description: 'Il file verrà cancellato e l’amministrazione non lo vedrà più.',
+    description: 'Il file verrà cancellato e non lo vedremo più.',
     confirmLabel: 'Elimina',
     danger: true,
   })
@@ -34,7 +34,7 @@ async function remove(document: PersonalDocumentDto) {
 
     <IcSection
       title="I tuoi documenti"
-      description="Certificati, diagnosi, documenti d’identità e tessere sanitarie. Li vedete solo voi e l’amministrazione del camp."
+      description="Certificati, diagnosi, documenti d’identità e tessere sanitarie. Li vedete solo voi e chi organizza il camp."
     >
       <FamiliesDocumentsList v-if="documents?.length" :documents="documents" removable @remove="remove" />
       <UEmpty

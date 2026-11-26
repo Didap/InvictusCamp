@@ -18,8 +18,8 @@ const waiting = computed(() => (data.value?.items ?? []).filter(isConvocationWai
         :title="data.approved ? 'Nessuna convocazione da rispondere' : 'Il tuo profilo non è attivo'"
         :description="
           data.approved
-            ? 'Quando l’amministrazione ti convoca per una sessione, la trovi qui e ricevi un’email: ti convochiamo solo per le sessioni a cui hai detto che ci sei. Quelle che hai accettato sono in Sessioni.'
-            : 'Non ricevi nuove convocazioni. Per tornare attivo scrivi all’amministrazione.'
+            ? 'Quando ti convochiamo per una sessione, la trovi qui e ricevi un’email: ti convochiamo solo per le sessioni per cui hai indicato la disponibilità. Quelle che hai accettato sono in Sessioni.'
+            : 'Non ricevi nuove convocazioni. Per tornare attivo scrivici.'
         "
         :actions="
           data.approved
@@ -38,7 +38,9 @@ const waiting = computed(() => (data.value?.items ?? []).filter(isConvocationWai
       <IcSection
         v-else
         title="Da rispondere"
-        :description="data.approved ? 'Accetta o rifiuta: l’amministrazione vede subito la tua risposta.' : undefined"
+        :description="
+          data.approved ? 'Accetta o rifiuta il prima possibile per organizzare al meglio la sessione.' : undefined
+        "
       >
         <div class="divide-y divide-default rounded-lg border border-default bg-elevated">
           <StaffMyConvocation v-for="c in waiting" :key="c.id" :convocation="c" @changed="refresh" />

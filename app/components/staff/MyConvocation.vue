@@ -21,7 +21,7 @@ async function accept() {
     title: 'Accetti la convocazione?',
     description: c.value.contractTitle
       ? `«${c.value.session.title}», ${dates.value}. Dopo l’accettazione firmi il contratto «${c.value.contractTitle}»: ti arriva anche una email con il link.`
-      : `«${c.value.session.title}», ${dates.value}. L’amministrazione vede subito la tua risposta.`,
+      : `«${c.value.session.title}», ${dates.value}. Accetta o rifiuta il prima possibile per organizzare al meglio la sessione.`,
     confirmLabel: 'Accetta',
     cancelLabel: 'Torna indietro',
   })
@@ -93,7 +93,7 @@ async function decline() {
     </dl>
 
     <div v-if="c.message" class="max-w-prose rounded-lg bg-muted px-4 py-3">
-      <p class="text-sm font-semibold text-muted">Messaggio dell’amministrazione</p>
+      <p class="text-sm font-semibold text-muted">Il nostro messaggio</p>
       <p class="whitespace-pre-line">{{ c.message }}</p>
     </div>
 
@@ -126,11 +126,11 @@ async function decline() {
     <UModal
       v-model:open="declineOpen"
       title="Rifiuti la convocazione?"
-      :description="`«${c.session.title}», ${dates}. Se vuoi, scrivi all’amministrazione il motivo.`"
+      :description="`«${c.session.title}», ${dates}. Se vuoi, scrivici il motivo.`"
       :ui="{ wrapper: 'pe-12', close: 'pointer-coarse:size-11 pointer-coarse:justify-center' }"
     >
       <template #body>
-        <UFormField label="Motivo" hint="Facoltativo" help="Lo legge solo l’amministrazione.">
+        <UFormField label="Motivo" hint="Facoltativo" help="Lo leggono solo gli organizzatori del camp.">
           <UTextarea v-model="reason" :rows="3" :maxlength="500" autoresize class="w-full" />
         </UFormField>
       </template>

@@ -11,7 +11,7 @@ docs/BUILD.md who builds what. Data model: `server/db/schema.ts`; enumerations: 
 - **Invito**: a family is asked to confirm or decline its place. Sent when the session changes status.
 - **Candidatura**: a person's application to the staff. **Staff approvato**: an accepted application.
 - **Squadra**: the staff side has two teams, **Staff** and **V-team** (volunteers), each with its coordinator.
-- **Disponibilità**: a staff or v-team member says "ci sono" for a whole session (never part of it).
+- **Disponibilità**: a staff or v-team member says «Sono disponibile» for a whole session (never part of it).
 - **Convocazione**: a staff member called to a session. **Confermata** = accepted and, if the session
   has a contract, contract signed (derived, not stored).
 - **Firma**: a simple electronic signature (FES) confirmed by a one-time code sent by email.
@@ -135,20 +135,27 @@ aggiornamenti», with the staff address (`contact.staffEmail`, staff@), or asks 
 message. Applications sent with the older, longer form keep birth date, city, roles and texts.
 
 Once approved, «Scheda personale» (`/staff/scheda`, staff and v-team alike) takes the place of the application
-page. Name, surname, email and phone are the account's, read only (changed from `/account`). To fill in, all
-required but the province: birth date (the age counts itself as it is typed), birthplace, codice fiscale
-(checked with its control letter, omocodia included), residence (street and number, city, CAP, province,
-region) and the T-shirt size «per la divisa» (XS to 3XL). Saving is audited (`staff.sheet`) with the names of
-the fields that changed, never their values. Under it, «Alimentazione e altre informazioni»: allergies and
-intolerances, food preference and notes with the lists of the families (3.8), which reach the canteen (3.14),
-and «Altro da condividere» (dyscalculia, dysgraphia, colour blindness…), which only the administration reads
-(`staff_profiles.otherInfo`): both are health data under one consent, given again at every save (the box starts
-empty, the date is the last save's); saving nothing withdraws it. Last, the
-application as it was sent (team, roles, the older texts, CV). Until the sheet is complete the home asks for
-it. The administration sees the sheet on the person's page, the health data in a reserved section opened on
-demand and audited (`staff.health_view`), as for families.
+page; nothing of the application is shown there (the CV is among the documents). Name, surname, email and
+phone are the account's, read only (changed from `/account`). One form, one «Salva la scheda», in two sections.
+**«Altri dati anagrafici»**, all required but the province: birth date (the age counts itself as it is typed),
+birthplace, codice fiscale (checked with its control letter, omocodia included), residence (street and number,
+city, CAP, province, region). **«Info utili per la nostra collaborazione»**, every question in sight: «Qual è la
+taglia che ti senti più comoda?» (XS to 3XL, required, for the uniform); «Formula contrattuale» («Ho partita
+IVA» / «Collaborazione occasionale», required, asked of the staff only: the v-team volunteer, and one moved
+there keeps none, `staff_profiles.contractType`); then the optional health questions: «Hai intolleranze o
+allergie alimentari?» (the allergens of the families' list, 3.8, plus «Altro» with a text, kept as the notes of
+`usefulInfo`), «Hai preferenze alimentari?», which both reach the canteen (3.14); «Hai altre allergie o
+intolleranze non alimentari da segnalare?» (dust mites, cat or dog hair, pollen, insect stings, latex, nickel,
+plus «Altro»: `staff_profiles.nonFoodAllergies`) and «Hai altre info da segnalare?» (dyscalculia, colour
+blindness…, `otherInfo`), which only the admins read. All the health answers are under one consent, a box under
+them: ticked as it was given, needed to save any of them; saving them changed renews its date, saving them
+unchanged keeps it; saving none, or «Cancella queste informazioni e ritira il consenso» (at once, whatever the
+rest of the sheet), withdraws it. Saving is audited with the names of the fields that changed, never their
+values (`staff.sheet`, `staff.useful_info`). Until the sheet is complete the home asks for it. The admins see the
+sheet on the person's page, the health data in a reserved section opened on demand and audited
+(`staff.health_view`), as for families.
 Once the sheet is complete, the gestionale writes its PDF («Scheda personale · Nome Cognome»: the account's
-name, email and phone, birth, codice fiscale, residence, T-shirt size and «Con la firma confermo che i dati di
+name, email and phone, birth, codice fiscale, residence, T-shirt size, the staff's contract formula and «Con la firma confermo che i dati di
 questa scheda sono corretti e aggiornati»; no health data) and asks the person to sign it like every document,
 with the code by email (3.6): the email «Hai un documento da firmare», «Firma la tua scheda» on the sheet and the
 document among those to sign. A change of the sheet, or of name or phone from `/account`, makes it again: the
@@ -191,10 +198,11 @@ availability or receive convocations. The administration can move a person to th
 ### 3.5 Availability, convocations, contract
 
 - `/staff/disponibilita` lists the sessions not started yet (neither concluded nor cancelled), by date: approved
-  staff and v-team switch "Ci sono" on or off for each one, for the whole session (`session_availability`).
+  staff and v-team switch «Sono disponibile» on or off for each one, for the whole session (`session_availability`).
   Taking it back keeps the convocations already received; the administration sees it on them. The page opens
   with the camp's text («In questa sezione puoi esprimere le tue preferenze… non costituisce una convocazione
-  ufficiale né comporta alcun vincolo per la Fondazione…», then «Ci sono vale per tutta la sessione»). Each answer
+  ufficiale né comporta alcun vincolo per la Fondazione…», then «Sono disponibile vale per tutta la sessione»), in
+  three paragraphs in a box as wide as the list, then «Hai indicato N sessioni». Each answer
   is saved at once; **«Conferma le preferenze»** fixes the answers of the sessions the page showed
   (`availability_confirmations`, one row per person and session; audited `staff.availability_confirm` with the
   sessions confirmed and those the person is in for): they can no longer be switched. A session not confirmed yet
@@ -546,7 +554,7 @@ What the supplier of the meals needs for a session: the **Mensa** tab of the ses
   («vegetariana»…), each with how many and who, by name; then «Da sapere»: the food selectivity of the young
   people with a condition and the other notes. They come from «Informazioni utili» of the cards (3.8) and, for
   the staff, from their personal sheet (3.4, `staff_profiles.usefulInfo`, with a consent of their own: saving
-  nothing withdraws it; «Altro da condividere» never reaches the canteen).
+  nothing withdraws it; their allergies not to food and their other details never reach the canteen).
 - «Genera PDF per il fornitore» (the primary action) downloads an A4 PDF: the session and its dates, «Totale
   pasti» with the groups, each need with how many and who by first and last name, then «Da sapere». «Copia il
   testo» copies «Totale pasti 72 (persone a ogni pasto: 60 di 12 famiglie, 10 dello staff e 2 del v-team) di

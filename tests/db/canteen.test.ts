@@ -37,7 +37,16 @@ describe('canteen', () => {
     const { user: volunteer, profile } = await makeStaff(db)
     await db.update(t.staffProfiles).set({ team: 'volunteer' }).where(eq(t.staffProfiles.id, profile.id))
     const actor = { userId: staff.id, ip: null }
-    await saveStaffUsefulInfo(db, { userId: staff.id, value: { info: { allergies: ['milk'] }, consent: true }, actor })
+    await saveStaffUsefulInfo(db, {
+      userId: staff.id,
+      value: {
+        info: { allergies: ['milk'] },
+        nonFoodAllergies: { allergies: ['cat_hair'], other: 'Penicillina' },
+        otherInfo: 'Daltonismo',
+        consent: true,
+      },
+      actor,
+    })
     await saveStaffUsefulInfo(db, {
       userId: volunteer.id,
       value: { info: { diet: 'vegetarian' }, consent: true },
@@ -78,6 +87,8 @@ describe('canteen', () => {
         volunteerName,
       ]),
     )
+    // The allergies not to food and the other details never reach the canteen.
+    expect(JSON.stringify(await canteenOf(db, session.id))).not.toMatch(/cat_hair|gatto|Penicillina|Daltonismo/)
     const pdf = await canteenPdf(db, session.id)
     expect(pdf.filename).toBe('mensa-sessione-di-prova-21-06-2027.pdf')
     expect(sniffMimeType(pdf.data)).toBe('application/pdf')
@@ -85,6 +96,7 @@ describe('canteen', () => {
     // Saving nothing clears the details and the consent.
     expect(await saveStaffUsefulInfo(db, { userId: staff.id, value: { info: {}, consent: false }, actor })).toEqual({
       info: null,
+      nonFoodAllergies: null,
       otherInfo: null,
       consentAt: null,
     })

@@ -52,7 +52,7 @@ const removing = ref<string | null>(null)
 async function remove(document: StaffDocumentDto) {
   const ok = await confirm({
     title: `Elimini «${document.title}» (${document.file.originalName})?`,
-    description: 'Il file viene cancellato e l’amministrazione non lo vede più.',
+    description: 'Il file viene cancellato e non lo vediamo più.',
     confirmLabel: 'Elimina',
     danger: true,
   })
@@ -121,14 +121,11 @@ async function remove(document: StaffDocumentDto) {
       </div>
     </IcSection>
 
-    <IcSection title="Da firmare" description="I documenti che l’amministrazione ti chiede di leggere e firmare.">
+    <IcSection title="Da firmare" description="I documenti che ti chiediamo di leggere e firmare.">
       <DocumentsPendingSignatures />
     </IcSection>
 
-    <IcSection
-      title="I tuoi documenti"
-      description="Titoli, attestati e certificati che vuoi condividere con l’amministrazione."
-    >
+    <IcSection title="I tuoi documenti" description="Titoli, attestati e certificati che vuoi condividere con noi.">
       <p v-if="!others.length" class="text-muted">Non hai ancora caricato altri documenti.</p>
       <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
         <li

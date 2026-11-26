@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SHEET_MISSING, requiredDocumentsText } from '#shared/schemas/staff'
+import { requiredDocumentsText } from '#shared/schemas/staff'
 import type { StaffHome } from '#shared/types/staff'
 import { formatDayRange, plural } from '#shared/utils/format'
 
@@ -69,13 +69,13 @@ watch(
       <!-- Approved (and inactive): the sheet to complete, convocations, sessions, documents, availability. -->
       <template v-else>
         <UAlert
-          v-if="!home.sheetComplete"
+          v-if="home.sheetMissing"
           class="mb-8"
           color="warning"
           variant="subtle"
           icon="i-lucide-id-card"
           title="Completa la tua scheda personale"
-          :description="SHEET_MISSING"
+          :description="home.sheetMissing"
           :actions="[
             {
               label: 'Compila la scheda',
@@ -116,7 +116,7 @@ watch(
         <IcSection
           v-if="home.toAnswer.length"
           title="Convocazioni da rispondere"
-          description="L’amministrazione ti ha convocato: accetta o rifiuta."
+          description="Accetta o rifiuta il prima possibile per organizzare al meglio la sessione."
         >
           <div class="divide-y divide-default rounded-lg border border-default bg-elevated">
             <StaffMyConvocation v-for="c in home.toAnswer" :key="c.id" :convocation="c" @changed="refresh" />
@@ -168,14 +168,14 @@ watch(
 
         <IcSection v-if="home.status === 'approved'" title="La tua disponibilità">
           <p v-if="!home.availability.total" class="max-w-prose text-muted">
-            Non ci sono sessioni in programma: quando l’amministrazione le prepara, indichi qui a quali puoi venire.
+            Non ci sono sessioni in programma: quando le prepariamo, indichi qui a quali puoi venire.
           </p>
           <div
             v-else-if="home.availability.available || !home.availability.toConfirm"
             class="flex flex-wrap items-center justify-between gap-3"
           >
             <p class="max-w-prose">
-              Ci sei per
+              Hai indicato
               <span class="font-semibold text-highlighted">{{
                 plural(home.availability.available, 'sessione', 'sessioni')
               }}</span>
@@ -200,7 +200,7 @@ watch(
             title="Indica a quali sessioni puoi venire"
             :description="`${
               home.availability.toConfirm === 1 ? 'C’è una sessione' : `Ci sono ${home.availability.toConfirm} sessioni`
-            } in programma su cui dirci se ci sei, dal primo all’ultimo giorno: ti convochiamo solo per quelle.`"
+            } in programma per cui indicare se sei disponibile, dal primo all’ultimo giorno: ti convochiamo solo per quelle.`"
             :actions="[
               {
                 label: 'Indica la disponibilità',

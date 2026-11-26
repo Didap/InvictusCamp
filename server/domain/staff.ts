@@ -9,7 +9,9 @@ import {
   canMoveStaff,
   isReviewMove,
   isSheetComplete,
+  normalizeNonFoodAllergies,
   REQUIRED_STAFF_DOCUMENTS,
+  sheetMissing,
   staffDocumentTypes,
   type ConvocationAddInput,
   type RequiredStaffDocument,
@@ -92,42 +94,61 @@ const LEAVE_SESSION = { activityGroup: null, lodgingId: null } as const
 
 /** The health data of a staff member as the person and the administration read it. */
 export function staffUsefulInfo(
-  profile: Pick<ProfileRow, 'usefulInfo' | 'otherInfo' | 'usefulInfoConsentAt'>,
+  profile: Pick<ProfileRow, 'usefulInfo' | 'nonFoodAllergies' | 'otherInfo' | 'usefulInfoConsentAt'>,
 ): StaffUsefulInfoDto {
-  return { info: profile.usefulInfo, otherInfo: profile.otherInfo, consentAt: iso(profile.usefulInfoConsentAt) }
+  return {
+    info: profile.usefulInfo,
+    nonFoodAllergies: profile.nonFoodAllergies,
+    otherInfo: profile.otherInfo,
+    consentAt: iso(profile.usefulInfoConsentAt),
+  }
+}
+
+/** The health data as flat fields, to tell what changed: jsonb keeps the keys of an object in its own order. */
+function healthFields(health: Pick<ProfileRow, 'usefulInfo' | 'nonFoodAllergies' | 'otherInfo'>) {
+  return {
+    allergies: health.usefulInfo?.allergies,
+    diet: health.usefulInfo?.diet,
+    notes: health.usefulInfo?.notes,
+    nonFoodAllergies: health.nonFoodAllergies?.allergies,
+    nonFoodOther: health.nonFoodAllergies?.other,
+    otherInfo: health.otherInfo,
+  }
 }
 
 /**
- * Saves the health data of a staff member (canteen details and other ones) with the consent, or clears them
- * and the consent; audited without the values.
+ * Saves the health data of a staff member with the consent, or with nothing clears them and withdraws it; audited
+ * with the fields that changed, never their values. Data saved again as it was keeps the consent of when it came.
  */
 export async function saveStaffUsefulInfo(
   db: DbOrTx,
   input: { userId: string; value: StaffUsefulInfoInput; actor: Actor },
 ): Promise<StaffUsefulInfoDto> {
-  const info = normalizeUsefulInfo(input.value.info)
-  const otherInfo = input.value.otherInfo?.trim() || null
+  // Locked: two saves at once each compare with what the other left.
+  const before = await profileOf(db, input.userId, { lock: true })
+  const health = {
+    usefulInfo: normalizeUsefulInfo(input.value.info),
+    nonFoodAllergies: normalizeNonFoodAllergies(input.value.nonFoodAllergies),
+    otherInfo: input.value.otherInfo?.trim() || null,
+  }
+  const fields = changedKeys(healthFields(before), healthFields(health))
+  if (!fields.length) return staffUsefulInfo(before)
+  const kept = Object.values(health).some(Boolean)
   const [row] = await db
     .update(staffProfiles)
-    // Every save with data is the consent given again (the box starts empty), to what is saved now; saving
-    // nothing withdraws it.
-    .set({ usefulInfo: info, otherInfo, usefulInfoConsentAt: info || otherInfo ? sql`now()` : null })
-    .where(eq(staffProfiles.userId, input.userId))
-    .returning({
-      usefulInfo: staffProfiles.usefulInfo,
-      otherInfo: staffProfiles.otherInfo,
-      usefulInfoConsentAt: staffProfiles.usefulInfoConsentAt,
-    })
-  if (!row) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
+    // Data saved is the consent given to it now (the schema asks for it); saving nothing withdraws it.
+    .set({ ...health, usefulInfoConsentAt: kept ? sql`now()` : null })
+    .where(eq(staffProfiles.id, before.id))
+    .returning()
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.useful_info',
     entityType: 'user',
     entityId: input.userId,
-    data: { fields: [...(info ? Object.keys(info) : []), ...(otherInfo ? ['otherInfo'] : [])] },
+    data: { fields, ...(kept ? {} : { withdrawn: true }) },
     ip: input.actor.ip,
   })
-  return staffUsefulInfo(row)
+  return staffUsefulInfo(row!)
 }
 
 /** The personal sheet of a profile row. */
@@ -142,6 +163,7 @@ export function staffSheetOf(profile: ProfileRow): StaffSheet {
     province: profile.province,
     region: profile.region,
     shirtSize: profile.shirtSize,
+    contractType: profile.contractType,
   }
 }
 
@@ -152,7 +174,12 @@ export async function saveStaffSheet(
 ): Promise<StaffSheet> {
   // Locked: two saves at once (two tabs) each audit what they changed against what the other left.
   const before = await profileOf(db, input.userId, { lock: true })
-  const sheet: StaffSheet = { ...input.value, province: input.value.province || null }
+  const sheet: StaffSheet = {
+    ...input.value,
+    province: input.value.province || null,
+    // The formula is the staff's: the v-team volunteer, and one moved there from the staff leaves theirs.
+    contractType: before.team === 'staff' ? (input.value.contractType ?? null) : null,
+  }
   const fields = changedKeys(staffSheetOf(before), sheet)
   if (!fields.length) return sheet
   await db.update(staffProfiles).set(sheet).where(eq(staffProfiles.id, before.id))
@@ -201,7 +228,7 @@ export interface Actor {
 }
 
 const BEFORE_APPROVAL = 'Potrai indicare la tua disponibilità dopo l’approvazione della candidatura'
-const AVAILABILITY_LOCKED = 'Hai già confermato la tua disponibilità: per cambiarla chiedi il reset all’amministrazione'
+const AVAILABILITY_LOCKED = 'Hai già confermato la tua disponibilità: per cambiarla chiedi il reset'
 
 /** The profile of approved staff, the only ones who answer about availability; `lock` until the commit. */
 async function approvedProfile(db: DbOrTx, userId: string, options: { lock?: boolean } = {}): Promise<ProfileRow> {
@@ -1029,7 +1056,7 @@ export async function answerConvocation(
   }
   const profile = await profileOf(db, input.userId)
   if (profile.status !== 'approved') {
-    throw createError({ statusCode: 403, message: 'Il tuo profilo non è attivo: scrivi all’amministrazione del camp' })
+    throw createError({ statusCode: 403, message: 'Il tuo profilo non è attivo: scrivi a Invictus Camp' })
   }
   const accept = input.answer === 'accept'
   await db
@@ -1456,32 +1483,19 @@ export async function sheetSignature(db: DbOrTx, userId: string): Promise<StaffS
 
 /**
  * The personal sheet of the signed-in person, from the rows `requireStaff` read: the account's details, the
- * sheet, the health data and the application.
+ * sheet with its PDF and the health data.
  */
 export async function myStaffSheet(
   db: DbOrTx,
   user: Pick<typeof users.$inferSelect, 'firstName' | 'lastName' | 'email' | 'phone'>,
   profile: ProfileRow,
 ): Promise<StaffSheetDto> {
-  const [cv, roleOptions, signature] = await Promise.all([
-    cvFileOf(db, profile.cvFileId),
-    staffRoleOptions(db),
-    sheetSignature(db, profile.userId),
-  ])
   return {
     account: { firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone },
+    team: profile.team,
     sheet: staffSheetOf(profile),
-    signature,
     health: staffUsefulInfo(profile),
-    application: {
-      team: profile.team,
-      roles: roleOptions.filter(role => profile.roles.includes(role.id)),
-      qualifications: profile.qualifications,
-      experience: profile.experience,
-      motivation: profile.motivation,
-      cv,
-      appliedAt: iso(profile.appliedAt),
-    },
+    signature: await sheetSignature(db, profile.userId),
   }
 }
 
@@ -1597,7 +1611,7 @@ export async function myConvocations(
 
 /** The home of the signed-in staff member, whatever the status of the application. */
 export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string = todayIso()): Promise<StaffHome> {
-  const sheetComplete = isSheetComplete(staffSheetOf(profile))
+  const sheetMissingText = isSheetComplete(staffSheetOf(profile), profile.team) ? null : sheetMissing(profile.team)
   // Before the approval the home is only where the application stands.
   if (!inStaffArea(profile.status)) {
     return {
@@ -1605,7 +1619,7 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       toAnswer: [],
       upcoming: [],
       availability: { available: 0, total: 0, toConfirm: 0 },
-      sheetComplete,
+      sheetMissing: sheetMissingText,
       documentsMissing: [],
     }
   }
@@ -1620,7 +1634,7 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
     toAnswer: convocations.filter(c => c.answerable),
     upcoming: convocations.filter(c => c.status === 'accepted' && isSessionAhead(c.session, today)),
     availability: { available, total: sessions.length, toConfirm: sessions.filter(session => !session.locked).length },
-    sheetComplete,
+    sheetMissing: sheetMissingText,
     documentsMissing: requiredDocumentsMissing(profile, documents),
   }
 }

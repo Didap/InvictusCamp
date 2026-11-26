@@ -48,7 +48,7 @@ async function open(r: MyStaffResource) {
         v-if="!resources.length"
         icon="i-lucide-library"
         title="Ancora nessuna risorsa"
-        description="Qui trovi i documenti che l’amministrazione ti chiede di leggere e accettare, come il regolamento, e quelli da consultare."
+        description="Qui trovi i documenti che ti chiediamo di leggere e accettare, come il regolamento, e quelli da consultare."
         variant="naked"
       />
 

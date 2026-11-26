@@ -40,7 +40,7 @@ export function communicationEmail(ctx: EmailContext, input: CommunicationEmailI
     preheader: preview.length > 140 ? `${preview.slice(0, 139)}…` : preview,
     title: subject,
     paragraphs,
-    footnote: 'Messaggio dell’amministrazione di Invictus Camp.',
+    footnote: 'Messaggio di Invictus Camp.',
   })
   return {
     to: input.to,
