@@ -37,6 +37,7 @@ import type {
   SessionStatus,
   ShirtSize,
   SignatureStatus,
+  StaffResourceMode,
   StaffRole,
   StaffStatus,
   StaffTagColor,
@@ -642,6 +643,8 @@ export const documents = pgTable(
      */
     staffUserId: uuid().references(() => users.id, { onDelete: 'cascade' }),
     sourceDigest: text(),
+    /** In the «Risorse utili» of staff and v-team: to accept (each approved person asked) or to consult. */
+    staffResource: text().$type<StaffResourceMode>(),
     /** Set when the document belongs to one session (e.g. its contract). */
     sessionId: uuid().references((): AnyPgColumn => campSessions.id, { onDelete: 'set null' }),
     createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),

@@ -1168,6 +1168,8 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
     createdAt: document.createdAt.toISOString(),
     archivedAt: document.archivedAt?.toISOString() ?? null,
     description: document.description,
+    generated: document.familyId !== null || document.staffUserId !== null,
+    staffResource: document.staffResource,
     file: {
       id: file.id,
       originalName: file.originalName,

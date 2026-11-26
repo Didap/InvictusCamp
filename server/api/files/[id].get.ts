@@ -1,9 +1,11 @@
 import { and, eq, ne, or } from 'drizzle-orm'
+import { isStaffResourceFile } from '~~/server/domain/staff-resources'
 
 /**
  * Downloads a stored file (?download for an attachment, otherwise inline for the preview). Allowed to
  * the administration, to the account the file belongs to or that uploaded it, and to whoever must sign
- * the document (the original) or signed it (their signed copy). Anyone else gets 404.
+ * the document (the original) or signed it (their signed copy), and to staff in the staff area for the «Risorse
+ * utili». Anyone else gets 404.
  */
 export default defineEventHandler(async event => {
   const user = await requireUser(event)
@@ -12,7 +14,8 @@ export default defineEventHandler(async event => {
     user.role === 'admin' ||
     file.ownerUserId === user.id ||
     file.uploadedBy === user.id ||
-    (await isSignerOf(user.id, file.id))
+    (await isSignerOf(user.id, file.id)) ||
+    (user.role === 'staff' && (await isStaffResourceFile(useDb(), user.id, file.id)))
   if (!allowed) throw createError({ statusCode: 404, message: 'File non trovato' })
   return sendFile(event, file, { download: getQuery(event).download !== undefined })
 })

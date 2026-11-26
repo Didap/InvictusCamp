@@ -46,6 +46,7 @@ export function useNav() {
             { label: 'Sessioni', icon: 'i-lucide-calendar-days', to: '/staff/sessioni' },
             { label: 'Documenti', icon: 'i-lucide-folder-open', to: '/staff/documenti' },
             { label: 'Formazione', icon: 'i-lucide-graduation-cap', to: '/staff/formazione' },
+            { label: 'Risorse utili', icon: 'i-lucide-library', to: '/staff/risorse' },
           ],
         ]
       }

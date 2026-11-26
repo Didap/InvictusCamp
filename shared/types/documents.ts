@@ -1,5 +1,12 @@
 // DTOs of the documents area (A4): documents of the administration, signature requests, the signing page.
-import type { DocumentAudience, DocumentCategory, SessionStatus, SignatureStatus, UserRole } from '../utils/constants'
+import type {
+  DocumentAudience,
+  DocumentCategory,
+  SessionStatus,
+  SignatureStatus,
+  StaffResourceMode,
+  UserRole,
+} from '../utils/constants'
 import type { FileDto } from './api'
 
 /** A session as the documents area shows it (choices in the assign dialog, links). */
@@ -83,6 +90,22 @@ export interface DocumentDetail extends Omit<DocumentListItem, 'audiences'> {
   /** Somebody has already signed or read it: the file can no longer be replaced. */
   locked: boolean
   requests: SignatureRequestRow[]
+  /** A family's release or a staff sheet, prepared by the gestionale: never changed by hand. */
+  generated: boolean
+  /** In the «Risorse utili» of staff and v-team: to accept or to consult. */
+  staffResource: StaffResourceMode | null
+}
+
+/** GET /api/staff/resources: a document of the «Risorse utili». */
+export interface MyStaffResource {
+  id: string
+  title: string
+  description: string | null
+  category: DocumentCategory
+  mode: StaffResourceMode
+  file: FileDto
+  /** For one to accept: the person's request, to read or to sign as the document says. */
+  request: { id: string; status: SignatureStatus; signedAt: string | null; requiresSignature: boolean } | null
 }
 
 /** Who receives a document (POST /api/admin/documents/:id/assign). */
