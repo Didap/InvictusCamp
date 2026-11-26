@@ -1,9 +1,7 @@
 // The «Anagrafica» (docs/spec.md 3.16): contacts, their groups, the bulk import and the bulk actions.
 import { z } from 'zod'
 import { CONTACT_KINDS } from '../utils/constants'
-import { blankAsMissing, zEmail, zListQuery, zRequiredText, zText, zUuid } from './common'
-
-const optional = <T extends z.ZodType>(schema: T) => z.preprocess(blankAsMissing, schema.optional())
+import { zEmail, zListQuery, zOptional, zRequiredText, zText, zUuid } from './common'
 
 /** A name can be missing: many lists hold only the address. */
 const zContactName = zText(100)
@@ -24,9 +22,9 @@ export type ContactInput = z.infer<typeof contactInputSchema>
 
 /** The filters of the list, also used to act on every contact they find. `none`: in no group. */
 export const contactFilterSchema = z.object({
-  q: z.string().trim().max(200).optional(),
-  kind: optional(zKind),
-  group: optional(z.union([zUuid, z.literal('none')])),
+  q: zListQuery.shape.q,
+  kind: zOptional(zKind),
+  group: zOptional(z.union([zUuid, z.literal('none')])),
 })
 export type ContactFilter = z.infer<typeof contactFilterSchema>
 

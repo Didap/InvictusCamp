@@ -10,7 +10,6 @@ export interface ContactListItem {
   groupIds: string[]
   /** The role of the account with the same email, if there is one. */
   accountRole: UserRole | null
-  createdAt: string
 }
 
 export interface ContactGroupItem {

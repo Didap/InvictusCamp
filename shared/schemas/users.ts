@@ -1,7 +1,7 @@
 // Accounts managed by the administration (/admin/utenti, docs/spec.md 3.1).
 import { z } from 'zod'
 import { USER_ROLES, USER_STATUSES } from '../utils/constants'
-import { blankAsMissing, zEmail, zListQuery, zPersonName, zPhone, zText } from './common'
+import { zEmail, zListQuery, zOptional, zPersonName, zPhone, zText } from './common'
 
 /** Who starts a staff account invited by the administration: to apply, or already approved. */
 export const INVITE_STAFF_STATUSES = ['registered', 'approved'] as const
@@ -19,20 +19,18 @@ export const inviteUserSchema = z.object({
 })
 export type InviteUserInput = z.infer<typeof inviteUserSchema>
 
-const optional = <T extends z.ZodType>(schema: T) => z.preprocess(blankAsMissing, schema.optional())
-
 /** The columns /admin/utenti sorts by, on the server because the list comes a page at a time. */
 export const USER_LIST_SORTS = ['name', 'role', 'status', 'lastLogin'] as const
 export type UserListSort = (typeof USER_LIST_SORTS)[number]
 
 export const userListQuery = zListQuery.extend({
-  role: optional(z.enum(USER_ROLES)),
-  status: optional(z.enum(USER_STATUSES)),
+  role: zOptional(z.enum(USER_ROLES)),
+  status: zOptional(z.enum(USER_STATUSES)),
   /** By name (surname first) when missing. */
-  sort: optional(z.enum(USER_LIST_SORTS)),
-  order: optional(z.enum(['asc', 'desc'])),
+  sort: zOptional(z.enum(USER_LIST_SORTS)),
+  order: zOptional(z.enum(['asc', 'desc'])),
   /** Comma-separated ids: the composer asks for the names of the people it was opened with. */
-  ids: optional(
+  ids: zOptional(
     z
       .string()
       .max(40 * 200)

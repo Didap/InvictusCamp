@@ -3,6 +3,7 @@ import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { ContactBulkInput, ContactFilter } from '#shared/schemas/contacts'
 import type { Paginated } from '#shared/types/api'
 import type { ContactListItem } from '#shared/types/contacts'
+import type { ConfirmOptions } from '~/composables/useConfirm'
 import { type ContactKind, enumLabel } from '#shared/utils/constants'
 import { fullName, plural } from '#shared/utils/format'
 
@@ -57,12 +58,6 @@ const groupItems = computed(() => [
   { value: 'none', label: 'Senza gruppo' },
   ...groups.value.map(item => ({ value: item.id, label: `${item.name} (${item.count})` })),
 ])
-// The group of the filter was deleted (in «Gruppi», or elsewhere): back to every group.
-watch(groups, value => {
-  if (value.length && !['all', 'none'].includes(group.value) && !value.some(item => item.id === group.value)) {
-    group.value = 'all'
-  }
-})
 const exportUrl = computed(() => {
   const params = new URLSearchParams(
     Object.entries(filter.value).filter((entry): entry is [string, string] => Boolean(entry[1])),
@@ -109,10 +104,23 @@ function openContact(contact: ContactListItem | null) {
 async function reload() {
   await Promise.all([refresh(), refreshGroups()])
 }
+/** A group deleted in «Gruppi»: its contacts changed, and a filter on it would find nothing. */
+function onGroupDeleted(id: string) {
+  if (group.value === id) group.value = 'all'
+  else refresh()
+}
+/** The name, or the email of a contact without one. */
+const nameOf = (contact: ContactListItem) => fullName(contact) || contact.email
 
-/** Runs an action on the selection; `done` says what happened to how many. */
-async function runBulk(body: ContactBulkInput, done: (count: number) => string) {
+/** One action of the selection bar; runBulk adds the selection. */
+type BulkAction = ContactBulkInput extends infer T ? (T extends unknown ? Omit<T, 'selection'> : never) : never
+
+/** Asks first when `ask` is given, runs the action on the selection; `done` says what happened to how many. */
+async function runBulk(action: BulkAction, done: (count: number) => string, ask?: ConfirmOptions) {
+  if (ask && !(await confirm(ask))) return
+  const selection = allFound.value ? { filter: filter.value } : { ids: [...selected.value] }
   try {
+    const body: ContactBulkInput = { ...action, selection }
     const { count } = await api<{ count: number }>('/api/admin/contacts/bulk', { method: 'POST', body })
     notifySuccess(done(count))
     clearSelection()
@@ -121,54 +129,47 @@ async function runBulk(body: ContactBulkInput, done: (count: number) => string) 
     notifyError(error)
   }
 }
-const selection = (): ContactBulkInput['selection'] =>
-  allFound.value ? { filter: filter.value } : { ids: [...selected.value] }
 
 function addToGroup(groupId: string) {
   const name = groupName(groupId)
-  return runBulk({ selection: selection(), action: 'add_to_group', groupId }, count =>
+  return runBulk({ action: 'add_to_group', groupId }, count =>
     count ? `${plural(count, 'contatto aggiunto', 'contatti aggiunti')} a «${name}»` : `Erano già tutti in «${name}»`,
   )
 }
-async function removeFromGroup(groupId: string) {
+function removeFromGroup(groupId: string) {
   const name = groupName(groupId)
-  const ok = await confirm({
-    title: `Togli ${selectionLabel.value} da «${name}»?`,
-    description: 'Restano in anagrafica e negli altri gruppi. Non parte nessuna email.',
-    confirmLabel: 'Togli dal gruppo',
-  })
-  if (!ok) return
-  return runBulk({ selection: selection(), action: 'remove_from_group', groupId }, count =>
-    count ? `${plural(count, 'contatto tolto', 'contatti tolti')} da «${name}»` : `Nessuno era in «${name}»`,
+  return runBulk(
+    { action: 'remove_from_group', groupId },
+    count => (count ? `${plural(count, 'contatto tolto', 'contatti tolti')} da «${name}»` : `Nessuno era in «${name}»`),
+    {
+      title: `Togli ${selectionLabel.value} da «${name}»?`,
+      description: 'Restano in anagrafica e negli altri gruppi. Non parte nessuna email.',
+      confirmLabel: 'Togli dal gruppo',
+    },
   )
 }
-async function setKind(value: ContactKind) {
-  const ok = await confirm({
-    title: `Cambi il tipo di ${selectionLabel.value} in «${enumLabel('contactKind', value)}»?`,
-    description: 'Il tipo di prima non si recupera. Non parte nessuna email.',
-    confirmLabel: 'Cambia il tipo',
-  })
-  if (!ok) return
-  return runBulk({ selection: selection(), action: 'set_kind', kind: value }, count =>
-    count ? `Tipo cambiato a ${plural(count, 'contatto', 'contatti')}` : 'Avevano già tutti quel tipo',
+function setKind(value: ContactKind) {
+  return runBulk(
+    { action: 'set_kind', kind: value },
+    count => (count ? `Tipo cambiato a ${plural(count, 'contatto', 'contatti')}` : 'Avevano già tutti quel tipo'),
+    {
+      title: `Cambi il tipo di ${selectionLabel.value} in «${enumLabel('contactKind', value)}»?`,
+      description: 'Il tipo di prima non si recupera. Non parte nessuna email.',
+      confirmLabel: 'Cambia il tipo',
+    },
   )
 }
-async function deleteSelected() {
-  const ok = await confirm({
+function deleteSelected() {
+  return runBulk({ action: 'delete' }, count => plural(count, 'contatto eliminato', 'contatti eliminati'), {
     title: `Elimini ${selectionLabel.value} dall’anagrafica?`,
     description: 'Gli account con la stessa email restano. Non parte nessuna email.',
     confirmLabel: 'Elimina',
     danger: true,
   })
-  if (ok) {
-    await runBulk({ selection: selection(), action: 'delete' }, count =>
-      plural(count, 'contatto eliminato', 'contatti eliminati'),
-    )
-  }
 }
 async function deleteOne(contact: ContactListItem) {
   const ok = await confirm({
-    title: `Elimini ${fullName(contact) || contact.email} dall’anagrafica?`,
+    title: `Elimini ${nameOf(contact)} dall’anagrafica?`,
     description: 'Un account con la stessa email resta. Non parte nessuna email.',
     confirmLabel: 'Elimina',
     danger: true,
@@ -358,12 +359,12 @@ const columns: TableColumn<ContactListItem>[] = [
         <template #select-cell="{ row }">
           <UCheckbox
             :model-value="allFound || selected.has(row.original.id)"
-            :aria-label="`Seleziona ${fullName(row.original) || row.original.email}`"
+            :aria-label="`Seleziona ${nameOf(row.original)}`"
             @update:model-value="(value: boolean | 'indeterminate') => tick([row.original.id], value === true)"
           />
         </template>
         <template #person-cell="{ row }">
-          <p class="font-semibold text-highlighted">{{ fullName(row.original) || row.original.email }}</p>
+          <p class="font-semibold text-highlighted">{{ nameOf(row.original) }}</p>
           <p v-if="fullName(row.original)" class="text-muted">{{ row.original.email }}</p>
         </template>
         <template #kind-cell="{ row }">
@@ -386,7 +387,7 @@ const columns: TableColumn<ContactListItem>[] = [
                 icon="i-lucide-ellipsis-vertical"
                 color="neutral"
                 variant="ghost"
-                :aria-label="`Azioni per ${fullName(row.original) || row.original.email}`"
+                :aria-label="`Azioni per ${nameOf(row.original)}`"
               />
             </UDropdownMenu>
           </div>
@@ -404,12 +405,12 @@ const columns: TableColumn<ContactListItem>[] = [
           <li v-for="contact in data.items" :key="contact.id" class="flex items-start gap-3 p-4">
             <UCheckbox
               :model-value="allFound || selected.has(contact.id)"
-              :aria-label="`Seleziona ${fullName(contact) || contact.email}`"
+              :aria-label="`Seleziona ${nameOf(contact)}`"
               class="mt-1"
               @update:model-value="(value: boolean | 'indeterminate') => tick([contact.id], value === true)"
             />
             <div class="min-w-0 flex-1">
-              <p class="font-semibold text-highlighted">{{ fullName(contact) || contact.email }}</p>
+              <p class="font-semibold text-highlighted">{{ nameOf(contact) }}</p>
               <p v-if="fullName(contact)" class="truncate text-sm text-muted">{{ contact.email }}</p>
               <div class="mt-2 flex flex-wrap gap-2">
                 <IcStatusBadge kind="contactKind" :value="contact.kind" />
@@ -423,7 +424,7 @@ const columns: TableColumn<ContactListItem>[] = [
                 color="neutral"
                 variant="ghost"
                 class="size-11 justify-center"
-                :aria-label="`Azioni per ${fullName(contact) || contact.email}`"
+                :aria-label="`Azioni per ${nameOf(contact)}`"
               />
             </UDropdownMenu>
           </li>
@@ -437,6 +438,6 @@ const columns: TableColumn<ContactListItem>[] = [
 
     <ContactsContactModal v-model:open="contactOpen" :contact="editing" @saved="reload" />
     <ContactsImportModal v-model:open="importOpen" @imported="reload" />
-    <ContactsGroupsModal v-model:open="groupsOpen" @changed="reload" />
+    <ContactsGroupsModal v-model:open="groupsOpen" @deleted="onGroupDeleted" />
   </IcPage>
 </template>

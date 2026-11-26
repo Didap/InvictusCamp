@@ -24,8 +24,6 @@ export interface ContactProblem {
 export interface ParsedContacts {
   contacts: ParsedContact[]
   problems: ContactProblem[]
-  /** The first row named the columns. */
-  header: boolean
 }
 
 type Column = 'firstName' | 'lastName' | 'fullName' | 'reversedName' | 'email' | 'kind'
@@ -73,7 +71,6 @@ const KIND_WORDS: Record<string, ContactKind> = {
   ...Object.fromEntries(CONTACT_KINDS.map(kind => [normalize(ENUM_META.contactKind[kind].label), kind])),
   ...Object.fromEntries(CONTACT_KINDS.map(kind => [kind, kind])),
   famiglie: 'family',
-  vteam: 'volunteer',
   volontario: 'volunteer',
   volontaria: 'volunteer',
   volontari: 'volunteer',
@@ -89,7 +86,7 @@ const KIND_WORDS: Record<string, ContactKind> = {
   azienda: 'partner',
 }
 
-export function kindOf(text: string): ContactKind | null {
+function kindOf(text: string): ContactKind | null {
   return KIND_WORDS[normalize(text)] ?? null
 }
 
@@ -173,16 +170,18 @@ function splitName(full: string, reversed = false): { firstName: string; lastNam
   return { firstName: words.slice(surname).join(' '), lastName: words.slice(0, surname).join(' ') }
 }
 
-/** The columns named by a header row, or null when the first row is data. «Email genitore» is the email. */
+/**
+ * The columns named by a header row, or null when the first row is data. The email column is the one whose
+ * cells have the @ (emailColumn), whatever its title: «Email genitore», «Recapito».
+ */
 function headerOf(cells: string[]): Map<Column, number> | null {
   if (cells.some(cell => cell.includes('@'))) return null
   const columns = new Map<Column, number>()
   cells.forEach((cell, index) => {
-    const name = normalize(cell)
-    const column = HEADERS[name] ?? (name.includes('mail') ? 'email' : undefined)
-    if (column && !columns.has(column)) columns.set(column, index)
+    const column = HEADERS[normalize(cell)]
+    if (column && column !== 'email' && !columns.has(column)) columns.set(column, index)
   })
-  return columns.size ? columns : null
+  return columns.size || cells.some(cell => HEADERS[normalize(cell)] === 'email') ? columns : null
 }
 
 interface Fields {
@@ -237,7 +236,7 @@ function byContent(cells: string[]): Fields[] | string {
   return [{ ...names, email, kind }]
 }
 
-/** Without a known title for it, the email is the column whose cells have the @. */
+/** The column whose cells most often have the @. */
 function emailColumn(rows: string[][]): number | undefined {
   const counts = new Map<number, number>()
   for (const cells of rows) {
@@ -256,11 +255,10 @@ export function parseContacts(text: string): ParsedContacts {
   const columns = firstFilled >= 0 ? headerOf(rows[firstFilled]!) : null
   const contacts: ParsedContact[] = []
   const problems: ContactProblem[] = []
-  if (columns && !columns.has('email')) {
+  if (columns) {
     const index = emailColumn(rows.slice(firstFilled + 1))
-    if (index === undefined) {
-      return { contacts, problems: [{ line: firstFilled + 1, reason: 'Manca la colonna dell’email' }], header: true }
-    }
+    if (index === undefined)
+      return { contacts, problems: [{ line: firstFilled + 1, reason: 'Manca la colonna dell’email' }] }
     columns.set('email', index)
   }
   const seen = new Map<string, number>()
@@ -295,5 +293,5 @@ export function parseContacts(text: string): ParsedContacts {
       })
     }
   })
-  return { contacts, problems, header: Boolean(columns) }
+  return { contacts, problems }
 }

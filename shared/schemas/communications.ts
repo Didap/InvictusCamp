@@ -17,7 +17,7 @@ import {
 import { AUTOMATIC_EMAIL_KEYS, AUTOMATIC_EMAILS } from '../utils/automatic-emails'
 import { orList, plural } from '../utils/format'
 import { fieldIssue, messageIssue } from '../utils/message-fields'
-import { blankAsMissing, zListQuery, zRequiredText, zText } from './common'
+import { zListQuery, zOptional, zRequiredText, zText } from './common'
 
 export const AUDIENCE_TYPES = [
   'all_families',
@@ -128,20 +128,18 @@ export const messageTemplateSchema = z
 export type MessageTemplateInput = z.infer<typeof messageTemplateSchema>
 
 /** Empty query values ("?status=") read as missing. */
-const optional = <T extends z.ZodType>(schema: T) => z.preprocess(blankAsMissing, schema.optional())
-
 export const communicationListQuery = zListQuery.extend({
-  sessionId: optional(z.uuid()),
+  sessionId: zOptional(z.uuid()),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
 
 export const emailLogQuery = zListQuery.extend({
-  template: optional(z.string().trim().max(60)),
-  status: optional(z.enum(EMAIL_STATUSES)),
-  sessionId: optional(z.uuid()),
-  communicationId: optional(z.uuid()),
+  template: zOptional(z.string().trim().max(60)),
+  status: zOptional(z.enum(EMAIL_STATUSES)),
+  sessionId: zOptional(z.uuid()),
+  communicationId: zOptional(z.uuid()),
   /** Only the last N days. */
-  days: optional(z.coerce.number().int().min(1).max(366)),
+  days: zOptional(z.coerce.number().int().min(1).max(366)),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 })
 export type EmailLogQuery = z.infer<typeof emailLogQuery>

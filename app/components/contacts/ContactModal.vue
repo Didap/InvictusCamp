@@ -9,7 +9,7 @@ const emit = defineEmits<{ saved: [] }>()
 
 const api = useApi()
 const { options } = useEnums()
-const kindItems = options('contactKind').map(({ value, label, icon }) => ({ value, label, icon }))
+const kindItems = options('contactKind')
 
 const blank = (): ContactInput => ({ kind: 'family', firstName: '', lastName: '', email: '', groupIds: [] })
 const state = reactive<ContactInput>(blank())

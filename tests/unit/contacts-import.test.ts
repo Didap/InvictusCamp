@@ -10,7 +10,6 @@ describe('parseContacts', () => {
     const csv =
       '\uFEFFEmail;Cognome;Nome;Tipo\r\nMARIO@Example.it;Rossi;Mario;Famiglia\r\nanna@example.it;Bianchi;Anna;donatrice\r\n'
     const parsed = parseContacts(csv)
-    expect(parsed.header).toBe(true)
     expect(parsed.problems).toEqual([])
     expect(fields(csv)).toEqual([
       ['Mario', 'Rossi', 'mario@example.it', 'family'],

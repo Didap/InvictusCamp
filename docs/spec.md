@@ -592,8 +592,9 @@ Tables `contacts`, `contact_groups`, `contact_group_members` (migration 0033).
   «Elimina» (confirmed).
 - **Import** («Importa un elenco»): a list pasted from a spreadsheet (cells split by tabs) or a CSV file
   (semicolons or commas; UTF-8, or Windows-1252 as Excel in Italian saves it), read in the browser
-  (`shared/utils/contacts-import.ts`). With a header row the columns are found by name (Nome, Cognome, Email, Tipo,
-  «Nome e cognome», «Cognome e nome»); without one the cell with the @ is the email, a known type is the type
+  (`shared/utils/contacts-import.ts`). With a header row the columns are found by name (Nome, Cognome, Tipo, «Nome e
+  cognome», «Cognome e nome», «Name»; «Nome» alone is not split) and the email is the column with the @, whatever
+  its title; without one the cell with the @ is the email, a known type is the type
   (labels and synonyms: «donatore», «volontaria», «scuola»…), the other cells the name and the surname. The preview
   shows how many contacts are ready, the first rows, and the rows left out with the reason (no email, email not
   valid, email repeated in the list, two addresses in one row). The administration picks the type of the rows

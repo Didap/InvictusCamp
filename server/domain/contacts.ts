@@ -1,7 +1,9 @@
 // The «Anagrafica» (docs/spec.md 3.16): the people the camp keeps in touch with, with an account or without,
-// their groups, the bulk import of a pasted list and the actions on many contacts at once. Explicit imports
-// only, so the database tests load this module directly.
-import { and, asc, count, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm'
+// their groups, the bulk import of a pasted list and the actions on many contacts at once. Every action is one
+// statement on its selection, never one per contact: the production database is a network hop away. An import
+// holds at most CONTACT_IMPORT_MAX rows, so its statements stay under the 65535 parameters of Postgres.
+// Explicit imports only, so the database tests load this module directly.
+import { and, asc, count, eq, ilike, inArray, ne, or, sql, type SQL } from 'drizzle-orm'
 import type {
   ContactBulkInput,
   ContactFilter,
@@ -12,7 +14,6 @@ import type {
 } from '../../shared/schemas/contacts'
 import type { Paginated } from '../../shared/types/api'
 import type { ContactGroupItem, ContactImportResult, ContactListItem } from '../../shared/types/contacts'
-import type { ContactKind } from '../../shared/utils/constants'
 import { contactGroupMembers, contactGroups, contacts, users } from '../db/schema'
 import { writeAudit } from './audit'
 import { isUniqueViolation, type DbOrTx } from './db'
@@ -21,16 +22,15 @@ import { containsPattern, httpError, type Actor } from './users'
 const duplicateContact = () => httpError(409, 'Questa email è già in anagrafica: cercala nell’elenco')
 const duplicateGroup = () => httpError(409, 'Esiste già un gruppo con questo nome')
 
-/** Inserts and deletes with one parameter per value stay well under the 65535 of Postgres. */
-const CHUNK = 2000
-function chunks<T>(items: T[]): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < items.length; i += CHUNK) out.push(items.slice(i, i + CHUNK))
-  return out
-}
-
-function audit(db: DbOrTx, action: string, entityType: string, entityId: string | null, data: object, actor: Actor) {
-  return writeAudit(db, { actorUserId: actor.userId, action, entityType, entityId, data: { ...data }, ip: actor.ip })
+function audit(
+  db: DbOrTx,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  data: Record<string, unknown>,
+  actor: Actor,
+) {
+  return writeAudit(db, { actorUserId: actor.userId, action, entityType, entityId, data, ip: actor.ip })
 }
 
 /** Runs a write and turns a unique violation (an email or a group name taken) into a 409. */
@@ -43,19 +43,22 @@ async function unique<T>(write: Promise<T>, conflict: () => Error): Promise<T> {
   }
 }
 
-/**
- * The contacts the filters of the list find. The group subquery names the outer row in full: Drizzle leaves
- * columns unqualified when a query reads one table, and a bare `id` would be read inside the subquery.
- */
+/** The ids of the contacts in a group, or in any group when none is given. */
+function membersOf(group?: string): SQL {
+  const ids = sql`select ${contactGroupMembers.contactId} from ${contactGroupMembers}`
+  return group ? sql`${ids} where ${contactGroupMembers.groupId} = ${group}` : ids
+}
+
+/** The contacts the filters of the list find. */
 function contactWhere(filter: ContactFilter): SQL | undefined {
   const pattern = filter.q ? containsPattern(filter.q) : null
-  const memberOf = (group?: string) =>
-    sql`exists (select 1 from contact_group_members m where m.contact_id = "contacts"."id"${
-      group ? sql` and m.group_id = ${group}` : sql``
-    })`
   return and(
     filter.kind ? eq(contacts.kind, filter.kind) : undefined,
-    filter.group === 'none' ? sql`not ${memberOf()}` : filter.group ? memberOf(filter.group) : undefined,
+    filter.group === 'none'
+      ? sql`${contacts.id} not in (${membersOf()})`
+      : filter.group
+        ? sql`${contacts.id} in (${membersOf(filter.group)})`
+        : undefined,
     pattern
       ? or(
           ilike(sql`${contacts.firstName} || ' ' || ${contacts.lastName}`, pattern),
@@ -78,7 +81,7 @@ const contactOrder = [
 export async function listContacts(db: DbOrTx, query: ContactListQuery): Promise<Paginated<ContactListItem>> {
   const { page, pageSize } = query
   const where = contactWhere(query)
-  const [rows, [totals]] = await Promise.all([
+  const [items, [totals]] = await Promise.all([
     db
       .select({
         id: contacts.id,
@@ -86,7 +89,10 @@ export async function listContacts(db: DbOrTx, query: ContactListQuery): Promise
         firstName: contacts.firstName,
         lastName: contacts.lastName,
         email: contacts.email,
-        createdAt: contacts.createdAt,
+        groupIds: sql<string[]>`array(
+          select ${contactGroupMembers.groupId} from ${contactGroupMembers}
+          where ${contactGroupMembers.contactId} = ${contacts.id}
+        )`,
         accountRole: users.role,
       })
       .from(contacts)
@@ -97,23 +103,7 @@ export async function listContacts(db: DbOrTx, query: ContactListQuery): Promise
       .offset((page - 1) * pageSize),
     db.select({ total: count() }).from(contacts).where(where),
   ])
-  const ids = rows.map(row => row.id)
-  const memberships = ids.length
-    ? await db
-        .select({ contactId: contactGroupMembers.contactId, groupId: contactGroupMembers.groupId })
-        .from(contactGroupMembers)
-        .where(inArray(contactGroupMembers.contactId, ids))
-    : []
-  return {
-    items: rows.map(row => ({
-      ...row,
-      groupIds: memberships.filter(m => m.contactId === row.id).map(m => m.groupId),
-      createdAt: row.createdAt.toISOString(),
-    })),
-    total: totals?.total ?? 0,
-    page,
-    pageSize,
-  }
+  return { items, total: totals?.total ?? 0, page, pageSize }
 }
 
 /** Refuses ids of groups deleted meanwhile (the form had an old list). */
@@ -128,19 +118,26 @@ async function assertGroups(db: DbOrTx, groupIds: string[]): Promise<void> {
   if (found.length !== new Set(groupIds).size) throw httpError(400, 'Un gruppo scelto non esiste più')
 }
 
-/** Puts the contacts in the groups; how many memberships are new. */
-async function addToGroups(db: DbOrTx, contactIds: string[], groupIds: string[]): Promise<number> {
-  const pairs = contactIds.flatMap(contactId => groupIds.map(groupId => ({ contactId, groupId })))
-  let added = 0
-  for (const part of chunks(pairs)) {
-    const rows = await db
-      .insert(contactGroupMembers)
-      .values(part)
-      .onConflictDoNothing()
-      .returning({ contactId: contactGroupMembers.contactId })
-    added += rows.length
-  }
-  return added
+/** Puts the contacts `where` finds in the groups, in one statement; how many memberships are new. */
+async function addToGroups(db: DbOrTx, where: SQL | undefined, groupIds: string[]): Promise<number> {
+  if (!groupIds.length) return 0
+  const added = await db
+    .insert(contactGroupMembers)
+    .select(
+      db
+        // Every column of the table, in its order: Drizzle checks it.
+        .select({
+          contactId: contacts.id,
+          groupId: contactGroups.id,
+          createdAt: sql<Date>`now()`.as('created_at'),
+        })
+        .from(contacts)
+        .innerJoin(contactGroups, inArray(contactGroups.id, groupIds))
+        .where(where),
+    )
+    .onConflictDoNothing()
+    .returning({ contactId: contactGroupMembers.contactId })
+  return added.length
 }
 
 export async function createContact(db: DbOrTx, input: ContactInput, actor: Actor): Promise<string> {
@@ -153,7 +150,7 @@ export async function createContact(db: DbOrTx, input: ContactInput, actor: Acto
       .returning({ id: contacts.id }),
     duplicateContact,
   )
-  await addToGroups(db, [row!.id], groupIds)
+  await addToGroups(db, eq(contacts.id, row!.id), groupIds)
   return row!.id
 }
 
@@ -167,7 +164,7 @@ export async function updateContact(db: DbOrTx, id: string, input: ContactInput)
   )
   if (!row) throw httpError(404, 'Contatto non trovato')
   await db.delete(contactGroupMembers).where(eq(contactGroupMembers.contactId, id))
-  await addToGroups(db, [id], groupIds)
+  await addToGroups(db, eq(contacts.id, id), groupIds)
 }
 
 export async function deleteContact(db: DbOrTx, id: string, actor: Actor): Promise<void> {
@@ -180,7 +177,7 @@ export async function deleteContact(db: DbOrTx, id: string, actor: Actor): Promi
  * Adds the contacts of a list (shared/utils/contacts-import.ts read it in the browser). One contact per
  * email: an address already in the registry is not added again; with `update` it takes the type and the
  * names of the row (a blank cell, or no type, changes nothing). Every contact of the list joins the chosen
- * groups. One statement per chunk, never one per row: the production database is a network hop away.
+ * groups, also one another import added meanwhile.
  */
 export async function importContacts(
   db: DbOrTx,
@@ -189,35 +186,29 @@ export async function importContacts(
 ): Promise<ContactImportResult> {
   await assertGroups(db, input.groupIds)
   const rows = [...new Map(input.rows.map(row => [row.email, row])).values()]
-  const byEmail = async () => {
-    const found: { id: string; email: string; kind: ContactKind; firstName: string; lastName: string }[] = []
-    for (const part of chunks(rows.map(row => row.email))) {
-      found.push(
-        ...(await db
-          .select({
-            id: contacts.id,
-            email: contacts.email,
-            kind: contacts.kind,
-            firstName: contacts.firstName,
-            lastName: contacts.lastName,
-          })
-          .from(contacts)
-          .where(inArray(contacts.email, part))),
-      )
-    }
-    return new Map(found.map(({ email, ...contact }) => [email, contact]))
-  }
-  const existing = await byEmail()
+  const emails = rows.map(row => row.email)
+  const found = await db
+    .select({
+      id: contacts.id,
+      email: contacts.email,
+      kind: contacts.kind,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+    })
+    .from(contacts)
+    .where(inArray(contacts.email, emails))
+  const existing = new Map(found.map(contact => [contact.email, contact]))
 
-  let created = 0
-  for (const part of chunks(rows.filter(row => !existing.has(row.email)))) {
-    const inserted = await db
-      .insert(contacts)
-      .values(part.map(row => ({ ...row, kind: row.kind ?? input.kind, createdBy: actor.userId })))
-      .onConflictDoNothing({ target: contacts.email })
-      .returning({ id: contacts.id })
-    created += inserted.length
-  }
+  const fresh = rows.filter(row => !existing.has(row.email))
+  const created = fresh.length
+    ? (
+        await db
+          .insert(contacts)
+          .values(fresh.map(row => ({ ...row, kind: row.kind ?? input.kind, createdBy: actor.userId })))
+          .onConflictDoNothing({ target: contacts.email })
+          .returning({ id: contacts.id })
+      ).length
+    : 0
 
   const changes = input.update
     ? rows.flatMap(row => {
@@ -234,9 +225,9 @@ export async function importContacts(
         return same ? [] : [after]
       })
     : []
-  for (const part of chunks(changes)) {
+  if (changes.length) {
     const values = sql.join(
-      part.map(change => sql`(${change.id}::uuid, ${change.kind}, ${change.firstName}, ${change.lastName})`),
+      changes.map(change => sql`(${change.id}::uuid, ${change.kind}, ${change.firstName}, ${change.lastName})`),
       sql`, `,
     )
     await db.execute(sql`
@@ -245,60 +236,48 @@ export async function importContacts(
       where ${contacts}.id = v.id`)
   }
 
-  // Read again: a row another import added meanwhile was skipped above, but is in the list all the same.
-  if (input.groupIds.length) {
-    await addToGroups(
-      db,
-      [...(await byEmail()).values()].map(contact => contact.id),
-      input.groupIds,
-    )
-  }
+  await addToGroups(db, inArray(contacts.email, emails), input.groupIds)
   const result = { created, existing: rows.length - created, updated: changes.length }
   await audit(db, 'contact.import', 'contact', null, { ...result, groupIds: input.groupIds }, actor)
   return result
 }
 
-/** The ids an action applies to: the ones ticked that still exist, or every contact the filters find. */
-async function selected(db: DbOrTx, selection: ContactBulkInput['selection']): Promise<string[]> {
-  const where = 'ids' in selection ? inArray(contacts.id, selection.ids) : contactWhere(selection.filter)
-  const rows = await db.select({ id: contacts.id }).from(contacts).where(where)
-  return rows.map(row => row.id)
-}
-
 /** Adds to a group, takes out of it, changes the type or deletes many contacts; how many changed. */
 export async function bulkContacts(db: DbOrTx, input: ContactBulkInput, actor: Actor): Promise<number> {
-  if (input.action === 'add_to_group' || input.action === 'remove_from_group') {
-    await assertGroups(db, [input.groupId])
+  const { selection, ...action } = input
+  const target = 'ids' in selection ? inArray(contacts.id, selection.ids) : contactWhere(selection.filter)
+  let changed: number
+  switch (action.action) {
+    case 'add_to_group':
+      await assertGroups(db, [action.groupId])
+      changed = await addToGroups(db, target, [action.groupId])
+      break
+    case 'remove_from_group':
+      changed = (
+        await db
+          .delete(contactGroupMembers)
+          .where(
+            and(
+              eq(contactGroupMembers.groupId, action.groupId),
+              inArray(contactGroupMembers.contactId, db.select({ id: contacts.id }).from(contacts).where(target)),
+            ),
+          )
+          .returning({ id: contactGroupMembers.contactId })
+      ).length
+      break
+    case 'set_kind':
+      changed = (
+        await db
+          .update(contacts)
+          .set({ kind: action.kind })
+          .where(and(target, ne(contacts.kind, action.kind)))
+          .returning({ id: contacts.id })
+      ).length
+      break
+    case 'delete':
+      changed = (await db.delete(contacts).where(target).returning({ id: contacts.id })).length
+      break
   }
-  let changed = 0
-  for (const part of chunks(await selected(db, input.selection))) {
-    switch (input.action) {
-      case 'add_to_group':
-        changed += await addToGroups(db, part, [input.groupId])
-        break
-      case 'remove_from_group':
-        changed += (
-          await db
-            .delete(contactGroupMembers)
-            .where(and(eq(contactGroupMembers.groupId, input.groupId), inArray(contactGroupMembers.contactId, part)))
-            .returning({ contactId: contactGroupMembers.contactId })
-        ).length
-        break
-      case 'set_kind':
-        changed += (
-          await db
-            .update(contacts)
-            .set({ kind: input.kind })
-            .where(and(inArray(contacts.id, part), sql`${contacts.kind} <> ${input.kind}`))
-            .returning({ id: contacts.id })
-        ).length
-        break
-      case 'delete':
-        changed += (await db.delete(contacts).where(inArray(contacts.id, part)).returning({ id: contacts.id })).length
-        break
-    }
-  }
-  const { selection: _selection, ...action } = input
   await audit(db, 'contact.bulk', 'contact', null, { ...action, count: changed }, actor)
   return changed
 }

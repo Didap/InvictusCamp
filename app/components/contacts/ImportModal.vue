@@ -13,7 +13,7 @@ const emit = defineEmits<{ imported: [] }>()
 
 const api = useApi()
 const { options } = useEnums()
-const kindItems = options('contactKind').map(({ value, label, icon }) => ({ value, label, icon }))
+const kindItems = options('contactKind')
 
 /** A CSV bigger than this is not a list of a few thousand contacts. */
 const MAX_FILE_BYTES = 2_000_000
@@ -21,40 +21,40 @@ const PREVIEW_ROWS = 5
 const SHOWN_PROBLEMS = 20
 
 const text = ref('')
-const fileName = ref('')
+const file = ref<File | null>(null)
 const fileError = ref('')
 const kind = ref<ContactKind>()
 const groupIds = ref<string[]>([])
 const update = ref(false)
 const importing = ref(false)
+// Emptied on close: a list of thousands of rows does not stay in memory until the next import.
 watch(open, value => {
-  if (!value) return
+  if (value) return
   text.value = ''
-  fileName.value = ''
+  file.value = null
   fileError.value = ''
   kind.value = undefined
   groupIds.value = []
   update.value = false
 })
 
-const parsed = computed(() => parseContacts(text.value))
+/** Read again a moment after the typing stops, not at every key: a list can have thousands of rows. */
+const typed = refDebounced(text, 250)
+const parsed = computed(() => parseContacts(typed.value))
 const contacts = computed(() => parsed.value.contacts)
 const withoutKind = computed(() => contacts.value.filter(contact => !contact.kind).length)
 const tooMany = computed(() => contacts.value.length > CONTACT_IMPORT_MAX)
 const ready = computed(() => contacts.value.length > 0 && !tooMany.value && (!withoutKind.value || Boolean(kind.value)))
 
 /** A CSV from Excel in Italian may be in Windows-1252, a «Testo Unicode» in UTF-16: each read as it is. */
-async function onFile(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
+watch(file, async chosen => {
   fileError.value = ''
-  if (file.size > MAX_FILE_BYTES) {
+  if (!chosen) return
+  if (chosen.size > MAX_FILE_BYTES) {
     fileError.value = `Il file è troppo grande: dividi l’elenco in parti da al massimo ${CONTACT_IMPORT_MAX} righe.`
     return
   }
-  const bytes = new Uint8Array(await file.arrayBuffer())
+  const bytes = new Uint8Array(await chosen.arrayBuffer())
   // «Testo Unicode» of Excel is UTF-16, with its byte order mark first.
   const utf16 =
     bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf-16le' : bytes[0] === 0xfe && bytes[1] === 0xff ? 'utf-16be' : null
@@ -66,20 +66,15 @@ async function onFile(event: Event) {
       text.value = new TextDecoder('windows-1252').decode(bytes)
     }
   }
-  fileName.value = file.name
-}
+})
 
 async function onImport() {
   if (!ready.value) return
   importing.value = true
   try {
     const body: ContactImportInput = {
-      rows: contacts.value.map(({ firstName, lastName, email, kind: rowKind }) => ({
-        firstName,
-        lastName,
-        email,
-        kind: rowKind,
-      })),
+      // The server keeps the fields of its schema: `line` stays here.
+      rows: contacts.value,
       kind: kind.value ?? 'other',
       groupIds: groupIds.value,
       update: update.value,
@@ -123,14 +118,9 @@ async function onImport() {
             class="w-full font-mono text-sm"
           />
         </UFormField>
-        <div class="flex flex-wrap items-center gap-3">
-          <UButton as="label" icon="i-lucide-file-up" color="neutral" variant="outline" class="cursor-pointer">
-            Scegli un file CSV
-            <input type="file" accept=".csv,.txt,text/csv,text/plain" class="sr-only" @change="onFile" />
-          </UButton>
-          <span v-if="fileName" class="text-sm text-muted">{{ fileName }}</span>
-          <p v-if="fileError" class="w-full text-sm text-error" role="alert">{{ fileError }}</p>
-        </div>
+        <UFormField label="Oppure un file" :error="fileError || undefined">
+          <IcFilePicker v-model="file" accept=".csv,.txt,text/csv,text/plain" description="CSV o testo, fino a 2 MB" />
+        </UFormField>
 
         <template v-if="text.trim()">
           <p class="font-semibold text-highlighted" aria-live="polite">

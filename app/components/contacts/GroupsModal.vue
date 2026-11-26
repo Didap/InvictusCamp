@@ -4,7 +4,8 @@ import { plural } from '#shared/utils/format'
 // The groups of the «Anagrafica» (spec 3.16): created, renamed (a name is saved when the field is left) and
 // deleted here. Deleting a group keeps its contacts.
 const open = defineModel<boolean>('open', { default: false })
-const emit = defineEmits<{ changed: [] }>()
+/** A group was deleted: the page refreshes its contacts and leaves a filter on it. */
+const emit = defineEmits<{ deleted: [id: string] }>()
 
 const api = useApi()
 const confirm = useConfirm()
@@ -18,19 +19,18 @@ watch(
   },
   { immediate: true },
 )
-watch(open, value => {
-  if (value) refresh()
-})
 
 const busy = ref(false)
-async function run(action: () => Promise<unknown>, success: string) {
+/** Runs a change and reloads the groups; false when it failed (the error is shown). */
+async function run(action: () => Promise<unknown>, success: string): Promise<boolean> {
   busy.value = true
   try {
     await action()
     notifySuccess(success)
-    emit('changed')
+    return true
   } catch (error) {
     notifyError(error)
+    return false
   } finally {
     await refresh()
     busy.value = false
@@ -58,7 +58,7 @@ async function remove(group: { id: string; name: string; count: number }) {
   })
   if (!ok) return
   const url: string = `/api/admin/contact-groups/${group.id}`
-  await run(() => api<{ ok: true }>(url, { method: 'DELETE' }), 'Gruppo eliminato')
+  if (await run(() => api<{ ok: true }>(url, { method: 'DELETE' }), 'Gruppo eliminato')) emit('deleted', group.id)
 }
 
 const fresh = ref('')
