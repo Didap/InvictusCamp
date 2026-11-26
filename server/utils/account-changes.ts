@@ -8,8 +8,8 @@ import { staffSheetDocument } from '../domain/staff-sheets'
  * After the sheet of a staff member, or their name or phone, changes: the PDF of the sheet to sign
  * (server/domain/staff-sheets.ts). Returns the emails to deliver after the commit.
  */
-export function staffSheetChanged(tx: DbOrTx, userId: string, actor: Actor) {
-  return staffSheetDocument(tx, { userId, ctx: emailContext(), uploadsDir: uploadsDir(), actor })
+export async function staffSheetChanged(tx: DbOrTx, userId: string, actor: Actor) {
+  return staffSheetDocument(tx, { userId, ctx: await emailContext(tx), uploadsDir: uploadsDir(), actor })
 }
 
 /**
@@ -23,5 +23,7 @@ export async function accountChanged(tx: DbOrTx, user: { id: string; role: strin
     .select({ id: tables.families.id })
     .from(tables.families)
     .where(eq(tables.families.userId, user.id))
-  return family ? familyRelease(tx, { familyId: family.id, ctx: emailContext(), uploadsDir: uploadsDir(), actor }) : []
+  return family
+    ? familyRelease(tx, { familyId: family.id, ctx: await emailContext(tx), uploadsDir: uploadsDir(), actor })
+    : []
 }

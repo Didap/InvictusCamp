@@ -7,8 +7,9 @@ export default defineEventHandler(async (event): Promise<CommunicationSendResult
   const admin = await requireAdmin(event)
   const draftId = requireUuidParam(event, 'id')
   const input = await parseBody(event, communicationSchema)
+  const ctx = appEmailContext()
   const { communicationId, messages } = await useDb().transaction(tx =>
-    sendCommunication(tx, emailContext(), { ...input, sentBy: admin.id, draftId }),
+    sendCommunication(tx, ctx, { ...input, sentBy: admin.id, draftId }),
   )
   const report = await deliver(messages)
   return { id: communicationId, recipients: messages.length, ...report }

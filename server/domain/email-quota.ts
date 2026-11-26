@@ -108,6 +108,9 @@ export async function hasQueueWork(db: DbOrTx): Promise<boolean> {
 /** One writer at a time on the count, so two sends together cannot pass the limit. */
 const lockQuota = (tx: Tx) => tx.execute(sql`select pg_advisory_xact_lock(7310100)`)
 
+/** Why an email whose automatic email is off did not leave. */
+export const EMAIL_OFF = 'Non inviata: l’email automatica è spenta in Comunicazioni › Automatiche.'
+
 /** The columns of a log row that come straight from the message. Access emails keep no content. */
 const logColumns = (message: EmailMessage) => ({
   template: message.template,
@@ -258,6 +261,14 @@ export async function recordUndelivered(db: Db, messages: EmailMessage[], reason
       error: reason.slice(0, 500),
     })),
   )
+}
+
+/** Records the emails whose automatic email is switched off: they never leave and never count. */
+export async function recordDisabled(db: Db, messages: EmailMessage[]) {
+  if (!messages.length) return
+  await db
+    .insert(emailLog)
+    .values(messages.map(message => ({ ...logColumns(message), status: 'disabled' as const, error: EMAIL_OFF })))
 }
 
 /** Whether an access email (link, code) can still leave today. */

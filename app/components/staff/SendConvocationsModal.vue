@@ -28,20 +28,20 @@ const description = computed(() =>
 async function send() {
   sending.value = true
   try {
-    const result = await api<{ sent: number; skipped: number } & Pick<DeliveryReport, 'failed' | 'queued'>>(
-      '/api/admin/convocations/send',
-      {
-        method: 'POST',
-        body: {
-          sessionId: props.sessionId,
-          ids: props.convocations.map(convocation => convocation.id),
-          message: message.value.trim() || null,
-        },
+    const result = await api<
+      { sent: number; skipped: number } & Pick<DeliveryReport, 'failed' | 'queued' | 'disabled'>
+    >('/api/admin/convocations/send', {
+      method: 'POST',
+      body: {
+        sessionId: props.sessionId,
+        ids: props.convocations.map(convocation => convocation.id),
+        message: message.value.trim() || null,
       },
-    )
+    })
     const notes = [
       result.failed ? `${result.failed} email non recapitate: controlla il registro delle email.` : '',
       result.queued ? `${result.queued} email in coda: partono da sole.` : '',
+      emailsOffNote(result.disabled),
     ].filter(Boolean)
     notifySuccess(
       result.sent === 1 ? 'Convocazione registrata' : `${result.sent} convocazioni registrate`,

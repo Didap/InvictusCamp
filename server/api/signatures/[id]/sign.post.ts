@@ -12,8 +12,9 @@ export default defineEventHandler(async (event): Promise<SignaturePage> => {
   const input = await parseBody(event, signSchema)
   rateLimit(`signature-sign:${user.id}`, 30, 10 * 60_000)
   const db = useDb()
+  const ctx = await emailContext()
   const outcome = await db.transaction(tx =>
-    signRequest(tx, emailContext(), uploadsDir(), {
+    signRequest(tx, ctx, uploadsDir(), {
       requestId,
       userId: user.id,
       code: input.code,

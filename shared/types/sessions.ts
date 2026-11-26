@@ -74,6 +74,8 @@ export interface SessionMove {
   emails: number
   /** The same emails by template, e.g. { 'session.invite': 5, 'session.reserve': 2 }. */
   emailsByTemplate: Record<string, number>
+  /** The automatic emails the move would send but are switched off (Comunicazioni › Automatiche). */
+  emailsOff: string[]
 }
 
 /** GET /api/admin/sessions/:id */
@@ -166,6 +168,8 @@ export interface SessionCandidate {
 export interface AddFamiliesResult {
   added: number
   invited: number
+  /** Invitations or reserve notices that stay back because the automatic email is switched off. */
+  emailsOff: number
 }
 
 /** Result of the actions on one participation (call a reserve, answer, cancel, resend). */

@@ -6,7 +6,7 @@ import { communicationEmail } from '../../../emails/communications'
 export default defineEventHandler(async (event): Promise<EmailPreview> => {
   const admin = await requireAdmin(event)
   const { subject, body } = await parseBody(event, emailPreviewSchema)
-  const message = communicationEmail(emailContext(), {
+  const message = communicationEmail(appEmailContext(), {
     to: admin.email,
     subject: subject || 'Oggetto del messaggio',
     body: body || 'Il testo del messaggio comparirà qui.',

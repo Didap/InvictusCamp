@@ -10,8 +10,9 @@ export default defineEventHandler(async (event): Promise<AssignResult> => {
   const admin = await requireAdmin(event)
   const documentId = requireUuidParam(event, 'id')
   const input = await parseBody(event, assignSchema)
+  const ctx = await emailContext()
   const { result, messages } = await useDb().transaction(tx =>
-    assignDocument(tx, emailContext(), {
+    assignDocument(tx, ctx, {
       documentId,
       target: input.target,
       dueDate: input.dueDate ?? null,
@@ -19,6 +20,6 @@ export default defineEventHandler(async (event): Promise<AssignResult> => {
       actor: { userId: admin.id, ip: clientIp(event) },
     }),
   )
-  await deliver(messages)
-  return result
+  const report = await deliver(messages)
+  return { ...result, emailsOff: report.disabled }
 })

@@ -4,9 +4,15 @@ import { cancelConvocation } from '../../../../domain/staff'
 export default defineEventHandler(async event => {
   const admin = await requireAdmin(event)
   const id = requireUuidParam(event, 'id')
+  const ctx = await emailContext()
   const result = await useDb().transaction(tx =>
-    cancelConvocation(tx, emailContext(), { id, actor: { userId: admin.id, ip: clientIp(event) } }),
+    cancelConvocation(tx, ctx, { id, actor: { userId: admin.id, ip: clientIp(event) } }),
   )
   const report = await deliver(result.emails)
-  return { removed: result.removed, emails: result.emails.length, failed: report.failed, queued: report.queued }
+  return {
+    removed: result.removed,
+    emails: result.emails.length - report.disabled,
+    failed: report.failed,
+    queued: report.queued,
+  }
 })

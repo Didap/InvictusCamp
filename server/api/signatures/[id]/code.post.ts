@@ -17,7 +17,10 @@ export default defineEventHandler(async (event): Promise<SignatureCodeState> => 
       message: `Abbiamo raggiunto il limite giornaliero di email. Puoi chiedere il codice dopo le ${emailQuotaResetTime()}.`,
     })
   }
-  const { code, message, state } = await issueSignatureCode(useDb(), emailContext(), { requestId, userId: user.id })
+  const { code, message, state } = await issueSignatureCode(useDb(), await emailContext(), {
+    requestId,
+    userId: user.id,
+  })
   if (import.meta.dev) devCodes.set(requestId, code)
   const report = await deliver(message)
   if (report.failed) {

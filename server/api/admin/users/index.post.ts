@@ -5,8 +5,9 @@ import { duplicateEmail, inviteUser } from '../../../domain/users'
 export default defineEventHandler(async event => {
   const admin = await requireAdmin(event)
   const input = await parseBody(event, inviteUserSchema)
+  const ctx = await emailContext()
   const { user, messages } = await useDb()
-    .transaction(tx => inviteUser(tx, emailContext(), input, { userId: admin.id, ip: clientIp(event) }))
+    .transaction(tx => inviteUser(tx, ctx, input, { userId: admin.id, ip: clientIp(event) }))
     .catch(error => {
       throw isUniqueViolation(error) ? duplicateEmail() : error
     })

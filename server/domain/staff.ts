@@ -74,11 +74,11 @@ import {
   availabilityReopenedEmail,
   convocationCancelledEmail,
   convocationEmail,
-  defaultOutcomeMessage,
-  outcomeSubject,
+  outcomeProposal,
   staffOutcomeEmail,
 } from '../emails/staff'
 import type { EmailContext, EmailMessage } from '../emails/types'
+import { loadEmailSettings } from './automatic-emails'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { withdrawQueuedEmails } from './email-quota'
@@ -1264,6 +1264,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
   })
 
   const template = outcomeTemplate(profile.status)
+  const proposal = template ? outcomeProposal((await loadEmailSettings(db)).texts, template, user.firstName) : null
   const [lastOutcome] = template
     ? await db
         .select({ createdAt: emailLog.createdAt, status: emailLog.status })
@@ -1311,8 +1312,8 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     training,
     outcome: {
       template,
-      subject: template ? outcomeSubject(template) : '',
-      defaultMessage: template ? defaultOutcomeMessage(template) : '',
+      subject: proposal?.subject ?? '',
+      defaultMessage: proposal?.message ?? '',
       sentAt: iso(lastOutcome?.createdAt),
       queued: lastOutcome?.status === 'queued',
     },

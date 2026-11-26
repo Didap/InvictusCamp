@@ -83,6 +83,8 @@ export interface DeliveryReport {
   simulated: number
   /** Over the daily limit: they leave by themselves, see GET /api/admin/email-log/queue. */
   queued: number
+  /** Not sent: their automatic email is switched off (Comunicazioni › Automatiche). */
+  disabled: number
 }
 
 /** When a group of queued emails is expected to leave: right away, when the queue opens, or at 23:59. */

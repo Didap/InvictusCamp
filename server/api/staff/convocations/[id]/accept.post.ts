@@ -5,8 +5,9 @@ import { answerConvocation } from '../../../../domain/staff'
 export default defineEventHandler(async (event): Promise<AcceptResult> => {
   const { user } = await requireStaff(event, 'approved')
   const id = requireUuidParam(event, 'id')
+  const ctx = await emailContext()
   const result = await useDb().transaction(tx =>
-    answerConvocation(tx, emailContext(), { id, userId: user.id, answer: 'accept', ip: clientIp(event) }),
+    answerConvocation(tx, ctx, { id, userId: user.id, answer: 'accept', ip: clientIp(event) }),
   )
   await deliver(result.emails)
   return { signatureRequestId: result.signatureRequestId }

@@ -11,7 +11,7 @@ export async function familyChanged(
   family: { id: string; ageNoticeAt: Date | null },
   actor: { userId: string; ip: string | null },
 ) {
-  const ctx = emailContext()
+  const ctx = await emailContext(tx)
   return [
     ...(family.ageNoticeAt ? [] : await guestAgeNotice(tx, { familyId: family.id, ctx })),
     ...(await familyRelease(tx, { familyId: family.id, ctx, uploadsDir: uploadsDir(), actor })),

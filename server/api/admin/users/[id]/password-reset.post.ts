@@ -5,8 +5,9 @@ export default defineEventHandler(async event => {
   const admin = await requireAdmin(event)
   const userId = requireUuidParam(event, 'id')
   rateLimit(`admin-reset:${userId}`, 5, 60 * 60_000)
+  const ctx = await emailContext()
   const { messages } = await useDb().transaction(tx =>
-    sendPasswordReset(tx, emailContext(), userId, { userId: admin.id, ip: clientIp(event) }),
+    sendPasswordReset(tx, ctx, userId, { userId: admin.id, ip: clientIp(event) }),
   )
   const report = await deliver(messages)
   return { emails: messages.length, failed: report.failed }

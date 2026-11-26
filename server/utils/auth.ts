@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import type { H3Event } from 'h3'
 import type { AccountDto, SessionUser } from '#shared/types/api'
+import { isAutomaticEmailKey, type AutomaticEmailKey } from '#shared/utils/automatic-emails'
 import { inStaffArea, type UserRole } from '#shared/utils/constants'
 import { forwardedClientIp } from '../domain/client-ip'
 
@@ -95,6 +96,13 @@ export function isUuid(value: unknown): value is string {
 export function requireUuidParam(event: H3Event, name: string): string {
   const value = getRouterParam(event, name)
   if (!isUuid(value)) throw createError({ statusCode: 404, message: 'Non trovato' })
+  return value
+}
+
+/** The `:key` of an automatic email (shared/utils/automatic-emails.ts); any other value is a 404. */
+export function requireAutomaticEmailKey(event: H3Event): AutomaticEmailKey {
+  const value = getRouterParam(event, 'key') ?? ''
+  if (!isAutomaticEmailKey(value)) throw createError({ statusCode: 404, message: 'Email non trovata' })
   return value
 }
 

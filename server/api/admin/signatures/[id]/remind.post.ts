@@ -5,9 +5,10 @@ import { remindRequests } from '~~/server/domain/signatures'
 export default defineEventHandler(async (event): Promise<RemindResult> => {
   const admin = await requireAdmin(event)
   const requestId = requireUuidParam(event, 'id')
+  const ctx = await emailContext()
   const messages = await useDb().transaction(tx =>
-    remindRequests(tx, emailContext(), { requestId, actor: { userId: admin.id, ip: clientIp(event) } }),
+    remindRequests(tx, ctx, { requestId, actor: { userId: admin.id, ip: clientIp(event) } }),
   )
-  await deliver(messages)
-  return { emails: messages.length }
+  const report = await deliver(messages)
+  return { emails: messages.length - report.disabled }
 })

@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  sessionCancelledEmail,
-  sessionConfirmedEmail,
-  sessionFeedbackEmail,
-  sessionInviteEmail,
-  sessionRemovedEmail,
-  sessionReserveEmail,
-  sessionSlotOfferedEmail,
-} from '../../server/emails/sessions'
+import { familySessionEmail, type SessionEmailKey } from '../../server/emails/sessions'
 
 const ctx = { appUrl: 'https://gestionale.example.it' }
 const to = { to: 'anna@example.it', toUserId: 'user-1', firstName: 'Anna' }
@@ -20,29 +12,30 @@ const session = {
   responseDeadline: '2027-05-15',
 }
 
-const all = [
-  sessionInviteEmail(ctx, to, session),
-  sessionInviteEmail(ctx, to, session, { reminder: true }),
-  sessionReserveEmail(ctx, to, session),
-  sessionSlotOfferedEmail(ctx, to, session),
-  sessionConfirmedEmail(ctx, to, session),
-  sessionCancelledEmail(ctx, to, session),
-  sessionRemovedEmail(ctx, to, session, 'slot'),
-  sessionRemovedEmail(ctx, to, session, 'reserve'),
-  sessionFeedbackEmail(ctx, to, session),
+const KEYS: SessionEmailKey[] = [
+  'session.invite',
+  'session.invite_reminder',
+  'session.reserve',
+  'session.slot_offered',
+  'session.confirmed',
+  'session.cancelled',
+  'session.removed',
+  'session.reserve_removed',
+  'session.feedback',
 ]
+const all = KEYS.map(key => familySessionEmail(ctx, key, to, session))
 
 describe('session emails', () => {
   it('use the documented templates and subjects, tied to the session', () => {
     expect(all.map(email => [email.template, email.subject])).toEqual([
       ['session.invite', `Invito: ${session.title}`],
-      ['session.invite', `Promemoria invito: ${session.title}`],
+      ['session.invite_reminder', `Promemoria invito: ${session.title}`],
       ['session.reserve', `Lista di riserva: ${session.title}`],
       ['session.slot_offered', `Si è liberato un posto: ${session.title}`],
       ['session.confirmed', `Sessione confermata: ${session.title}`],
       ['session.cancelled', `Sessione annullata: ${session.title}`],
       ['session.removed', `Partecipazione annullata: ${session.title}`],
-      ['session.removed', `Partecipazione annullata: ${session.title}`],
+      ['session.reserve_removed', `Partecipazione annullata: ${session.title}`],
       ['session.feedback', `Com’è andata? ${session.title}`],
     ])
     for (const email of all) {
@@ -55,7 +48,7 @@ describe('session emails', () => {
     const withDeadline = all.filter(email => email.text.includes('Rispondi entro: 15 maggio 2027'))
     expect(withDeadline.map(email => email.template)).toEqual([
       'session.invite',
-      'session.invite',
+      'session.invite_reminder',
       'session.slot_offered',
     ])
     expect(all[0]!.text).toContain('https://gestionale.example.it/famiglia/sessioni')

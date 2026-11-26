@@ -5,12 +5,15 @@ import {
   claimQueuedEmails,
   hasQueueWork,
   providerRefusal,
+  recordDisabled,
   recordEmailOutcomes,
   recordUndelivered,
   recoverInterruptedEmails,
   type EmailOutcome,
   type EmailToSend,
 } from '../domain/email-quota'
+import { loadEmailSettings } from '../domain/automatic-emails'
+import type { DbOrTx } from '../domain/db'
 import type { EmailContext, EmailMessage } from '../emails/types'
 
 /** After a provider problem the queue waits this long, so an outage does not burn through it. */
@@ -19,8 +22,22 @@ const QUEUE_PAUSE_MS = 10 * 60 * 1000
 let resend: Resend | null = null
 let queuePausedUntil = 0
 
-/** What templates need from the configuration. */
-export function emailContext(): EmailContext {
+/**
+ * What templates need: the app's address, and the texts and switches of Comunicazioni › Automatiche read
+ * through `db` (the open transaction, when there is one). Never throws: when they cannot be read the emails
+ * leave with their starting texts, as an access email must.
+ */
+export async function emailContext(db: DbOrTx = useDb()): Promise<EmailContext> {
+  try {
+    return { ...appEmailContext(), ...(await loadEmailSettings(db)) }
+  } catch (error) {
+    logEmailError('email automatiche non lette, testi iniziali', error)
+    return appEmailContext()
+  }
+}
+
+/** The app's address only: for the written messages and the examples, which read no saved texts. */
+export function appEmailContext(): EmailContext {
   return { appUrl: useRuntimeConfig().appUrl }
 }
 
@@ -94,12 +111,16 @@ async function record(outcomes: EmailOutcome[]) {
 
 /**
  * Sends the messages within the daily limit (domain/email-quota) and records every one in email_log:
- * what does not fit waits in the queue, an access email over the limit is recorded as failed. Never
- * throws. Call it after the transaction that produced the messages has committed.
+ * what does not fit waits in the queue, an access email over the limit is recorded as failed, an email
+ * switched off in Comunicazioni › Automatiche is recorded as disabled. Never throws. Call it after the
+ * transaction that produced the messages has committed.
  */
 export async function deliver(input: EmailMessage | EmailMessage[]): Promise<DeliveryReport> {
-  const messages = Array.isArray(input) ? input : [input]
-  const report: DeliveryReport = { sent: 0, failed: 0, simulated: 0, queued: 0 }
+  const all = Array.isArray(input) ? input : [input]
+  const off = all.filter(message => message.switchedOff)
+  const messages = all.filter(message => !message.switchedOff)
+  const report: DeliveryReport = { sent: 0, failed: 0, simulated: 0, queued: 0, disabled: off.length }
+  if (off.length) await recordDisabled(useDb(), off).catch(error => logEmailError('registro non aggiornato', error))
   if (!messages.length) return report
 
   let claim: Awaited<ReturnType<typeof claimEmailSlots>>

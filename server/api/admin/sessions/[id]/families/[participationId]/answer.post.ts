@@ -18,6 +18,6 @@ export default defineEventHandler(async (event): Promise<ParticipationActionResu
       actor: { userId: admin.id, ip: clientIp(event) },
     }),
   )
-  await deliver(result.emails)
-  return { emails: result.emails.length }
+  const report = await deliver(result.emails)
+  return { emails: result.emails.length - report.disabled }
 })

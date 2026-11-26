@@ -136,6 +136,8 @@ export interface AssignResult {
   /** New or reopened requests, one email each. */
   created: number
   dryRun: boolean
+  /** Of those emails, how many stay back because the automatic email is switched off. */
+  emailsOff?: number
 }
 
 /** POST /api/admin/documents/:id/remind, POST /api/admin/signatures/:id/remind */

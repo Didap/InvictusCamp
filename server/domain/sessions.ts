@@ -61,18 +61,9 @@ import {
   staffProfiles,
   users,
 } from '../db/schema'
-import {
-  sessionCancelledEmail,
-  sessionConfirmedEmail,
-  sessionFeedbackEmail,
-  sessionInviteEmail,
-  sessionRemovedEmail,
-  sessionReserveEmail,
-  sessionSlotOfferedEmail,
-  type SessionEmailFacts,
-  type SessionEmailTemplate,
-} from '../emails/sessions'
+import { familySessionEmail, type SessionEmailFacts, type SessionEmailTemplate } from '../emails/sessions'
 import type { EmailContext, EmailMessage } from '../emails/types'
+import { loadEmailSettings } from './automatic-emails'
 import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
@@ -381,25 +372,31 @@ function canReceive(row: Pick<ParticipationRow, 'userStatus'>): boolean {
   return row.userStatus !== 'disabled'
 }
 
-/** `staffNotices`: the staff emails of a cancellation (sessionConvocationNotices). */
+/**
+ * `staffNotices`: the staff emails of a cancellation (sessionConvocationNotices). `off`: the automatic emails
+ * switched off, which the move does not send (`emailsOff` says which).
+ */
 function movesOf(
   session: SessionRow,
   rows: ParticipationRow[],
   staffNotices: number,
   questionnaire: boolean,
+  off: ReadonlySet<string>,
 ): SessionMove[] {
   return SESSION_TRANSITIONS[session.status].map(to => {
-    const recipients = transitionRecipients(to, rows, questionnaire).filter(r => canReceive(r.row))
-    const emailsByTemplate: Record<string, number> = {}
-    for (const { template } of recipients) emailsByTemplate[template] = (emailsByTemplate[template] ?? 0) + 1
-    const staffEmails = to === 'cancelled' ? staffNotices : 0
-    if (staffEmails) emailsByTemplate['staff.convocation_cancelled'] = staffEmails
+    const counts: Record<string, number> = {}
+    for (const { template } of transitionRecipients(to, rows, questionnaire).filter(r => canReceive(r.row))) {
+      counts[template] = (counts[template] ?? 0) + 1
+    }
+    if (to === 'cancelled' && staffNotices) counts['staff.session_cancelled'] = staffNotices
+    const emailsByTemplate = Object.fromEntries(Object.entries(counts).filter(([template]) => !off.has(template)))
     return {
       to,
       label: SESSION_TRANSITION_ACTIONS[to],
       effect: SESSION_TRANSITION_EFFECTS[to],
-      emails: recipients.length + staffEmails,
+      emails: Object.values(emailsByTemplate).reduce((sum, count) => sum + count, 0),
       emailsByTemplate,
+      emailsOff: Object.keys(counts).filter(template => off.has(template)),
     }
   })
 }
@@ -435,6 +432,7 @@ export async function getSessionDetail(db: DbOrTx, sessionId: string): Promise<S
       participations,
       canTransition(row.status, 'cancelled') ? await sessionConvocationNotices(db, row.id) : 0,
       canTransition(row.status, 'completed') && (await opensQuestionnaire(db, row, participations)),
+      SESSION_TRANSITIONS[row.status].length ? (await loadEmailSettings(db)).off : new Set(),
     ),
     deletable: row.status === 'draft' && participations.length === 0 && (convocations?.count ?? 0) === 0,
   }
@@ -681,24 +679,18 @@ function familyEmail(
   session: SessionRow,
   options: { reminder?: boolean } = {},
 ): EmailMessage {
-  const recipient = { to: row.email, toUserId: row.userId, firstName: row.firstName }
-  const facts = factsOf(session)
-  switch (template) {
-    case 'session.invite':
-      return sessionInviteEmail(ctx, recipient, facts, options)
-    case 'session.reserve':
-      return sessionReserveEmail(ctx, recipient, facts)
-    case 'session.slot_offered':
-      return sessionSlotOfferedEmail(ctx, recipient, facts)
-    case 'session.confirmed':
-      return sessionConfirmedEmail(ctx, recipient, facts)
-    case 'session.cancelled':
-      return sessionCancelledEmail(ctx, recipient, facts)
-    case 'session.removed':
-      return sessionRemovedEmail(ctx, recipient, facts, row.kind)
-    case 'session.feedback':
-      return sessionFeedbackEmail(ctx, recipient, facts)
-  }
+  const key =
+    template === 'session.invite' && options.reminder
+      ? 'session.invite_reminder'
+      : template === 'session.removed' && row.kind === 'reserve'
+        ? 'session.reserve_removed'
+        : template
+  return familySessionEmail(
+    ctx,
+    key,
+    { to: row.email, toUserId: row.userId, firstName: row.firstName },
+    factsOf(session),
+  )
 }
 
 // ─── The session ───────────────────────────────────────────────────────────────────────────────────

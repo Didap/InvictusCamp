@@ -2,13 +2,7 @@
 // "Confermata", the schemas shared with the forms, and the emails.
 import { describe, expect, it } from 'vitest'
 import { contractState, isConfirmed } from '~~/server/domain/staff'
-import {
-  convocationCancelledEmail,
-  convocationEmail,
-  defaultOutcomeMessage,
-  messageParagraphs,
-  staffOutcomeEmail,
-} from '~~/server/emails/staff'
+import { convocationCancelledEmail, convocationEmail, outcomeProposal, staffOutcomeEmail } from '~~/server/emails/staff'
 import {
   STAFF_DOCUMENT_CATEGORIES,
   STAFF_STATUS_MOVES,
@@ -18,6 +12,7 @@ import {
   isReviewMove,
   staffDocumentSchema,
 } from '#shared/schemas/staff'
+import { AUTOMATIC_EMAILS } from '#shared/utils/automatic-emails'
 import { STAFF_STATUSES } from '#shared/utils/constants'
 
 const ctx = { appUrl: 'https://gestionale.test' }
@@ -91,12 +86,18 @@ describe('personal documents', () => {
 })
 
 describe('emails', () => {
-  it('splits a message written in the dashboard into paragraphs', () => {
-    expect(messageParagraphs('Prima riga\nstessa frase.\n\n\nSecondo paragrafo.\n')).toEqual([
-      'Prima riga stessa frase.',
-      'Secondo paragrafo.',
-    ])
-    expect(messageParagraphs('   ')).toEqual([])
+  it('proposes the outcome with the texts saved in Automatiche, the name written in', () => {
+    const texts = {
+      'staff.approved': {
+        ...AUTOMATIC_EMAILS['staff.approved'].defaults,
+        subject: 'Benvenuta, {nome}',
+        body: 'Ti aspettiamo, {nome}.',
+      },
+    }
+    expect(outcomeProposal(texts, 'staff.approved', 'Rita')).toEqual({
+      subject: 'Benvenuta, Rita',
+      message: 'Ti aspettiamo, Rita.',
+    })
   })
 
   it('the outcome email carries the message as written, escaped', () => {
@@ -119,7 +120,7 @@ describe('emails', () => {
       toUserId: 'u1',
       firstName: 'Rita',
       template: 'staff.rejected',
-      message: defaultOutcomeMessage('staff.rejected'),
+      message: outcomeProposal(undefined, 'staff.rejected', 'Rita').message,
     })
     expect(rejected.template).toBe('staff.rejected')
     expect(rejected.html).not.toContain('https://gestionale.test/staff')
@@ -127,7 +128,7 @@ describe('emails', () => {
 
   it('the proposed outcome messages use the "tu" form and no em dashes', () => {
     for (const template of ['staff.approved', 'staff.rejected'] as const) {
-      const message = defaultOutcomeMessage(template)
+      const { message } = outcomeProposal(undefined, template, 'Rita')
       expect(message).not.toMatch(/—/)
       expect(message).toMatch(/\b(tua|tuoi|ti|hai)\b/i)
     }

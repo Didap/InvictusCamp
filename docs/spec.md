@@ -265,7 +265,27 @@ availability or receive convocations. The administration can move a person to th
 - Sending records a `communications` row and one `email_log` row per recipient (`deliver()`). Disabled
   accounts never receive emails.
 - The log lists every email the platform sent, automatic or written, with status (sent, failed,
-  simulated) and, for non-sensitive emails, the content. Access emails and codes are never stored.
+  simulated, queued, withdrawn, disabled) and, for non-sensitive emails, the content. Access emails and codes are never stored.
+- **Automatic emails** ("Automatiche", a tab of Comunicazioni; the catalog is `shared/utils/automatic-emails.ts`):
+  every email the platform sends by itself (section 4), by area, with the event that sends it, who receives it
+  and a switch. Each one opens a page (`/admin/comunicazioni/automatiche/:key`) with its texts on the left
+  (subject, preview line, title, greeting, body, button label, closing, footnote) and on the right the email as
+  it arrives, rendered by its real template with example data while the administration writes. Fields filled
+  by themselves: `{nome}` always, `{sessione}`, `{date}`, `{luogo}` in the session and convocation emails,
+  `{documento}` in the document ones; any other field stops the save. The facts (session, dates, deadline,
+  document, code) and the button's address stay the platform's. Saving texts equal to the starting ones keeps
+  no change; "Rimetti il testo iniziale" goes back to them; a save over someone else's later save is refused
+  (409). Stored in `automatic_emails` (no row: on, starting texts), audited `email.texts`, `email.texts_reset`, `email.active`, `email.manual_send`.
+  - **Off**: the event no longer sends the email; `deliver()` records it in the log as `disabled` ("Spenta"),
+    outside the daily count, and so do the ones of its kind already waiting in the queue. The confirmation of
+    a session move says which emails are off, and the toasts after an action count only the emails that left. Access emails
+    (invitations, address confirmation, password reset), the signature code and the outcomes of a candidacy
+    (sent by hand from «Comunica l’esito», whose proposed text is the one saved here) cannot be switched off.
+  - **Invia una prova a me**: the email as written, with example data, to the administrator's address; it asks
+    first, as it counts in the daily limit.
+  - **Invia a mano** (the session emails, to the families of a chosen session by kind and status, starting from
+    those the event reaches): the saved texts, with the session's facts, leave now even when the email is off.
+    The other emails need what their event creates (a link, a convocation, a document to sign).
 - **WhatsApp**: where the administration sees a family's phone (the family record; the families of a session,
   as "Scrivi su WhatsApp" in a row's menu) or a staff member's (the staff record), a button opens the chat with
   that number (`https://wa.me/…`) in a new tab, from the WhatsApp of the device in use. Only for numbers that
@@ -563,24 +583,31 @@ today's count, the expected departures and the queue in Comunicazioni, and the q
 
 | Template | When | To |
 |---|---|---|
-| `auth.invite` | invitation by the administration, or reset asked by an invited user | the person |
+| `auth.invite_family` / `_staff` / `_admin` | invitation by the administration, or reset asked by an invited user | the person |
 | `auth.verify_email` | registration, new link | the person |
 | `auth.reset_password` | password reset | the person |
 | `session.invite` | session to `inviting`, titolare added while open | titolare |
+| `session.invite_reminder` | invitation sent again to a family that has not answered | titolare |
 | `session.reserve` | session to `inviting`, reserve added while open | reserve |
 | `session.slot_offered` | reserve called while open | promoted family |
 | `session.confirmed` | session to `confirmed` | titolari confirmed |
 | `session.cancelled` | session cancelled | families invited or confirmed |
-| `session.removed` | family removed after being invited | that family |
+| `session.removed` / `session.reserve_removed` | titolare / reserve removed after being told | that family |
 | `session.feedback` | session to `completed` (the end-of-session questionnaire, 3.13) | titolari confirmed |
+| `family.age_notice` | family data completed with nobody within the camp's ages (3.8) | family |
 | `staff.convocation` | convocation sent | staff member |
-| `staff.convocation_cancelled` | sent convocation cancelled, or its session cancelled | staff member |
+| `staff.convocation_cancelled` | sent convocation cancelled | staff member |
+| `staff.session_cancelled` | session cancelled with sent convocations | staff member |
 | `staff.availability_reopened` | «Riapri la disponibilità» from the person's page | staff member |
 | `staff.approved` / `staff.rejected` | sent by the administration from the review | candidate |
-| `signature.request` / `signature.reminder` | document assigned / reminder | assignee |
+| `signature.request` / `signature.reminder` | document to sign assigned / reminder | assignee |
+| `document.read` / `document.read_reminder` | document to read assigned / reminder | assignee |
 | `signature.otp` | code requested | signer |
 | `signature.signed` | signature completed | signer |
 | `communication` | message from the dashboard | audience |
+
+Every email but `communication` can have its texts changed and, except access links, the code and the outcomes,
+be switched off in Comunicazioni › Automatiche (3.7). Older log rows carry `auth.invite` for every invitation.
 
 Emails never contain health details. Without `NUXT_RESEND_API_KEY` every email is recorded as
 `simulated` and access links are printed in the dev console.

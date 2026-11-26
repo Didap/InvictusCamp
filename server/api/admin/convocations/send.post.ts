@@ -5,9 +5,16 @@ import { sendConvocations } from '../../../domain/staff'
 export default defineEventHandler(async event => {
   const admin = await requireAdmin(event)
   const input = await parseBody(event, convocationSendSchema)
+  const ctx = await emailContext()
   const result = await useDb().transaction(tx =>
-    sendConvocations(tx, emailContext(), { ...input, actor: { userId: admin.id, ip: clientIp(event) } }),
+    sendConvocations(tx, ctx, { ...input, actor: { userId: admin.id, ip: clientIp(event) } }),
   )
   const report = await deliver(result.emails)
-  return { sent: result.sent, skipped: result.skipped, failed: report.failed, queued: report.queued }
+  return {
+    sent: result.sent,
+    skipped: result.skipped,
+    failed: report.failed,
+    queued: report.queued,
+    disabled: report.disabled,
+  }
 })

@@ -6,8 +6,9 @@ export default defineEventHandler(async event => {
   const admin = await requireAdmin(event)
   const userId = requireUuidParam(event, 'userId')
   const { message } = await parseBody(event, staffOutcomeSchema)
+  const ctx = await emailContext()
   const emails = await useDb().transaction(tx =>
-    staffOutcomeEmails(tx, emailContext(), { userId, message, actor: { userId: admin.id, ip: clientIp(event) } }),
+    staffOutcomeEmails(tx, ctx, { userId, message, actor: { userId: admin.id, ip: clientIp(event) } }),
   )
   return deliver(emails)
 })
