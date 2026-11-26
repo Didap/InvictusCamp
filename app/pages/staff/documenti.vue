@@ -169,6 +169,7 @@ async function remove(document: StaffDocumentDto) {
           :fields="{ category: upload.category, title: upload.title.trim() }"
           :disabled="!upload.title.trim()"
           accept="application/pdf"
+          description="PDF, fino a 15 MB"
           button-label="Carica il documento"
           :secondary="missing.length > 0"
           @uploaded="uploaded"

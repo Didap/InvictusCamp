@@ -2,7 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { asksContract, isSheetComplete, requiredDocumentsText } from '#shared/schemas/staff'
 import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
-import { inStaffArea, OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
+import { IN_TEAM, inStaffArea, OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
 import {
   andList,
@@ -27,7 +27,7 @@ const route = useRoute()
 const userId = computed(() => String(route.params.userId))
 const api = useApi()
 const confirm = useConfirm()
-const { label, options } = useEnums()
+const { label } = useEnums()
 // Started before the await, so the menus of roles and tags fill with the page.
 const { roleItems, tags } = useStaffLabels()
 const { data: person, refresh } = await useApiFetch<StaffDetail>(() => `/api/admin/staff/${userId.value}`)
@@ -96,30 +96,43 @@ function saveLabels(field: 'roles' | 'tags', ids: string[]) {
 const labelsOpen = ref(false)
 
 // ─── Team: staff or v-team, from the link of the application; moved only for a mistake ───
-const IN_TEAM: Record<StaffTeam, string> = { staff: 'nello staff', volunteer: 'nel v-team' }
 const otherTeam = computed<StaffTeam>(() => (person.value?.team === 'staff' ? 'volunteer' : 'staff'))
-async function changeTeam(to: StaffTeam) {
+const movingTeam = ref(false)
+/** Moves the person to the other team, after saying what follows for the sheet and how many emails leave. */
+async function changeTeam() {
   const p = person.value
-  if (!p || to === p.team) return
-  const sheet = inStaffArea(p.status)
-    ? to === 'volunteer'
-      ? ' La formula contrattuale della scheda personale si cancella: se la scheda era pronta, riceve un’email per firmarla di nuovo.'
-      : ' Nella scheda personale dovrà indicare la formula contrattuale.'
-    : ''
+  if (!p) return
+  const to = otherTeam.value
+  // To the v-team the formula goes: a sheet complete without it gets its PDF again, to sign (1 email).
+  const emails =
+    inStaffArea(p.status) &&
+    p.accountStatus !== 'disabled' &&
+    !asksContract(to) &&
+    isSheetComplete({ ...p.sheet, contractType: null }, to)
+      ? 1
+      : 0
+  const sheet = !inStaffArea(p.status)
+    ? ' Nessuna email parte.'
+    : asksContract(to)
+      ? ' Nella scheda personale dovrà indicare la formula contrattuale: fino ad allora la scheda resta da completare.'
+      : ` La formula contrattuale si cancella.${emails ? ' La scheda personale cambia: le chiediamo di firmarla, parte 1 email.' : ''}`
   const ok = await confirm({
     title: `Sposti ${name.value} ${IN_TEAM[to]}?`,
     description: `Passa all’elenco ${OF_TEAM[to]}: serve se la candidatura è arrivata dal link sbagliato.${sheet}`,
-    confirmLabel: `Sposta ${IN_TEAM[to]}`,
+    confirmLabel: emails ? 'Sposta e invia 1 email' : `Sposta ${IN_TEAM[to]}`,
   })
   if (!ok) return
+  movingTeam.value = true
   try {
     const url: string = `/api/admin/staff/${userId.value}/team`
     await api(url, { method: 'PUT', body: { team: to } })
-    if (person.value) person.value = { ...person.value, team: to }
     notifySuccess('Squadra cambiata', `${name.value} ora è nell’elenco ${OF_TEAM[to]}.`)
   } catch (error) {
     notifyError(error)
+  } finally {
+    // The formula and the sheet's PDF change on the server too; the page then moves to the other list.
     await refresh()
+    movingTeam.value = false
   }
 }
 
@@ -135,8 +148,7 @@ async function move(to: StaffStatus) {
       from === 'inactive'
         ? {
             title: `Riattivi ${name.value}?`,
-            description:
-              'Torna nello staff approvato: può indicare la disponibilità e ricevere convocazioni. Nessuna email parte.',
+            description: `Torna ${IN_TEAM[person.value!.team]}: può indicare la disponibilità e ricevere convocazioni. Nessuna email parte.`,
             confirmLabel: 'Riattiva',
           }
         : {
@@ -194,7 +206,7 @@ const statusLine = computed(() => {
     case 'applied':
       return `Candidatura inviata il ${dayOf(p.appliedAt)}: da valutare. La decidi tu: se la approvi, entra ${IN_TEAM[p.team]} e può compilare la scheda personale, indicare la disponibilità e ricevere convocazioni.`
     case 'approved':
-      return p.reviewedAt ? `Candidatura approvata il ${dayOf(p.reviewedAt)}${by}.` : 'Nello staff approvato.'
+      return p.reviewedAt ? `Candidatura approvata il ${dayOf(p.reviewedAt)}${by}.` : `Approvata ${IN_TEAM[p.team]}.`
     case 'rejected':
       return p.reviewedAt
         ? `Candidatura non selezionata il ${dayOf(p.reviewedAt)}${by}.`
@@ -210,11 +222,16 @@ const moreItems = computed<DropdownMenuItem[][]>(() => {
   const teamMove = {
     label: `Sposta ${IN_TEAM[otherTeam.value]}`,
     icon: 'i-lucide-arrow-right-left',
-    onSelect: () => changeTeam(otherTeam.value),
+    disabled: movingTeam.value,
+    onSelect: changeTeam,
   }
-  return p.status === 'approved'
-    ? [[teamMove], [{ label: 'Disattiva', icon: 'i-lucide-pause', color: 'error', onSelect: () => move('inactive') }]]
-    : [[teamMove]]
+  const disable = {
+    label: 'Disattiva',
+    icon: 'i-lucide-pause',
+    color: 'error' as const,
+    onSelect: () => move('inactive'),
+  }
+  return [[teamMove], ...(p.status === 'approved' ? [[disable]] : [])]
 })
 
 const contacts = computed(() => {
@@ -344,6 +361,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           <div class="space-y-5">
             <div class="flex flex-wrap items-center gap-2">
               <IcStatusBadge kind="staffStatus" :value="person.status" size="lg" />
+              <IcStatusBadge kind="staffTeam" :value="person.team" />
               <IcStatusBadge v-if="person.accountStatus !== 'active'" kind="userStatus" :value="person.accountStatus" />
             </div>
             <p class="text-sm text-muted">{{ statusLine }}</p>
@@ -560,7 +578,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
 
         <IcSection
           title="Documenti personali"
-          description="Caricati dalla persona, in PDF: il curriculum, il documento d’identità, titoli e attestati."
+          description="Caricati dalla persona: il curriculum, il documento d’identità, titoli e attestati."
         >
           <UAlert
             v-if="person.documentsMissing.length"
@@ -576,9 +594,11 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
             <li v-if="person.cv" class="space-y-1 px-4 py-3">
               <IcFileLink :file="person.cv" label="Curriculum" />
               <p class="text-sm text-muted">
-                Curriculum · inviato con la candidatura<template v-if="person.appliedAt">
-                  il {{ dayOf(person.appliedAt) }}</template
-                >
+                {{
+                  person.appliedAt
+                    ? `Curriculum · inviato con la candidatura il ${dayOf(person.appliedAt)}`
+                    : 'Curriculum · caricato con la registrazione'
+                }}
               </p>
             </li>
             <li v-for="doc in person.documents" :key="doc.id" class="space-y-1 px-4 py-3">
@@ -598,7 +618,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           <p v-if="!person.training.length" class="text-muted">Nessuna indicata.</p>
           <UCollapsible v-else>
             <UButton
-              :label="`Mostra ${plural(person.training.length, 'formazione', 'formazioni')}`"
+              :label="plural(person.training.length, 'formazione', 'formazioni')"
               color="neutral"
               variant="link"
               trailing-icon="i-lucide-chevron-down"
