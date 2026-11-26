@@ -325,6 +325,37 @@ export const staffProfiles = pgTable(
   t => [uniqueIndex('staff_profiles_user_key').on(t.userId), index('staff_profiles_status_idx').on(t.status)],
 )
 
+/**
+ * «Formazione»: the trainings the administration proposes (docs/spec.md 3.4), for staff and v-team to say they are
+ * interested; in the order they were added.
+ */
+export const trainingOptions = pgTable('training_options', {
+  id: pk(),
+  title: text().notNull(),
+  description: text(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+})
+
+/** A staff or v-team member interested in a training («Formazione»). */
+export const trainingInterests = pgTable(
+  'training_interests',
+  {
+    id: pk(),
+    optionId: uuid()
+      .notNull()
+      .references(() => trainingOptions.id, { onDelete: 'cascade' }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  t => [
+    uniqueIndex('training_interests_option_user_key').on(t.optionId, t.userId),
+    index('training_interests_user_idx').on(t.userId),
+  ],
+)
+
 // ─── Sessions ──────────────────────────────────────────────────────────────────────────────────────
 
 /** A camp session (sessione): dates, places for families, staff needed. */

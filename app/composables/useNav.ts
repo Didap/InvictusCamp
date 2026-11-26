@@ -16,6 +16,7 @@ export function useNav() {
             { label: 'Famiglie', icon: 'i-lucide-heart-handshake', to: '/admin/famiglie' },
             { label: 'Staff', icon: 'i-lucide-id-card', to: '/admin/staff' },
             { label: 'V-team', icon: 'i-lucide-hand-heart', to: '/admin/v-team' },
+            { label: 'Formazione', icon: 'i-lucide-graduation-cap', to: '/admin/formazione' },
             { label: 'Documenti', icon: 'i-lucide-files', to: '/admin/documenti' },
             { label: 'Comunicazioni', icon: 'i-lucide-mail', to: '/admin/comunicazioni' },
             { label: 'Feedback', icon: 'i-lucide-message-square-heart', to: '/admin/feedback' },
@@ -44,6 +45,7 @@ export function useNav() {
             { label: 'Convocazioni', icon: 'i-lucide-bell-ring', to: '/staff/convocazioni' },
             { label: 'Sessioni', icon: 'i-lucide-calendar-days', to: '/staff/sessioni' },
             { label: 'Documenti', icon: 'i-lucide-folder-open', to: '/staff/documenti' },
+            { label: 'Formazione', icon: 'i-lucide-graduation-cap', to: '/staff/formazione' },
           ],
         ]
       }
