@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { asksContract, isSheetComplete, requiredDocumentsText } from '#shared/schemas/staff'
+import { asksContract, isSheetComplete, requiredDocumentsText, teamMoveSendsSheet } from '#shared/schemas/staff'
 import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
 import { IN_TEAM, inStaffArea, OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
@@ -98,28 +98,28 @@ const labelsOpen = ref(false)
 // ─── Team: staff or v-team, from the link of the application; moved only for a mistake ───
 const otherTeam = computed<StaffTeam>(() => (person.value?.team === 'staff' ? 'volunteer' : 'staff'))
 const movingTeam = ref(false)
+/** Bumped after a move: «Firme» loads its own list, and the sheet's PDF may have changed. */
+const signaturesKey = ref(0)
 /** Moves the person to the other team, after saying what follows for the sheet and how many emails leave. */
 async function changeTeam() {
   const p = person.value
   if (!p) return
   const to = otherTeam.value
-  // To the v-team the formula goes: a sheet complete without it gets its PDF again, to sign (1 email).
-  const emails =
-    inStaffArea(p.status) &&
-    p.accountStatus !== 'disabled' &&
-    !asksContract(to) &&
-    isSheetComplete({ ...p.sheet, contractType: null }, to)
-      ? 1
-      : 0
-  const sheet = !inStaffArea(p.status)
-    ? ' Nessuna email parte.'
-    : asksContract(to)
-      ? ' Nella scheda personale dovrà indicare la formula contrattuale: fino ad allora la scheda resta da completare.'
-      : ` La formula contrattuale si cancella.${emails ? ' La scheda personale cambia: le chiediamo di firmarla, parte 1 email.' : ''}`
+  const sendsSheet = teamMoveSendsSheet(p, to)
+  let follows = ' Nessuna email parte.'
+  if (asksContract(to) && inStaffArea(p.status)) {
+    follows =
+      ' Nella scheda personale dovrà indicare la formula contrattuale: fino ad allora la scheda resta da completare.'
+  } else if (sendsSheet) {
+    follows =
+      ' La formula contrattuale si cancella e la scheda personale cambia: le chiediamo di firmarla, parte 1 email.'
+  } else if (inStaffArea(p.status)) {
+    follows = ' La formula contrattuale si cancella.'
+  }
   const ok = await confirm({
     title: `Sposti ${name.value} ${IN_TEAM[to]}?`,
-    description: `Passa all’elenco ${OF_TEAM[to]}: serve se la candidatura è arrivata dal link sbagliato.${sheet}`,
-    confirmLabel: emails ? 'Sposta e invia 1 email' : `Sposta ${IN_TEAM[to]}`,
+    description: `Passa all’elenco ${OF_TEAM[to]}: serve se la candidatura è arrivata dal link sbagliato.${follows}`,
+    confirmLabel: sendsSheet ? 'Sposta e invia 1 email' : `Sposta ${IN_TEAM[to]}`,
   })
   if (!ok) return
   movingTeam.value = true
@@ -132,15 +132,20 @@ async function changeTeam() {
   } finally {
     // The formula and the sheet's PDF change on the server too; the page then moves to the other list.
     await refresh()
+    signaturesKey.value++
     movingTeam.value = false
   }
 }
 
 const NO_EMAIL = 'Nessuna email parte adesso: l’esito lo comunichi tu, quando vuoi, con «Comunica l’esito».'
 const moving = ref<StaffStatus | null>(null)
+/** What approval gives, for the status line and the confirmation. */
+const inTheArea = (team: StaffTeam) =>
+  `${IN_TEAM[team]}: compila la scheda personale, indica la disponibilità e può ricevere convocazioni`
 async function move(to: StaffStatus) {
-  const from = person.value?.status
-  if (!from) return
+  const p = person.value
+  if (!p) return
+  const from = p.status
   const questions: Partial<
     Record<StaffStatus, { title: string; description: string; confirmLabel: string; danger?: boolean }>
   > = {
@@ -148,12 +153,12 @@ async function move(to: StaffStatus) {
       from === 'inactive'
         ? {
             title: `Riattivi ${name.value}?`,
-            description: `Torna ${IN_TEAM[person.value!.team]}: può indicare la disponibilità e ricevere convocazioni. Nessuna email parte.`,
+            description: `Torna ${IN_TEAM[p.team]}: può indicare la disponibilità e ricevere convocazioni. Nessuna email parte.`,
             confirmLabel: 'Riattiva',
           }
         : {
             title: `Approvi la candidatura di ${name.value}?`,
-            description: `Entra ${IN_TEAM[person.value!.team]}: compila la scheda personale, indica la disponibilità e può ricevere convocazioni. ${NO_EMAIL}`,
+            description: `Entra ${inTheArea(p.team)}. ${NO_EMAIL}`,
             confirmLabel: 'Approva la candidatura',
           },
     rejected: {
@@ -204,7 +209,7 @@ const statusLine = computed(() => {
     case 'registered':
       return 'Ha creato l’account: la candidatura arriva quando conferma l’email e c’è il CV.'
     case 'applied':
-      return `Candidatura inviata il ${dayOf(p.appliedAt)}: da valutare. La decidi tu: se la approvi, entra ${IN_TEAM[p.team]} e può compilare la scheda personale, indicare la disponibilità e ricevere convocazioni.`
+      return `Candidatura inviata il ${dayOf(p.appliedAt)}: da valutare. La decidi tu: se la approvi, entra ${inTheArea(p.team)}.`
     case 'approved':
       return p.reviewedAt ? `Candidatura approvata il ${dayOf(p.reviewedAt)}${by}.` : `Approvata ${IN_TEAM[p.team]}.`
     case 'rejected':
@@ -611,7 +616,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
         </IcSection>
 
         <IcSection title="Firme" description="I documenti assegnati a questa persona e il loro stato.">
-          <DocumentsUserSignatures :user-id="person.userId" />
+          <DocumentsUserSignatures :key="signaturesKey" :user-id="person.userId" />
         </IcSection>
 
         <IcSection title="Formazione" description="Le formazioni proposte che le interessano.">

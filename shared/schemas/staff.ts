@@ -16,7 +16,9 @@ import {
   type StaffRole,
   type UploadMimeType,
   type StaffStatus,
+  type UserStatus,
   type StaffTeam,
+  inStaffArea,
 } from '../utils/constants'
 import { andList } from '../utils/format'
 import { changedKeys } from '../utils/plain'
@@ -79,6 +81,23 @@ export function sheetMissing(team: StaffTeam): string {
 /** Whether a sheet as stored passes the form's schema: until then the home asks for it. */
 export function isSheetComplete(sheet: Record<keyof StaffSheetInput, string | null>, team: StaffTeam): boolean {
   return staffSheetSchema(team).safeParse(sheet).success
+}
+
+/**
+ * Whether moving a person to the team `to` gives their sheet a new PDF to sign, with its email: to the v-team the
+ * formula goes (setStaffTeam) and a sheet complete without it is written again (server/domain/staff-sheets.ts); a
+ * disabled account gets no email. The confirmation of the move says it; a database test holds it to the server.
+ */
+export function teamMoveSendsSheet(
+  person: { status: StaffStatus; accountStatus: UserStatus; sheet: Record<keyof StaffSheetInput, string | null> },
+  to: StaffTeam,
+): boolean {
+  return (
+    inStaffArea(person.status) &&
+    person.accountStatus !== 'disabled' &&
+    !asksContract(to) &&
+    isSheetComplete({ ...person.sheet, contractType: null }, to)
+  )
 }
 
 // ─── Health: allergies, diet and other details ─────────────────────────────────────────────────────

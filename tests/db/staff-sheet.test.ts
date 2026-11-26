@@ -14,7 +14,9 @@ import {
   setStaffTeam,
   sheetSignature,
   staffHome,
+  staffSheetOf,
 } from '../../server/domain/staff'
+import { teamMoveSendsSheet } from '../../shared/schemas/staff'
 import { staffSheetDocument } from '../../server/domain/staff-sheets'
 import { makeStaff, t, useTestDb } from './helpers'
 
@@ -185,6 +187,27 @@ describe('staff personal sheet', () => {
     const { signature: renewed } = await myStaffSheet(db, user, profile!)
     expect(renewed).toMatchObject({ status: 'pending' })
     expect(renewed!.id).not.toBe(signature!.id)
+  })
+
+  it('says beforehand whether a team move sends the sheet to sign again, as the server does', async () => {
+    const { user, profile } = await makeStaff(db)
+    const actor = { userId: user.id, ip: null }
+    const input = { userId: user.id, ctx, uploadsDir, actor }
+    await saveStaffSheet(db, { userId: user.id, value: VALUE, actor })
+    expect(await staffSheetDocument(db, input)).toHaveLength(1)
+    const person = async () => {
+      const [row] = await db.select().from(t.staffProfiles).where(eq(t.staffProfiles.id, profile.id))
+      return { status: row!.status, accountStatus: user.status, sheet: staffSheetOf(row!) }
+    }
+    // To the v-team the formula goes: a new PDF to sign, and its email.
+    expect(teamMoveSendsSheet(await person(), 'volunteer')).toBe(true)
+    await setStaffTeam(db, { userId: user.id, team: 'volunteer', actor })
+    expect(await staffSheetDocument(db, input)).toHaveLength(1)
+    // Back to the staff: the formula is still to choose, the PDF goes and nothing is sent.
+    expect(teamMoveSendsSheet(await person(), 'staff')).toBe(false)
+    await setStaffTeam(db, { userId: user.id, team: 'staff', actor })
+    expect(await staffSheetDocument(db, input)).toEqual([])
+    expect(await sheetSignature(db, user.id)).toBeNull()
   })
 
   it('asks no signature before the approval', async () => {
