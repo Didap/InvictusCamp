@@ -39,9 +39,10 @@ describe('release', () => {
       assignDocument(db, ctx, { documentId: document!.id, target: { type: 'all_families' }, actor }),
     ).rejects.toMatchObject({ statusCode: 409 })
     // The administration sees it as the gestionale's, so it offers none of those actions.
-    const detail = await documentDetail(db, document!.id)
-    expect(detail.generated).toBe(true)
-    expect(detail.requests.map(r => r.document.generated)).toEqual([true])
+    expect(await documentDetail(db, document!.id)).toMatchObject({
+      generated: true,
+      requests: [{ document: { generated: true } }],
+    })
 
     // Nothing changed: nothing new.
     expect(await familyRelease(db, input)).toEqual([])

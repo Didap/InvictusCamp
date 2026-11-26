@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DropdownMenuItem } from '@nuxt/ui'
+import type { ButtonProps, DropdownMenuItem } from '@nuxt/ui'
 import type { AssignResult, DocumentDetail, RemindResult } from '#shared/types/documents'
 import { enumLabel, type StaffResourceMode } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
@@ -163,30 +163,47 @@ async function onReplaced() {
   await reload()
 }
 
+/** The banner of an archived document: one the gestionale prepared is never restored, a new one comes instead. */
+const archivedNote = computed((): { description: string; actions: ButtonProps[] } | null => {
+  const d = doc.value
+  if (!d?.archivedAt) return null
+  const since = `Dal ${formatDay(todayIso(new Date(d.archivedAt)), 'long')}.`
+  if (d.generated) {
+    return {
+      description: `${since} Non è più in vigore e non si può ripristinare: il gestionale ne prepara uno nuovo quando i dati sono completi.`,
+      actions: [],
+    }
+  }
+  return {
+    description: `${since} Non si può assegnare né firmare: ripristinalo per usarlo di nuovo.`,
+    actions: [{ label: 'Ripristina', color: 'neutral', variant: 'outline', onClick: () => setArchived(false) }],
+  }
+})
+
 const menuItems = computed<DropdownMenuItem[][]>(() => {
   const d = doc.value
   if (!d) return []
-  const download: DropdownMenuItem = {
-    label: 'Scarica il PDF originale',
-    icon: 'i-lucide-download',
-    href: `/api/files/${d.file.id}?download`,
-    external: true,
-  }
-  const archive: DropdownMenuItem = { label: 'Archivia', icon: 'i-lucide-archive', onSelect: () => setArchived(true) }
-  if (d.generated) return d.archivedAt ? [[download]] : [[download], [archive]]
+  const manual = !d.generated
   return [
     [
-      { label: 'Modifica i dettagli', icon: 'i-lucide-pencil', onSelect: () => (editOpen.value = true) },
-      ...(d.locked
-        ? []
-        : [{ label: 'Sostituisci il file', icon: 'i-lucide-file-up', onSelect: () => (replaceOpen.value = true) }]),
-      download,
+      ...(manual
+        ? [{ label: 'Modifica i dettagli', icon: 'i-lucide-pencil', onSelect: () => (editOpen.value = true) }]
+        : []),
+      ...(manual && !d.locked
+        ? [{ label: 'Sostituisci il file', icon: 'i-lucide-file-up', onSelect: () => (replaceOpen.value = true) }]
+        : []),
+      {
+        label: 'Scarica il PDF originale',
+        icon: 'i-lucide-download',
+        href: `/api/files/${d.file.id}?download`,
+        external: true,
+      },
     ],
-    [
-      d.archivedAt
-        ? { label: 'Ripristina', icon: 'i-lucide-archive-restore', onSelect: () => setArchived(false) }
-        : archive,
-    ],
+    ...(!d.archivedAt
+      ? [[{ label: 'Archivia', icon: 'i-lucide-archive', onSelect: () => setArchived(true) }]]
+      : manual
+        ? [[{ label: 'Ripristina', icon: 'i-lucide-archive-restore', onSelect: () => setArchived(false) }]]
+        : []),
   ]
 })
 </script>
@@ -223,21 +240,13 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
 
     <template v-else>
       <UAlert
-        v-if="doc.archivedAt"
+        v-if="archivedNote"
         color="neutral"
         variant="subtle"
         icon="i-lucide-archive"
         title="Documento archiviato"
-        :description="`Dal ${formatDay(todayIso(new Date(doc.archivedAt)), 'long')}. ${
-          doc.generated
-            ? 'Non è più in vigore e non si può ripristinare: il gestionale ne prepara uno nuovo quando i dati sono completi.'
-            : 'Non si può assegnare né firmare: ripristinalo per usarlo di nuovo.'
-        }`"
-        :actions="
-          doc.generated
-            ? []
-            : [{ label: 'Ripristina', color: 'neutral', variant: 'outline', onClick: () => setArchived(false) }]
-        "
+        :description="archivedNote.description"
+        :actions="archivedNote.actions"
         class="mb-8"
       />
 
@@ -396,23 +405,25 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
           </ul>
         </template>
       </UModal>
-      <DocumentsAssignModal v-model:open="assignOpen" :document-id="doc.id" @assigned="reload" />
-      <DocumentsDocumentFormModal v-model:open="editOpen" :document="doc" @saved="reload" />
-      <UModal
-        v-model:open="replaceOpen"
-        title="Sostituisci il file"
-        description="Nessuno lo ha ancora firmato: puoi caricare una versione corretta. I codici già inviati smettono di valere."
-      >
-        <template #body>
-          <IcFileUpload
-            :endpoint="`/api/admin/documents/${doc.id}/file`"
-            accept="application/pdf"
-            description="Solo PDF, fino a 15 MB"
-            button-label="Sostituisci il file"
-            @uploaded="onReplaced"
-          />
-        </template>
-      </UModal>
+      <template v-if="!doc.generated">
+        <DocumentsAssignModal v-model:open="assignOpen" :document-id="doc.id" @assigned="reload" />
+        <DocumentsDocumentFormModal v-model:open="editOpen" :document="doc" @saved="reload" />
+        <UModal
+          v-model:open="replaceOpen"
+          title="Sostituisci il file"
+          description="Nessuno lo ha ancora firmato: puoi caricare una versione corretta. I codici già inviati smettono di valere."
+        >
+          <template #body>
+            <IcFileUpload
+              :endpoint="`/api/admin/documents/${doc.id}/file`"
+              accept="application/pdf"
+              description="Solo PDF, fino a 15 MB"
+              button-label="Sostituisci il file"
+              @uploaded="onReplaced"
+            />
+          </template>
+        </UModal>
+      </template>
     </template>
   </IcPage>
 </template>

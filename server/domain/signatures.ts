@@ -1149,6 +1149,7 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
   const [row] = await db
     .select({
       document: documents,
+      generated: GENERATED,
       file: files,
       session: { id: campSessions.id, title: campSessions.title },
       author: { firstName: users.firstName, lastName: users.lastName },
@@ -1160,7 +1161,7 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
     .where(eq(documents.id, documentId))
     .limit(1)
   if (!row) throw fail(404, 'Documento non trovato')
-  const { document, file, session, author } = row
+  const { document, generated, file, session, author } = row
   const requests = await signatureRows(db, eq(signatureRequests.documentId, document.id))
   const live = requests.filter(r => r.status !== 'cancelled')
   return {
@@ -1173,7 +1174,7 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
     createdAt: document.createdAt.toISOString(),
     archivedAt: document.archivedAt?.toISOString() ?? null,
     description: document.description,
-    generated: document.familyId !== null || document.staffUserId !== null,
+    generated,
     staffResource: document.staffResource,
     file: {
       id: file.id,
