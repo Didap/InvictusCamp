@@ -172,6 +172,8 @@ export const GUIDES: Record<UserRole, Guide> = {
         'I documenti obbligatori (CV e documento d’identità, in PDF), quelli da firmare, come la tua scheda o il contratto di una sessione, e quelli che carichi tu.',
       '/staff/formazione':
         'Le formazioni che propone l’amministrazione: spunta quelle che ti interessano, ogni spunta si salva da sola.',
+      '/staff/risorse':
+        'I documenti che l’amministrazione ti chiede di leggere e accettare, come il regolamento, e quelli da consultare.',
       ...ACCOUNT,
     },
     howTos: [

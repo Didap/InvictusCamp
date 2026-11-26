@@ -57,6 +57,7 @@ export const PAGES = {
     '/staff/programma/{sessionPast}',
     '/staff/documenti',
     '/staff/formazione',
+    '/staff/risorse',
     '/firma/{signature}',
     '/guida',
   ],

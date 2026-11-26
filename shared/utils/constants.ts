@@ -122,6 +122,13 @@ export type ShirtSize = (typeof SHIRT_SIZES)[number]
 export const DOCUMENT_CATEGORIES = ['contract', 'consent', 'regulation', 'privacy', 'other'] as const
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number]
 
+/**
+ * A document in the «Risorse utili» of staff and v-team (docs/spec.md 3.6): to read and accept (or sign, as the
+ * document says), each approved person asked; or only to consult.
+ */
+export const STAFF_RESOURCE_MODES = ['accept', 'consult'] as const
+export type StaffResourceMode = (typeof STAFF_RESOURCE_MODES)[number]
+
 export const SIGNATURE_STATUSES = ['pending', 'signed', 'cancelled'] as const
 export type SignatureStatus = (typeof SIGNATURE_STATUSES)[number]
 

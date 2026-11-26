@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { DocumentDetail, RemindResult } from '#shared/types/documents'
-import { enumLabel } from '#shared/utils/constants'
-import { formatDateTime, formatDay } from '#shared/utils/format'
+import type { AssignResult, DocumentDetail, RemindResult } from '#shared/types/documents'
+import { enumLabel, type StaffResourceMode } from '#shared/utils/constants'
+import { formatDateTime, formatDay, plural } from '#shared/utils/format'
 
 // One document: who must sign it and where each person is (reminders, cancellations, signed copies),
 // its details and a preview. "Assegna" is the primary action; archive and edit sit in the menu.
@@ -63,6 +63,42 @@ const details = computed(() => {
 
 async function reload() {
   await Promise.all([refresh(), refreshNuxtData('admin-documents')])
+}
+
+/** «Risorse utili» of staff and v-team: to accept (every approved person asked, one email each), to consult, or no. */
+const RESOURCE_ITEMS = [
+  { label: 'No', value: 'none' },
+  { label: 'Da leggere e accettare', value: 'accept', description: 'Lo chiediamo a ogni persona approvata.' },
+  { label: 'Da consultare', value: 'consult', description: 'Resta a disposizione, senza conferme.' },
+]
+const resourceSaving = ref(false)
+async function setResource(value: string) {
+  const mode = value === 'none' ? null : (value as StaffResourceMode)
+  const url: string = `/api/admin/documents/${documentId.value}/staff-resource`
+  resourceSaving.value = true
+  try {
+    if (mode === 'accept') {
+      const { result } = await api<{ result: AssignResult }>(url, { method: 'PUT', body: { mode, dryRun: true } })
+      const later = 'Chi viene approvato dopo lo trova nelle sue risorse.'
+      const ok = await confirm({
+        title: 'Da leggere e accettare?',
+        description: result.created
+          ? `Lo chiediamo a ${plural(result.created, 'persona approvata', 'persone approvate')}: ${plural(result.created, 'email', 'email')} in partenza. ${later}`
+          : result.recipients
+            ? `Tutte le persone approvate lo hanno già: nessuna email. ${later}`
+            : `Non c’è ancora nessuna persona approvata: nessuna email. ${later}`,
+        confirmLabel: result.created ? `Chiedi e invia ${plural(result.created, 'email', 'email')}` : 'Conferma',
+      })
+      if (!ok) return
+    }
+    await api(url, { method: 'PUT', body: { mode } })
+    notifySuccess(mode ? 'Messo tra le risorse utili' : 'Tolto dalle risorse utili')
+    await reload()
+  } catch (error) {
+    notifyError(error)
+  } finally {
+    resourceSaving.value = false
+  }
 }
 
 async function remindAll() {
@@ -267,6 +303,19 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
           <p v-if="!rows.length" class="text-muted">Nessuna richiesta corrisponde alla ricerca.</p>
           <DocumentsSignatureRequestList v-else :rows="rows" show="person" @changed="reload" />
         </template>
+      </IcSection>
+
+      <IcSection
+        v-if="!doc.generated"
+        title="Risorse utili dello staff"
+        description="Lo trovano staff e v-team nella loro pagina «Risorse utili»."
+      >
+        <URadioGroup
+          :model-value="doc.staffResource ?? 'none'"
+          :items="RESOURCE_ITEMS"
+          :disabled="resourceSaving || Boolean(doc.archivedAt)"
+          @update:model-value="value => setResource(String(value))"
+        />
       </IcSection>
 
       <IcSection title="Dettagli">

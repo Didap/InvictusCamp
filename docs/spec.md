@@ -46,6 +46,7 @@ Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova
 Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
 `/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`, `/famiglia/questionario/:sessionId` (3.13). Staff: `/staff` (home), `/staff/scheda`,
 `/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`, `/staff/formazione`,
+`/staff/risorse`,
 `/staff/programma/:sessionId`.
 Everyone: `/account`, `/firma/:requestId`, `/guida` (3.15).
 
@@ -238,6 +239,14 @@ availability or receive convocations. The administration can move a person to th
 - Requests signed in the demo data have no signed copy: the copy is generated at the first download.
 - Legal note: an FES is valid but freely assessed by a judge (eIDAS art. 25, CAD art. 20). A qualified
   provider (FEA/FEQ) can be added later behind the same flow if the contracts require it.
+- **Risorse utili** of staff and v-team (`/staff/risorse`): on a document's admin page the administration puts it
+  there «da leggere e accettare» or «da consultare» (`documents.staffResource`, audited `document.staff_resource`;
+  never a release or a staff sheet, never archived). To accept: every approved person is asked as with «Assegna →
+  tutto lo staff» (the request to read or to sign, as the document says, and its email; the confirmation says how
+  many leave), and whoever has no request yet (approved later, re-enabled, after a restore) gets it, without an
+  email, when they press «Leggi il documento» or «Leggi e firma». Leaving «da leggere e accettare» cancels the staff's
+  requests still to answer. To consult: in the list, nothing to confirm. Staff in the staff area can open their
+  files.
 
 ### 3.7 Communications and the email log
 

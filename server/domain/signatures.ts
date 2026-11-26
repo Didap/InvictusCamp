@@ -76,7 +76,7 @@ type DocumentRow = typeof documents.$inferSelect
  */
 type DocumentLock = 'update' | 'share'
 
-async function requireDocument(db: DbOrTx, documentId: string, lock?: DocumentLock): Promise<DocumentRow> {
+export async function requireDocument(db: DbOrTx, documentId: string, lock?: DocumentLock): Promise<DocumentRow> {
   const query = db.select().from(documents).where(eq(documents.id, documentId)).limit(1)
   const [row] = lock ? await query.for(lock) : await query
   if (!row) throw fail(404, 'Documento non trovato')
@@ -87,7 +87,10 @@ async function requireDocument(db: DbOrTx, documentId: string, lock?: DocumentLo
 // member's sheet (staff-sheets.ts). Never changed, assigned or restored by hand.
 const NOT_GENERATED = and(isNull(documents.familyId), isNull(documents.staffUserId))
 
-function assertNotGenerated(document: { familyId: string | null; staffUserId: string | null }) {
+/** A request no longer to answer: its code goes too. */
+export const CANCELLED_REQUEST = { status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 } as const
+
+export function assertNotGenerated(document: { familyId: string | null; staffUserId: string | null }) {
   if (document.familyId) throw fail(409, 'È la liberatoria di una famiglia: la prepara e la aggiorna il gestionale')
   if (document.staffUserId) {
     throw fail(409, 'È la scheda personale di una persona dello staff: la prepara e la aggiorna il gestionale')
@@ -300,7 +303,7 @@ export async function setDocumentArchived(
   if (input.archived) {
     const rows = await db
       .update(signatureRequests)
-      .set({ status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 })
+      .set(CANCELLED_REQUEST)
       .where(and(eq(signatureRequests.documentId, document.id), eq(signatureRequests.status, 'pending')))
       .returning({ id: signatureRequests.id })
     cancelled = rows.length
@@ -479,7 +482,7 @@ export async function cancelRequest(db: DbOrTx, input: { requestId: string; acto
   if (target) assertNotGenerated(target)
   const [row] = await db
     .update(signatureRequests)
-    .set({ status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 })
+    .set(CANCELLED_REQUEST)
     .where(and(eq(signatureRequests.id, input.requestId), eq(signatureRequests.status, 'pending')))
     .returning({ documentId: signatureRequests.documentId, userId: signatureRequests.userId })
   if (!row) {
@@ -1168,6 +1171,8 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
     createdAt: document.createdAt.toISOString(),
     archivedAt: document.archivedAt?.toISOString() ?? null,
     description: document.description,
+    generated: document.familyId !== null || document.staffUserId !== null,
+    staffResource: document.staffResource,
     file: {
       id: file.id,
       originalName: file.originalName,
