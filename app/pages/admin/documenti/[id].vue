@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { DocumentDetail, RemindResult } from '#shared/types/documents'
+import type { AssignResult, DocumentDetail, RemindResult } from '#shared/types/documents'
 import { enumLabel, type StaffResourceMode } from '#shared/utils/constants'
 import { formatDateTime, formatDay, plural } from '#shared/utils/format'
 
@@ -78,13 +78,16 @@ async function setResource(value: string) {
   resourceSaving.value = true
   try {
     if (mode === 'accept') {
-      const { asked } = await api<{ asked: number }>(url, { method: 'PUT', body: { mode, dryRun: true } })
+      const { result } = await api<{ result: AssignResult }>(url, { method: 'PUT', body: { mode, dryRun: true } })
+      const later = 'Chi viene approvato dopo lo trova nelle sue risorse.'
       const ok = await confirm({
         title: 'Da leggere e accettare?',
-        description: asked
-          ? `Lo chiediamo a ${plural(asked, 'persona approvata', 'persone approvate')}: ${plural(asked, 'email', 'email')} in partenza. Chi viene approvato dopo lo trova nelle sue risorse.`
-          : 'Tutte le persone approvate lo hanno già: nessuna email. Chi viene approvato dopo lo trova nelle sue risorse.',
-        confirmLabel: asked ? `Chiedi e invia ${plural(asked, 'email', 'email')}` : 'Conferma',
+        description: result.created
+          ? `Lo chiediamo a ${plural(result.created, 'persona approvata', 'persone approvate')}: ${plural(result.created, 'email', 'email')} in partenza. ${later}`
+          : result.recipients
+            ? `Tutte le persone approvate lo hanno già: nessuna email. ${later}`
+            : `Non c’è ancora nessuna persona approvata: nessuna email. ${later}`,
+        confirmLabel: result.created ? `Chiedi e invia ${plural(result.created, 'email', 'email')}` : 'Conferma',
       })
       if (!ok) return
     }

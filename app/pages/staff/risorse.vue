@@ -3,22 +3,39 @@ import type { MyStaffResource } from '#shared/types/documents'
 import { formatDateTime } from '#shared/utils/format'
 
 // «Risorse utili» (spec 3.6): what the administration puts here for staff and v-team. The documents to read and
-// accept (each confirmed on /firma, or signed as the document says) and those to consult, always at hand.
+// accept (confirmed or signed on /firma, as the document says; the request is made when the person opens it if they
+// have none yet) and those to consult, always at hand.
+const api = useApi()
 const { label } = useEnums()
 const { data } = await useApiFetch<MyStaffResource[]>('/api/staff/resources')
 const resources = computed(() => data.value ?? [])
-const toAccept = computed(() => resources.value.filter(r => r.mode === 'accept'))
+/** Each one to accept with what the person sees: when they accepted it, or the button to open it. */
+const toAccept = computed(() =>
+  resources.value
+    .filter(r => r.mode === 'accept')
+    .map(r => ({
+      ...r,
+      done:
+        r.request?.status === 'signed'
+          ? `${r.requiresSignature ? 'Firmato' : 'Letto e accettato'} il ${formatDateTime(r.request.signedAt)}`
+          : null,
+      action: r.requiresSignature ? 'Leggi e firma' : 'Leggi il documento',
+    })),
+)
 const toConsult = computed(() => resources.value.filter(r => r.mode === 'consult'))
 
-/** What the person does with a resource to accept, from its request. */
-function acceptState(r: MyStaffResource) {
-  const request = r.request
-  if (!request) return { text: 'Non ancora richiesto', action: null }
-  const sign = request.requiresSignature
-  if (request.status === 'signed') {
-    return { text: `${sign ? 'Firmato' : 'Letto e accettato'} il ${formatDateTime(request.signedAt)}`, action: null }
+const opening = ref<string | null>(null)
+async function open(r: MyStaffResource) {
+  opening.value = r.id
+  try {
+    const url: string = `/api/staff/resources/${r.id}`
+    const { requestId } = await api<{ requestId: string }>(url, { method: 'POST' })
+    await navigateTo(`/firma/${requestId}`)
+  } catch (error) {
+    notifyError(error)
+  } finally {
+    opening.value = null
   }
-  return { text: null, action: { label: sign ? 'Leggi e firma' : 'Leggi e accetta', to: `/firma/${request.id}` } }
 }
 </script>
 
@@ -49,14 +66,17 @@ function acceptState(r: MyStaffResource) {
               <p class="text-sm text-muted">{{ label('documentCategory', r.category) }}</p>
               <IcFileLink :file="r.file" />
               <p v-if="r.description" class="max-w-prose text-sm whitespace-pre-line">{{ r.description }}</p>
-              <p v-if="acceptState(r).text" class="text-sm text-muted">{{ acceptState(r).text }}</p>
+              <p v-if="r.done" class="text-sm text-muted">{{ r.done }}</p>
             </div>
             <UButton
-              v-if="acceptState(r).action"
-              :to="acceptState(r).action!.to"
-              :label="acceptState(r).action!.label"
+              v-if="!r.done"
+              :label="r.action"
               icon="i-lucide-pen-line"
+              color="neutral"
+              variant="outline"
+              :loading="opening === r.id"
               class="pointer-coarse:min-h-11"
+              @click="open(r)"
             />
           </li>
         </ul>

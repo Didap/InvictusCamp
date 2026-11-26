@@ -104,8 +104,10 @@ export interface MyStaffResource {
   category: DocumentCategory
   mode: StaffResourceMode
   file: FileDto
-  /** For one to accept: the person's request, to read or to sign as the document says. */
-  request: { id: string; status: SignatureStatus; signedAt: string | null; requiresSignature: boolean } | null
+  /** To accept by signing (otherwise by confirming the reading). */
+  requiresSignature: boolean
+  /** For one to accept: the person's request, if they have one (it is made when they open it). */
+  request: { id: string; status: SignatureStatus; signedAt: string | null } | null
 }
 
 /** Who receives a document (POST /api/admin/documents/:id/assign). */

@@ -1,86 +1,88 @@
 // «Risorse utili» of staff and v-team (docs/spec.md 3.6): documents of the documents area the administration puts
-// there, to read and accept (each approved person asked to confirm the reading, or to sign, as the document says;
-// someone approved later is asked too, without an email) or only to consult. Explicit imports only.
-import { and, asc, eq, inArray, isNull, isNotNull, ne } from 'drizzle-orm'
-import type { MyStaffResource } from '../../shared/types/documents'
-import type { StaffResourceMode } from '../../shared/utils/constants'
+// there, to read and accept or only to consult. To accept: every approved person is asked as with «Assegna → tutto lo
+// staff» (assignDocument, one email each); whoever has no request yet (approved later, re-enabled, after a restore)
+// gets it when they open the resource. Explicit imports only, so the database tests can load it.
+import { and, asc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
+import type { AssignResult, MyStaffResource } from '../../shared/types/documents'
+import { STAFF_STATUSES, inStaffArea, type StaffResourceMode } from '../../shared/utils/constants'
 import { documents, files, signatureRequests, staffProfiles, users } from '../db/schema'
 import type { EmailContext, EmailMessage } from '../emails/types'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
-import { requestSignatures, signatureRequestEmails } from './signature-requests'
+import { requestSignatures } from './signature-requests'
+import { assignDocument } from './signatures'
 import type { Actor } from './users'
 
-/** The approved staff and v-team with an account that is not disabled: who a resource to accept asks. */
-async function approvedStaff(db: DbOrTx): Promise<string[]> {
-  const rows = await db
-    .select({ id: users.id })
-    .from(staffProfiles)
-    .innerJoin(users, eq(users.id, staffProfiles.userId))
-    .where(and(eq(staffProfiles.status, 'approved'), ne(users.status, 'disabled')))
-  return rows.map(row => row.id)
-}
+const NOT_FOUND = 'Documento non trovato'
+const STAFF_AREA = STAFF_STATUSES.filter(inStaffArea)
 
 /**
- * Puts a document in the «Risorse utili» (or takes it out). To accept: every approved person is asked, with an email
- * each (returned; `dryRun` only counts them). Taking it out leaves the requests already made.
+ * Puts a document in the «Risorse utili» (or takes it out). To accept: every approved person not asked yet gets the
+ * request and its email (`dryRun` only counts them, as the assignment does); choosing it again asks whoever is missing.
+ * Leaving «accept» cancels the staff's requests still to answer.
  */
 export async function setStaffResource(
   db: DbOrTx,
   input: { documentId: string; mode: StaffResourceMode | null; dryRun?: boolean; ctx: EmailContext; actor: Actor },
-): Promise<{ emails: EmailMessage[]; asked: number }> {
+): Promise<{ result: AssignResult | null; messages: EmailMessage[] }> {
   const [document] = await db.select().from(documents).where(eq(documents.id, input.documentId)).for('update')
-  if (!document) throw new DomainError(404, 'Documento non trovato')
+  if (!document) throw new DomainError(404, NOT_FOUND)
   if (document.familyId || document.staffUserId) {
     throw new DomainError(409, 'È un documento preparato dal gestionale per una persona: non va tra le risorse')
   }
   if (document.archivedAt && input.mode) throw new DomainError(409, 'Il documento è archiviato: ripristinalo prima')
-  const toAsk = input.mode === 'accept' ? await approvedStaff(db) : []
-  if (input.dryRun) {
-    // Those already asked (a cancelled request is asked again) get no new email.
-    const asked = toAsk.length
-      ? await db
-          .select({ userId: signatureRequests.userId })
-          .from(signatureRequests)
-          .where(
-            and(
-              eq(signatureRequests.documentId, document.id),
-              inArray(signatureRequests.userId, toAsk),
-              ne(signatureRequests.status, 'cancelled'),
-            ),
-          )
-      : []
-    return { emails: [], asked: toAsk.length - asked.length }
+  const asked =
+    input.mode === 'accept'
+      ? await assignDocument(db, input.ctx, {
+          documentId: document.id,
+          target: { type: 'all_staff' },
+          dryRun: input.dryRun,
+          actor: input.actor,
+        })
+      : { result: null, messages: [] }
+  if (input.dryRun || document.staffResource === input.mode) return asked
+  if (document.staffResource === 'accept') {
+    await db
+      .update(signatureRequests)
+      .set({ status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 })
+      .where(
+        and(
+          eq(signatureRequests.documentId, document.id),
+          eq(signatureRequests.status, 'pending'),
+          inArray(signatureRequests.userId, db.select({ id: users.id }).from(users).where(eq(users.role, 'staff'))),
+        ),
+      )
   }
   await db.update(documents).set({ staffResource: input.mode }).where(eq(documents.id, document.id))
-  const requests = await requestSignatures(db, { documentId: document.id, userIds: toAsk })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'document.staff_resource',
     entityType: 'document',
     entityId: document.id,
-    data: { from: document.staffResource, to: input.mode, asked: requests.length },
+    data: { from: document.staffResource, to: input.mode },
     ip: input.actor.ip ?? null,
   })
-  return {
-    emails: await signatureRequestEmails(
-      db,
-      input.ctx,
-      requests.map(request => request.id),
-    ),
-    asked: requests.length,
-  }
+  return asked
 }
 
-/** Someone just approved: the resources to accept ask them too, without an email (they see them on their pages). */
-export async function askStaffResources(db: DbOrTx, userIds: string[]): Promise<void> {
-  if (!userIds.length) return
-  const resources = await db
+/**
+ * «Leggi e accetta» on a resource: the person's request, made (or reopened) now if missing, without an email. Returns
+ * its id, for /firma.
+ */
+export async function openStaffResource(db: DbOrTx, input: { userId: string; documentId: string }): Promise<string> {
+  const [document] = await db
     .select({ id: documents.id })
     .from(documents)
-    .where(and(eq(documents.staffResource, 'accept'), isNull(documents.archivedAt)))
-  for (const resource of resources) await requestSignatures(db, { documentId: resource.id, userIds })
+    .where(and(eq(documents.id, input.documentId), eq(documents.staffResource, 'accept'), isNull(documents.archivedAt)))
+    .for('share')
+  if (!document) throw new DomainError(404, NOT_FOUND)
+  await requestSignatures(db, { documentId: document.id, userIds: [input.userId] })
+  const [request] = await db
+    .select({ id: signatureRequests.id })
+    .from(signatureRequests)
+    .where(and(eq(signatureRequests.documentId, document.id), eq(signatureRequests.userId, input.userId)))
+  return request!.id
 }
 
 /** The «Risorse utili» of the signed-in person: each with their request, for those to accept. */
@@ -112,14 +114,10 @@ export async function myStaffResources(db: DbOrTx, userId: string): Promise<MySt
       sizeBytes: file.sizeBytes,
       createdAt: file.createdAt.toISOString(),
     },
+    requiresSignature: document.requiresSignature,
     request:
       document.staffResource === 'accept' && request
-        ? {
-            id: request.id,
-            status: request.status,
-            signedAt: request.signedAt?.toISOString() ?? null,
-            requiresSignature: document.requiresSignature,
-          }
+        ? { id: request.id, status: request.status, signedAt: request.signedAt?.toISOString() ?? null }
         : null,
   }))
 }
@@ -135,7 +133,7 @@ export async function isStaffResourceFile(db: DbOrTx, userId: string, fileId: st
         eq(documents.fileId, fileId),
         isNotNull(documents.staffResource),
         isNull(documents.archivedAt),
-        inArray(staffProfiles.status, ['approved', 'inactive']),
+        inArray(staffProfiles.status, STAFF_AREA),
       ),
     )
     .limit(1)

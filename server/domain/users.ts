@@ -14,7 +14,6 @@ import type { DbOrTx } from './db'
 import { leaveOpenSessions } from './staff'
 import { issueToken } from './tokens'
 import { DomainError } from './errors'
-import { askStaffResources } from './staff-resources'
 
 type UserRow = typeof users.$inferSelect
 
@@ -90,7 +89,6 @@ export async function inviteUser(
       status: staffStatus,
       ...(staffStatus === 'approved' ? { reviewedAt: now, reviewedBy: actor.userId } : {}),
     })
-    if (staffStatus === 'approved') await askStaffResources(db, [user!.id])
   }
   const token = await issueToken(db, user!.id, 'invite', now)
   await writeAudit(db, {

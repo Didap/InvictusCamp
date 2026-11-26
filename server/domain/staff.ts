@@ -84,7 +84,6 @@ import type { DbOrTx } from './db'
 import { withdrawQueuedEmails } from './email-quota'
 import { requestSignatures, signatureRequestEmails } from './signature-requests'
 import { checkLabels, staffRoleOptions } from './staff-labels'
-import { askStaffResources } from './staff-resources'
 import { trainingInterestsOf } from './training'
 import { createError } from './errors'
 
@@ -386,8 +385,6 @@ export async function changeStaffStatus(
     data: { from: profile.status, to: input.status },
     ip: input.actor.ip ?? null,
   })
-  // Approved (again): the «Risorse utili» to accept ask them too.
-  if (input.status === 'approved') await askStaffResources(db, [input.userId])
   return updated!
 }
 
@@ -422,10 +419,6 @@ export async function approveApplications(
         ip: input.actor.ip ?? null,
       })
     }
-    await askStaffResources(
-      db,
-      waiting.map(row => row.userId),
-    )
   }
   return { approved: waiting.length, skipped: userIds.length - waiting.length }
 }

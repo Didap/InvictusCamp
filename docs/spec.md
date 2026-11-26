@@ -241,9 +241,12 @@ availability or receive convocations. The administration can move a person to th
   provider (FEA/FEQ) can be added later behind the same flow if the contracts require it.
 - **Risorse utili** of staff and v-team (`/staff/risorse`): on a document's admin page the administration puts it
   there «da leggere e accettare» or «da consultare» (`documents.staffResource`, audited `document.staff_resource`;
-  never a release or a staff sheet, never archived). To accept: every approved person gets the request (to read or to
-  sign, as the document says) with its email, the confirmation saying how many leave; someone approved later gets it
-  too, without an email. To consult: in the list, nothing to confirm. Staff in the staff area can open their files.
+  never a release or a staff sheet, never archived). To accept: every approved person is asked as with «Assegna →
+  tutto lo staff» (the request to read or to sign, as the document says, and its email; the confirmation says how
+  many leave), and whoever has no request yet (approved later, re-enabled, after a restore) gets it, without an
+  email, when they press «Leggi il documento» or «Leggi e firma». Leaving «da leggere e accettare» cancels the staff's
+  requests still to answer. To consult: in the list, nothing to confirm. Staff in the staff area can open their
+  files.
 
 ### 3.7 Communications and the email log
 
