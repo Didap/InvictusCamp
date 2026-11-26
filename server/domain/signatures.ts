@@ -86,6 +86,7 @@ export async function requireDocument(db: DbOrTx, documentId: string, lock?: Doc
 // A document the gestionale prepares for one person has its owner: a family's release (releases.ts) or a staff
 // member's sheet (staff-sheets.ts). Never changed, assigned or restored by hand.
 const NOT_GENERATED = and(isNull(documents.familyId), isNull(documents.staffUserId))
+const GENERATED = sql<boolean>`(${documents.familyId} is not null or ${documents.staffUserId} is not null)`
 
 /** A request no longer to answer: its code goes too. */
 export const CANCELLED_REQUEST = { status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 } as const
@@ -1050,6 +1051,7 @@ export async function signatureRows(
         title: documents.title,
         category: documents.category,
         requiresSignature: documents.requiresSignature,
+        generated: GENERATED,
       },
     })
     .from(signatureRequests)

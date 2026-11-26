@@ -6,6 +6,7 @@ import { formatDateTime, formatDay, plural } from '#shared/utils/format'
 
 // One document: who must sign it and where each person is (reminders, cancellations, signed copies),
 // its details and a preview. "Assegna" is the primary action; archive and edit sit in the menu.
+// A family's release or a staff sheet (`generated`) is the gestionale's: no assign, edit, replace or restore.
 const route = useRoute()
 const api = useApi()
 const confirm = useConfirm()
@@ -127,9 +128,11 @@ async function setArchived(archived: boolean) {
     const count = pendingCount.value
     const ok = await confirm({
       title: 'Archiviare il documento?',
-      description: count
-        ? `${count === 1 ? 'La richiesta ancora aperta viene annullata' : `Le ${count} richieste ancora aperte vengono annullate`}, senza inviare email. Le firme raccolte restano qui.`
-        : 'Non comparirà più tra i documenti da assegnare. Le firme raccolte restano qui.',
+      description: doc.value?.generated
+        ? `${count ? 'La richiesta ancora aperta viene annullata, senza inviare email. ' : ''}Non si potrà ripristinare: il gestionale ne prepara uno nuovo al prossimo salvataggio dei dati.`
+        : count
+          ? `${count === 1 ? 'La richiesta ancora aperta viene annullata' : `Le ${count} richieste ancora aperte vengono annullate`}, senza inviare email. Le firme raccolte restano qui.`
+          : 'Non comparirà più tra i documenti da assegnare. Le firme raccolte restano qui.',
       confirmLabel: 'Archivia',
       danger: count > 0,
     })
@@ -160,23 +163,26 @@ async function onReplaced() {
 const menuItems = computed<DropdownMenuItem[][]>(() => {
   const d = doc.value
   if (!d) return []
+  const download: DropdownMenuItem = {
+    label: 'Scarica il PDF originale',
+    icon: 'i-lucide-download',
+    href: `/api/files/${d.file.id}?download`,
+    external: true,
+  }
+  const archive: DropdownMenuItem = { label: 'Archivia', icon: 'i-lucide-archive', onSelect: () => setArchived(true) }
+  if (d.generated) return d.archivedAt ? [[download]] : [[download], [archive]]
   return [
     [
       { label: 'Modifica i dettagli', icon: 'i-lucide-pencil', onSelect: () => (editOpen.value = true) },
       ...(d.locked
         ? []
         : [{ label: 'Sostituisci il file', icon: 'i-lucide-file-up', onSelect: () => (replaceOpen.value = true) }]),
-      {
-        label: 'Scarica il PDF originale',
-        icon: 'i-lucide-download',
-        href: `/api/files/${d.file.id}?download`,
-        external: true,
-      },
+      download,
     ],
     [
       d.archivedAt
         ? { label: 'Ripristina', icon: 'i-lucide-archive-restore', onSelect: () => setArchived(false) }
-        : { label: 'Archivia', icon: 'i-lucide-archive', onSelect: () => setArchived(true) },
+        : archive,
     ],
   ]
 })
@@ -195,6 +201,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
         />
       </UDropdownMenu>
       <UButton
+        v-if="!doc.generated"
         icon="i-lucide-user-plus"
         label="Assegna"
         :disabled="!!doc.archivedAt"
@@ -218,8 +225,16 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
         variant="subtle"
         icon="i-lucide-archive"
         title="Documento archiviato"
-        :description="`Dal ${formatDay(doc.archivedAt.slice(0, 10), 'long')}. Non si può assegnare né firmare: ripristinalo per usarlo di nuovo.`"
-        :actions="[{ label: 'Ripristina', color: 'neutral', variant: 'outline', onClick: () => setArchived(false) }]"
+        :description="
+          doc.generated
+            ? `Dal ${formatDay(doc.archivedAt.slice(0, 10), 'long')}. Non è più in vigore e non si può ripristinare: quello aggiornato lo prepara il gestionale.`
+            : `Dal ${formatDay(doc.archivedAt.slice(0, 10), 'long')}. Non si può assegnare né firmare: ripristinalo per usarlo di nuovo.`
+        "
+        :actions="
+          doc.generated
+            ? []
+            : [{ label: 'Ripristina', color: 'neutral', variant: 'outline', onClick: () => setArchived(false) }]
+        "
         class="mb-8"
       />
 
@@ -234,6 +249,10 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
         </span>
         <span>{{ enumLabel('documentCategory', doc.category) }}</span>
         <span v-if="doc.session">{{ doc.session.title }}</span>
+        <span v-if="doc.generated" class="inline-flex items-center gap-1.5">
+          <UIcon name="i-lucide-file-cog" class="size-4" aria-hidden="true" />
+          Preparato e aggiornato dal gestionale
+        </span>
       </div>
 
       <IcSection
@@ -269,7 +288,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
           :title="`Ancora nessuno deve ${doc.requiresSignature ? 'firmarlo' : 'leggerlo'}`"
           description="Assegnalo a persone scelte, a tutte le famiglie, a tutto lo staff o a una sessione: ognuno riceve un’email con il link."
           :actions="
-            doc.archivedAt
+            doc.archivedAt || doc.generated
               ? []
               : [
                   {

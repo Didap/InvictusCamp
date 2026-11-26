@@ -6,8 +6,9 @@ import { join } from 'node:path'
 import { and, eq, isNull } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { familyRelease, releaseTextDto, renewReleases, saveReleaseText } from '../../server/domain/releases'
-import { assignDocument, setDocumentArchived } from '../../server/domain/signatures'
-import { makeFamily, t, useTestDb } from './helpers'
+import { requestSignatures } from '../../server/domain/signature-requests'
+import { assignDocument, documentDetail, setDocumentArchived } from '../../server/domain/signatures'
+import { makeDocument, makeFamily, t, useTestDb } from './helpers'
 
 const db = useTestDb()
 const uploadsDir = mkdtempSync(join(tmpdir(), 'invictus-release-'))
@@ -38,6 +39,16 @@ describe('release', () => {
     await expect(
       assignDocument(db, ctx, { documentId: document!.id, target: { type: 'all_families' }, actor }),
     ).rejects.toMatchObject({ statusCode: 409 })
+    // The administration sees it as the gestionale's, so it offers none of those actions.
+    const detail = await documentDetail(db, document!.id)
+    expect(detail.generated).toBe(true)
+    expect(detail.requests.map(r => r.document.generated)).toEqual([true])
+    const upload = await makeDocument(db)
+    await requestSignatures(db, { documentId: upload.id, userIds: [user.id] })
+    expect(await documentDetail(db, upload.id)).toMatchObject({
+      generated: false,
+      requests: [{ document: { generated: false } }],
+    })
 
     // Nothing changed: nothing new.
     expect(await familyRelease(db, input)).toEqual([])
