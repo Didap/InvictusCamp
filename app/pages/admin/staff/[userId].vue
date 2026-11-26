@@ -203,7 +203,7 @@ const contacts = computed(() => {
   if (!p) return []
   return [
     { label: 'Email', value: p.email },
-    { label: 'Telefono', value: p.phone },
+    { label: 'Telefono', value: p.phone, action: whatsappLink(p.phone) },
     { label: 'Account creato il', value: dayOf(p.createdAt) },
   ]
 })

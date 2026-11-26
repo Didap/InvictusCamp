@@ -19,10 +19,11 @@ const {
 const contacts = computed(() => {
   const f = family.value
   if (!f) return []
+  const phone = f.phone ?? f.referent.phone
   return [
     { label: 'Referente', value: fullName(f.referent) },
     { label: 'Email', value: f.referent.email },
-    { label: 'Telefono', value: f.phone ?? f.referent.phone },
+    { label: 'Telefono', value: phone, action: whatsappLink(phone) },
     { label: 'Indirizzo', value: f.address },
     { label: 'Città', value: formatTown(f) },
     { label: 'Regione', value: f.region },
