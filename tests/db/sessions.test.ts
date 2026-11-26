@@ -252,18 +252,18 @@ describe('life of a session (spec 3.2)', () => {
 
     const preview = (await getSessionDetail(db, session.id)).moves.find(move => move.to === 'cancelled')!
     expect(preview.emails).toBe(3)
-    expect(preview.emailsByTemplate).toEqual({ 'session.cancelled': 1, 'staff.convocation_cancelled': 2 })
+    expect(preview.emailsByTemplate).toEqual({ 'session.cancelled': 1, 'staff.session_cancelled': 2 })
 
     const result = await transitionSession(db, ctx, { sessionId: session.id, to: 'cancelled', actor })
 
     expect(sent(result.emails)).toEqual(
       [
         `session.cancelled ${family.user.email}`,
-        `staff.convocation_cancelled ${waiting.user.email}`,
-        `staff.convocation_cancelled ${accepted.user.email}`,
+        `staff.session_cancelled ${waiting.user.email}`,
+        `staff.session_cancelled ${accepted.user.email}`,
       ].sort(),
     )
-    const notice = result.emails.find(email => email.template === 'staff.convocation_cancelled')!
+    const notice = result.emails.find(email => email.template === 'staff.session_cancelled')!
     expect(notice.subject).toBe('Sessione annullata: «Sessione di prova»')
     const rows = await db.select().from(t.sessionStaff).where(eq(t.sessionStaff.sessionId, session.id))
     const statusOf = (userId: string) => rows.find(row => row.userId === userId)?.status
@@ -713,7 +713,7 @@ describe('families in a session (spec 3.3)', () => {
       participationId: waiting.participation.id,
       actor,
     })
-    expect(sent(again.emails)).toEqual([`session.invite ${waiting.user.email}`])
+    expect(sent(again.emails)).toEqual([`session.invite_reminder ${waiting.user.email}`])
     expect(again.emails[0]!.subject).toBe('Promemoria invito: Sessione di prova')
     const list = await resendInvitation(db, ctx, {
       sessionId: session.id,

@@ -17,10 +17,10 @@ export default defineEventHandler(async event => {
     const recipient = { to: user.email, toUserId: user.id, firstName: user.firstName }
     if (user.status === 'invited' || !user.passwordHash) {
       const token = await issueToken(db, user.id, 'invite')
-      await deliver(inviteEmail(emailContext(), { ...recipient, role: user.role, token }))
+      await deliver(inviteEmail(await emailContext(), { ...recipient, role: user.role, token }))
     } else {
       const token = await issueToken(db, user.id, 'reset_password')
-      await deliver(resetPasswordEmail(emailContext(), { ...recipient, token }))
+      await deliver(resetPasswordEmail(await emailContext(), { ...recipient, token }))
     }
   }
   return { ok: true }

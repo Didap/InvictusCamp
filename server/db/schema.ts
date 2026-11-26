@@ -19,6 +19,7 @@ import {
 import type { Audience, DisabilityInfo, UsefulInfo, FormAnswers, ProgrammeContent } from '../../shared/types/domain'
 import type { FeedbackArchive } from '../../shared/types/feedback'
 import type { FamilyFormContent } from '../../shared/content/family-form'
+import type { EmailTexts } from '../../shared/utils/automatic-emails'
 import type {
   ConvocationStatus,
   DocumentCategory,
@@ -756,6 +757,21 @@ export const messageTemplates = pgTable('message_templates', {
   /** Plain text; blank lines separate paragraphs. */
   body: text().notNull(),
   createdAt: createdAt(),
+  updatedAt: updatedAt(),
+})
+
+/**
+ * An automatic email the administration changed in Comunicazioni › Automatiche: switched off, or with its own
+ * texts. An email without a row leaves, with the texts of shared/utils/automatic-emails.ts.
+ */
+export const automaticEmails = pgTable('automatic_emails', {
+  /** The email's key, e.g. 'session.invite' (AUTOMATIC_EMAILS). */
+  key: text().primaryKey(),
+  /** Off: its event no longer sends it (deliver() records it as `disabled`); it can still be sent by hand. */
+  active: boolean().notNull().default(true),
+  /** The texts written in the dashboard; null keeps the defaults. */
+  texts: jsonb().$type<EmailTexts>(),
+  updatedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
   updatedAt: updatedAt(),
 })
 

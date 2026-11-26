@@ -2,6 +2,7 @@
 import { AUDIENCE_TYPE_META, AUDIENCE_TYPES, type AudienceDraft } from '#shared/schemas/communications'
 import type { Paginated } from '#shared/types/api'
 import type { CommunicationSessionOption } from '#shared/types/communications'
+import type { AudienceType } from '#shared/types/domain'
 import type { UserListItem } from '#shared/types/users'
 import { formatDayRange, fullName } from '#shared/utils/format'
 
@@ -9,12 +10,18 @@ import { formatDayRange, fullName } from '#shared/utils/format'
 // families of a session (by kind and status), the staff or v-team of a session (by team and status), chosen
 // people.
 const draft = defineModel<AudienceDraft>({ required: true })
-const props = defineProps<{ sessions: CommunicationSessionOption[] }>()
+/** `types`: the audiences offered, all of them when missing. */
+const props = defineProps<{ sessions: CommunicationSessionOption[]; types?: readonly AudienceType[] }>()
 
 const api = useApi()
 const { label, options } = useEnums()
 
-const typeItems = AUDIENCE_TYPES.map(type => ({ value: type, ...AUDIENCE_TYPE_META[type] }))
+const typeItems = computed(() =>
+  AUDIENCE_TYPES.filter(type => !props.types || props.types.includes(type)).map(type => ({
+    value: type,
+    ...AUDIENCE_TYPE_META[type],
+  })),
+)
 /** Checkboxes show the label only: an item's icon would replace the tick. */
 const plain = (name: 'participationKind' | 'participationStatus' | 'convocationStatus' | 'staffTeam') =>
   options(name).map(({ value, label }) => ({ value, label }))
@@ -99,6 +106,7 @@ function removePerson(id: string) {
 <template>
   <div class="space-y-5">
     <URadioGroup
+      v-if="typeItems.length > 1"
       v-model="draft.type"
       legend="A chi scrivi"
       :items="typeItems"

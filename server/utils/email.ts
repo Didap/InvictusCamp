@@ -5,12 +5,14 @@ import {
   claimQueuedEmails,
   hasQueueWork,
   providerRefusal,
+  recordDisabled,
   recordEmailOutcomes,
   recordUndelivered,
   recoverInterruptedEmails,
   type EmailOutcome,
   type EmailToSend,
 } from '../domain/email-quota'
+import { disabledEmailKeys, loadEmailTexts } from '../domain/automatic-emails'
 import type { EmailContext, EmailMessage } from '../emails/types'
 
 /** After a provider problem the queue waits this long, so an outage does not burn through it. */
@@ -19,9 +21,9 @@ const QUEUE_PAUSE_MS = 10 * 60 * 1000
 let resend: Resend | null = null
 let queuePausedUntil = 0
 
-/** What templates need from the configuration. */
-export function emailContext(): EmailContext {
-  return { appUrl: useRuntimeConfig().appUrl }
+/** What templates need: the app's address and the texts the administration wrote. */
+export async function emailContext(): Promise<EmailContext> {
+  return { appUrl: useRuntimeConfig().appUrl, texts: await loadEmailTexts(useDb()) }
 }
 
 export function logEmailError(label: string, error: unknown) {
@@ -93,13 +95,36 @@ async function record(outcomes: EmailOutcome[]) {
 }
 
 /**
+ * The messages whose automatic email is switched off are recorded as `disabled` and stay out; those sent by
+ * hand always leave. When the switches cannot be read nothing is held back: most emails are on, and with the
+ * database down the daily limit that follows stops them anyway.
+ */
+async function withoutDisabled(messages: EmailMessage[], report: DeliveryReport): Promise<EmailMessage[]> {
+  try {
+    const off = await disabledEmailKeys(
+      useDb(),
+      messages.filter(message => !message.manual).map(message => message.template),
+    )
+    if (!off.size) return messages
+    const held = messages.filter(message => !message.manual && off.has(message.template))
+    report.disabled = held.length
+    await recordDisabled(useDb(), held).catch(error => logEmailError('registro non aggiornato', error))
+    return messages.filter(message => message.manual || !off.has(message.template))
+  } catch (error) {
+    logEmailError('email spente non verificabili, invio di tutte', error)
+    return messages
+  }
+}
+
+/**
  * Sends the messages within the daily limit (domain/email-quota) and records every one in email_log:
- * what does not fit waits in the queue, an access email over the limit is recorded as failed. Never
- * throws. Call it after the transaction that produced the messages has committed.
+ * what does not fit waits in the queue, an access email over the limit is recorded as failed, an email
+ * switched off in Comunicazioni › Automatiche is recorded as disabled. Never throws. Call it after the
+ * transaction that produced the messages has committed.
  */
 export async function deliver(input: EmailMessage | EmailMessage[]): Promise<DeliveryReport> {
-  const messages = Array.isArray(input) ? input : [input]
-  const report: DeliveryReport = { sent: 0, failed: 0, simulated: 0, queued: 0 }
+  const report: DeliveryReport = { sent: 0, failed: 0, simulated: 0, queued: 0, disabled: 0 }
+  const messages = await withoutDisabled(Array.isArray(input) ? input : [input], report)
   if (!messages.length) return report
 
   let claim: Awaited<ReturnType<typeof claimEmailSlots>>

@@ -83,7 +83,7 @@ describe('emails of the documents area', () => {
       requestId: 'r2',
       reminder: true,
     })
-    expect(message.template).toBe('signature.reminder')
+    expect(message.template).toBe('document.read_reminder')
     expect(message.subject).toBe('Promemoria: documento da leggere, «Guida al camp»')
     expect(message.text).not.toContain('codice')
   })

@@ -5,7 +5,8 @@ import type { SessionCreated, SessionDetail, SessionMove, SessionTransitionResul
 import { DEFAULT_LOCATION, enumLabel, enumMeta, type SessionStatus, type StaffTeam } from '#shared/utils/constants'
 import { TEAM_SLUG } from '#shared/utils/routes'
 import { todayIso } from '#shared/utils/dates'
-import { formatDateTime, formatDay, formatDayRange, plural } from '#shared/utils/format'
+import { emailTemplateLabel } from '#shared/schemas/communications'
+import { andList, formatDateTime, formatDay, formatDayRange, plural } from '#shared/utils/format'
 import { SESSION_TRANSITION_ACTIONS, isSessionEditable } from '#shared/utils/session-status'
 
 // One session (docs/spec.md 3.2): the status with its valid moves, then the tabs. Every move first
@@ -77,7 +78,7 @@ const EMAIL_KINDS: Record<string, (count: number) => string> = {
   'session.cancelled': n =>
     n === 1 ? '1 avviso di annullamento a una famiglia' : `${n} avvisi di annullamento alle famiglie`,
   'session.feedback': n => (n === 1 ? '1 questionario a una famiglia' : `${n} questionari alle famiglie`),
-  'staff.convocation_cancelled': n => (n === 1 ? '1 avviso a una persona dello staff' : `${n} avvisi allo staff`),
+  'staff.session_cancelled': n => (n === 1 ? '1 avviso a una persona dello staff' : `${n} avvisi allo staff`),
 }
 
 function emailsSentence(move: SessionMove): string {
@@ -116,6 +117,14 @@ function moveNotes(move: SessionMove, s: SessionDetail): string[] {
     }
   }
   notes.push(emailsSentence(move))
+  if (move.emailsOff.length) {
+    const names = andList(move.emailsOff.map(template => `«${emailTemplateLabel(template)}»`))
+    notes.push(
+      move.emailsOff.length === 1
+        ? `L’email ${names} è spenta in Comunicazioni › Automatiche: non parte.`
+        : `Le email ${names} sono spente in Comunicazioni › Automatiche: non partono.`,
+    )
+  }
   if (move.to === 'inviting' && !s.responseDeadline) {
     notes.push('Non hai indicato entro quando rispondere: puoi aggiungerlo prima, con «Modifica».')
   }

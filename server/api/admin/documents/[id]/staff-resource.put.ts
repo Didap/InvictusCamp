@@ -6,12 +6,13 @@ export default defineEventHandler(async event => {
   const admin = await requireAdmin(event)
   const documentId = requireUuidParam(event, 'id')
   const input = await parseBody(event, staffResourceSchema)
+  const emailCtx = await emailContext()
   const { result, messages } = await useDb().transaction(tx =>
     setStaffResource(tx, {
       documentId,
       mode: input.mode,
       dryRun: input.dryRun,
-      ctx: emailContext(),
+      ctx: emailCtx,
       actor: { userId: admin.id, ip: clientIp(event) },
     }),
   )

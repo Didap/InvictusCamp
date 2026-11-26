@@ -6,10 +6,11 @@ import type { ReleaseRenewResult } from '#shared/types/families'
 export default defineEventHandler(async (event): Promise<ReleaseRenewResult> => {
   const admin = await requireAdmin(event)
   const { revision } = await parseBody(event, releaseRenewSchema)
+  const emailCtx = await emailContext()
   const { renewed, emails } = await useDb().transaction(tx =>
     renewReleases(tx, {
       revision,
-      ctx: emailContext(),
+      ctx: emailCtx,
       uploadsDir: uploadsDir(),
       actor: { userId: admin.id, ip: clientIp(event) },
     }),

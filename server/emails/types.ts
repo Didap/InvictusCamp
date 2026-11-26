@@ -1,7 +1,11 @@
+import type { EmailTextsByKey } from '../../shared/utils/automatic-emails'
+
 /** What a template needs besides its own data. */
 export interface EmailContext {
   /** Public address of the app, for links. */
   appUrl: string
+  /** The texts the administration changed (Comunicazioni › Automatiche); the others use their defaults. */
+  texts?: EmailTextsByKey
 }
 
 /** A rendered email, ready for deliver() (server/utils/email.ts). Domain functions return these. */
@@ -19,4 +23,6 @@ export interface EmailMessage {
   sensitive?: boolean
   /** Printed in the dev console when the email is simulated (the link or code of an access email). */
   devNote?: string
+  /** Sent by hand by the administration: it leaves even when its automatic email is switched off. */
+  manual?: boolean
 }

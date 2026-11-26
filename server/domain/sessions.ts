@@ -73,6 +73,7 @@ import {
   type SessionEmailTemplate,
 } from '../emails/sessions'
 import type { EmailContext, EmailMessage } from '../emails/types'
+import { disabledEmailKeys } from './automatic-emails'
 import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
@@ -336,6 +337,16 @@ export async function listSessions(
 }
 
 /** A titolare who confirmed: the session is confirmed to it and, once it is over, it gets the questionnaire. */
+/** Every email a status move can send. */
+const SESSION_MOVE_EMAILS = [
+  'session.invite',
+  'session.reserve',
+  'session.confirmed',
+  'session.feedback',
+  'session.cancelled',
+  'staff.session_cancelled',
+]
+
 const cameToSession = (row: Pick<ParticipationRow, 'kind' | 'status'>) =>
   row.kind === 'slot' && row.status === 'confirmed'
 
@@ -381,25 +392,31 @@ function canReceive(row: Pick<ParticipationRow, 'userStatus'>): boolean {
   return row.userStatus !== 'disabled'
 }
 
-/** `staffNotices`: the staff emails of a cancellation (sessionConvocationNotices). */
+/**
+ * `staffNotices`: the staff emails of a cancellation (sessionConvocationNotices). `off`: the automatic emails
+ * switched off, which the move does not send (`emailsOff` says which).
+ */
 function movesOf(
   session: SessionRow,
   rows: ParticipationRow[],
   staffNotices: number,
   questionnaire: boolean,
+  off: ReadonlySet<string>,
 ): SessionMove[] {
   return SESSION_TRANSITIONS[session.status].map(to => {
-    const recipients = transitionRecipients(to, rows, questionnaire).filter(r => canReceive(r.row))
-    const emailsByTemplate: Record<string, number> = {}
-    for (const { template } of recipients) emailsByTemplate[template] = (emailsByTemplate[template] ?? 0) + 1
-    const staffEmails = to === 'cancelled' ? staffNotices : 0
-    if (staffEmails) emailsByTemplate['staff.convocation_cancelled'] = staffEmails
+    const counts: Record<string, number> = {}
+    for (const { template } of transitionRecipients(to, rows, questionnaire).filter(r => canReceive(r.row))) {
+      counts[template] = (counts[template] ?? 0) + 1
+    }
+    if (to === 'cancelled' && staffNotices) counts['staff.session_cancelled'] = staffNotices
+    const emailsByTemplate = Object.fromEntries(Object.entries(counts).filter(([template]) => !off.has(template)))
     return {
       to,
       label: SESSION_TRANSITION_ACTIONS[to],
       effect: SESSION_TRANSITION_EFFECTS[to],
-      emails: recipients.length + staffEmails,
+      emails: Object.values(emailsByTemplate).reduce((sum, count) => sum + count, 0),
       emailsByTemplate,
+      emailsOff: Object.keys(counts).filter(template => off.has(template)),
     }
   })
 }
@@ -435,6 +452,7 @@ export async function getSessionDetail(db: DbOrTx, sessionId: string): Promise<S
       participations,
       canTransition(row.status, 'cancelled') ? await sessionConvocationNotices(db, row.id) : 0,
       canTransition(row.status, 'completed') && (await opensQuestionnaire(db, row, participations)),
+      await disabledEmailKeys(db, SESSION_MOVE_EMAILS),
     ),
     deletable: row.status === 'draft' && participations.length === 0 && (convocations?.count ?? 0) === 0,
   }

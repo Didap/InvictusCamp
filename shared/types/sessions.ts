@@ -74,6 +74,8 @@ export interface SessionMove {
   emails: number
   /** The same emails by template, e.g. { 'session.invite': 5, 'session.reserve': 2 }. */
   emailsByTemplate: Record<string, number>
+  /** The automatic emails the move would send but are switched off (Comunicazioni › Automatiche). */
+  emailsOff: string[]
 }
 
 /** GET /api/admin/sessions/:id */

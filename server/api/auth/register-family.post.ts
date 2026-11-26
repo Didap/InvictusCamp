@@ -54,7 +54,7 @@ export default defineEventHandler(async event => {
       throw isUniqueViolation(error) ? duplicateEmail() : error
     })
   await deliver(
-    verifyEmailEmail(emailContext(), { to: user.email, toUserId: user.id, firstName: user.firstName, token }),
+    verifyEmailEmail(await emailContext(), { to: user.email, toUserId: user.id, firstName: user.firstName, token }),
   )
   await audit(event, {
     actorUserId: user.id,

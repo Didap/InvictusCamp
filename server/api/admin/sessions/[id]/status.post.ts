@@ -7,9 +7,10 @@ export default defineEventHandler(async (event): Promise<SessionTransitionResult
   const admin = await requireAdmin(event)
   const sessionId = requireUuidParam(event, 'id')
   const { to } = await parseBody(event, sessionTransitionSchema)
+  const ctx = await emailContext()
   const result = await useDb().transaction(tx =>
-    transitionSession(tx, emailContext(), { sessionId, to, actor: { userId: admin.id, ip: clientIp(event) } }),
+    transitionSession(tx, ctx, { sessionId, to, actor: { userId: admin.id, ip: clientIp(event) } }),
   )
-  await deliver(result.emails)
-  return { from: result.from, to: result.to, emails: result.emails.length }
+  const report = await deliver(result.emails)
+  return { from: result.from, to: result.to, emails: result.emails.length - report.disabled }
 })

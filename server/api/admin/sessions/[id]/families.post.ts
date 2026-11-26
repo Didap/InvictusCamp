@@ -11,8 +11,9 @@ export default defineEventHandler(async (event): Promise<AddFamiliesResult> => {
   const admin = await requireAdmin(event)
   const sessionId = requireUuidParam(event, 'id')
   const { familyIds, kind } = await parseBody(event, addFamiliesSchema)
+  const ctx = await emailContext()
   const result = await useDb().transaction(tx =>
-    addFamilies(tx, emailContext(), {
+    addFamilies(tx, ctx, {
       sessionId,
       familyIds,
       kind,

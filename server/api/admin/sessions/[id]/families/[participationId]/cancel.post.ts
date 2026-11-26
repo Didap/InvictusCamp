@@ -6,13 +6,14 @@ export default defineEventHandler(async (event): Promise<ParticipationActionResu
   const admin = await requireAdmin(event)
   const sessionId = requireUuidParam(event, 'id')
   const participationId = requireUuidParam(event, 'participationId')
+  const ctx = await emailContext()
   const result = await useDb().transaction(tx =>
-    cancelParticipation(tx, emailContext(), {
+    cancelParticipation(tx, ctx, {
       sessionId,
       participationId,
       actor: { userId: admin.id, ip: clientIp(event) },
     }),
   )
-  await deliver(result.emails)
-  return { emails: result.emails.length }
+  const report = await deliver(result.emails)
+  return { emails: result.emails.length - report.disabled }
 })

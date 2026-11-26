@@ -6,7 +6,7 @@ import { renderEmail } from './layout'
 import type { EmailContext, EmailMessage } from './types'
 
 /** Stands for a line break inside a paragraph while the layout escapes the text. */
-const LINE_BREAK = '\u2028'
+export const LINE_BREAK = '\u2028'
 
 /** Paragraphs of a plain text body; lines inside a paragraph are joined by LINE_BREAK. */
 export function bodyParagraphs(body: string): string[] {

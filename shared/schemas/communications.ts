@@ -14,6 +14,7 @@ import {
   type ParticipationStatus,
   type StaffTeam,
 } from '../utils/constants'
+import { AUTOMATIC_EMAIL_KEYS, AUTOMATIC_EMAILS } from '../utils/automatic-emails'
 import { orList, plural } from '../utils/format'
 import { fieldIssue, messageIssue } from '../utils/message-fields'
 import { blankAsMissing, zListQuery, zRequiredText, zText } from './common'
@@ -145,29 +146,12 @@ export const emailLogQuery = zListQuery.extend({
 })
 export type EmailLogQuery = z.infer<typeof emailLogQuery>
 
-/** What each template is, in the log. Keys come from the email templates (docs/spec.md, 4). */
+/** What each template is, in the log: the automatic emails, then the keys that only older rows carry. */
 export const EMAIL_TEMPLATE_LABELS: Record<string, string> = {
-  'auth.invite': 'Invito all’accesso',
-  'auth.verify_email': 'Conferma dell’indirizzo',
-  'auth.reset_password': 'Reimpostazione della password',
-  'session.invite': 'Invito alla sessione',
-  'session.reserve': 'Lista di riserva',
-  'session.slot_offered': 'Posto liberato',
-  'session.confirmed': 'Sessione confermata',
-  'session.cancelled': 'Sessione annullata',
-  'session.removed': 'Rimozione dalla sessione',
-  'session.feedback': 'Questionario di fine sessione',
-  'family.age_notice': 'Fascia d’età dei ragazzi',
-  'staff.convocation': 'Convocazione',
-  'staff.convocation_cancelled': 'Convocazione annullata',
-  'staff.availability_reopened': 'Disponibilità riaperta',
-  'staff.approved': 'Candidatura approvata',
-  'staff.rejected': 'Esito della candidatura',
-  'signature.request': 'Documento da firmare',
-  'signature.reminder': 'Promemoria di firma',
-  'signature.otp': 'Codice di firma',
-  'signature.signed': 'Firma completata',
+  ...Object.fromEntries(AUTOMATIC_EMAIL_KEYS.map(key => [key, AUTOMATIC_EMAILS[key].label])),
   communication: 'Comunicazione',
+  // Before the invitation had one text per role.
+  'auth.invite': 'Invito all’accesso',
 }
 
 export function emailTemplateLabel(template: string): string {

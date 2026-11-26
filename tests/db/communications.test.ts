@@ -349,7 +349,7 @@ describe('accounts', () => {
     expect(members).toMatchObject([{ firstName: 'Anna', isReferent: true }])
     const tokens = await db.select().from(t.authTokens).where(eq(t.authTokens.userId, user.id))
     expect(tokens).toMatchObject([{ purpose: 'invite', usedAt: null }])
-    expect(messages).toMatchObject([{ template: 'auth.invite', to: 'anna.verdi@test.local', sensitive: true }])
+    expect(messages).toMatchObject([{ template: 'auth.invite_family', to: 'anna.verdi@test.local', sensitive: true }])
     const [entry] = await db.select().from(t.auditLog).where(eq(t.auditLog.entityId, user.id))
     expect(entry).toMatchObject({ action: 'user.invite', actorUserId: admin.id })
   })
@@ -379,7 +379,7 @@ describe('accounts', () => {
     const invited = await makeUser(db, { status: 'invited', emailVerifiedAt: null })
     await issueToken(db, invited.id, 'invite')
     const { messages } = await resendInvite(db, ctx, invited.id, { userId: admin.id })
-    expect(messages).toMatchObject([{ template: 'auth.invite' }])
+    expect(messages).toMatchObject([{ template: expect.stringMatching(/^auth\.invite_/) }])
     const open = await db
       .select()
       .from(t.authTokens)
@@ -421,7 +421,7 @@ describe('accounts', () => {
     ])
     const invited = await makeUser(db, { status: 'invited', emailVerifiedAt: null })
     expect((await sendPasswordReset(db, ctx, invited.id, { userId: admin.id })).messages).toMatchObject([
-      { template: 'auth.invite' },
+      { template: expect.stringMatching(/^auth\.invite_/) },
     ])
     const disabled = await makeUser(db, { status: 'disabled', passwordHash: 'hash' })
     await expect(sendPasswordReset(db, ctx, disabled.id, { userId: admin.id })).rejects.toMatchObject({
@@ -478,7 +478,15 @@ describe('reading', () => {
       })),
     )
     const detail = await getCommunication(db, sent.communicationId)
-    expect(detail.delivery).toEqual({ sent: 0, failed: 1, simulated: 0, queued: 0, sending: 0, withdrawn: 0 })
+    expect(detail.delivery).toEqual({
+      sent: 0,
+      failed: 1,
+      simulated: 0,
+      queued: 0,
+      sending: 0,
+      withdrawn: 0,
+      disabled: 0,
+    })
     expect(detail.recipients).toMatchObject([
       { userId: anna.user.id, status: 'failed', error: 'Indirizzo inesistente' },
     ])

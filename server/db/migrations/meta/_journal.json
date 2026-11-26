@@ -225,6 +225,13 @@
       "when": 1795681393640,
       "tag": "0031_staff_resources",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795688959914,
+      "tag": "0032_automatic_emails",
+      "breakpoints": true
     }
   ]
 }

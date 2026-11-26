@@ -44,6 +44,7 @@ const TABLES = [
   'feedback_archives',
   'feedback_responses',
   'communications',
+  'automatic_emails',
   'personal_documents',
   'signature_requests',
   'session_staff',

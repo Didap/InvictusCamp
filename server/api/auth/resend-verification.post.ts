@@ -13,7 +13,7 @@ export default defineEventHandler(async event => {
   if (user && user.status === 'active' && user.passwordHash && !user.emailVerifiedAt) {
     const token = await issueToken(db, user.id, 'verify_email')
     await deliver(
-      verifyEmailEmail(emailContext(), { to: user.email, toUserId: user.id, firstName: user.firstName, token }),
+      verifyEmailEmail(await emailContext(), { to: user.email, toUserId: user.id, firstName: user.firstName, token }),
     )
   }
   return { ok: true }

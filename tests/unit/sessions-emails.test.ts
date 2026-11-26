@@ -36,13 +36,13 @@ describe('session emails', () => {
   it('use the documented templates and subjects, tied to the session', () => {
     expect(all.map(email => [email.template, email.subject])).toEqual([
       ['session.invite', `Invito: ${session.title}`],
-      ['session.invite', `Promemoria invito: ${session.title}`],
+      ['session.invite_reminder', `Promemoria invito: ${session.title}`],
       ['session.reserve', `Lista di riserva: ${session.title}`],
       ['session.slot_offered', `Si è liberato un posto: ${session.title}`],
       ['session.confirmed', `Sessione confermata: ${session.title}`],
       ['session.cancelled', `Sessione annullata: ${session.title}`],
       ['session.removed', `Partecipazione annullata: ${session.title}`],
-      ['session.removed', `Partecipazione annullata: ${session.title}`],
+      ['session.reserve_removed', `Partecipazione annullata: ${session.title}`],
       ['session.feedback', `Com’è andata? ${session.title}`],
     ])
     for (const email of all) {
@@ -55,7 +55,7 @@ describe('session emails', () => {
     const withDeadline = all.filter(email => email.text.includes('Rispondi entro: 15 maggio 2027'))
     expect(withDeadline.map(email => email.template)).toEqual([
       'session.invite',
-      'session.invite',
+      'session.invite_reminder',
       'session.slot_offered',
     ])
     expect(all[0]!.text).toContain('https://gestionale.example.it/famiglia/sessioni')
