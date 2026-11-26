@@ -11,27 +11,23 @@ import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { DomainError } from './errors'
 import { requestSignatures } from './signature-requests'
-import { assignDocument } from './signatures'
+import { CANCELLED_REQUEST, assertNotGenerated, assignDocument, requireDocument } from './signatures'
+import { toFileDto } from './staff'
 import type { Actor } from './users'
 
 const NOT_FOUND = 'Documento non trovato'
 const STAFF_AREA = STAFF_STATUSES.filter(inStaffArea)
 
-/**
- * Puts a document in the «Risorse utili» (or takes it out). To accept: every approved person not asked yet gets the
- * request and its email (`dryRun` only counts them, as the assignment does); choosing it again asks whoever is missing.
- * Leaving «accept» cancels the staff's requests still to answer.
- */
+/** Puts a document in the «Risorse utili» (or takes it out); `dryRun` only counts the emails, as the assignment. */
 export async function setStaffResource(
   db: DbOrTx,
   input: { documentId: string; mode: StaffResourceMode | null; dryRun?: boolean; ctx: EmailContext; actor: Actor },
 ): Promise<{ result: AssignResult | null; messages: EmailMessage[] }> {
-  const [document] = await db.select().from(documents).where(eq(documents.id, input.documentId)).for('update')
-  if (!document) throw new DomainError(404, NOT_FOUND)
-  if (document.familyId || document.staffUserId) {
-    throw new DomainError(409, 'È un documento preparato dal gestionale per una persona: non va tra le risorse')
-  }
+  const document = await requireDocument(db, input.documentId, 'update')
+  assertNotGenerated(document)
   if (document.archivedAt && input.mode) throw new DomainError(409, 'Il documento è archiviato: ripristinalo prima')
+  const unchanged = { result: null, messages: [] }
+  if (document.staffResource === input.mode) return unchanged
   const asked =
     input.mode === 'accept'
       ? await assignDocument(db, input.ctx, {
@@ -40,12 +36,12 @@ export async function setStaffResource(
           dryRun: input.dryRun,
           actor: input.actor,
         })
-      : { result: null, messages: [] }
-  if (input.dryRun || document.staffResource === input.mode) return asked
+      : unchanged
+  if (input.dryRun) return asked
   if (document.staffResource === 'accept') {
     await db
       .update(signatureRequests)
-      .set({ status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 })
+      .set(CANCELLED_REQUEST)
       .where(
         and(
           eq(signatureRequests.documentId, document.id),
@@ -66,10 +62,7 @@ export async function setStaffResource(
   return asked
 }
 
-/**
- * «Leggi e accetta» on a resource: the person's request, made (or reopened) now if missing, without an email. Returns
- * its id, for /firma.
- */
+/** «Leggi il documento» on a resource without a request yet: made (or reopened) now, no email; its id, for /firma. */
 export async function openStaffResource(db: DbOrTx, input: { userId: string; documentId: string }): Promise<string> {
   const [document] = await db
     .select({ id: documents.id })
@@ -77,7 +70,8 @@ export async function openStaffResource(db: DbOrTx, input: { userId: string; doc
     .where(and(eq(documents.id, input.documentId), eq(documents.staffResource, 'accept'), isNull(documents.archivedAt)))
     .for('share')
   if (!document) throw new DomainError(404, NOT_FOUND)
-  await requestSignatures(db, { documentId: document.id, userIds: [input.userId] })
+  const [created] = await requestSignatures(db, { documentId: document.id, userIds: [input.userId] })
+  if (created) return created.id
   const [request] = await db
     .select({ id: signatureRequests.id })
     .from(signatureRequests)
@@ -97,6 +91,7 @@ export async function myStaffResources(db: DbOrTx, userId: string): Promise<MySt
         eq(signatureRequests.documentId, documents.id),
         eq(signatureRequests.userId, userId),
         ne(signatureRequests.status, 'cancelled'),
+        eq(documents.staffResource, 'accept'),
       ),
     )
     .where(and(isNotNull(documents.staffResource), isNull(documents.archivedAt)))
@@ -107,18 +102,9 @@ export async function myStaffResources(db: DbOrTx, userId: string): Promise<MySt
     description: document.description,
     category: document.category,
     mode: document.staffResource!,
-    file: {
-      id: file.id,
-      originalName: file.originalName,
-      mimeType: file.mimeType,
-      sizeBytes: file.sizeBytes,
-      createdAt: file.createdAt.toISOString(),
-    },
+    file: toFileDto(file),
     requiresSignature: document.requiresSignature,
-    request:
-      document.staffResource === 'accept' && request
-        ? { id: request.id, status: request.status, signedAt: request.signedAt?.toISOString() ?? null }
-        : null,
+    request: request && { id: request.id, status: request.status, signedAt: request.signedAt?.toISOString() ?? null },
   }))
 }
 

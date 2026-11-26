@@ -26,6 +26,8 @@ const toConsult = computed(() => resources.value.filter(r => r.mode === 'consult
 
 const opening = ref<string | null>(null)
 async function open(r: MyStaffResource) {
+  // Asked already (the usual case): straight to the signing page; otherwise the request is made first.
+  if (r.request) return navigateTo(`/firma/${r.request.id}`)
   opening.value = r.id
   try {
     const url: string = `/api/staff/resources/${r.id}`

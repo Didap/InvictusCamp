@@ -1,10 +1,7 @@
 import { staffResourceSchema } from '#shared/schemas/documents'
 import { setStaffResource } from '~~/server/domain/staff-resources'
 
-/**
- * Puts the document in the «Risorse utili» of staff and v-team (to accept: as «Assegna → tutto lo staff», one email
- * to each approved person not asked yet), or takes it out. With `dryRun` it only counts (the confirmation's numbers).
- */
+/** The document in the «Risorse utili» of staff and v-team, or not (spec 3.6). */
 export default defineEventHandler(async event => {
   const admin = await requireAdmin(event)
   const documentId = requireUuidParam(event, 'id')

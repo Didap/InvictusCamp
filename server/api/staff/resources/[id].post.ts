@@ -1,6 +1,6 @@
 import { openStaffResource } from '../../../domain/staff-resources'
 
-/** «Leggi e accetta»: the person's request for a resource to accept, made now if missing (no email). */
+/** The person's request for a resource to accept (spec 3.6). */
 export default defineEventHandler(async event => {
   const { user } = await requireStaff(event)
   const documentId = requireUuidParam(event, 'id')
