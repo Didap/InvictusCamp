@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ProgrammeSaveInput } from '#shared/schemas/programmes'
 import type { SessionProgrammeDto } from '#shared/types/programmes'
+import { datesMismatch } from '#shared/utils/programme'
 
 // The Programma tab of a session: the programme of its year (read here, edited in /admin/programma),
 // or a copy of its own, edited here and valid for this session only.
@@ -46,6 +47,21 @@ async function dropCopy() {
   }
 }
 
+/**
+ * The alert of a session on the year's programme. When the dates do not fit it (a weekend on the year's
+ * five days), it says why and to make a copy, where the editor fixes the days.
+ */
+const yearDescription = computed(() => {
+  if (!data.value?.programme) return ''
+  const { year, dates, editable, programme } = data.value
+  const everywhere = `Le modifiche al programma del ${year} valgono per tutte le sessioni dell’anno senza una copia.`
+  if (!editable) return everywhere
+  const mismatch = datesMismatch(programme.content, dates)
+  return mismatch
+    ? `${mismatch}: crea una copia solo per questa sessione e sistemane i giorni. ${everywhere}`
+    : `${everywhere} Se questa sessione ha bisogno di qualcosa di diverso, crea una copia solo per lei.`
+})
+
 async function save(body: ProgrammeSaveInput) {
   const target: string = url.value
   data.value = await api<SessionProgrammeDto>(target, { method: 'PUT', body })
@@ -79,11 +95,7 @@ async function save(body: ProgrammeSaveInput) {
         variant="subtle"
         icon="i-lucide-calendar-clock"
         :title="`Questa sessione usa il programma del ${data.year}`"
-        :description="
-          data.editable
-            ? `Le modifiche al programma del ${data.year} valgono per tutte le sessioni dell’anno senza una copia. Se questa sessione ha bisogno di qualcosa di diverso, crea una copia solo per lei.`
-            : `Le modifiche al programma del ${data.year} valgono per tutte le sessioni dell’anno senza una copia.`
-        "
+        :description="yearDescription"
         :actions="[
           {
             label: `Modifica il programma del ${data.year}`,

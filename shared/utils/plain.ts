@@ -24,6 +24,12 @@ function canonical(value: unknown): string {
   )
 }
 
+/** Moves the item at `index` by `by` places (-1 one up, 1 one down) in place. */
+export function moveAt<T>(list: T[], index: number, by: number): void {
+  const [item] = list.splice(index, 1)
+  list.splice(index + by, 0, item!)
+}
+
 /** The keys whose values differ between two records, whatever their fields (null and missing are the same). */
 export function changedKeys(before: object | null, after: object | null): string[] {
   const a: Record<string, unknown> = { ...before }

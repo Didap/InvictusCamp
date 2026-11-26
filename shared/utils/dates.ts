@@ -75,6 +75,9 @@ export function monthBounds(day: IsoDay): DayRange {
   return { startDate: `${year}-${mm}-01`, endDate: `${year}-${mm}-${String(last).padStart(2, '0')}` }
 }
 
+/** The names of the week's days, Monday first, as weekdayIndex counts them. */
+export const WEEKDAY_NAMES = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
+
 /** Day of the week, Monday = 0 … Sunday = 6. */
 export function weekdayIndex(day: IsoDay): number {
   return (new Date(toUtc(day)).getUTCDay() + 6) % 7

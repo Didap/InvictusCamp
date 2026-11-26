@@ -4,7 +4,7 @@ import { dayCaptions } from '#shared/utils/programme'
 
 // The week to read, one day after the other (the same at 390px and on a desktop): families, staff and
 // a session whose programme is no longer edited. `dates`: the days of the session, shown next to each
-// day when the session is as long as the programme. The editor shows the week as a board instead.
+// day when they fit (datesFit). The editor shows the week as a board instead.
 const props = defineProps<{ content: ProgrammeContent; dates?: string[] }>()
 const captions = computed(() => dayCaptions(props.content, props.dates))
 </script>

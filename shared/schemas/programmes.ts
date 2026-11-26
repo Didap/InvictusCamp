@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import type { ProgrammeGroupTurn } from '../types/domain'
 import { PROGRAMME_BLOCK_KINDS, PROGRAMME_GROUPS, type ProgrammeGroup } from '../utils/constants'
+import { dayNameKey } from '../utils/programme'
 import { zOptionalText, zRequiredText, zText } from './common'
 
-const MAX_PROGRAMME_DAYS = 14
+export const MAX_PROGRAMME_DAYS = 14
 const MAX_BLOCKS_PER_DAY = 30
 export const MAX_ACTIVITIES = 20
 /** The years a programme can be made for. */
@@ -65,6 +66,10 @@ const programmeDaySchema = z.object({
     .max(MAX_BLOCKS_PER_DAY, { error: `Al massimo ${MAX_BLOCKS_PER_DAY} blocchi al giorno` }),
 })
 
+/** The name and the subtitle of a day (the form of the day editor). */
+export const programmeDayNameSchema = programmeDaySchema.pick({ name: true, subtitle: true })
+export type ProgrammeDayNameValues = z.output<typeof programmeDayNameSchema>
+
 /** The whole week (programmes.content). */
 export const programmeContentSchema = z
   .object({
@@ -74,6 +79,10 @@ export const programmeContentSchema = z
   .superRefine((content, ctx) => {
     const ids = content.days.flatMap(day => [day.id, ...day.blocks.map(block => block.id)])
     if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', message: 'Due elementi hanno lo stesso id' })
+    const days = content.days.map(day => dayNameKey(day.name))
+    if (new Set(days).size !== days.length) {
+      ctx.addIssue({ code: 'custom', message: 'Due giorni hanno lo stesso nome', path: ['days'] })
+    }
     const names = content.activities.map(activity => activity.toLowerCase())
     if (new Set(names).size !== names.length) {
       ctx.addIssue({ code: 'custom', message: 'Un’attività compare due volte', path: ['activities'] })

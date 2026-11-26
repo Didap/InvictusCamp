@@ -11,7 +11,7 @@ import {
 import type { FamilyFormDto, FamilyFormSaveResult } from '#shared/types/families'
 import { enumLabel } from '#shared/utils/constants'
 import { plural } from '#shared/utils/format'
-import { copyOf, newId, sameContent } from '#shared/utils/plain'
+import { copyOf, moveAt, newId, sameContent } from '#shared/utils/plain'
 import { answerFields, type AnswerFields } from '~/utils/family-form'
 import type { EditedQuestion } from './FormQuestionModal.vue'
 
@@ -136,8 +136,7 @@ function addSection() {
 }
 
 function moveSection(index: number, by: number) {
-  const [section] = draft.value.splice(index, 1)
-  draft.value.splice(index + by, 0, section!)
+  moveAt(draft.value, index, by)
 }
 
 const hasLocked = (section: FormSection) => section.questions.some(question => lockedReason(question.id))

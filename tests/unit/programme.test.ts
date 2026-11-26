@@ -10,6 +10,9 @@ import {
   blockTime,
   canFamilyReadProgramme,
   dayCaptions,
+  datesMismatch,
+  nextDayName,
+  weekdayOfName,
   groupRotation,
   moveBlock,
   openPoints,
@@ -177,7 +180,7 @@ describe('editor helpers', () => {
     expect(canFamilyReadProgramme('declined', 'confirmed')).toBe(false)
   })
 
-  it('captions the days with the dates only for a session that starts on Monday and is long enough', () => {
+  it('captions the days with the dates only when they fall on the weekdays the days are named after', () => {
     const week = emptyWeek()
     week.days[0]!.subtitle = 'Arrivo'
     const seven = ['2027-06-21', '2027-06-22', '2027-06-23', '2027-06-24', '2027-06-25', '2027-06-26', '2027-06-27']
@@ -188,6 +191,54 @@ describe('editor helpers', () => {
     expect(dayCaptions(week, seven.slice(0, 3))).toEqual(undated)
     expect(dayCaptions(week, ['2027-06-20', ...seven.slice(0, 5)])).toEqual(undated)
     expect(dayCaptions(week, undefined)).toEqual(undated)
+
+    // A weekend from Friday: dated on a Friday-to-Sunday session, not on a week.
+    const weekend: ProgrammeContent = {
+      days: ['Venerdì', 'Sabato', 'domenica'].map(name => ({ id: name, name, subtitle: '', blocks: [] })),
+      activities: [],
+    }
+    const friday = ['2027-04-16', '2027-04-17', '2027-04-18']
+    expect(dayCaptions(weekend, friday)).toEqual(friday.map(day => formatDay(day, 'long')))
+    expect(dayCaptions(weekend, seven)).toEqual(['', '', ''])
+    // Days named otherwise take any dates; one weekday name among them still has to match.
+    const free: ProgrammeContent = {
+      ...weekend,
+      days: weekend.days.map((day, i) => ({ ...day, name: `Giorno ${i + 1}` })),
+    }
+    expect(dayCaptions(free, seven)[0]).toBe(formatDay(seven[0]!, 'long'))
+    free.days[2]!.name = 'Sabato sera'
+    expect(dayCaptions(free, seven)).toEqual(['', '', ''])
+    expect(dayCaptions(free, ['2027-06-24', ...seven.slice(4)])[2]).toBe(formatDay('2027-06-26', 'long'))
+
+    // The reason the editor and the session's tab give.
+    expect(datesMismatch(weekend, friday)).toBe('')
+    expect(datesMismatch(weekend, undefined)).toBe('')
+    expect(datesMismatch(week, friday)).toBe('La sessione dura 3 giorni e il programma ne ha 5')
+    expect(datesMismatch(weekend, seven)).toBe(
+      'La sessione comincia di lunedì e i nomi dei giorni non cadono nelle sue date',
+    )
+  })
+
+  it('reads the weekday of a day name and suggests the name of the next day', () => {
+    expect(['Lunedì', 'lunedi', 'MERCOLEDÌ pomeriggio', 'Domenica'].map(weekdayOfName)).toEqual([0, 0, 2, 6])
+    expect(['Giorno 1', 'Arrivo', '', 'Lunedìssimo'].map(weekdayOfName)).toEqual([-1, -1, -1, -1])
+    const week = emptyWeek()
+    expect(nextDayName(week.days)).toBe('Sabato')
+    week.days[4]!.name = 'Domenica'
+    expect(nextDayName(week.days)).toBe('')
+    week.days[4]!.name = 'Arrivo'
+    expect(nextDayName(week.days)).toBe('Giorno 6')
+    week.days[4]!.name = 'Giorno 2'
+    expect(nextDayName(week.days)).toBe('Giorno 3')
+    expect(nextDayName([])).toBe('Giorno 1')
+  })
+
+  it('refuses two days with the same name, accents and case aside', () => {
+    const week = emptyWeek()
+    expect(programmeContentSchema.safeParse(week).success).toBe(true)
+    week.days[4]!.name = 'giovedi'
+    const result = programmeContentSchema.safeParse(week)
+    expect(result.error?.issues.map(issue => issue.message)).toEqual(['Due giorni hanno lo stesso nome'])
   })
 })
 

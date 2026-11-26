@@ -1,5 +1,5 @@
 // Pure helpers of the week programme (docs/spec.md 3.10), shared by the editor and the read-only week.
-import type { ProgrammeBlock, ProgrammeContent } from '../types/domain'
+import type { ProgrammeBlock, ProgrammeContent, ProgrammeDay } from '../types/domain'
 import {
   PROGRAMME_GROUPS,
   type ConvocationStatus,
@@ -7,8 +7,8 @@ import {
   type ProgrammeGroup,
   type SessionStatus,
 } from './constants'
-import { weekdayIndex } from './dates'
-import { formatDay } from './format'
+import { weekdayIndex, WEEKDAY_NAMES } from './dates'
+import { formatDay, plural } from './format'
 
 /** A family reads the programme of a session it is invited to or confirmed in, unless cancelled. */
 export function canFamilyReadProgramme(participation: ParticipationStatus, session: SessionStatus): boolean {
@@ -109,14 +109,55 @@ export function openPoints(content: ProgrammeContent): OpenPoint[] {
   )
 }
 
+/** A day's name as two names compare: without accents and case ("Venerdi" is "Venerdì"). */
+export function dayNameKey(name: string): string {
+  return name.trim().normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+}
+
+/** Whether another day of the week (not `exceptId`) already has this name: two days never share one. */
+export function dayNameTaken(days: Pick<ProgrammeDay, 'id' | 'name'>[], name: string, exceptId?: string): boolean {
+  const key = dayNameKey(name)
+  return days.some(day => day.id !== exceptId && dayNameKey(day.name) === key)
+}
+
+const weekdayKeys = WEEKDAY_NAMES.map(dayNameKey)
+
+/** The weekday a day's name starts with ("Sabato", "venerdi sera": 5, 4), or -1 ("Giorno 1", "Arrivo"). */
+export function weekdayOfName(name: string): number {
+  return weekdayKeys.indexOf(dayNameKey(name).split(/\s+/)[0]!)
+}
+
+/** The name to suggest for a day added after the last one: the next weekday, or "Giorno N". */
+export function nextDayName(days: Pick<ProgrammeDay, 'id' | 'name'>[]): string {
+  const last = days.at(-1)?.name ?? ''
+  const weekday = weekdayOfName(last)
+  const number = Number(/^giorno (\d+)$/i.exec(last.trim())?.[1] ?? days.length)
+  const name = weekday < 0 ? `Giorno ${number + 1}` : WEEKDAY_NAMES[(weekday + 1) % 7]!
+  return dayNameTaken(days, name) ? '' : name
+}
+
 /**
- * What follows each day's name: "21 giugno 2027 · Arrivo", the date, then the subtitle. Day one is the
- * first day of the session, and so on. The days of a programme start on Monday, so the dates appear only
- * for a session that starts on a Monday and is at least as long as the programme; otherwise they would
- * not line up with the names of the days.
+ * Why the session's dates do not go next to the days, '' when they do (or there are none). They go when
+ * the session is at least as long as the programme and each day named after a weekday falls on it (a week
+ * from Monday starts on a Monday, a weekend from Friday on a Friday); days with other names ("Giorno 1")
+ * take any date. Day one is the session's first. "La sessione dura 3 giorni e il programma ne ha 5".
  */
+export function datesMismatch(content: ProgrammeContent, dates: string[] | undefined): string {
+  if (!dates?.length) return ''
+  const days = content.days.length
+  if (dates.length < days)
+    return `La sessione dura ${plural(dates.length, 'giorno', 'giorni')} e il programma ne ha ${days}`
+  const off = content.days.some((day, i) => {
+    const weekday = weekdayOfName(day.name)
+    return weekday >= 0 && weekday !== weekdayIndex(dates[i]!)
+  })
+  const first = WEEKDAY_NAMES[weekdayIndex(dates[0]!)]!.toLowerCase()
+  return off ? `La sessione comincia di ${first} e i nomi dei giorni non cadono nelle sue date` : ''
+}
+
+/** What follows each day's name: "21 giugno 2027 · Arrivo", the date when it fits, then the subtitle. */
 export function dayCaptions(content: ProgrammeContent, dates: string[] | undefined): string[] {
-  const dated = !!dates?.length && weekdayIndex(dates[0]!) === 0 && dates.length >= content.days.length
+  const dated = !!dates?.length && !datesMismatch(content, dates)
   return content.days.map((day, i) =>
     [dated ? formatDay(dates![i]!, 'long') : '', day.subtitle].filter(Boolean).join(' · '),
   )

@@ -1,14 +1,18 @@
 import type { ProgrammeContent } from '../types/domain'
+import { WEEKDAY_NAMES } from '../utils/dates'
 
 // The model week a new year's programme can start from: the 2027 draft of Nicola Giulivo (staff), taken
 // from his page in November 2026, without his comparisons with the 2026 programme.
 
-const WEEKDAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì']
-
 /** Five days, Monday to Friday, with no blocks. */
 export function emptyWeek(): ProgrammeContent {
   return {
-    days: WEEKDAYS.map(name => ({ id: name.slice(0, 3).toLowerCase(), name, subtitle: '', blocks: [] })),
+    days: WEEKDAY_NAMES.slice(0, 5).map(name => ({
+      id: name.slice(0, 3).toLowerCase(),
+      name,
+      subtitle: '',
+      blocks: [],
+    })),
     activities: [],
   }
 }

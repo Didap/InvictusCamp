@@ -3,7 +3,7 @@ import type { FormError } from '@nuxt/ui'
 import { lockedReason as reasonOf, type FormQuestion } from '#shared/content/family-form'
 import { formQuestionSchema, hasOptions, MAX_QUESTION_OPTIONS, typesFor } from '#shared/schemas/questionnaires'
 import type { FormQuestionType } from '#shared/utils/constants'
-import { newId } from '#shared/utils/plain'
+import { moveAt, newId } from '#shared/utils/plain'
 
 // Adds a question (`question` null) or edits one of the questionnaire «Dati della famiglia». Every option
 // carries its `origin`, the text it has in the saved form (null when new): the editor turns the
@@ -72,8 +72,7 @@ const withOptions = computed(() => hasOptions(state.type))
 const newlyRequired = computed(() => !!props.saved && !props.saved.required && state.required)
 
 function moveOption(index: number, by: number) {
-  const [option] = state.options.splice(index, 1)
-  state.options.splice(index + by, 0, option!)
+  moveAt(state.options, index, by)
 }
 
 function draft() {
