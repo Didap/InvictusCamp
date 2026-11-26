@@ -28,13 +28,17 @@ let queuePausedUntil = 0
  * leave with their starting texts, as an access email must.
  */
 export async function emailContext(db: DbOrTx = useDb()): Promise<EmailContext> {
-  const appUrl = useRuntimeConfig().appUrl
   try {
-    return { appUrl, ...(await loadEmailSettings(db)) }
+    return { ...appEmailContext(), ...(await loadEmailSettings(db)) }
   } catch (error) {
     logEmailError('email automatiche non lette, testi iniziali', error)
-    return { appUrl }
+    return appEmailContext()
   }
+}
+
+/** The app's address only: for the written messages and the examples, which read no saved texts. */
+export function appEmailContext(): EmailContext {
+  return { appUrl: useRuntimeConfig().appUrl }
 }
 
 export function logEmailError(label: string, error: unknown) {

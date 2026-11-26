@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { exampleEmail } from '~~/server/domain/automatic-emails'
 import { automaticEmail } from '~~/server/emails/automatic'
-import { sessionConfirmedEmail } from '~~/server/emails/sessions'
+import { familySessionEmail } from '~~/server/emails/sessions'
 import { emailTextsSchema } from '#shared/schemas/automatic-emails'
 import { EMAIL_TEMPLATE_LABELS } from '#shared/schemas/communications'
 import {
@@ -42,7 +42,7 @@ describe('the catalog of automatic emails', () => {
     for (const key of AUTOMATIC_EMAIL_KEYS) {
       const email = exampleEmail(ctx, key, recipient)
       expect(email.template).toBe(key)
-      expect(email.switchedOff).toBe(false)
+      expect(email.switchedOff).toBeUndefined()
       expect(email.sessionId).toBeNull()
       expect(Boolean(email.sensitive)).toBe(key.startsWith('auth.') || key === 'signature.otp')
     }
@@ -60,7 +60,12 @@ describe('texts written in the dashboard', () => {
   }
 
   it('fill the fields, keep the line breaks and escape what is written', () => {
-    const email = sessionConfirmedEmail({ ...ctx, texts: { 'session.confirmed': custom } }, recipient, session)
+    const email = familySessionEmail(
+      { ...ctx, texts: { 'session.confirmed': custom } },
+      'session.confirmed',
+      recipient,
+      session,
+    )
     expect(email.subject).toBe('Ci vediamo a Maruggio (TA), Anna')
     expect(email.html).toContain('Cara Anna,')
     expect(email.html).toContain('Si parte: «Sessione di giugno», 21–27 giugno 2027.<br>Porta il &lt;cappello&gt;.')
@@ -71,8 +76,8 @@ describe('texts written in the dashboard', () => {
 
   it('come out switched off when the administration switched them off', () => {
     const off = new Set(['session.confirmed'])
-    expect(sessionConfirmedEmail({ ...ctx, off }, recipient, session).switchedOff).toBe(true)
-    expect(exampleEmail({ ...ctx, off }, 'session.confirmed', recipient).switchedOff).toBe(false)
+    expect(familySessionEmail({ ...ctx, off }, 'session.confirmed', recipient, session).switchedOff).toBe(true)
+    expect(exampleEmail({ ...ctx, off }, 'session.confirmed', recipient).switchedOff).toBeUndefined()
   })
 
   it('leave the other emails with their defaults', () => {

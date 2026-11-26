@@ -2,7 +2,6 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
   automaticEmailDetail,
-  disabledEmailKeys,
   listAutomaticEmails,
   loadEmailSettings,
   manualEmails,
@@ -10,7 +9,7 @@ import {
   setEmailActive,
 } from '../../server/domain/automatic-emails'
 import { recordDisabled } from '../../server/domain/email-quota'
-import { sessionConfirmedEmail } from '../../server/emails/sessions'
+import { familySessionEmail } from '../../server/emails/sessions'
 import { AUTOMATIC_EMAILS } from '../../shared/utils/automatic-emails'
 import { makeAdmin, makeFamily, makeSession, t, useTestDb } from './helpers'
 
@@ -44,9 +43,7 @@ describe('automatic emails', () => {
   it('switches an email off and on; access links, codes and outcomes stay on', async () => {
     const admin = await makeAdmin(db)
     await setEmailActive(db, { key: 'session.confirmed', active: false, actorId: admin.id })
-    expect(await disabledEmailKeys(db, ['session.confirmed', 'session.invite', 'communication'])).toEqual(
-      new Set(['session.confirmed']),
-    )
+    expect((await loadEmailSettings(db)).off).toEqual(new Set(['session.confirmed']))
     const states = await listAutomaticEmails(db)
     expect(states.find(state => state.key === 'session.confirmed')).toMatchObject({ active: false, customized: false })
 
@@ -56,7 +53,7 @@ describe('automatic emails', () => {
     await expect(setEmailActive(db, { key: 'staff.approved', active: false, actorId: admin.id })).rejects.toThrow()
 
     await setEmailActive(db, { key: 'session.confirmed', active: true, actorId: admin.id })
-    expect(await disabledEmailKeys(db, ['session.confirmed'])).toEqual(new Set())
+    expect((await loadEmailSettings(db)).off).toEqual(new Set())
   })
 
   it('switching an email off holds back the ones of its kind waiting in the queue', async () => {
@@ -88,7 +85,12 @@ describe('automatic emails', () => {
   it('records an email held back by the switch as disabled, outside the daily count', async () => {
     const { user } = await makeFamily(db)
     const session = await makeSession(db)
-    const message = sessionConfirmedEmail(ctx, { to: user.email, toUserId: user.id, firstName: 'Anna' }, session)
+    const message = familySessionEmail(
+      ctx,
+      'session.confirmed',
+      { to: user.email, toUserId: user.id, firstName: 'Anna' },
+      session,
+    )
     await recordDisabled(db, [message])
     const [row] = await db.select().from(t.emailLog)
     expect(row).toMatchObject({
@@ -121,7 +123,6 @@ describe('automatic emails', () => {
         to: anna.user.email,
         sessionId: session.id,
         subject: 'Sessione confermata: Sessione di luglio',
-        switchedOff: false,
       },
     ])
     await expect(

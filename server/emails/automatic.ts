@@ -7,9 +7,9 @@ import {
   type AutomaticEmailKey,
   type EmailFieldValues,
   type EmailTexts,
+  type EmailTextsByKey,
 } from '../../shared/utils/automatic-emails'
-import { bodyParagraphs, LINE_BREAK } from './communications'
-import { renderEmail } from './layout'
+import { bodyParagraphs, oneLine, renderTextEmail } from './communications'
 import type { EmailContext, EmailMessage } from './types'
 
 export interface AutomaticEmailInput {
@@ -29,35 +29,35 @@ export interface AutomaticEmailInput {
   devNote?: string
 }
 
-/** The texts the email goes out with now. */
-export function emailTexts(ctx: EmailContext, key: AutomaticEmailKey): EmailTexts {
-  return ctx.texts?.[key] ?? automaticEmailDefinition(key).defaults
+/** The texts the email goes out with: those written in the dashboard, or its defaults. */
+export function emailTexts(texts: EmailTextsByKey | undefined, key: AutomaticEmailKey): EmailTexts {
+  return texts?.[key] ?? automaticEmailDefinition(key).defaults
 }
 
 export function automaticEmail(ctx: EmailContext, key: AutomaticEmailKey, input: AutomaticEmailInput): EmailMessage {
-  const texts = emailTexts(ctx, key)
+  const texts = emailTexts(ctx.texts, key)
   const fill = (text: string) => fillEmailFields(key, text, input.values)
-  const oneLine = (text: string) => fill(text).replace(/\s+/g, ' ').trim()
+  const line = (text: string) => oneLine(fill(text))
   const paragraphs = (text: string) => bodyParagraphs(fill(text))
-  const actionLabel = oneLine(texts.actionLabel)
+  const actionLabel = line(texts.actionLabel)
 
-  const rendered = renderEmail(ctx, {
-    preheader: oneLine(texts.preheader) || undefined,
-    title: oneLine(texts.title),
-    greeting: oneLine(texts.greeting) || undefined,
+  const { html, text } = renderTextEmail(ctx, {
+    preheader: line(texts.preheader) || undefined,
+    title: line(texts.title),
+    greeting: line(texts.greeting) || undefined,
     paragraphs: [...paragraphs(input.body ?? texts.body), ...paragraphs(input.extra ?? '')],
     details: input.details,
     action: input.actionUrl && actionLabel ? { label: actionLabel, url: input.actionUrl } : undefined,
     after: paragraphs(texts.after),
-    footnote: oneLine(texts.footnote) || undefined,
+    footnote: line(texts.footnote) || undefined,
   })
   return {
     to: input.to,
     toUserId: input.toUserId ?? null,
     template: key,
-    subject: oneLine(texts.subject),
-    html: rendered.html.replaceAll(LINE_BREAK, '<br>'),
-    text: rendered.text.replaceAll(LINE_BREAK, '\n'),
+    subject: line(texts.subject),
+    html,
+    text,
     sessionId: input.sessionId ?? null,
     ...(ctx.off?.has(key) ? { switchedOff: true } : {}),
     ...(input.sensitive ? { sensitive: true } : {}),

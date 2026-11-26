@@ -2,7 +2,7 @@
 // a place offered to a reserve, the session confirmed or cancelled, a family removed, the end-of-session
 // questionnaire. They speak to the family's account ("tu"), carry the session's facts and never any health
 // detail. Their texts live in shared/utils/automatic-emails.ts.
-import type { ParticipationKind } from '../../shared/utils/constants'
+import type { AutomaticEmailKey } from '../../shared/utils/automatic-emails'
 import { formatDay, formatDayRange } from '../../shared/utils/format'
 import { automaticEmail } from './automatic'
 import { appLink } from './layout'
@@ -35,12 +35,16 @@ export type SessionEmailTemplate =
   | 'session.removed'
   | 'session.feedback'
 
-/** Every email key of the area, variants included. */
-export type SessionEmailKey = SessionEmailTemplate | 'session.invite_reminder' | 'session.reserve_removed'
+/** Every email key of the area, variants included (session.invite_reminder, session.reserve_removed). */
+export type SessionEmailKey = Extract<AutomaticEmailKey, `session.${string}`>
 
 const FAMILY_SESSIONS_PATH = '/famiglia/sessioni'
 
-function facts(session: SessionEmailFacts, options: { deadline?: boolean } = {}) {
+/** The rows of a session's facts an email shows; the deadline only where an answer is expected. */
+export function sessionFacts(
+  session: Omit<SessionEmailFacts, 'id' | 'responseDeadline'> & { responseDeadline?: string | null },
+  options: { deadline?: boolean } = {},
+) {
   const rows = [
     { label: 'Sessione', value: session.title },
     { label: 'Date', value: formatDayRange(session.startDate, session.endDate, 'long') },
@@ -52,7 +56,10 @@ function facts(session: SessionEmailFacts, options: { deadline?: boolean } = {})
   return rows
 }
 
-/** One email of the area: greeting, the session's facts, the button to the family's sessions. */
+/**
+ * One email of the area: greeting, the session's facts, the button to the family's sessions (to the
+ * questionnaire for session.feedback).
+ */
 export function familySessionEmail(
   ctx: EmailContext,
   key: SessionEmailKey,
@@ -69,73 +76,8 @@ export function familySessionEmail(
       date: formatDayRange(session.startDate, session.endDate, 'long'),
       luogo: session.location,
     },
-    details: facts(session, { deadline: answers }),
+    details: sessionFacts(session, { deadline: answers }),
     actionUrl: appLink(ctx, key === 'session.feedback' ? `/famiglia/questionario/${session.id}` : FAMILY_SESSIONS_PATH),
     sessionId: session.id,
   })
-}
-
-/** session.invite: a titolare is invited (the session opens, or the family is added while it is open). */
-export function sessionInviteEmail(
-  ctx: EmailContext,
-  recipient: FamilyRecipient,
-  session: SessionEmailFacts,
-  options: { reminder?: boolean } = {},
-): EmailMessage {
-  return familySessionEmail(ctx, options.reminder ? 'session.invite_reminder' : 'session.invite', recipient, session)
-}
-
-/** session.reserve: the family is on the reserve list of the session. */
-export function sessionReserveEmail(
-  ctx: EmailContext,
-  recipient: FamilyRecipient,
-  session: SessionEmailFacts,
-): EmailMessage {
-  return familySessionEmail(ctx, 'session.reserve', recipient, session)
-}
-
-/** session.slot_offered: a reserve is called to a free place. */
-export function sessionSlotOfferedEmail(
-  ctx: EmailContext,
-  recipient: FamilyRecipient,
-  session: SessionEmailFacts,
-): EmailMessage {
-  return familySessionEmail(ctx, 'session.slot_offered', recipient, session)
-}
-
-/** session.confirmed: the session will take place (to the titolari who confirmed). */
-export function sessionConfirmedEmail(
-  ctx: EmailContext,
-  recipient: FamilyRecipient,
-  session: SessionEmailFacts,
-): EmailMessage {
-  return familySessionEmail(ctx, 'session.confirmed', recipient, session)
-}
-
-/** session.cancelled: the session will not take place (to the families invited or confirmed). */
-export function sessionCancelledEmail(
-  ctx: EmailContext,
-  recipient: FamilyRecipient,
-  session: SessionEmailFacts,
-): EmailMessage {
-  return familySessionEmail(ctx, 'session.cancelled', recipient, session)
-}
-
-/** session.removed (session.reserve_removed for a reserve): the administration removed a family that had been told. */
-export function sessionRemovedEmail(
-  ctx: EmailContext,
-  recipient: FamilyRecipient,
-  session: SessionEmailFacts,
-  kind: ParticipationKind,
-): EmailMessage {
-  return familySessionEmail(ctx, kind === 'reserve' ? 'session.reserve_removed' : 'session.removed', recipient, session)
-}
-
-/** session.feedback: the session is over, the families who took part answer the questionnaire. */
-export function sessionFeedbackEmail(
-  ctx: EmailContext,
-  recipient: FamilyRecipient,
-  session: SessionEmailFacts,
-): EmailMessage {
-  return familySessionEmail(ctx, 'session.feedback', recipient, session)
 }

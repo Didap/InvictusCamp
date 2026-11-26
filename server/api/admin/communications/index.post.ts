@@ -6,7 +6,7 @@ import { sendCommunication } from '../../../domain/audiences'
 export default defineEventHandler(async (event): Promise<CommunicationSendResult> => {
   const admin = await requireAdmin(event)
   const input = await parseBody(event, communicationSchema)
-  const ctx = await emailContext()
+  const ctx = appEmailContext()
   const { communicationId, messages } = await useDb().transaction(tx =>
     sendCommunication(tx, ctx, { ...input, sentBy: admin.id }),
   )

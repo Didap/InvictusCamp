@@ -20,9 +20,9 @@ const types: AudienceType[] = ['session_families']
 const { data: options } = await useApiFetch<CommunicationOptions>('/api/admin/communications/options')
 /** The families of a session, starting from those the event would have reached. */
 function startingDraft(): AudienceDraft {
-  const draft = emptyAudienceDraft('session_families')
-  const preset = email.value.manual
-  return preset ? { ...draft, kinds: [...preset.kinds], familyStatuses: [...preset.statuses] } : draft
+  // Mounted only for an email that can be sent by hand, so it has its starting kinds and statuses.
+  const { kinds, statuses } = email.value.manual!
+  return { ...emptyAudienceDraft('session_families'), kinds: [...kinds], familyStatuses: [...statuses] }
 }
 const draft = ref<AudienceDraft>(startingDraft())
 const audience = computed(() => audienceFromDraft(draft.value))

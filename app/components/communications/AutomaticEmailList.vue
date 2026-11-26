@@ -1,19 +1,15 @@
 <script setup lang="ts">
-import type { AutomaticEmailState, AutomaticEmailSwitch } from '#shared/types/automatic-emails'
+import type { AutomaticEmailState } from '#shared/types/automatic-emails'
 import {
   AUTOMATIC_EMAIL_AREA_LABELS,
   AUTOMATIC_EMAIL_AREAS,
   automaticEmailDefinition,
   type AutomaticEmailKey,
 } from '#shared/utils/automatic-emails'
-import { plural } from '#shared/utils/format'
 
 // Comunicazioni › Automatiche: every email the platform sends by itself, by area, with what makes it leave
 // and its switch. Off, its event no longer sends it; the page of each email changes its texts.
-const api = useApi()
-const confirm = useConfirm()
-
-const { data: states, refresh } = await useApiFetch<AutomaticEmailState[]>('/api/admin/automatic-emails')
+const { data: states } = await useApiFetch<AutomaticEmailState[]>('/api/admin/automatic-emails')
 
 const groups = computed(() =>
   AUTOMATIC_EMAIL_AREAS.map(area => ({
@@ -25,32 +21,12 @@ const groups = computed(() =>
   })).filter(group => group.emails.length),
 )
 
-const switching = ref<AutomaticEmailKey | null>(null)
+const { switching, setActive } = useAutomaticEmailSwitch()
 
-async function setActive(key: AutomaticEmailKey, active: boolean) {
-  const email = automaticEmailDefinition(key)
-  if (!active) {
-    const ok = await confirm({
-      title: `Spegni «${email.label}»?`,
-      description: `${email.trigger} Da adesso non parte più: nel registro la trovi come «Spenta».${email.manual ? ' Puoi sempre mandarla a mano dalla sua pagina.' : ''} Nessuna email parte adesso.`,
-      confirmLabel: 'Spegni l’email',
-    })
-    if (!ok) return
-  }
-  switching.value = key
-  try {
-    const url: string = `/api/admin/automatic-emails/${key}/active`
-    const { held } = await api<AutomaticEmailSwitch>(url, { method: 'PUT', body: { active } })
-    await refresh()
-    notifySuccess(
-      active ? `«${email.label}» è accesa` : `«${email.label}» è spenta`,
-      held ? `${plural(held, 'email in coda non partirà', 'email in coda non partiranno')}.` : undefined,
-    )
-  } catch (error) {
-    notifyError(error)
-  } finally {
-    switching.value = null
-  }
+/** The list takes the new state from the answer, with no new request. */
+async function toggle(key: AutomaticEmailKey, active: boolean) {
+  const result = await setActive(key, active)
+  if (result && states.value) states.value = states.value.map(state => (state.key === key ? result : state))
 }
 </script>
 
@@ -96,7 +72,7 @@ async function setActive(key: AutomaticEmailKey, active: boolean) {
               label="Attiva"
               :loading="switching === email.key"
               :disabled="switching !== null"
-              @update:model-value="value => setActive(email.key, value)"
+              @update:model-value="value => toggle(email.key, value)"
             />
             <UButton
               :to="`/admin/comunicazioni/automatiche/${email.key}`"

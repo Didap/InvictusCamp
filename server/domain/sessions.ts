@@ -61,19 +61,9 @@ import {
   staffProfiles,
   users,
 } from '../db/schema'
-import {
-  sessionCancelledEmail,
-  sessionConfirmedEmail,
-  sessionFeedbackEmail,
-  sessionInviteEmail,
-  sessionRemovedEmail,
-  sessionReserveEmail,
-  sessionSlotOfferedEmail,
-  type SessionEmailFacts,
-  type SessionEmailTemplate,
-} from '../emails/sessions'
+import { familySessionEmail, type SessionEmailFacts, type SessionEmailTemplate } from '../emails/sessions'
 import type { EmailContext, EmailMessage } from '../emails/types'
-import { disabledEmailKeys } from './automatic-emails'
+import { loadEmailSettings } from './automatic-emails'
 import { writeAudit } from './audit'
 import { sessionCsv } from './csv'
 import type { DbOrTx } from './db'
@@ -336,16 +326,6 @@ export async function listSessions(
   return sortSessions(rows, today).map(row => toListItem(row, slots.get(row.id)!, staff.get(row.id)!))
 }
 
-/** Every email a status move can send. */
-const SESSION_MOVE_EMAILS = [
-  'session.invite',
-  'session.reserve',
-  'session.confirmed',
-  'session.feedback',
-  'session.cancelled',
-  'staff.session_cancelled',
-]
-
 /** A titolare who confirmed: the session is confirmed to it and, once it is over, it gets the questionnaire. */
 const cameToSession = (row: Pick<ParticipationRow, 'kind' | 'status'>) =>
   row.kind === 'slot' && row.status === 'confirmed'
@@ -452,7 +432,7 @@ export async function getSessionDetail(db: DbOrTx, sessionId: string): Promise<S
       participations,
       canTransition(row.status, 'cancelled') ? await sessionConvocationNotices(db, row.id) : 0,
       canTransition(row.status, 'completed') && (await opensQuestionnaire(db, row, participations)),
-      await disabledEmailKeys(db, SESSION_MOVE_EMAILS),
+      SESSION_TRANSITIONS[row.status].length ? (await loadEmailSettings(db)).off : new Set(),
     ),
     deletable: row.status === 'draft' && participations.length === 0 && (convocations?.count ?? 0) === 0,
   }
@@ -699,24 +679,18 @@ function familyEmail(
   session: SessionRow,
   options: { reminder?: boolean } = {},
 ): EmailMessage {
-  const recipient = { to: row.email, toUserId: row.userId, firstName: row.firstName }
-  const facts = factsOf(session)
-  switch (template) {
-    case 'session.invite':
-      return sessionInviteEmail(ctx, recipient, facts, options)
-    case 'session.reserve':
-      return sessionReserveEmail(ctx, recipient, facts)
-    case 'session.slot_offered':
-      return sessionSlotOfferedEmail(ctx, recipient, facts)
-    case 'session.confirmed':
-      return sessionConfirmedEmail(ctx, recipient, facts)
-    case 'session.cancelled':
-      return sessionCancelledEmail(ctx, recipient, facts)
-    case 'session.removed':
-      return sessionRemovedEmail(ctx, recipient, facts, row.kind)
-    case 'session.feedback':
-      return sessionFeedbackEmail(ctx, recipient, facts)
-  }
+  const key =
+    template === 'session.invite' && options.reminder
+      ? 'session.invite_reminder'
+      : template === 'session.removed' && row.kind === 'reserve'
+        ? 'session.reserve_removed'
+        : template
+  return familySessionEmail(
+    ctx,
+    key,
+    { to: row.email, toUserId: row.userId, firstName: row.firstName },
+    factsOf(session),
+  )
 }
 
 // ─── The session ───────────────────────────────────────────────────────────────────────────────────

@@ -2,7 +2,8 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import { blockLines, toWinAnsi } from '~~/server/domain/pdf'
 import { buildSignedPdf, formatSignatureTime, type CertificateData } from '~~/server/domain/signatures'
-import { documentToReadEmail, signatureSignedEmail } from '~~/server/emails/documents'
+import { signatureSignedEmail } from '~~/server/emails/documents'
+import { documentRequestEmail } from '~~/server/emails/signatures'
 
 async function pdfWithPages(count: number): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
@@ -75,7 +76,8 @@ describe('emails of the documents area', () => {
   })
 
   it('ask to read, not to sign, a document to read', () => {
-    const message = documentToReadEmail(ctx, {
+    const message = documentRequestEmail(ctx, {
+      requiresSignature: false,
       to: 'anna@example.com',
       toUserId: 'u1',
       firstName: 'Anna',

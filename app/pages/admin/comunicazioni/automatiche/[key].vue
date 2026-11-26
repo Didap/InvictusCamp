@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { emailTextsSchema } from '#shared/schemas/automatic-emails'
-import type { AutomaticEmailDetail, AutomaticEmailSwitch } from '#shared/types/automatic-emails'
+import type { AutomaticEmailDetail } from '#shared/types/automatic-emails'
 import type { DeliveryReport, EmailPreview } from '#shared/types/communications'
 import {
   automaticEmailDefinition,
@@ -11,7 +11,8 @@ import {
   type AutomaticEmailKey,
   type EmailTexts,
 } from '#shared/utils/automatic-emails'
-import { formatDateTime, plural } from '#shared/utils/format'
+import { formatDateTime } from '#shared/utils/format'
+import { sameContent } from '#shared/utils/plain'
 
 // One automatic email (Comunicazioni › Automatiche): what makes it leave, its switch, its texts with the
 // email previewed on the right as it arrives (real template, example data), a test to oneself, the send by
@@ -20,13 +21,12 @@ const route = useRoute()
 const api = useApi()
 const confirm = useConfirm()
 
-const key = computed(() => String(route.params.key))
-const known = computed(() => isAutomaticEmailKey(key.value))
-const { data, error } = await useApiFetch<AutomaticEmailDetail>(() => `/api/admin/automatic-emails/${key.value}`)
+// The server answers 404 for a key that is not an email: everything below the error runs with a real one.
+const emailKey = computed(() => String(route.params.key) as AutomaticEmailKey)
+const { data, error } = await useApiFetch<AutomaticEmailDetail>(() => `/api/admin/automatic-emails/${emailKey.value}`)
 
-const email = computed(() => (known.value ? automaticEmailDefinition(key.value as AutomaticEmailKey) : null))
-const emailKey = computed(() => key.value as AutomaticEmailKey)
-const withButton = computed(() => known.value && hasEmailAction(emailKey.value))
+const email = computed(() => (isAutomaticEmailKey(emailKey.value) ? automaticEmailDefinition(emailKey.value) : null))
+const withButton = computed(() => hasEmailAction(emailKey.value))
 const schema = computed(() => emailTextsSchema(emailKey.value))
 
 const state = reactive<EmailTexts>({
@@ -49,15 +49,9 @@ watch(
   },
   { immediate: true },
 )
-const dirty = computed(
-  () =>
-    !!saved.value && (Object.keys(state) as (keyof EmailTexts)[]).some(field => state[field] !== saved.value![field]),
-)
-const differsFromDefaults = computed(
-  () =>
-    !!email.value &&
-    (Object.keys(state) as (keyof EmailTexts)[]).some(field => state[field] !== email.value!.defaults[field]),
-)
+const dirty = computed(() => !!saved.value && !sameContent({ ...state }, saved.value))
+const differsFromDefaults = computed(() => !!email.value && !sameContent({ ...state }, email.value.defaults))
+useLeaveGuard(dirty, 'al testo dell’email')
 
 // ─── Preview ───────────────────────────────────────────────────────────────────────────────────────
 const preview = ref<EmailPreview | null>(null)
@@ -65,10 +59,10 @@ let previewRequest = 0
 watchDebounced(
   () => ({ ...state }),
   async texts => {
-    if (!known.value || !saved.value) return
+    if (!saved.value) return
     const request = ++previewRequest
     try {
-      const url: string = `/api/admin/automatic-emails/${key.value}/preview`
+      const url: string = `/api/admin/automatic-emails/${emailKey.value}/preview`
       const result = await api<EmailPreview>(url, { method: 'POST', body: texts })
       if (request === previewRequest) preview.value = result
     } catch {
@@ -83,7 +77,7 @@ const saving = ref(false)
 async function save() {
   saving.value = true
   try {
-    const url: string = `/api/admin/automatic-emails/${key.value}`
+    const url: string = `/api/admin/automatic-emails/${emailKey.value}`
     data.value = await api<AutomaticEmailDetail>(url, {
       method: 'PUT',
       body: { texts: { ...state }, updatedAt: data.value?.updatedAt ?? null },
@@ -105,7 +99,7 @@ async function restore() {
   })
   if (!ok) return
   try {
-    const url: string = `/api/admin/automatic-emails/${key.value}`
+    const url: string = `/api/admin/automatic-emails/${emailKey.value}`
     data.value = await api<AutomaticEmailDetail>(url, { method: 'DELETE' })
     notifySuccess('Testo iniziale rimesso')
   } catch (error) {
@@ -113,31 +107,10 @@ async function restore() {
   }
 }
 
-const switching = ref(false)
-async function setActive(active: boolean) {
-  if (!email.value) return
-  if (!active) {
-    const ok = await confirm({
-      title: `Spegni «${email.value.label}»?`,
-      description: `Da adesso non parte più quando succede: nel registro la trovi come «Spenta».${email.value.manual ? ' Puoi sempre mandarla a mano.' : ''} Nessuna email parte adesso.`,
-      confirmLabel: 'Spegni l’email',
-    })
-    if (!ok) return
-  }
-  switching.value = true
-  try {
-    const url: string = `/api/admin/automatic-emails/${key.value}/active`
-    const { held, ...detail } = await api<AutomaticEmailSwitch>(url, { method: 'PUT', body: { active } })
-    data.value = detail
-    notifySuccess(
-      active ? 'Email accesa' : 'Email spenta',
-      held ? `${plural(held, 'email in coda non partirà', 'email in coda non partiranno')}.` : undefined,
-    )
-  } catch (error) {
-    notifyError(error)
-  } finally {
-    switching.value = false
-  }
+const { switching, setActive } = useAutomaticEmailSwitch()
+async function toggle(active: boolean) {
+  const result = await setActive(emailKey.value, active)
+  if (result) data.value = result
 }
 
 const { user } = useUserSession()
@@ -151,7 +124,7 @@ async function sendTest() {
   if (!ok) return
   testing.value = true
   try {
-    const url: string = `/api/admin/automatic-emails/${key.value}/test`
+    const url: string = `/api/admin/automatic-emails/${emailKey.value}/test`
     const report = await api<DeliveryReport>(url, { method: 'POST', body: { ...state } })
     notifySuccess(`Prova inviata a ${user.value?.email ?? 'te'}`, deliveryOutcome(report))
   } catch (error) {
@@ -162,7 +135,7 @@ async function sendTest() {
 }
 
 const sendOpen = ref(false)
-const fieldsHelp = computed(() => (known.value ? emailFieldsHelp(emailKey.value) : ''))
+const fieldsHelp = computed(() => emailFieldsHelp(emailKey.value))
 const updated = computed(() =>
   data.value?.updatedAt
     ? `Ultima modifica il ${formatDateTime(data.value.updatedAt)}${data.value.updatedByName ? ` da ${data.value.updatedByName}` : ''}.`
@@ -219,8 +192,8 @@ const updated = computed(() =>
                     ? 'Parte da sola quando succede l’evento.'
                     : 'Spenta: l’evento non la manda. Nel registro la trovi come «Spenta».'
                 "
-                :loading="switching"
-                @update:model-value="setActive"
+                :loading="switching !== null"
+                @update:model-value="toggle"
               />
             </template>
           </div>
@@ -252,7 +225,7 @@ const updated = computed(() =>
               name="body"
               required
               :help="
-                key === 'staff.approved' || key === 'staff.rejected'
+                emailKey === 'staff.approved' || emailKey === 'staff.rejected'
                   ? `${fieldsHelp} È il testo che ti proponiamo in «Comunica l’esito»: lì puoi ancora cambiarlo.`
                   : fieldsHelp
               "

@@ -180,16 +180,10 @@ async function submit() {
       method: 'POST',
       body: { target: target.value, dueDate: state.dueDate || null },
     })
+    const sent = result.created - (result.emailsOff ?? 0)
     notifySuccess(
       'Documento assegnato',
-      [
-        result.created - (result.emailsOff ?? 0) === 1
-          ? 'È partita 1 email.'
-          : result.created > (result.emailsOff ?? 0)
-            ? `Sono partite ${result.created - (result.emailsOff ?? 0)} email.`
-            : '',
-        emailsOffNote(result.emailsOff),
-      ]
+      [sent === 1 ? 'È partita 1 email.' : sent ? `Sono partite ${sent} email.` : '', emailsOffNote(result.emailsOff)]
         .filter(Boolean)
         .join(' ') || undefined,
     )

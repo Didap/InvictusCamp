@@ -3,10 +3,11 @@
 // reopened. No health details, no access links: they are kept in email_log. Their texts live in
 // shared/utils/automatic-emails.ts.
 import type { StaffOutcomeTemplate } from '../../shared/types/staff'
-import { fillEmailFields } from '../../shared/utils/automatic-emails'
+import { fillEmailFields, type EmailTextsByKey } from '../../shared/utils/automatic-emails'
 import { formatDayRange } from '../../shared/utils/format'
 import { automaticEmail, emailTexts } from './automatic'
 import { appLink } from './layout'
+import { sessionFacts } from './sessions'
 import type { EmailContext, EmailMessage } from './types'
 
 interface Recipient {
@@ -25,13 +26,13 @@ interface ConvocationSession {
 
 /** The subject and the text proposed to the administration before sending the outcome to this person. */
 export function outcomeProposal(
-  ctx: EmailContext,
+  texts: EmailTextsByKey | undefined,
   template: StaffOutcomeTemplate,
   firstName: string,
 ): { subject: string; message: string } {
-  const texts = emailTexts(ctx, template)
+  const { subject, body } = emailTexts(texts, template)
   const fill = (text: string) => fillEmailFields(template, text, { nome: firstName })
-  return { subject: fill(texts.subject), message: fill(texts.body) }
+  return { subject: fill(subject), message: fill(body) }
 }
 
 /** "Esito della candidatura": the message the administration kept or wrote, sent when it chose to. */
@@ -56,11 +57,7 @@ function sessionEmail(
 ): EmailMessage {
   const { session } = input
   const dates = formatDayRange(session.startDate, session.endDate, 'long')
-  const details = [
-    { label: 'Sessione', value: session.title },
-    { label: 'Date', value: dates },
-    { label: 'Luogo', value: session.location },
-  ]
+  const details = sessionFacts(session)
   if (input.roleName) details.push({ label: 'Ruolo', value: input.roleName })
   return automaticEmail(ctx, key, {
     to: input.to,

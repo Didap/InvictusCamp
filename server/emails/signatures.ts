@@ -6,7 +6,7 @@ import { automaticEmail } from './automatic'
 import { appLink } from './layout'
 import type { EmailContext, EmailMessage } from './types'
 
-export interface DocumentEmailInput {
+interface DocumentEmailInput {
   to: string
   toUserId: string
   firstName: string
@@ -17,19 +17,19 @@ export interface DocumentEmailInput {
   reminder?: boolean
 }
 
+/** The email of a request, by what it asks: [first email, reminder]. */
+const REQUEST_KEYS = {
+  sign: ['signature.request', 'signature.reminder'],
+  read: ['document.read', 'document.read_reminder'],
+} as const
+
 /** A document to read or to sign, or its reminder: the link opens the request. */
 export function documentRequestEmail(
   ctx: EmailContext,
   input: DocumentEmailInput & { requiresSignature: boolean },
 ): EmailMessage {
   const sign = input.requiresSignature
-  const key = sign
-    ? input.reminder
-      ? 'signature.reminder'
-      : 'signature.request'
-    : input.reminder
-      ? 'document.read_reminder'
-      : 'document.read'
+  const key = REQUEST_KEYS[sign ? 'sign' : 'read'][input.reminder ? 1 : 0]
   const details = [{ label: 'Documento', value: input.documentTitle }]
   if (input.dueDate) {
     details.push({ label: sign ? 'Da firmare entro' : 'Da leggere entro', value: formatDay(input.dueDate, 'long') })
@@ -42,10 +42,6 @@ export function documentRequestEmail(
     actionUrl: appLink(ctx, `/firma/${input.requestId}`),
     sessionId: input.sessionId ?? null,
   })
-}
-
-export function signatureRequestEmail(ctx: EmailContext, input: DocumentEmailInput): EmailMessage {
-  return documentRequestEmail(ctx, { ...input, requiresSignature: true })
 }
 
 export function signatureOtpEmail(

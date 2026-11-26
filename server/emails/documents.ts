@@ -1,14 +1,9 @@
-// Emails of the documents area: a document to read (the "to sign" one lives in ./signatures.ts) and
-// the confirmation of a completed signature. Their texts live in shared/utils/automatic-emails.ts.
+// Emails of the documents area: the confirmation of a completed signature (a document to read or to sign
+// lives in ./signatures.ts). Its texts live in shared/utils/automatic-emails.ts.
 import { formatDateTime } from '../../shared/utils/format'
 import { automaticEmail } from './automatic'
 import { appLink } from './layout'
-import { documentRequestEmail, type DocumentEmailInput } from './signatures'
 import type { EmailContext, EmailMessage } from './types'
-
-export function documentToReadEmail(ctx: EmailContext, input: DocumentEmailInput): EmailMessage {
-  return documentRequestEmail(ctx, { ...input, requiresSignature: false })
-}
 
 export function signatureSignedEmail(
   ctx: EmailContext,

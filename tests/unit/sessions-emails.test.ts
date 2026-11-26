@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  sessionCancelledEmail,
-  sessionConfirmedEmail,
-  sessionFeedbackEmail,
-  sessionInviteEmail,
-  sessionRemovedEmail,
-  sessionReserveEmail,
-  sessionSlotOfferedEmail,
-} from '../../server/emails/sessions'
+import { familySessionEmail, type SessionEmailKey } from '../../server/emails/sessions'
 
 const ctx = { appUrl: 'https://gestionale.example.it' }
 const to = { to: 'anna@example.it', toUserId: 'user-1', firstName: 'Anna' }
@@ -20,17 +12,18 @@ const session = {
   responseDeadline: '2027-05-15',
 }
 
-const all = [
-  sessionInviteEmail(ctx, to, session),
-  sessionInviteEmail(ctx, to, session, { reminder: true }),
-  sessionReserveEmail(ctx, to, session),
-  sessionSlotOfferedEmail(ctx, to, session),
-  sessionConfirmedEmail(ctx, to, session),
-  sessionCancelledEmail(ctx, to, session),
-  sessionRemovedEmail(ctx, to, session, 'slot'),
-  sessionRemovedEmail(ctx, to, session, 'reserve'),
-  sessionFeedbackEmail(ctx, to, session),
+const KEYS: SessionEmailKey[] = [
+  'session.invite',
+  'session.invite_reminder',
+  'session.reserve',
+  'session.slot_offered',
+  'session.confirmed',
+  'session.cancelled',
+  'session.removed',
+  'session.reserve_removed',
+  'session.feedback',
 ]
+const all = KEYS.map(key => familySessionEmail(ctx, key, to, session))
 
 describe('session emails', () => {
   it('use the documented templates and subjects, tied to the session', () => {

@@ -2,7 +2,7 @@
 // stops an email's event from sending it, the preview with example data and the send by hand. The catalog
 // (what each email is, its fields, its defaults) is shared/utils/automatic-emails.ts; the templates render
 // through server/emails/automatic.ts with the texts loaded here into the EmailContext.
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { AutomaticEmailDetail, AutomaticEmailState } from '../../shared/types/automatic-emails'
 import type { Audience } from '../../shared/types/domain'
 import {
@@ -13,6 +13,8 @@ import {
   type EmailTexts,
   type EmailTextsByKey,
 } from '../../shared/utils/automatic-emails'
+import { fullName } from '../../shared/utils/format'
+import { sameContent } from '../../shared/utils/plain'
 import { automaticEmails, campSessions, emailLog, users } from '../db/schema'
 import { inviteEmail, resetPasswordEmail, verifyEmailEmail } from '../emails/auth'
 import { signatureSignedEmail } from '../emails/documents'
@@ -49,17 +51,6 @@ export async function loadEmailSettings(db: DbOrTx): Promise<{ texts: EmailTexts
   return { texts, off }
 }
 
-/** Which of these templates are switched off now. Emails that cannot be switched off never are. */
-export async function disabledEmailKeys(db: DbOrTx, templates: Iterable<string>): Promise<Set<string>> {
-  const keys = [...new Set(templates)].filter(canSwitchOff)
-  if (!keys.length) return new Set()
-  const rows = await db
-    .select({ key: automaticEmails.key })
-    .from(automaticEmails)
-    .where(and(inArray(automaticEmails.key, keys), eq(automaticEmails.active, false)))
-  return new Set(rows.map(row => row.key))
-}
-
 // ─── The page ──────────────────────────────────────────────────────────────────────────────────────
 
 interface Row {
@@ -93,7 +84,7 @@ function stateOf(key: AutomaticEmailKey, row: Row | undefined): AutomaticEmailSt
     active: Boolean(automaticEmailDefinition(key).alwaysOn) || (row?.active ?? true),
     customized: Boolean(row?.texts),
     updatedAt: row?.updatedAt.toISOString() ?? null,
-    updatedByName: row?.firstName ? `${row.firstName} ${row.lastName ?? ''}`.trim() : null,
+    updatedByName: row?.firstName ? fullName({ firstName: row.firstName, lastName: row.lastName ?? '' }) : null,
   }
 }
 
@@ -106,9 +97,6 @@ export async function automaticEmailDetail(db: DbOrTx, key: AutomaticEmailKey): 
   const row = (await rows(db, key)).get(key)
   return { ...stateOf(key, row), texts: row?.texts ?? automaticEmailDefinition(key).defaults }
 }
-
-const sameTexts = (a: EmailTexts, b: EmailTexts) =>
-  (Object.keys(b) as (keyof EmailTexts)[]).every(field => a[field] === b[field])
 
 /**
  * Saves the texts of an email; texts equal to the defaults are stored as no change. `updatedAt`: when the page
@@ -131,7 +119,7 @@ export async function saveEmailTexts(
       })
     }
   }
-  const texts = sameTexts(input.texts, automaticEmailDefinition(input.key).defaults) ? null : input.texts
+  const texts = sameContent(input.texts, automaticEmailDefinition(input.key).defaults) ? null : input.texts
   await db
     .insert(automaticEmails)
     .values({ key: input.key, texts, updatedBy: input.actorId })
@@ -201,7 +189,7 @@ const session = (key: SessionEmailKey) => (ctx: EmailContext, r: EmailRecipient)
 const document = (requiresSignature: boolean, reminder: boolean) => (ctx: EmailContext, r: EmailRecipient) =>
   documentRequestEmail(ctx, { ...r, ...EXAMPLE_DOCUMENT, requiresSignature, reminder })
 const outcome = (template: 'staff.approved' | 'staff.rejected') => (ctx: EmailContext, r: EmailRecipient) =>
-  staffOutcomeEmail(ctx, { ...r, template, message: outcomeProposal(ctx, template, r.firstName).message })
+  staffOutcomeEmail(ctx, { ...r, template, message: outcomeProposal(ctx.texts, template, r.firstName).message })
 
 /** Every email built by its real template, with example data. */
 const EXAMPLES: Record<AutomaticEmailKey, (ctx: EmailContext, recipient: EmailRecipient) => EmailMessage> = {
@@ -245,9 +233,10 @@ export function exampleEmail(
   recipient: EmailRecipient,
   texts?: EmailTexts,
 ): EmailMessage {
-  const context = texts ? { ...ctx, texts: { ...ctx.texts, [key]: texts } } : ctx
+  // Never switched off; written with the texts given (the other emails' texts are not read).
+  const context = { appUrl: ctx.appUrl, texts: texts ? { [key]: texts } : ctx.texts }
   // The example session does not exist: the log row of a test belongs to no session.
-  return { ...EXAMPLES[key](context, recipient), sessionId: null, switchedOff: false }
+  return { ...EXAMPLES[key](context, recipient), sessionId: null }
 }
 
 /**
@@ -277,8 +266,15 @@ export async function manualEmails(
     .where(eq(campSessions.id, audience.sessionId))
     .limit(1)
   if (!facts) throw createError({ statusCode: 404, message: 'Sessione non trovata' })
+  // Sent by hand: it leaves even when switched off.
+  const context = { ...ctx, off: undefined }
   const messages = recipients.map(r =>
-    familySessionEmail(ctx, key as SessionEmailKey, { to: r.email, toUserId: r.userId, firstName: r.firstName }, facts),
+    familySessionEmail(
+      context,
+      key as SessionEmailKey,
+      { to: r.email, toUserId: r.userId, firstName: r.firstName },
+      facts,
+    ),
   )
   await writeAudit(db, {
     actorUserId: input.actorId,
@@ -286,5 +282,5 @@ export async function manualEmails(
     entityType: 'automatic_email',
     data: { key, audience, recipients: messages.length },
   })
-  return messages.map(message => ({ ...message, switchedOff: false }))
+  return messages
 }

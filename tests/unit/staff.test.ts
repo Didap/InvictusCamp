@@ -94,7 +94,7 @@ describe('emails', () => {
         body: 'Ti aspettiamo, {nome}.',
       },
     }
-    expect(outcomeProposal({ ...ctx, texts }, 'staff.approved', 'Rita')).toEqual({
+    expect(outcomeProposal(texts, 'staff.approved', 'Rita')).toEqual({
       subject: 'Benvenuta, Rita',
       message: 'Ti aspettiamo, Rita.',
     })
@@ -120,7 +120,7 @@ describe('emails', () => {
       toUserId: 'u1',
       firstName: 'Rita',
       template: 'staff.rejected',
-      message: outcomeProposal(ctx, 'staff.rejected', 'Rita').message,
+      message: outcomeProposal(undefined, 'staff.rejected', 'Rita').message,
     })
     expect(rejected.template).toBe('staff.rejected')
     expect(rejected.html).not.toContain('https://gestionale.test/staff')
@@ -128,7 +128,7 @@ describe('emails', () => {
 
   it('the proposed outcome messages use the "tu" form and no em dashes', () => {
     for (const template of ['staff.approved', 'staff.rejected'] as const) {
-      const { message } = outcomeProposal(ctx, template, 'Rita')
+      const { message } = outcomeProposal(undefined, template, 'Rita')
       expect(message).not.toMatch(/—/)
       expect(message).toMatch(/\b(tua|tuoi|ti|hai)\b/i)
     }

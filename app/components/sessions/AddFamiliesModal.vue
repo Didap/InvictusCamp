@@ -101,15 +101,11 @@ async function submit() {
       method: 'POST',
       body: { familyIds: selected.value, kind: kind.value },
     })
+    const sent = result.invited - result.emailsOff
     notifySuccess(
       `${plural(result.added, 'famiglia aggiunta', 'famiglie aggiunte')}`,
       result.invited
-        ? [
-            result.invited > result.emailsOff
-              ? `${plural(result.invited - result.emailsOff, 'email inviata', 'email inviate')}.`
-              : '',
-            emailsOffNote(result.emailsOff),
-          ]
+        ? [sent ? `${plural(sent, 'email inviata', 'email inviate')}.` : '', emailsOffNote(result.emailsOff)]
             .filter(Boolean)
             .join(' ')
         : 'La sessione è in bozza: riceveranno l’invito quando apri gli inviti.',

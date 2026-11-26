@@ -1264,10 +1264,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
   })
 
   const template = outcomeTemplate(profile.status)
-  // The proposal only needs the texts: no link is written, so no address.
-  const proposal = template
-    ? outcomeProposal({ appUrl: '', ...(await loadEmailSettings(db)) }, template, user.firstName)
-    : null
+  const proposal = template ? outcomeProposal((await loadEmailSettings(db)).texts, template, user.firstName) : null
   const [lastOutcome] = template
     ? await db
         .select({ createdAt: emailLog.createdAt, status: emailLog.status })

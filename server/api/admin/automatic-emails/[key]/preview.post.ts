@@ -8,7 +8,7 @@ export default defineEventHandler(async (event): Promise<EmailPreview> => {
   const key = requireAutomaticEmailKey(event)
   const texts = await parseBody(event, emailTextsDraftSchema)
   const message = exampleEmail(
-    await emailContext(),
+    appEmailContext(),
     key,
     { to: admin.email, toUserId: admin.id, firstName: admin.firstName },
     texts,

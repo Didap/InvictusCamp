@@ -2,19 +2,25 @@
 // blank lines separate paragraphs, a single line break stays a line break. Not sensitive: the log
 // keeps its content.
 import { textParagraphs } from '../../shared/utils/plain-text'
-import { renderEmail } from './layout'
+import { renderEmail, type EmailContent } from './layout'
 import type { EmailContext, EmailMessage } from './types'
 
 /** Stands for a line break inside a paragraph while the layout escapes the text. */
-export const LINE_BREAK = '\u2028'
+const LINE_BREAK = '\u2028'
 
 /** Paragraphs of a plain text body; lines inside a paragraph are joined by LINE_BREAK. */
 export function bodyParagraphs(body: string): string[] {
   return textParagraphs(body, LINE_BREAK)
 }
 
-function oneLine(value: string): string {
+export function oneLine(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
+}
+
+/** renderEmail for paragraphs from bodyParagraphs(): their line breaks become <br> and new lines again. */
+export function renderTextEmail(ctx: EmailContext, content: EmailContent): { html: string; text: string } {
+  const rendered = renderEmail(ctx, content)
+  return { html: rendered.html.replaceAll(LINE_BREAK, '<br>'), text: rendered.text.replaceAll(LINE_BREAK, '\n') }
 }
 
 export interface CommunicationEmailInput {
@@ -30,7 +36,7 @@ export function communicationEmail(ctx: EmailContext, input: CommunicationEmailI
   const subject = oneLine(input.subject)
   const paragraphs = bodyParagraphs(input.body)
   const preview = oneLine((paragraphs[0] ?? '').replaceAll(LINE_BREAK, ' '))
-  const rendered = renderEmail(ctx, {
+  const rendered = renderTextEmail(ctx, {
     preheader: preview.length > 140 ? `${preview.slice(0, 139)}…` : preview,
     title: subject,
     paragraphs,
@@ -41,8 +47,8 @@ export function communicationEmail(ctx: EmailContext, input: CommunicationEmailI
     toUserId: input.toUserId ?? null,
     template: 'communication',
     subject,
-    html: rendered.html.replaceAll(LINE_BREAK, '<br>'),
-    text: rendered.text.replaceAll(LINE_BREAK, '\n'),
+    html: rendered.html,
+    text: rendered.text,
     communicationId: input.communicationId ?? null,
     sessionId: input.sessionId ?? null,
   }

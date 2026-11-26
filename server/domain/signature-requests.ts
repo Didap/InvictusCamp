@@ -3,8 +3,7 @@
 // existing request is kept as it is; a cancelled one is reopened for the session asking now.
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { documents, signatureRequests, users } from '../db/schema'
-import { documentToReadEmail } from '../emails/documents'
-import { signatureRequestEmail } from '../emails/signatures'
+import { documentRequestEmail } from '../emails/signatures'
 import type { EmailContext, EmailMessage } from '../emails/types'
 import type { DbOrTx } from './db'
 
@@ -92,6 +91,6 @@ export async function signatureRequestEmails(
         sessionId: row.sessionId,
         reminder: options.reminder,
       }
-      return row.requiresSignature ? signatureRequestEmail(ctx, input) : documentToReadEmail(ctx, input)
+      return documentRequestEmail(ctx, { ...input, requiresSignature: row.requiresSignature })
     })
 }
