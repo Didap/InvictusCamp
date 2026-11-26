@@ -84,6 +84,7 @@ function actionsFor(item: SessionFamilyItem): DropdownMenuItem[][] {
     })
   }
   const groups: DropdownMenuItem[][] = main.length ? [main] : []
+  const whatsapp = whatsappLink(item.phone)
   groups.push([
     { label: 'Apri la scheda famiglia', icon: 'i-lucide-heart-handshake', to: `/admin/famiglie/${item.familyId}` },
     {
@@ -91,6 +92,7 @@ function actionsFor(item: SessionFamilyItem): DropdownMenuItem[][] {
       icon: 'i-lucide-mail',
       to: { path: '/admin/comunicazioni/nuova', query: { userIds: item.userId } },
     },
+    ...(whatsapp ? [whatsapp] : []),
   ])
   if (props.editable && props.variant !== 'gone') {
     groups.push([

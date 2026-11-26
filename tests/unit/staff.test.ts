@@ -1,4 +1,4 @@
-// Pure rules of the staff area: what an application lacks, the moves of a review, the derived
+// Pure rules of the staff area: the moves of a review, the derived
 // "Confermata", the schemas shared with the forms, and the emails.
 import { describe, expect, it } from 'vitest'
 import { contractState, isConfirmed } from '~~/server/domain/staff'
@@ -10,19 +10,15 @@ import {
   staffOutcomeEmail,
 } from '~~/server/emails/staff'
 import {
-  APPLICATION_CHECKLIST,
   STAFF_DOCUMENT_CATEGORIES,
   STAFF_STATUS_MOVES,
-  applicationMissing,
   availabilityAnswerSchema,
   canMoveStaff,
   countsTowardNeeded,
   isReviewMove,
-  staffApplicationSchema,
   staffDocumentSchema,
 } from '#shared/schemas/staff'
 import { STAFF_STATUSES } from '#shared/utils/constants'
-import { addDays, todayIso } from '#shared/utils/dates'
 
 const ctx = { appUrl: 'https://gestionale.test' }
 const session = {
@@ -32,47 +28,6 @@ const session = {
   endDate: '2027-06-27',
   location: 'Invictus Camp, Maruggio (TA)',
 }
-
-describe('application', () => {
-  const empty = { birthDate: null, city: null, roles: [], qualifications: null, experience: null, motivation: null }
-
-  it('lists what is missing in the order of the form', () => {
-    expect(applicationMissing(empty)).toEqual([...APPLICATION_CHECKLIST])
-    expect(
-      applicationMissing({
-        ...empty,
-        birthDate: '1990-01-01',
-        city: '  ',
-        roles: ['activity_lead'],
-        qualifications: 'OSS',
-        experience: 'Sì',
-        motivation: 'Sì',
-        cvFileId: 'f1',
-      }),
-    ).toEqual(['Città'])
-  })
-
-  it('the full schema refuses a future birth date, an empty list of roles and an unknown team', () => {
-    const valid = {
-      team: 'volunteer',
-      birthDate: '1995-04-10',
-      city: 'Lecce',
-      roles: ['group_lead'],
-      qualifications: 'Laurea',
-      experience: 'Centri estivi',
-      motivation: 'Esserci',
-    }
-    expect(staffApplicationSchema.safeParse(valid).success).toBe(true)
-    expect(staffApplicationSchema.safeParse({ ...valid, birthDate: addDays(todayIso(), 1) }).success).toBe(false)
-    expect(staffApplicationSchema.safeParse({ ...valid, birthDate: '1995-02-30' }).success).toBe(false)
-    expect(staffApplicationSchema.safeParse({ ...valid, roles: [] }).success).toBe(false)
-    // Any role id passes the schema: the server checks it exists (staff_roles, tests/db/staff-labels.test.ts).
-    expect(staffApplicationSchema.safeParse({ ...valid, roles: [''] }).success).toBe(false)
-    expect(staffApplicationSchema.safeParse({ ...valid, team: 'cucina' }).success).toBe(false)
-    const { team: _team, ...withoutTeam } = valid
-    expect(staffApplicationSchema.safeParse(withoutTeam).success).toBe(false)
-  })
-})
 
 describe('review', () => {
   it('allows only the moves of spec 3.4', () => {

@@ -13,11 +13,12 @@ import type {
   CommunicationDetail,
   CommunicationOptions,
   CommunicationSendResult,
+  EmailQuotaSummary,
   EmailPreview,
   MessageTemplate,
 } from '#shared/types/communications'
 import type { AudienceType } from '#shared/types/domain'
-import { STAFF_TEAMS } from '#shared/utils/constants'
+import { EMAIL_DAILY_LIMIT, STAFF_TEAMS } from '#shared/utils/constants'
 import { TEAM_SLUG } from '#shared/utils/routes'
 import { plural } from '#shared/utils/format'
 import { fillMessageFields, MESSAGE_FIELDS_HELP, messageFieldValues } from '#shared/utils/message-fields'
@@ -195,9 +196,15 @@ async function send() {
     const emails = plural(fresh.count, 'email', 'email')
     const names = fresh.recipients.map(person => person.name)
     const who = names.length <= 3 ? names.join(', ') : fresh.label
+    const quota = await api<EmailQuotaSummary>('/api/admin/email-log/quota')
+    const leavingNow = Math.min(fresh.count, quota.ordinaryLeft)
+    const limitNote =
+      leavingNow < fresh.count
+        ? ` Limite di ${EMAIL_DAILY_LIMIT} email al giorno: ${leavingNow} subito, ${fresh.count - leavingNow} in coda con partenza automatica.`
+        : ''
     const ok = await confirm({
       title: `Invierai ${emails}`,
-      description: `Destinatari: ${who}. ${fresh.count === 1 ? 'Riceve' : 'Ognuno riceve'} «${filledFor(fresh.recipients[0]?.firstName).subject.trim()}» al proprio indirizzo. Dopo l’invio il messaggio non si può ritirare.`,
+      description: `Destinatari: ${who}. ${fresh.count === 1 ? 'Riceve' : 'Ognuno riceve'} «${filledFor(fresh.recipients[0]?.firstName).subject.trim()}» al proprio indirizzo.${limitNote} Dopo l’invio il messaggio non si può ritirare.`,
       confirmLabel: `Invia ${emails}`,
     })
     if (!ok) return
@@ -205,11 +212,23 @@ async function send() {
       draftId.value ? `/api/admin/communications/${draftId.value}/send` : '/api/admin/communications',
       { method: 'POST', body: message },
     )
-    const outcome = result.failed
-      ? `${plural(result.failed, 'email non recapitata', 'email non recapitate')}: le trovi nel registro.`
-      : result.simulated
-        ? `${plural(result.simulated, 'email registrata come simulata', 'email registrate come simulate')}: in questo ambiente non partono davvero.`
-        : `${plural(result.sent, 'email partita', 'email partite')}.`
+    const parts: string[] = []
+    if (result.failed) {
+      parts.push(`${plural(result.failed, 'email non recapitata', 'email non recapitate')}: le trovi nel registro.`)
+    }
+    if (result.queued) {
+      parts.push(
+        `${plural(result.sent + result.simulated, 'email partita', 'email partite')}, ${result.queued} in coda: partono da sole.`,
+      )
+    }
+    if (!parts.length) {
+      parts.push(
+        result.simulated
+          ? `${plural(result.simulated, 'email registrata come simulata', 'email registrate come simulate')}: in questo ambiente non partono davvero.`
+          : `${plural(result.sent, 'email partita', 'email partite')}.`,
+      )
+    }
+    const outcome = parts.join(' ')
     notifySuccess('Messaggio inviato', outcome)
     await navigateTo(`/admin/comunicazioni/${result.id}`)
   } catch (error) {

@@ -26,6 +26,7 @@ export const PAGES = {
     '/admin/staff/{staff}',
     '/admin/staff/{candidate}',
     '/admin/v-team',
+    '/admin/formazione',
     '/admin/v-team/{volunteer}',
     '/admin/documenti',
     '/admin/documenti/{document}',
@@ -34,6 +35,7 @@ export const PAGES = {
     '/admin/comunicazioni/{communication}',
     '/admin/utenti',
     '/account',
+    '/guida',
   ],
   famiglia: [
     '/famiglia',
@@ -44,18 +46,23 @@ export const PAGES = {
     '/famiglia/membri',
     '/famiglia/documenti',
     '/firma/{signature}',
+    '/guida',
   ],
   staff: [
     '/staff',
-    '/staff/candidatura',
+    '/staff/scheda',
     '/staff/disponibilita',
     '/staff/convocazioni',
     '/staff/sessioni',
     '/staff/programma/{sessionPast}',
     '/staff/documenti',
+    '/staff/formazione',
+    '/staff/risorse',
     '/firma/{signature}',
+    '/guida',
   ],
-  candidato: ['/staff', '/staff/candidatura'],
+  // Before the approval the area is the home alone: the other pages lead back there.
+  candidato: ['/staff', '/guida'],
 }
 
 if (!LOCAL) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FormError, FormErrorEvent } from '@nuxt/ui'
+import type { FormError } from '@nuxt/ui'
 import { formQuestions } from '#shared/content/family-form'
 import {
   COMPOSITION_GROUPS,
@@ -12,9 +12,10 @@ import {
   type FamilyComposition,
 } from '#shared/schemas/families'
 import type { FamilyDataResult, FamilyFormView, FamilyProfileDto } from '#shared/types/families'
-import type { ItalianRegion } from '#shared/utils/constants'
+import { residenceForm } from '#shared/schemas/common'
 import { formatDateTime, plural, surnameOf } from '#shared/utils/format'
 import { answerFields, fieldAnswers, type AnswerFields } from '~/utils/family-form'
+import { focusFirstError } from '~/utils/errors'
 
 // The family data (docs/spec.md, 3.8): the first form of the family, editable afterwards. Confirming it
 // creates one card per person declared, filled in on /famiglia/membri; the «-» removes an empty card. The
@@ -37,11 +38,7 @@ const filledCards = computed<FamilyComposition>(
 const state = reactive({
   name: '',
   phone: '',
-  address: '',
-  city: '',
-  postalCode: '',
-  province: '',
-  region: undefined as ItalianRegion | undefined,
+  ...residenceForm(null),
   composition: {} as Partial<FamilyComposition>,
   /** The names of the young people with a condition added now, asked next to their number. */
   guestNames: [] as string[],
@@ -73,11 +70,7 @@ if (profile.value) {
   Object.assign(state, {
     name: surnameOf(value.name),
     phone: value.phone ?? '',
-    address: value.address ?? '',
-    city: value.city ?? '',
-    postalCode: value.postalCode ?? '',
-    province: value.province ?? '',
-    region: value.region ?? undefined,
+    ...residenceForm(value),
     // Once confirmed, the composition is the cards; the first time the family says it.
     composition: value.formStatus === 'submitted' ? { ...value.cards } : {},
   })
@@ -121,15 +114,6 @@ function validate(): FormError[] {
     errors.push({ name: 'healthConsent', message: 'Senza il consenso non puoi indicare questi ragazzi e ragazze' })
   }
   return errors
-}
-
-/** Brings the first field with an error into view and puts the focus on its first control. */
-function onError(event: FormErrorEvent) {
-  const name = event.errors[0]?.name
-  const field = name ? document.querySelector<HTMLElement>(`[data-field="${name}"]`) : null
-  if (!field) return
-  field.scrollIntoView({ block: 'center' })
-  field.querySelector<HTMLElement>('input, textarea, button')?.focus({ preventScroll: true })
 }
 
 const saving = ref(false)
@@ -208,26 +192,32 @@ async function save() {
       title="Le domande non si sono caricate"
       :description="`${apiErrorMessage(formError)}. Ricarica la pagina.`"
     />
-    <UForm v-else :schema="familyDataFieldsSchema" :state="state" :validate="validate" @submit="save" @error="onError">
+    <UForm
+      v-else
+      :schema="familyDataFieldsSchema"
+      :state="state"
+      :validate="validate"
+      @submit="save"
+      @error="focusFirstError"
+    >
       <IcSection title="La famiglia">
         <div class="space-y-5">
           <UFormField
             label="Cognome della famiglia"
             name="name"
-            data-field="name"
             required
             help="Per esempio «Rossi»: negli elenchi del camp appare come «Famiglia Rossi»."
           >
             <UInput v-model="state.name" class="w-full" />
           </UFormField>
-          <UFormField label="Telefono" name="phone" data-field="phone" required>
+          <UFormField label="Telefono" name="phone" required>
             <UInput v-model="state.phone" type="tel" autocomplete="tel" class="w-full" />
           </UFormField>
         </div>
       </IcSection>
 
       <IcSection title="Residenza">
-        <FamiliesResidenceFields v-model="state" required />
+        <IcResidenceFields v-model="state" required />
       </IcSection>
 
       <IcSection
@@ -236,13 +226,7 @@ async function save() {
       >
         <div class="space-y-5">
           <template v-for="field in COMPOSITION_GROUPS" :key="field.key">
-            <UFormField
-              :label="field.label"
-              :help="fieldHelp(field)"
-              :name="`composition.${field.key}`"
-              :data-field="`composition.${field.key}`"
-              required
-            >
+            <UFormField :label="field.label" :help="fieldHelp(field)" :name="`composition.${field.key}`" required>
               <UInputNumber
                 v-model="state.composition[field.key]"
                 :min="minOf(field.key)"
@@ -259,7 +243,6 @@ async function save() {
                 :key="i"
                 :label="guestLabel(i)"
                 :name="`guestNames.${i}`"
-                :data-field="`guestNames.${i}`"
                 required
               >
                 <UInput v-model="state.guestNames[i]" autocomplete="off" class="w-full" />
@@ -274,7 +257,7 @@ async function save() {
               famiglia e l’amministrazione del camp, e non finisce mai nelle email. Puoi ritirare il consenso quando
               vuoi dalla pagina Componenti.
             </p>
-            <UFormField name="healthConsent" data-field="healthConsent">
+            <UFormField name="healthConsent">
               <FamiliesHealthConsentCheckbox v-model="state.healthConsent" />
             </UFormField>
           </div>

@@ -3,10 +3,14 @@ import { registerStaffSchema } from '#shared/schemas/auth'
 import { verifyEmailEmail } from '../../emails/auth'
 import { issueToken } from '../../domain/tokens'
 
-/** A person applies to join the staff: the account now, the application inside the platform. */
+/**
+ * A person applies to join the staff or the v-team (spec 3.4): the account and the CV in PDF, one
+ * multipart form. The application reaches the administration when the address is confirmed.
+ */
 export default defineEventHandler(async event => {
-  const input = await parseBody(event, registerStaffSchema)
   rateLimit(`register:${clientIp(event)}`, 10, 60 * 60_000)
+  const upload = await readUpload(event, { accept: ['application/pdf'] })
+  const input = parseFields(upload.fields, registerStaffSchema)
   const db = useDb()
   const [existing] = await db
     .select({ id: tables.users.id })
@@ -26,10 +30,23 @@ export default defineEventHandler(async event => {
           status: 'active',
           firstName: input.firstName,
           lastName: input.lastName,
-          phone: input.phone || null,
+          phone: input.phone,
         })
         .returning()
-      await tx.insert(tables.staffProfiles).values({ userId: user!.id, status: 'registered', team: input.team })
+      const cv = await saveFile(
+        {
+          data: upload.data,
+          originalName: upload.filename,
+          mimeType: upload.mimeType,
+          purpose: 'cv',
+          ownerUserId: user!.id,
+          uploadedBy: user!.id,
+        },
+        tx,
+      )
+      await tx
+        .insert(tables.staffProfiles)
+        .values({ userId: user!.id, status: 'registered', team: input.team, cvFileId: cv.id })
       return { user: user!, token: await issueToken(tx, user!.id, 'verify_email') }
     })
     .catch(error => {

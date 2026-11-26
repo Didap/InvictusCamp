@@ -1,15 +1,16 @@
-import { and, asc, count, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm'
 import {
   FAILED_EMAIL_DAYS,
   type DashboardDto,
   type DashboardSession,
   type DashboardTodo,
 } from '#shared/types/dashboard'
+import { queuedCount } from '~~/server/domain/email-quota'
 import { staffCountsOf } from '~~/server/domain/sessions'
 import { OF_TEAM, STAFF_TEAMS, enumLabel, type SessionStatus, type StaffTeam } from '#shared/utils/constants'
 import { todayIso } from '#shared/utils/dates'
-import { formatDay, plural } from '#shared/utils/format'
-import { TEAM_SLUG } from '#shared/utils/routes'
+import { formatDay, fullName, plural } from '#shared/utils/format'
+import { TEAM_SLUG, teamPath } from '#shared/utils/routes'
 import { slotSummary } from '#shared/utils/slots'
 
 const ACTIVE: SessionStatus[] = ['draft', 'inviting', 'confirmed']
@@ -47,7 +48,7 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
     .orderBy(asc(t.campSessions.startDate))
   const ids = sessions.map(s => s.id)
 
-  const [participations, staffCounts, counts, expiredInvites, overdueSignatures] = await Promise.all([
+  const [participations, staffCounts, counts, expiredInvites, overdueSignatures, resetRequests] = await Promise.all([
     ids.length
       ? db
           .select({
@@ -92,11 +93,13 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
             ),
           ),
       ),
-    ]).then(([applicationsToReview, formsToComplete, signaturesPending, emailsFailed]) => ({
+      queuedCount(db),
+    ]).then(([applicationsToReview, formsToComplete, signaturesPending, emailsFailed, emailsQueued]) => ({
       applicationsToReview,
       formsToComplete,
       signaturesPending,
       emailsFailed,
+      emailsQueued,
     })),
     total(
       db
@@ -126,6 +129,20 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
           ),
         ),
     ),
+    // «Chiedi il reset» of the availability, oldest first.
+    db
+      .select({
+        userId: t.users.id,
+        firstName: t.users.firstName,
+        lastName: t.users.lastName,
+        team: t.staffProfiles.team,
+        at: t.staffProfiles.availabilityResetRequestedAt,
+      })
+      .from(t.staffProfiles)
+      .innerJoin(t.users, eq(t.users.id, t.staffProfiles.userId))
+      // Leaving the approved staff drops the request; a disabled account has nothing to change.
+      .where(and(isNotNull(t.staffProfiles.availabilityResetRequestedAt), ne(t.users.status, 'disabled')))
+      .orderBy(asc(t.staffProfiles.availabilityResetRequestedAt)),
   ])
 
   const progress = sessions.map((s): DashboardSession & { endsBeforeToday: boolean } => {
@@ -217,6 +234,15 @@ export default defineEventHandler(async (event): Promise<DashboardDto> => {
       label: `${plural(overdueSignatures, 'firma oltre la scadenza', 'firme oltre la scadenza')}: manda un promemoria`,
       to: '/admin/documenti',
       icon: 'i-lucide-pen-line',
+    })
+  }
+  for (const request of resetRequests) {
+    todo.push({
+      key: `availability-reset:${request.userId}`,
+      label: `${fullName(request)} chiede di cambiare la disponibilità: riaprila`,
+      detail: `Richiesta del ${formatDay(todayIso(request.at!))}`,
+      to: teamPath(request.team, request.userId),
+      icon: 'i-lucide-calendar-clock',
     })
   }
   if (expiredInvites > 0) {

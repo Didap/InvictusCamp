@@ -25,9 +25,16 @@ export type ParticipationKind = (typeof PARTICIPATION_KINDS)[number]
 export const PARTICIPATION_STATUSES = ['selected', 'invited', 'confirmed', 'declined', 'cancelled'] as const
 export type ParticipationStatus = (typeof PARTICIPATION_STATUSES)[number]
 
-/** registered (account only) → applied (candidatura inviata) → approved / rejected; inactive = no longer called. */
+/**
+ * registered (account, address or CV still missing) → applied (candidatura inviata) → approved / rejected;
+ * inactive = no longer called.
+ */
 export const STAFF_STATUSES = ['registered', 'applied', 'approved', 'rejected', 'inactive'] as const
 export type StaffStatus = (typeof STAFF_STATUSES)[number]
+/** Who sees the whole staff area (spec 3.4): the others see only the home with where their application stands. */
+export function inStaffArea(status: StaffStatus | null | undefined): boolean {
+  return status === 'approved' || status === 'inactive'
+}
 
 /**
  * A role of staff and v-team: the id of a row of `staff_roles`, which the administration creates, renames
@@ -83,7 +90,7 @@ export type MemberKind = (typeof MEMBER_KINDS)[number]
 export const FAMILY_FORM_STATUSES = ['draft', 'submitted'] as const
 export type FamilyFormStatus = (typeof FAMILY_FORM_STATUSES)[number]
 
-/** The regions of Italy, for the family's residence. */
+/** The regions of Italy, for the residence of a family or of a staff member. */
 export const ITALIAN_REGIONS = [
   'Abruzzo',
   'Basilicata',
@@ -108,8 +115,19 @@ export const ITALIAN_REGIONS = [
 ] as const
 export type ItalianRegion = (typeof ITALIAN_REGIONS)[number]
 
+/** The T-shirt sizes of the staff's uniform (the personal sheet, /staff/scheda). */
+export const SHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'] as const
+export type ShirtSize = (typeof SHIRT_SIZES)[number]
+
 export const DOCUMENT_CATEGORIES = ['contract', 'consent', 'regulation', 'privacy', 'other'] as const
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number]
+
+/**
+ * A document in the «Risorse utili» of staff and v-team (docs/spec.md 3.6): to read and accept (or sign, as the
+ * document says), each approved person asked; or only to consult.
+ */
+export const STAFF_RESOURCE_MODES = ['accept', 'consult'] as const
+export type StaffResourceMode = (typeof STAFF_RESOURCE_MODES)[number]
 
 export const SIGNATURE_STATUSES = ['pending', 'signed', 'cancelled'] as const
 export type SignatureStatus = (typeof SIGNATURE_STATUSES)[number]
@@ -120,6 +138,7 @@ export const PERSONAL_DOCUMENT_CATEGORIES = [
   'id_document',
   'health_card',
   'certification',
+  'cv',
   'other',
 ] as const
 export type PersonalDocumentCategory = (typeof PERSONAL_DOCUMENT_CATEGORIES)[number]
@@ -128,8 +147,18 @@ export type PersonalDocumentCategory = (typeof PERSONAL_DOCUMENT_CATEGORIES)[num
 export const FILE_PURPOSES = ['personal_document', 'cv', 'document', 'signed_copy'] as const
 export type FilePurpose = (typeof FILE_PURPOSES)[number]
 
-export const EMAIL_STATUSES = ['sent', 'failed', 'simulated'] as const
+export const EMAIL_STATUSES = ['sent', 'failed', 'simulated', 'queued', 'sending', 'withdrawn'] as const
 export type EmailStatus = (typeof EMAIL_STATUSES)[number]
+
+/** The most emails that may leave in one day, whatever they are: Resend's free plan, on a UTC day. */
+export const EMAIL_DAILY_LIMIT = 100
+/** Kept for access emails (links, codes) until 23:59, when what is left goes to the queue. */
+export const EMAIL_ACCESS_RESERVE = 20
+/** Ordinary emails leave up to here; over it they wait in the queue. */
+export const EMAIL_ORDINARY_LIMIT = EMAIL_DAILY_LIMIT - EMAIL_ACCESS_RESERVE
+/** The queue leaves between these hours, plus one last round at 23:59. */
+export const EMAIL_QUEUE_START_HOUR = 8
+export const EMAIL_QUEUE_END_HOUR = 20
 
 /** What a block of the week programme is (docs/spec.md 3.10). `staff` blocks are not shown to families. */
 export const PROGRAMME_BLOCK_KINDS = [
@@ -360,6 +389,7 @@ const personalDocumentCategory: Record<PersonalDocumentCategory, EnumMeta> = {
   id_document: { label: 'Documento d’identità', icon: 'i-lucide-id-card', color: 'neutral' },
   health_card: { label: 'Tessera sanitaria', icon: 'i-lucide-credit-card', color: 'neutral' },
   certification: { label: 'Attestato o titolo', icon: 'i-lucide-award', color: 'neutral' },
+  cv: { label: 'Curriculum', icon: 'i-lucide-file-user', color: 'neutral' },
   other: { label: 'Altro', icon: 'i-lucide-file', color: 'neutral' },
 }
 
@@ -371,6 +401,19 @@ const emailStatus: Record<EmailStatus, EnumMeta> = {
     icon: 'i-lucide-flask-conical',
     color: 'neutral',
     description: 'Non inviata: manca la chiave di Resend (sviluppo)',
+  },
+  queued: {
+    label: 'In coda',
+    icon: 'i-lucide-clock',
+    color: 'warning',
+    description: 'Aspetta il primo posto libero nel limite giornaliero',
+  },
+  sending: { label: 'In invio', icon: 'i-lucide-loader', color: 'info' },
+  withdrawn: {
+    label: 'Ritirata',
+    icon: 'i-lucide-undo-2',
+    color: 'neutral',
+    description: 'Tolta dalla coda prima di partire',
   },
 }
 

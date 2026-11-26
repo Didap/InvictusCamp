@@ -31,5 +31,9 @@ export default defineAppConfig({
     selectMenu: { slots: { base: 'pointer-coarse:min-h-11' } },
     formField: { slots: { label: 'font-semibold' } },
     badge: { slots: { base: 'font-semibold' } },
+    // The close button in the header's flow, after the title: it takes its own room, at its own size, and
+    // only when there is one.
+    modal: { slots: { wrapper: 'flex-1 min-w-0', close: 'static ms-auto self-start' } },
+    slideover: { slots: { wrapper: 'flex-1 min-w-0', close: 'static ms-auto self-start' } },
   },
 })

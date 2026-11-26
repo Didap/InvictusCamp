@@ -16,7 +16,6 @@ defineProps<{ sections: FormSection[]; fields: AnswerFields }>()
         v-for="question in section.questions"
         :key="question.id"
         :name="question.id"
-        :data-field="question.id"
         :label="question.label"
         :help="question.help"
         :required="question.required"

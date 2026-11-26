@@ -166,10 +166,11 @@ P0:
   cancel (spec 3.5).
 - Staff side: `/staff` home that adapts to the status (complete the application, waiting, approved:
   next convocations, `PendingSignatures`, availability prompt; not selected: a kind message);
-  `/staff/candidatura` (form + CV upload as PDF, send → `applied`; editable while `registered`);
+  `/staff/scheda` (the personal sheet once approved: birth, codice fiscale, residence, T-shirt size, health
+  data under consent, the application read only);
   `/staff/disponibilita` ("Ci sono" per session; refused before approval); `/staff/convocazioni` (accept,
   decline with reason; accept creates the contract request with `requestSignatures` and sends it);
-  `/staff/sessioni` (calendar and list of accepted sessions); `/staff/documenti` (`PendingSignatures` +
+  `/staff/sessioni` (contracts to sign, next confirmed sessions, sessions done, cancelled ones; no calendar); `/staff/documenti` (`PendingSignatures` +
   personal documents upload with category and title).
 - Database tests: review, convocation send, accept with and without contract, availability rules.
 

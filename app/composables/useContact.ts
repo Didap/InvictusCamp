@@ -1,3 +1,5 @@
+import type { UserRole } from '#shared/utils/constants'
+
 export interface ContactConfig {
   email?: string
   phone?: string
@@ -39,21 +41,31 @@ export function contactSentence(contact: ContactConfig, lead?: string): string {
     .join('')
 }
 
+/** Whether a role is shown how to reach the camp (the help box of the menu, the end of the guide). */
+export function showsContact(role: UserRole | undefined): boolean {
+  return role === 'family' || role === 'staff'
+}
+
 /** How families or staff reach the camp, with the question the help box asks. */
 export interface Contact extends ContactConfig {
   question: string
 }
 
 /**
- * How to reach the camp (runtimeConfig.public.contact): families write to their own address, everyone
- * else to the general one. `families` for a public page; signed in, the role decides.
+ * How to reach the camp (runtimeConfig.public.contact): families and staff write to their own address,
+ * everyone else to the general one. `families` for a public page; signed in, the role decides.
  */
 export function useContact(families?: MaybeRefOrGetter<boolean | undefined>) {
   const { user } = useUserSession()
-  const { familiesEmail, ...contact } = useRuntimeConfig().public.contact
-  return computed<Contact>(() =>
-    (toValue(families) || user.value?.role === 'family') && familiesEmail
-      ? { ...contact, email: familiesEmail, question: 'Ti occorre supporto per la registrazione?' }
-      : { ...contact, question: 'Serve aiuto?' },
-  )
+  const { familiesEmail, staffEmail, ...contact } = useRuntimeConfig().public.contact
+  return computed<Contact>(() => {
+    if ((toValue(families) || user.value?.role === 'family') && familiesEmail) {
+      return { ...contact, email: familiesEmail, question: 'Ti occorre supporto per la registrazione?' }
+    }
+    return {
+      ...contact,
+      email: (user.value?.role === 'staff' && staffEmail) || contact.email,
+      question: 'Serve aiuto?',
+    }
+  })
 }

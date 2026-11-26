@@ -17,9 +17,8 @@ import type { DbOrTx } from './db'
 import { DomainError } from './errors'
 import { cardChecks, cardChecksByFamily, type Actor } from './families'
 import { textPdf } from './pdf'
-import { requestSignatures, signatureRequestEmails } from './signature-requests'
-import { setDocumentArchived } from './signatures'
-import { storeFile } from './storage'
+import { signatureRequestEmails } from './signature-requests'
+import { createGeneratedDocument, setDocumentArchived } from './signatures'
 
 const FAMILY_RELEASE = 'family'
 /** Keeps a save of the text and a renewal apart, also before the first save (no row to lock yet). */
@@ -128,45 +127,30 @@ export async function familyRelease(
 
   const template = input.renewWith ?? templateOf(await getReleaseText(db))
   const text = releaseText(template.body, data.input)
-  const file = await storeFile(db, input.uploadsDir, {
-    data: await textPdf(
+  const { documentId, requestIds } = await createGeneratedDocument(db, input.uploadsDir, {
+    owner: { familyId: family.id },
+    signerId: family.userId,
+    title: text.title,
+    description: 'Preparata dal gestionale con i dati dei componenti e le risposte della famiglia.',
+    category: 'consent',
+    pdf: await textPdf(
       text.title,
       text.paragraphs,
       template.revision
         ? 'Preparata dal gestionale con i dati dei componenti e le risposte della famiglia.'
         : 'Testo di esempio preparato dal gestionale con i dati dei componenti: il testo definitivo lo dà il camp.',
     ),
-    originalName: `${text.title}.pdf`,
-    mimeType: 'application/pdf',
-    purpose: 'document',
-    ownerUserId: family.userId,
+    sourceDigest: `${data.digest}.${template.digest}`,
   })
-  const [document] = await db
-    .insert(documents)
-    .values({
-      title: text.title,
-      description: 'Preparata dal gestionale con i dati dei componenti e le risposte della famiglia.',
-      category: 'consent',
-      fileId: file.id,
-      requiresSignature: true,
-      familyId: family.id,
-      sourceDigest: `${data.digest}.${template.digest}`,
-    })
-    .returning({ id: documents.id })
-  const requests = await requestSignatures(db, { documentId: document!.id, userIds: [family.userId] })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'family.release',
     entityType: 'family',
     entityId: family.id,
-    data: { documentId: document!.id, replaced: current?.id ?? null },
+    data: { documentId, replaced: current?.id ?? null },
     ip: input.actor.ip ?? null,
   })
-  return signatureRequestEmails(
-    db,
-    input.ctx,
-    requests.map(request => request.id),
-  )
+  return signatureRequestEmails(db, input.ctx, requestIds)
 }
 
 /**

@@ -32,16 +32,20 @@ export const registerFamilySchema = z.object({
 })
 export type RegisterFamilyInput = z.infer<typeof registerFamilySchema>
 
-/** A person applies to join the staff: the account first, the application inside the platform. */
+/**
+ * A person applies to join the staff or the v-team: the account and the CV, one multipart form (`file`
+ * plus these fields, so the tick arrives as the text 'true'). It reaches the administration once the
+ * address is confirmed (spec 3.4).
+ */
 export const registerStaffSchema = z.object({
-  /** The team the person applies for (the link they came from); the application can still change it. */
+  /** The team the person applies for: the link they came from. */
   team: z.enum(STAFF_TEAMS).default('staff'),
   firstName: zPersonName,
   lastName: zPersonName,
   email: zEmail,
-  phone: zPhone.optional(),
+  phone: zRequiredPhone,
   password: zPassword,
-  privacy: zPrivacy,
+  privacy: z.preprocess(value => (typeof value === 'string' ? value === 'true' : value), zPrivacy),
 })
 export type RegisterStaffInput = z.infer<typeof registerStaffSchema>
 

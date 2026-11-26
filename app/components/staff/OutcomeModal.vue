@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { staffOutcomeSchema } from '#shared/schemas/staff'
+import type { DeliveryReport } from '#shared/types/communications'
 import type { StaffOutcome } from '#shared/types/staff'
 import { formatDateTime } from '#shared/utils/format'
 
@@ -27,12 +28,14 @@ watch(open, value => {
 async function send() {
   sending.value = true
   try {
-    const report = await api<{ sent: number; failed: number; simulated: number }>(
-      `/api/admin/staff/${props.userId}/outcome`,
-      { method: 'POST', body: { message: state.message } },
-    )
+    const report = await api<DeliveryReport>(`/api/admin/staff/${props.userId}/outcome`, {
+      method: 'POST',
+      body: { message: state.message },
+    })
     if (report.failed) {
       notifyError({ data: { message: 'L’email non è stata recapitata: riprova più tardi o controlla il registro.' } })
+    } else if (report.queued) {
+      notifySuccess('Esito in coda', `L’email per ${props.name} parte da sola appena c’è posto nel limite giornaliero.`)
     } else {
       notifySuccess('Esito comunicato', `Email inviata a ${props.name}.`)
     }

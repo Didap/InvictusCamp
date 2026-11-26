@@ -80,7 +80,7 @@ import { DomainError } from './errors'
 import { familyPhoneSql } from './families'
 import { isYearArchived, ownResponse, questionnaireOpen } from './feedback'
 import { freezeSessionProgramme, sessionHasProgramme } from './programmes'
-import { cancelSessionConvocations, sessionConvocationNotices } from './staff'
+import { cancelSessionConvocations, reopenSessionAvailability, sessionConvocationNotices } from './staff'
 
 /** Who acts: the signed-in user and the client address, for the audit. */
 export interface Actor {
@@ -773,6 +773,7 @@ export async function updateSession(
   const fields = EDITABLE_FIELDS.filter(field => input.values[field] !== session[field])
   if (!fields.length) return
   await db.update(campSessions).set(input.values).where(eq(campSessions.id, session.id))
+  if (fields.includes('startDate') || fields.includes('endDate')) await reopenSessionAvailability(db, session.id)
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'session.update',

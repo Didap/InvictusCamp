@@ -67,10 +67,13 @@ function copyUrl(row: SignatureRequestRow, download = false): string {
 
 function actions(row: SignatureRequestRow): DropdownMenuItem[] {
   if (row.status === 'pending') {
-    return [
+    const items: DropdownMenuItem[] = [
       { label: 'Invia un promemoria', icon: 'i-lucide-bell-ring', onSelect: () => remind(row) },
-      { label: 'Annulla la richiesta', icon: 'i-lucide-ban', color: 'error', onSelect: () => cancel(row) },
     ]
+    if (!row.document.generated) {
+      items.push({ label: 'Annulla la richiesta', icon: 'i-lucide-ban', color: 'error', onSelect: () => cancel(row) })
+    }
+    return items
   }
   if (row.hasSignedCopy) {
     return [

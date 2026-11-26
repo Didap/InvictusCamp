@@ -1,70 +1,55 @@
 <script setup lang="ts">
-import { APPLICATION_CHECKLIST } from '#shared/schemas/staff'
+import { SHEET_MISSING, requiredDocumentsText } from '#shared/schemas/staff'
 import type { StaffHome } from '#shared/types/staff'
-import { todayIso } from '#shared/utils/dates'
-import { formatDay, formatDayRange, plural } from '#shared/utils/format'
+import { formatDayRange, plural } from '#shared/utils/format'
 
-// The staff home: it follows the application (spec 3.4). Registered: complete the application. Applied:
-// wait for the review. Approved: convocations to answer, next sessions, documents to sign, availability.
-// Not selected: a kind message. Inactive: no convocations for now.
-const { user } = useUserSession()
+// The staff home: it follows the application (spec 3.4). Until the approval it is the whole area:
+// registered, the CV to upload (an account made before it was asked at registration); applied, the
+// notice that we are reviewing it; not selected, a kind message. Approved: the personal sheet while it is
+// incomplete, convocations to answer, next sessions, documents to sign, availability. Inactive: no
+// convocations for now.
+const { user, session, fetch: fetchSession } = useUserSession()
 const { data: home, refresh } = await useApiFetch<StaffHome>('/api/staff/home')
+const documentsAlert = computed(() => {
+  const missing = home.value?.documentsMissing ?? []
+  return `${missing.length === 1 ? 'Ci serve' : 'Ci servono'} ${requiredDocumentsText(missing)}, in PDF.`
+})
 
-const dayOf = (instant: string | null) => (instant ? formatDay(todayIso(new Date(instant)), 'long') : '')
-const checklist = computed(() =>
-  APPLICATION_CHECKLIST.map(part => ({ part, done: !home.value?.missing.includes(part) })),
+// The approval may come while the tab is open: the session, and with it the menu, catches up.
+watch(
+  () => home.value?.status,
+  status => {
+    if (status && status !== session.value?.staffStatus) fetchSession()
+  },
 )
-const started = computed(() => checklist.value.some(item => item.done))
 </script>
 
 <template>
   <IcPage :title="user?.firstName ? `Ciao ${user.firstName}` : 'Home'" width="narrow">
     <template v-if="home">
-      <!-- Registered: the application is still to complete and send. -->
+      <!-- Registered: the CV is missing, and with it the application. -->
       <IcSection
         v-if="home.status === 'registered'"
-        title="Completa la candidatura"
-        description="Per entrare nello staff di Invictus Camp ti chiediamo qualche informazione su di te e il tuo CV in PDF. Puoi salvare e riprendere quando vuoi."
+        title="Carica qui il tuo CV"
+        description="Per completare la candidatura ci serve il tuo curriculum in PDF: con il CV la candidatura arriva a noi."
       >
-        <ul class="space-y-2" aria-label="Cosa serve per la candidatura">
-          <li v-for="item in checklist" :key="item.part" class="flex items-center gap-3">
-            <UIcon
-              :name="item.done ? 'i-lucide-circle-check' : 'i-lucide-circle'"
-              class="size-5 shrink-0"
-              :class="item.done ? 'text-success' : 'text-dimmed'"
-              aria-hidden="true"
-            />
-            <span :class="item.done ? 'text-muted' : 'text-highlighted'">{{ item.part }}</span>
-            <span class="sr-only">{{ item.done ? ': fatto' : ': da completare' }}</span>
-          </li>
-        </ul>
-        <UButton
-          to="/staff/candidatura"
-          size="lg"
-          icon="i-lucide-file-user"
-          :label="started ? 'Riprendi la candidatura' : 'Completa la candidatura'"
-          class="pointer-coarse:min-h-11 mt-6"
+        <IcFileUpload
+          endpoint="/api/staff/application/cv"
+          accept="application/pdf"
+          description="PDF, fino a 15 MB"
+          button-label="Invia il CV"
+          @uploaded="refresh()"
         />
       </IcSection>
 
-      <!-- Applied: waiting for the review. -->
+      <!-- Applied: waiting for the review, nothing else to see. -->
       <IcSection v-else-if="home.status === 'applied'" title="La tua candidatura">
         <div class="flex items-start gap-4">
           <UIcon name="i-lucide-hourglass" class="mt-1 size-6 shrink-0 text-info" aria-hidden="true" />
           <div class="max-w-prose space-y-2">
-            <p class="font-semibold text-highlighted">Candidatura inviata il {{ dayOf(home.appliedAt) }}.</p>
-            <p class="text-muted">
-              L’amministrazione la sta valutando. Ti scriveremo per email quando c’è un esito: intanto non devi fare
-              nulla.
-            </p>
-            <UButton
-              to="/staff/candidatura"
-              label="Rivedi la candidatura"
-              icon="i-lucide-file-user"
-              color="neutral"
-              variant="outline"
-              class="pointer-coarse:min-h-11 mt-2"
-            />
+            <p class="font-semibold text-highlighted">Grazie per la tua richiesta.</p>
+            <p>Stiamo valutando la candidatura e presto riceverai aggiornamenti.</p>
+            <IcContactLine lead="Per dubbi o necessità" class="text-muted" />
           </div>
         </div>
       </IcSection>
@@ -81,8 +66,46 @@ const started = computed(() => checklist.value.some(item => item.done))
         </div>
       </IcSection>
 
-      <!-- Approved (and inactive): convocations, sessions, documents, availability. -->
+      <!-- Approved (and inactive): the sheet to complete, convocations, sessions, documents, availability. -->
       <template v-else>
+        <UAlert
+          v-if="!home.sheetComplete"
+          class="mb-8"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-id-card"
+          title="Completa la tua scheda personale"
+          :description="SHEET_MISSING"
+          :actions="[
+            {
+              label: 'Compila la scheda',
+              to: '/staff/scheda',
+              class: 'pointer-coarse:min-h-11',
+              color: 'neutral',
+              variant: 'outline',
+            },
+          ]"
+        />
+
+        <UAlert
+          v-if="home.documentsMissing.length"
+          class="mb-8"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-file-up"
+          title="Carica i documenti obbligatori"
+          :description="documentsAlert"
+          :actions="[
+            {
+              label: 'Vai ai documenti',
+              to: '/staff/documenti',
+              class: 'pointer-coarse:min-h-11',
+              color: 'neutral',
+              variant: 'outline',
+            },
+          ]"
+        />
+
         <IcSection v-if="home.status === 'inactive'" title="Il tuo profilo non è attivo">
           <p class="max-w-prose text-muted">
             Al momento non ricevi convocazioni e non puoi indicare la disponibilità.
@@ -105,7 +128,7 @@ const started = computed(() => checklist.value.some(item => item.done))
             <UButton
               class="pointer-coarse:min-h-11"
               to="/staff/sessioni"
-              label="Calendario"
+              label="Tutte le sessioni"
               icon="i-lucide-calendar-days"
               color="neutral"
               variant="ghost"
@@ -139,13 +162,6 @@ const started = computed(() => checklist.value.some(item => item.done))
           <p v-else class="text-muted">Nessuna sessione in programma. Quando accetti una convocazione, la trovi qui.</p>
         </IcSection>
 
-        <IcSection
-          title="Per la mensa"
-          description="Allergie, intolleranze e preferenze alimentari, per i pasti delle sessioni a cui partecipi."
-        >
-          <StaffUsefulInfo />
-        </IcSection>
-
         <IcSection title="Documenti da firmare">
           <DocumentsPendingSignatures />
         </IcSection>
@@ -154,18 +170,23 @@ const started = computed(() => checklist.value.some(item => item.done))
           <p v-if="!home.availability.total" class="max-w-prose text-muted">
             Non ci sono sessioni in programma: quando l’amministrazione le prepara, indichi qui a quali puoi venire.
           </p>
-          <div v-else-if="home.availability.available" class="flex flex-wrap items-center justify-between gap-3">
+          <div
+            v-else-if="home.availability.available || !home.availability.toConfirm"
+            class="flex flex-wrap items-center justify-between gap-3"
+          >
             <p class="max-w-prose">
               Ci sei per
               <span class="font-semibold text-highlighted">{{
                 plural(home.availability.available, 'sessione', 'sessioni')
               }}</span>
-              su {{ home.availability.total }} in programma.
+              su {{ home.availability.total }} in programma.<template v-if="home.availability.toConfirm">
+                Quando hai finito, conferma le tue preferenze.</template
+              >
             </p>
             <UButton
               class="pointer-coarse:min-h-11"
               to="/staff/disponibilita"
-              label="Aggiorna la disponibilità"
+              :label="home.availability.toConfirm ? 'Conferma la disponibilità' : 'Vedi la disponibilità'"
               icon="i-lucide-calendar-check"
               color="neutral"
               variant="outline"
@@ -178,8 +199,8 @@ const started = computed(() => checklist.value.some(item => item.done))
             icon="i-lucide-calendar-plus"
             title="Indica a quali sessioni puoi venire"
             :description="`${
-              home.availability.total === 1 ? 'C’è una sessione' : `Ci sono ${home.availability.total} sessioni`
-            } in programma: ti convochiamo solo per quelle a cui ci sei, dal primo all’ultimo giorno.`"
+              home.availability.toConfirm === 1 ? 'C’è una sessione' : `Ci sono ${home.availability.toConfirm} sessioni`
+            } in programma su cui dirci se ci sei, dal primo all’ultimo giorno: ti convochiamo solo per quelle.`"
             :actions="[
               {
                 label: 'Indica la disponibilità',
