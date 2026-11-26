@@ -3,7 +3,7 @@ import type { DropdownMenuItem, TableColumn } from '@nuxt/ui'
 import type { ContactBulkInput, ContactFilter } from '#shared/schemas/contacts'
 import type { Paginated } from '#shared/types/api'
 import type { ContactListItem } from '#shared/types/contacts'
-import type { ContactKind } from '#shared/utils/constants'
+import { type ContactKind, enumLabel } from '#shared/utils/constants'
 import { fullName, plural } from '#shared/utils/format'
 
 // The «Anagrafica» (docs/spec.md 3.16): every person the camp keeps in touch with, with an account or without.
@@ -41,6 +41,10 @@ const { data, pending, refresh } = await useApiFetch<Paginated<ContactListItem>>
   query: computed(() => ({ ...query.value, pageSize: PAGE_SIZE })),
 })
 const total = computed(() => data.value?.total ?? 0)
+// After a delete the page may be past the end: go back to the last one instead of showing an empty list.
+watch(data, value => {
+  if (value && !value.items.length && page.value > 1) page.value = Math.max(1, Math.ceil(value.total / PAGE_SIZE))
+})
 function resetFilters() {
   q.value = ''
   kind.value = 'all'
@@ -53,6 +57,12 @@ const groupItems = computed(() => [
   { value: 'none', label: 'Senza gruppo' },
   ...groups.value.map(item => ({ value: item.id, label: `${item.name} (${item.count})` })),
 ])
+// The group of the filter was deleted (in «Gruppi», or elsewhere): back to every group.
+watch(groups, value => {
+  if (value.length && !['all', 'none'].includes(group.value) && !value.some(item => item.id === group.value)) {
+    group.value = 'all'
+  }
+})
 const exportUrl = computed(() => {
   const params = new URLSearchParams(
     Object.entries(filter.value).filter((entry): entry is [string, string] => Boolean(entry[1])),
@@ -70,11 +80,13 @@ function clearSelection() {
 }
 const pageIds = computed(() => data.value?.items.map(item => item.id) ?? [])
 const pageChecked = computed<boolean | 'indeterminate'>(() => {
+  if (allFound.value) return true
   const ticked = pageIds.value.filter(id => selected.value.has(id)).length
   return ticked && ticked === pageIds.value.length ? true : ticked ? 'indeterminate' : false
 })
+/** Changing one box while «all found» is on keeps what is in sight: this page, then the change. */
 function tick(ids: string[], value: boolean) {
-  const next = new Set(selected.value)
+  const next = new Set(allFound.value ? pageIds.value : selected.value)
   for (const id of ids) {
     if (value) next.add(id)
     else next.delete(id)
@@ -118,13 +130,25 @@ function addToGroup(groupId: string) {
     count ? `${plural(count, 'contatto aggiunto', 'contatti aggiunti')} a «${name}»` : `Erano già tutti in «${name}»`,
   )
 }
-function removeFromGroup(groupId: string) {
+async function removeFromGroup(groupId: string) {
   const name = groupName(groupId)
+  const ok = await confirm({
+    title: `Togli ${selectionLabel.value} da «${name}»?`,
+    description: 'Restano in anagrafica e negli altri gruppi. Non parte nessuna email.',
+    confirmLabel: 'Togli dal gruppo',
+  })
+  if (!ok) return
   return runBulk({ selection: selection(), action: 'remove_from_group', groupId }, count =>
     count ? `${plural(count, 'contatto tolto', 'contatti tolti')} da «${name}»` : `Nessuno era in «${name}»`,
   )
 }
-function setKind(value: ContactKind) {
+async function setKind(value: ContactKind) {
+  const ok = await confirm({
+    title: `Cambi il tipo di ${selectionLabel.value} in «${enumLabel('contactKind', value)}»?`,
+    description: 'Il tipo di prima non si recupera. Non parte nessuna email.',
+    confirmLabel: 'Cambia il tipo',
+  })
+  if (!ok) return
   return runBulk({ selection: selection(), action: 'set_kind', kind: value }, count =>
     count ? `Tipo cambiato a ${plural(count, 'contatto', 'contatti')}` : 'Avevano già tutti quel tipo',
   )

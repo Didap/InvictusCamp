@@ -119,7 +119,12 @@ export async function listContacts(db: DbOrTx, query: ContactListQuery): Promise
 /** Refuses ids of groups deleted meanwhile (the form had an old list). */
 async function assertGroups(db: DbOrTx, groupIds: string[]): Promise<void> {
   if (!groupIds.length) return
-  const found = await db.select({ id: contactGroups.id }).from(contactGroups).where(inArray(contactGroups.id, groupIds))
+  // Locked until the end of the transaction, so a group deleted meanwhile cannot leave a foreign key error.
+  const found = await db
+    .select({ id: contactGroups.id })
+    .from(contactGroups)
+    .where(inArray(contactGroups.id, groupIds))
+    .for('share')
   if (found.length !== new Set(groupIds).size) throw httpError(400, 'Un gruppo scelto non esiste più')
 }
 
@@ -174,7 +179,8 @@ export async function deleteContact(db: DbOrTx, id: string, actor: Actor): Promi
 /**
  * Adds the contacts of a list (shared/utils/contacts-import.ts read it in the browser). One contact per
  * email: an address already in the registry is not added again; with `update` it takes the type and the
- * names of the row (blank cells change nothing). Every contact of the list joins the chosen groups.
+ * names of the row (a blank cell, or no type, changes nothing). Every contact of the list joins the chosen
+ * groups. One statement per chunk, never one per row: the production database is a network hop away.
  */
 export async function importContacts(
   db: DbOrTx,
@@ -183,22 +189,26 @@ export async function importContacts(
 ): Promise<ContactImportResult> {
   await assertGroups(db, input.groupIds)
   const rows = [...new Map(input.rows.map(row => [row.email, row])).values()]
-  const existing = new Map<string, { id: string; kind: ContactKind; firstName: string; lastName: string }>()
-  for (const part of chunks(rows.map(row => row.email))) {
-    const found = await db
-      .select({
-        id: contacts.id,
-        email: contacts.email,
-        kind: contacts.kind,
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-      })
-      .from(contacts)
-      .where(inArray(contacts.email, part))
-    for (const { email, ...contact } of found) existing.set(email, contact)
+  const byEmail = async () => {
+    const found: { id: string; email: string; kind: ContactKind; firstName: string; lastName: string }[] = []
+    for (const part of chunks(rows.map(row => row.email))) {
+      found.push(
+        ...(await db
+          .select({
+            id: contacts.id,
+            email: contacts.email,
+            kind: contacts.kind,
+            firstName: contacts.firstName,
+            lastName: contacts.lastName,
+          })
+          .from(contacts)
+          .where(inArray(contacts.email, part))),
+      )
+    }
+    return new Map(found.map(({ email, ...contact }) => [email, contact]))
   }
+  const existing = await byEmail()
 
-  const ids = [...existing.values()].map(contact => contact.id)
   let created = 0
   for (const part of chunks(rows.filter(row => !existing.has(row.email)))) {
     const inserted = await db
@@ -207,29 +217,43 @@ export async function importContacts(
       .onConflictDoNothing({ target: contacts.email })
       .returning({ id: contacts.id })
     created += inserted.length
-    ids.push(...inserted.map(row => row.id))
   }
 
-  let updated = 0
-  if (input.update) {
-    for (const row of rows) {
-      const before = existing.get(row.email)
-      if (!before) continue
-      const after = {
-        kind: row.kind ?? input.kind,
-        firstName: row.firstName || before.firstName,
-        lastName: row.lastName || before.lastName,
-      }
-      if (after.kind === before.kind && after.firstName === before.firstName && after.lastName === before.lastName) {
-        continue
-      }
-      await db.update(contacts).set(after).where(eq(contacts.id, before.id))
-      updated++
-    }
+  const changes = input.update
+    ? rows.flatMap(row => {
+        const before = existing.get(row.email)
+        if (!before) return []
+        const after = {
+          id: before.id,
+          kind: row.kind ?? before.kind,
+          firstName: row.firstName || before.firstName,
+          lastName: row.lastName || before.lastName,
+        }
+        const same =
+          after.kind === before.kind && after.firstName === before.firstName && after.lastName === before.lastName
+        return same ? [] : [after]
+      })
+    : []
+  for (const part of chunks(changes)) {
+    const values = sql.join(
+      part.map(change => sql`(${change.id}::uuid, ${change.kind}, ${change.firstName}, ${change.lastName})`),
+      sql`, `,
+    )
+    await db.execute(sql`
+      update ${contacts} set kind = v.kind, first_name = v.first_name, last_name = v.last_name, updated_at = now()
+      from (values ${values}) as v(id, kind, first_name, last_name)
+      where ${contacts}.id = v.id`)
   }
 
-  await addToGroups(db, ids, input.groupIds)
-  const result = { created, existing: existing.size, updated }
+  // Read again: a row another import added meanwhile was skipped above, but is in the list all the same.
+  if (input.groupIds.length) {
+    await addToGroups(
+      db,
+      [...(await byEmail()).values()].map(contact => contact.id),
+      input.groupIds,
+    )
+  }
+  const result = { created, existing: rows.length - created, updated: changes.length }
   await audit(db, 'contact.import', 'contact', null, { ...result, groupIds: input.groupIds }, actor)
   return result
 }

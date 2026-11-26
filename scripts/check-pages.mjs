@@ -33,6 +33,7 @@ export const PAGES = {
     '/admin/comunicazioni',
     '/admin/comunicazioni/nuova',
     '/admin/comunicazioni/{communication}',
+    '/admin/anagrafica',
     '/admin/utenti',
     '/account',
     '/guida',

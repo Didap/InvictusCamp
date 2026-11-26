@@ -78,13 +78,15 @@ describe('contacts', () => {
     ])
     expect(items.every(item => item.groupIds.includes(group))).toBe(true)
 
-    expect(await importContacts(db, { rows, kind: 'family', groupIds: [], update: true }, actor)).toEqual({
+    // With `update`, a row without a type keeps the contact's: Mario stays a family, not «Altro».
+    expect(await importContacts(db, { rows, kind: 'other', groupIds: [], update: true }, actor)).toEqual({
       created: 0,
       existing: 3,
       updated: 1,
     })
     const anna = (await list({ q: 'anna' })).items[0]
     expect(anna).toMatchObject({ kind: 'staff', firstName: 'Anna', lastName: 'Bianchi' })
+    expect((await list({ q: 'mario' })).items[0]).toMatchObject({ kind: 'family' })
   })
 
   it('filters by name, type and group, and acts on the ones ticked or on every one found', async () => {

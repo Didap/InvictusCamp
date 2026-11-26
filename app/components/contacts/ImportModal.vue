@@ -43,7 +43,7 @@ const withoutKind = computed(() => contacts.value.filter(contact => !contact.kin
 const tooMany = computed(() => contacts.value.length > CONTACT_IMPORT_MAX)
 const ready = computed(() => contacts.value.length > 0 && !tooMany.value && (!withoutKind.value || Boolean(kind.value)))
 
-/** A CSV from Excel in Italian may be in Windows-1252: read as UTF-8 when it is, else as that. */
+/** A CSV from Excel in Italian may be in Windows-1252, a «Testo Unicode» in UTF-16: each read as it is. */
 async function onFile(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -54,11 +54,17 @@ async function onFile(event: Event) {
     fileError.value = `Il file è troppo grande: dividi l’elenco in parti da al massimo ${CONTACT_IMPORT_MAX} righe.`
     return
   }
-  const bytes = await file.arrayBuffer()
-  try {
-    text.value = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-  } catch {
-    text.value = new TextDecoder('windows-1252').decode(bytes)
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  // «Testo Unicode» of Excel is UTF-16, with its byte order mark first.
+  const utf16 =
+    bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf-16le' : bytes[0] === 0xfe && bytes[1] === 0xff ? 'utf-16be' : null
+  if (utf16) text.value = new TextDecoder(utf16).decode(bytes)
+  else {
+    try {
+      text.value = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    } catch {
+      text.value = new TextDecoder('windows-1252').decode(bytes)
+    }
   }
   fileName.value = file.name
 }
@@ -156,7 +162,7 @@ async function onImport() {
                 </tr>
               </thead>
               <tbody class="divide-y divide-default">
-                <tr v-for="contact in contacts.slice(0, PREVIEW_ROWS)" :key="contact.line">
+                <tr v-for="contact in contacts.slice(0, PREVIEW_ROWS)" :key="contact.email">
                   <td class="px-3 py-2">{{ contact.firstName || '·' }}</td>
                   <td class="px-3 py-2">{{ contact.lastName || '·' }}</td>
                   <td class="px-3 py-2 break-all">{{ contact.email }}</td>

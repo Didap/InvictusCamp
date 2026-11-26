@@ -36,10 +36,38 @@ describe('parseContacts', () => {
     expect(fields('Nominativo,Email\nMario Rossi,mario@example.it')).toEqual([
       ['Mario', 'Rossi', 'mario@example.it', null],
     ])
-    expect(fields('Cognome e nome;Email\nDe Luca Anna;anna@example.it')).toEqual([
-      ['Luca Anna', 'De', 'anna@example.it', null],
-    ])
+    expect(fields('Cognome e nome;Email\nDe Luca Anna;anna@example.it\nDell’Acqua Maria Grazia;mg@example.it')).toEqual(
+      [
+        ['Anna', 'De Luca', 'anna@example.it', null],
+        ['Maria Grazia', 'Dell’Acqua', 'mg@example.it', null],
+      ],
+    )
     expect(fields('Name,Email\nMario Rossi,mario@example.it')).toEqual([['Mario', 'Rossi', 'mario@example.it', null]])
+    // «Nome» alone is the first name: «Maria Grazia» is not split.
+    expect(fields('Nome;Email\nMaria Grazia;mg@example.it')).toEqual([['Maria Grazia', '', 'mg@example.it', null]])
+  })
+
+  it('finds the email column by a title with «mail» or by its @', () => {
+    expect(fields('Nome;Cognome;Email genitore\nMario;Rossi;mario@example.it')).toEqual([
+      ['Mario', 'Rossi', 'mario@example.it', null],
+    ])
+    expect(fields('Nome;Cognome;Recapito\nMario;Rossi;mario@example.it')).toEqual([
+      ['Mario', 'Rossi', 'mario@example.it', null],
+    ])
+  })
+
+  it('never takes a phone or a CAP for a surname', () => {
+    expect(fields('Mario Rossi\t333 1234567\tmario@example.it\t74024')).toEqual([
+      ['Mario', 'Rossi', 'mario@example.it', null],
+    ])
+  })
+
+  it('reads the recipients an email program copies on one line', () => {
+    expect(fields('"Mario Rossi" <mario@example.it>, Anna Bianchi <anna@example.it>, luca@example.it')).toEqual([
+      ['Mario', 'Rossi', 'mario@example.it', null],
+      ['Anna', 'Bianchi', 'anna@example.it', null],
+      ['', '', 'luca@example.it', null],
+    ])
   })
 
   it('keeps quoted cells whole', () => {
@@ -61,11 +89,11 @@ describe('parseContacts', () => {
     ])
   })
 
-  it('refuses a header without an email column, and two addresses in a row without a header', () => {
+  it('refuses a list without addresses, and two addresses in a row with a name', () => {
     expect(parseContacts('Nome;Cognome\nMario;Rossi').problems).toEqual([
       { line: 1, reason: 'Manca la colonna dell’email' },
     ])
-    expect(parseContacts('a@example.it;b@example.it').problems).toEqual([
+    expect(parseContacts('Mario;a@example.it;b@example.it').problems).toEqual([
       { line: 1, reason: 'Più di un indirizzo nella stessa riga' },
     ])
   })

@@ -41,7 +41,7 @@ const normalize = (text: string) =>
 const HEADERS: Record<string, Column> = {
   nome: 'firstName',
   firstname: 'firstName',
-  name: 'firstName',
+  name: 'fullName',
   givenname: 'firstName',
   cognome: 'lastName',
   lastname: 'lastName',
@@ -140,21 +140,46 @@ function splitAddress(cell: string): { name: string; email: string } {
   return match ? { name: match[1]!.replace(/^"|"$/g, '').trim(), email: match[2]! } : { name: '', email: cell }
 }
 
-/** «Mario Rossi»: the first word is the name, the rest the surname (reversed: «Rossi Mario»). */
+/** The words that open an Italian surname: «De Luca», «Di Stefano», «La Rosa», «Dell’Acqua». */
+const PARTICLES = new Set([
+  'd',
+  'da',
+  'dal',
+  'dalla',
+  'de',
+  'dei',
+  'del',
+  'della',
+  'dello',
+  'di',
+  'la',
+  'lo',
+  'li',
+  'van',
+  'von',
+])
+const isParticle = (word: string) => PARTICLES.has(word.toLowerCase().replace(/[’']$/, ''))
+
+/**
+ * «Mario Rossi»: the first word is the name, the rest the surname. Reversed («Rossi Mario», a «Cognome e
+ * nome» column) the surname is the first word with the particles before it: «De Luca Anna».
+ */
 function splitName(full: string, reversed = false): { firstName: string; lastName: string } {
   const words = full.split(/\s+/).filter(Boolean)
   if (words.length < 2) return { firstName: words[0] ?? '', lastName: '' }
-  return reversed
-    ? { firstName: words.slice(1).join(' '), lastName: words[0]! }
-    : { firstName: words[0]!, lastName: words.slice(1).join(' ') }
+  if (!reversed) return { firstName: words[0]!, lastName: words.slice(1).join(' ') }
+  let surname = 1
+  while (surname < words.length - 1 && isParticle(words[surname - 1]!)) surname++
+  return { firstName: words.slice(surname).join(' '), lastName: words.slice(0, surname).join(' ') }
 }
 
-/** The columns named by a header row, or null when the first row is data. */
+/** The columns named by a header row, or null when the first row is data. «Email genitore» is the email. */
 function headerOf(cells: string[]): Map<Column, number> | null {
   if (cells.some(cell => cell.includes('@'))) return null
   const columns = new Map<Column, number>()
   cells.forEach((cell, index) => {
-    const column = HEADERS[normalize(cell)]
+    const name = normalize(cell)
+    const column = HEADERS[name] ?? (name.includes('mail') ? 'email' : undefined)
     if (column && !columns.has(column)) columns.set(column, index)
   })
   return columns.size ? columns : null
@@ -174,29 +199,53 @@ function byHeader(cells: string[], columns: Map<Column, number>): Fields {
     return index === undefined ? '' : (cells[index] ?? '')
   }
   const { name, email } = splitAddress(at('email'))
-  // Without a surname column, one column holds the whole name («Nominativo», or «Name» in English).
-  let { firstName, lastName } = columns.has('lastName')
-    ? { firstName: at('firstName'), lastName: at('lastName') }
-    : splitName(at('fullName') || at('reversedName') || at('firstName'), !at('fullName') && Boolean(at('reversedName')))
+  // «Nominativo» (or «Name» in English) holds the whole name; «Nome» alone is the first name only.
+  const whole = at('fullName') || at('reversedName')
+  let { firstName, lastName } =
+    columns.has('lastName') || !whole
+      ? { firstName: at('firstName'), lastName: at('lastName') }
+      : splitName(whole, !at('fullName'))
   if (!firstName && !lastName) ({ firstName, lastName } = splitName(name))
   return { firstName, lastName, email, kind: kindOf(at('kind')) }
 }
 
-/** A row without a header: the cell with the @ is the email, a known type is the type, the rest the name. */
-function byContent(cells: string[]): Fields | string {
-  const emails = cells.filter(cell => cell.includes('@'))
-  if (emails.length > 1) return 'Più di un indirizzo nella stessa riga'
+/**
+ * A row without a header: the cell with the @ is the email, a known type is the type, the rest the name
+ * (never a cell with digits: a phone, a CAP). A row of addresses alone, as an email program copies its
+ * recipients, is one contact per address.
+ */
+function byContent(cells: string[]): Fields[] | string {
+  const filled = cells.filter(Boolean)
+  const emails = filled.filter(cell => cell.includes('@'))
+  if (emails.length > 1) {
+    if (emails.length < filled.length) return 'Più di un indirizzo nella stessa riga'
+    return emails.map(cell => {
+      const { name, email } = splitAddress(cell)
+      return { ...splitName(name), email, kind: null }
+    })
+  }
   const { name, email } = splitAddress(emails[0] ?? '')
   let kind: ContactKind | null = null
   const words: string[] = []
-  for (const cell of cells) {
-    if (!cell || cell.includes('@')) continue
+  for (const cell of filled) {
+    if (cell.includes('@') || /\d/.test(cell)) continue
     const known: ContactKind | null = kind ? null : kindOf(cell)
     if (known) kind = known
     else words.push(cell)
   }
   const names = words.length >= 2 ? { firstName: words[0]!, lastName: words[1]! } : splitName(words[0] || name)
-  return { ...names, email, kind }
+  return [{ ...names, email, kind }]
+}
+
+/** Without a known title for it, the email is the column whose cells have the @. */
+function emailColumn(rows: string[][]): number | undefined {
+  const counts = new Map<number, number>()
+  for (const cells of rows) {
+    cells.forEach((cell, index) => {
+      if (cell.includes('@')) counts.set(index, (counts.get(index) ?? 0) + 1)
+    })
+  }
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0]
 }
 
 /** Every contact of the list, and the rows that cannot be imported, with the reason. */
@@ -208,28 +257,43 @@ export function parseContacts(text: string): ParsedContacts {
   const contacts: ParsedContact[] = []
   const problems: ContactProblem[] = []
   if (columns && !columns.has('email')) {
-    return { contacts, problems: [{ line: firstFilled + 1, reason: 'Manca la colonna dell’email' }], header: true }
+    const index = emailColumn(rows.slice(firstFilled + 1))
+    if (index === undefined) {
+      return { contacts, problems: [{ line: firstFilled + 1, reason: 'Manca la colonna dell’email' }], header: true }
+    }
+    columns.set('email', index)
   }
   const seen = new Map<string, number>()
   rows.forEach((cells, index) => {
     const line = index + 1
     if ((columns && index === firstFilled) || !cells.some(Boolean)) return
-    const fields = columns ? byHeader(cells, columns) : byContent(cells)
-    if (typeof fields === 'string') return problems.push({ line, reason: fields })
-    if (!fields.email) return problems.push({ line, reason: 'Manca l’email' })
-    const parsed = zEmail.safeParse(fields.email)
-    if (!parsed.success) return problems.push({ line, reason: `Email non valida: ${fields.email}` })
-    const email = parsed.data
-    const first = seen.get(email)
-    if (first) return problems.push({ line, reason: `Email già alla riga ${first}` })
-    seen.set(email, line)
-    contacts.push({
-      line,
-      firstName: fields.firstName.slice(0, 100),
-      lastName: fields.lastName.slice(0, 100),
-      email,
-      kind: fields.kind,
-    })
+    const read = columns ? [byHeader(cells, columns)] : byContent(cells)
+    if (typeof read === 'string') return problems.push({ line, reason: read })
+    for (const fields of read) {
+      if (!fields.email) {
+        problems.push({ line, reason: 'Manca l’email' })
+        continue
+      }
+      const parsed = zEmail.safeParse(fields.email)
+      if (!parsed.success) {
+        problems.push({ line, reason: `Email non valida: ${fields.email}` })
+        continue
+      }
+      const email = parsed.data
+      const first = seen.get(email)
+      if (first) {
+        problems.push({ line, reason: first === line ? 'Email ripetuta nella riga' : `Email già alla riga ${first}` })
+        continue
+      }
+      seen.set(email, line)
+      contacts.push({
+        line,
+        firstName: fields.firstName.slice(0, 100),
+        lastName: fields.lastName.slice(0, 100),
+        email,
+        kind: fields.kind,
+      })
+    }
   })
   return { contacts, problems, header: Boolean(columns) }
 }
