@@ -47,7 +47,7 @@ Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the famil
 `/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`, `/famiglia/questionario/:sessionId` (3.13). Staff: `/staff` (home), `/staff/scheda`,
 `/staff/disponibilita`, `/staff/convocazioni`, `/staff/sessioni`, `/staff/documenti`, `/staff/formazione`,
 `/staff/programma/:sessionId`.
-Everyone: `/account`, `/firma/:requestId`.
+Everyone: `/account`, `/firma/:requestId`, `/guida` (3.15).
 
 ## 3. Flows
 
@@ -513,6 +513,24 @@ What the supplier of the meals needs for a session: the **Mensa** tab of the ses
   cui: 5 senza lattosio (…)»; «Scarica CSV» downloads the same. Health data with names: administration only;
   reading and downloads are audited (`session.canteen_view`, `session.canteen_export`, with `format: 'pdf'`
   for the PDF).
+
+### 3.15 The guide
+
+`/guida`, «Guida», the last item of the menu of every role (staff not approved yet too): what each person can do
+in the gestionale, in plain words for people not at ease with a computer. Static text in
+`shared/content/guide.ts`, one guide per role (staff and v-team share one), changed with the flow it describes;
+the menu it describes is `navFor` (`shared/utils/nav.ts`), and a test checks that every page of it has its text.
+Signed in only: help to sign in stays on the public pages (`/accedi` offers the new confirmation link).
+
+- **Cosa puoi fare**: the role's menu as it is now, in its order, each item with a sentence on what it is for and
+  a link to it, then «Il mio account». Staff not approved yet see the home alone, as in the menu.
+- **Passo passo**: the common tasks as numbered steps, one action each, the buttons named as the pages show them
+  («Conferma la partecipazione», «Invia il codice»…): the family's first steps, an invitation, a signature, the
+  questionnaire; the staff's application, personal sheet, availability, convocation; the administration's life of a
+  session, applications, convocations, documents, lodgings, groups and canteen, messages.
+- **Domande frequenti**: questions and answers that open one by one (password, emails not arrived, who sees the
+  health data, the reserve list, the daily email limit…).
+- Families and staff end with how to reach the camp (`useContact`).
 
 ## 4. Emails
 
