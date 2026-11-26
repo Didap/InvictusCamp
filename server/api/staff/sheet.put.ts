@@ -1,6 +1,6 @@
 import { staffSheetFormSchema } from '#shared/schemas/staff'
 import type { StaffSheetSaved } from '#shared/types/staff'
-import { saveStaffSheet, saveStaffUsefulInfo, sheetSignature } from '../../domain/staff'
+import { saveStaffSheet, saveStaffUsefulInfo, sheetSignature, staffUsefulInfo } from '../../domain/staff'
 
 /**
  * Saves the personal sheet (birth, codice fiscale, residence, T-shirt size, the staff's contract formula) and the
@@ -9,7 +9,7 @@ import { saveStaffSheet, saveStaffUsefulInfo, sheetSignature } from '../../domai
  */
 export default defineEventHandler(async (event): Promise<StaffSheetSaved> => {
   const { user, profile } = await requireStaff(event)
-  const { health, ...value } = await parseBody(event, staffSheetFormSchema(profile.team))
+  const { health, ...value } = await parseBody(event, staffSheetFormSchema(profile.team, staffUsefulInfo(profile)))
   const actor = { userId: user.id, ip: clientIp(event) }
   const { saved, emails } = await useDb().transaction(async tx => {
     const sheet = await saveStaffSheet(tx, { userId: user.id, value, actor })

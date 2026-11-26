@@ -148,8 +148,9 @@ allergie alimentari?» (the allergens of the families' list, 3.8, plus «Altro»
 intolleranze non alimentari da segnalare?» (dust mites, cat or dog hair, pollen, insect stings, latex, nickel,
 plus «Altro»: `staff_profiles.nonFoodAllergies`) and «Hai altre info da segnalare?» (dyscalculia, colour
 blindness…, `otherInfo`), which only the admins read. All the health answers are under one consent, a box under
-them: ticked as it was given, needed to save any of them; saving them changed renews its date, saving them
-unchanged keeps it; saving none, or «Cancella queste informazioni e ritira il consenso» (at once, whatever the
+them that always starts empty: answers new or changed are saved only with it ticked then (the server checks it
+against what is stored), and its date is renewed; the same answers again keep the consent given, shown as
+«Consenso dato il …»; saving none, or «Cancella queste informazioni e ritira il consenso» (at once, whatever the
 rest of the sheet), withdraws it. Saving is audited with the names of the fields that changed, never their
 values (`staff.sheet`, `staff.useful_info`). Until the sheet is complete the home asks for it. The admins see the
 sheet on the person's page, the health data in a reserved section opened on demand and audited

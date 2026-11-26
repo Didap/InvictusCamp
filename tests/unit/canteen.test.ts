@@ -1,6 +1,6 @@
 // The canteen summary of a session (docs/spec.md 3.14): totals, needs with names, the text for the supplier.
 import { describe, expect, it } from 'vitest'
-import { staffUsefulInfoSchema } from '../../shared/schemas/staff'
+import { needsHealthConsent } from '../../shared/schemas/staff'
 import { canteenSummary, canteenText, canteenWho } from '../../shared/utils/canteen'
 
 describe('canteen', () => {
@@ -57,8 +57,7 @@ describe('canteen', () => {
   })
 
   it('asks the staff for the consent only when they write something', () => {
-    expect(staffUsefulInfoSchema.safeParse({ info: { allergies: ['milk'] }, consent: false }).success).toBe(false)
-    expect(staffUsefulInfoSchema.safeParse({ info: { allergies: ['milk'] }, consent: true }).success).toBe(true)
-    expect(staffUsefulInfoSchema.safeParse({ info: { allergies: [], diet: '', notes: ' ' } }).success).toBe(true)
+    expect(needsHealthConsent({ info: { allergies: ['milk'] } }, { info: null })).toBe(true)
+    expect(needsHealthConsent({ info: { allergies: [], diet: '', notes: ' ' } }, { info: null })).toBe(false)
   })
 })

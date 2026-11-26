@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ALLERGIES, DIETS, NON_FOOD_ALLERGIES, type Choice } from '#shared/content/member-form'
 import type { StaffHealthForm } from '#shared/schemas/staff'
+import { formatDateTime } from '#shared/utils/format'
 
 // The health questions of the personal sheet (/staff/scheda), always in sight, with the consent: food allergies
 // (with «Altro», the notes of «Informazioni utili») and diet reach the canteen of the sessions the person is
 // convoked to (docs/spec.md 3.14); the allergies not to food and the other details only the camp's admins, in the
-// reserved section of the person's page. The errors land under `health.*`.
+// reserved section of the person's page. The errors land under `health.*`. The consent box starts empty and shows
+// while there is no consent or the answers changed (`changed`): new or changed data needs it ticked then.
 const health = defineModel<StaffHealthForm>({ required: true })
+defineProps<{ consentAt: string | null; changed: boolean }>()
 
 const DIET_ITEMS: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
 </script>
@@ -52,7 +55,15 @@ const DIET_ITEMS: Choice[] = [{ value: '', label: 'Nessuna' }, ...DIETS]
     >
       <UTextarea v-model="health.otherInfo" autoresize :rows="3" :maxlength="2000" class="w-full" />
     </UFormField>
-    <UFormField name="health.consent">
+    <p v-if="consentAt && !changed" class="flex items-center gap-2 text-sm text-muted">
+      <UIcon name="i-lucide-shield-check" class="size-4 shrink-0" aria-hidden="true" />
+      Consenso dato il {{ formatDateTime(consentAt) }}.
+    </p>
+    <UFormField
+      v-else
+      name="health.consent"
+      :help="consentAt ? 'Hai cambiato queste informazioni: per salvarle spunta di nuovo il consenso.' : undefined"
+    >
       <UCheckbox
         v-model="health.consent"
         label="Acconsento al trattamento di questi dati per organizzare il camp"

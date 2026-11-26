@@ -3,6 +3,7 @@ import {
   hasStaffHealth,
   isSheetComplete,
   sheetMissing,
+  staffHealthChanges,
   staffHealthForm,
   staffSheetFormSchema,
   staffSheetSchema,
@@ -15,7 +16,7 @@ import type {
   StaffUsefulInfoDto,
 } from '#shared/types/staff'
 import { residenceForm } from '#shared/schemas/common'
-import { SHIRT_SIZES, type StaffContract } from '#shared/utils/constants'
+import { SHIRT_SIZES, STAFF_CONTRACTS, type StaffContract } from '#shared/utils/constants'
 import { ageOn, isIsoDay, todayIso } from '#shared/utils/dates'
 import { formatAge, formatDateTime } from '#shared/utils/format'
 import { focusFirstError } from '~/utils/errors'
@@ -28,8 +29,10 @@ import { focusFirstError } from '~/utils/errors'
 const api = useApi()
 const { data } = await useApiFetch<StaffSheetDto>('/api/staff/sheet')
 
+const NO_HEALTH: StaffUsefulInfoDto = { info: null, nonFoodAllergies: null, otherInfo: null, consentAt: null }
 const team = computed(() => data.value?.team ?? 'staff')
-const schema = computed(() => staffSheetFormSchema(team.value))
+const stored = computed(() => data.value?.health ?? NO_HEALTH)
+const schema = computed(() => staffSheetFormSchema(team.value, stored.value))
 const today = todayIso()
 
 /** The sheet as the form holds it: '' for an empty text, nothing chosen. */
@@ -43,12 +46,16 @@ function sheetForm(sheet: StaffSheet | undefined) {
     contractType: sheet?.contractType ?? undefined,
   }
 }
-const NO_HEALTH: StaffUsefulInfoDto = { info: null, nonFoodAllergies: null, otherInfo: null, consentAt: null }
 // Loaded once: a save updates `data` without overwriting what is being typed.
-const state = reactive({
-  ...sheetForm(data.value?.sheet),
-  health: staffHealthForm(data.value?.health ?? NO_HEALTH),
-})
+const state = reactive({ ...sheetForm(data.value?.sheet), health: staffHealthForm(stored.value) })
+/** The health answers differ from the ones saved: the consent box comes back. */
+const healthChanged = computed(() => staffHealthChanges(stored.value, state.health).length > 0)
+/** Bumped when the health answers are replaced from the server: the fields start again from them. */
+const healthKey = ref(0)
+function resetHealth(health: StaffUsefulInfoDto) {
+  state.health = staffHealthForm(health)
+  healthKey.value++
+}
 
 const complete = computed(() => !data.value || isSheetComplete(data.value.sheet, team.value))
 const signature = computed(() => data.value?.signature ?? null)
@@ -71,10 +78,12 @@ const account = computed(() => {
 })
 
 const SIZE_ITEMS = SHIRT_SIZES.map(size => ({ value: size, label: size }))
-const CONTRACT_ITEMS: { value: StaffContract; label: string }[] = [
-  { value: 'vat_number', label: 'Ho partita IVA' },
-  { value: 'occasional', label: 'Collaborazione occasionale' },
-]
+/** The formula as the person says it (the admin pages and the PDF use ENUM_META.staffContract). */
+const CONTRACT_CHOICE: Record<StaffContract, string> = {
+  vat_number: 'Ho partita IVA',
+  occasional: 'Collaborazione occasionale',
+}
+const CONTRACT_ITEMS = STAFF_CONTRACTS.map(value => ({ value, label: CONTRACT_CHOICE[value] }))
 const HORIZONTAL = { legend: 'sr-only', fieldset: 'flex-wrap gap-x-5 gap-y-3' }
 
 /** The sheet as the server keeps it, to tell a change from a different spelling (a lower-case codice fiscale). */
@@ -123,7 +132,8 @@ async function save() {
   try {
     const result = await api<StaffSheetSaved>('/api/staff/sheet', { method: 'PUT', body: state })
     if (data.value) data.value = { ...data.value, sheet: result.sheet, health: result.health }
-    Object.assign(state, sheetForm(result.sheet), { health: staffHealthForm(result.health) })
+    Object.assign(state, sheetForm(result.sheet))
+    resetHealth(result.health)
     await showSignature(result.signature, 'Scheda salvata')
   } catch (error) {
     notifyError(error, 'Scheda non salvata')
@@ -146,7 +156,7 @@ async function withdraw() {
   try {
     const health = await api<StaffUsefulInfoDto>('/api/staff/useful-info', { method: 'DELETE' })
     if (data.value) data.value = { ...data.value, health }
-    state.health = staffHealthForm(health)
+    resetHealth(health)
     notifySuccess('Consenso ritirato', 'Le informazioni sono state cancellate.')
   } catch (error) {
     notifyError(error, 'Consenso non ritirato')
@@ -278,7 +288,12 @@ const signPrompt = computed(() => {
                 :ui="HORIZONTAL"
               />
             </UFormField>
-            <StaffHealthFields v-model="state.health" />
+            <StaffHealthFields
+              :key="healthKey"
+              v-model="state.health"
+              :consent-at="data.health.consentAt"
+              :changed="healthChanged"
+            />
             <UButton
               v-if="data.health.consentAt"
               label="Cancella queste informazioni e ritira il consenso"

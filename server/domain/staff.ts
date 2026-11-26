@@ -9,15 +9,17 @@ import {
   canMoveStaff,
   isReviewMove,
   isSheetComplete,
+  HEALTH_CONSENT_NEEDED,
   normalizeNonFoodAllergies,
   REQUIRED_STAFF_DOCUMENTS,
   sheetMissing,
   staffDocumentTypes,
+  staffHealthChanges,
   type ConvocationAddInput,
   type RequiredStaffDocument,
   type ConvocationSendInput,
   type StaffSheetInput,
-  type StaffUsefulInfoInput,
+  type StaffHealthInput,
 } from '../../shared/schemas/staff'
 import { normalizeUsefulInfo } from '../../shared/schemas/families'
 import type { FileDto } from '../../shared/types/api'
@@ -85,7 +87,7 @@ import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { withdrawQueuedEmails } from './email-quota'
 import { requestSignatures, signatureRequestEmails } from './signature-requests'
-import { checkLabels, staffRoleOptions } from './staff-labels'
+import { checkLabels } from './staff-labels'
 import { trainingInterestsOf } from './training'
 import { createError } from './errors'
 
@@ -104,25 +106,14 @@ export function staffUsefulInfo(
   }
 }
 
-/** The health data as flat fields, to tell what changed: jsonb keeps the keys of an object in its own order. */
-function healthFields(health: Pick<ProfileRow, 'usefulInfo' | 'nonFoodAllergies' | 'otherInfo'>) {
-  return {
-    allergies: health.usefulInfo?.allergies,
-    diet: health.usefulInfo?.diet,
-    notes: health.usefulInfo?.notes,
-    nonFoodAllergies: health.nonFoodAllergies?.allergies,
-    nonFoodOther: health.nonFoodAllergies?.other,
-    otherInfo: health.otherInfo,
-  }
-}
-
 /**
- * Saves the health data of a staff member with the consent, or with nothing clears them and withdraws it; audited
- * with the fields that changed, never their values. Data saved again as it was keeps the consent of when it came.
+ * Saves the health data of a staff member, or with nothing clears them and withdraws the consent; audited with the
+ * fields that changed, never their values. New or changed data needs the consent ticked now; the same data again
+ * keeps the consent of when it was given.
  */
 export async function saveStaffUsefulInfo(
   db: DbOrTx,
-  input: { userId: string; value: StaffUsefulInfoInput; actor: Actor },
+  input: { userId: string; value: StaffHealthInput; actor: Actor },
 ): Promise<StaffUsefulInfoDto> {
   // Locked: two saves at once each compare with what the other left.
   const before = await profileOf(db, input.userId, { lock: true })
@@ -131,12 +122,14 @@ export async function saveStaffUsefulInfo(
     nonFoodAllergies: normalizeNonFoodAllergies(input.value.nonFoodAllergies),
     otherInfo: input.value.otherInfo?.trim() || null,
   }
-  const fields = changedKeys(healthFields(before), healthFields(health))
-  if (!fields.length) return staffUsefulInfo(before)
+  const stored = staffUsefulInfo(before)
+  const fields = staffHealthChanges(stored, input.value)
+  if (!fields.length) return stored
   const kept = Object.values(health).some(Boolean)
+  if (kept && !input.value.consent) throw createError({ statusCode: 400, message: HEALTH_CONSENT_NEEDED })
   const [row] = await db
     .update(staffProfiles)
-    // Data saved is the consent given to it now (the schema asks for it); saving nothing withdraws it.
+    // Data saved is the consent given to it now; saving nothing withdraws it.
     .set({ ...health, usefulInfoConsentAt: kept ? sql`now()` : null })
     .where(eq(staffProfiles.id, before.id))
     .returning()
@@ -457,7 +450,9 @@ export async function setStaffTeam(
 ): Promise<void> {
   const profile = await profileOf(db, input.userId, { lock: true })
   if (profile.team === input.team) return
-  await db.update(staffProfiles).set({ team: input.team }).where(eq(staffProfiles.id, profile.id))
+  // The contract formula is the staff's: the v-team volunteer. The handler makes the sheet's PDF again.
+  const contractType = input.team === 'staff' ? profile.contractType : null
+  await db.update(staffProfiles).set({ team: input.team, contractType }).where(eq(staffProfiles.id, profile.id))
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.team',
