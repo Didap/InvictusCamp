@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { isSheetComplete, requiredDocumentsText } from '#shared/schemas/staff'
+import { asksContract, isSheetComplete, requiredDocumentsText } from '#shared/schemas/staff'
 import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
 import { inStaffArea, OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
@@ -229,7 +229,7 @@ const sheet = computed(() => {
     { label: 'Luogo di nascita', value: s.birthPlace },
     { label: 'Codice fiscale', value: s.fiscalCode },
     { label: 'Taglia della maglietta', value: s.shirtSize },
-    ...(person.value?.team === 'staff'
+    ...(person.value && asksContract(person.value.team)
       ? [{ label: 'Formula contrattuale', value: s.contractType && label('staffContract', s.contractType) }]
       : []),
     { label: 'Indirizzo', value: s.address },

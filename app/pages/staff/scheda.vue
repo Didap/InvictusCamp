@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { INLINE_CHOICES_UI } from '#shared/content/member-form'
 import {
+  asksContract,
   hasStaffHealth,
   isSheetComplete,
+  needsHealthConsent,
   sheetMissing,
-  staffHealthChanges,
   staffHealthForm,
   staffSheetFormSchema,
   staffSheetSchema,
@@ -29,9 +31,8 @@ import { focusFirstError } from '~/utils/errors'
 const api = useApi()
 const { data } = await useApiFetch<StaffSheetDto>('/api/staff/sheet')
 
-const NO_HEALTH: StaffUsefulInfoDto = { info: null, nonFoodAllergies: null, otherInfo: null, consentAt: null }
 const team = computed(() => data.value?.team ?? 'staff')
-const stored = computed(() => data.value?.health ?? NO_HEALTH)
+const stored = computed(() => data.value?.health ?? {})
 const schema = computed(() => staffSheetFormSchema(team.value, stored.value))
 const today = todayIso()
 
@@ -48,14 +49,13 @@ function sheetForm(sheet: StaffSheet | undefined) {
 }
 // Loaded once: a save updates `data` without overwriting what is being typed.
 const state = reactive({ ...sheetForm(data.value?.sheet), health: staffHealthForm(stored.value) })
-/** The health answers differ from the ones saved: the consent box comes back. */
-const healthChanged = computed(() => staffHealthChanges(stored.value, state.health).length > 0)
-/** Bumped when the health answers are replaced from the server: the fields start again from them. */
+const needsConsent = computed(() => needsHealthConsent(state.health, stored.value))
+// The health answers saved anew (a save, a withdrawal): the fields start again from them, «Altro» too.
 const healthKey = ref(0)
-function resetHealth(health: StaffUsefulInfoDto) {
+watch(stored, health => {
   state.health = staffHealthForm(health)
   healthKey.value++
-}
+})
 
 const complete = computed(() => !data.value || isSheetComplete(data.value.sheet, team.value))
 const signature = computed(() => data.value?.signature ?? null)
@@ -84,7 +84,6 @@ const CONTRACT_CHOICE: Record<StaffContract, string> = {
   occasional: 'Collaborazione occasionale',
 }
 const CONTRACT_ITEMS = STAFF_CONTRACTS.map(value => ({ value, label: CONTRACT_CHOICE[value] }))
-const HORIZONTAL = { legend: 'sr-only', fieldset: 'flex-wrap gap-x-5 gap-y-3' }
 
 /** The sheet as the server keeps it, to tell a change from a different spelling (a lower-case codice fiscale). */
 const normalized = (value: unknown) => JSON.stringify(staffSheetSchema(team.value).safeParse(value).data)
@@ -133,7 +132,6 @@ async function save() {
     const result = await api<StaffSheetSaved>('/api/staff/sheet', { method: 'PUT', body: state })
     if (data.value) data.value = { ...data.value, sheet: result.sheet, health: result.health }
     Object.assign(state, sheetForm(result.sheet))
-    resetHealth(result.health)
     await showSignature(result.signature, 'Scheda salvata')
   } catch (error) {
     notifyError(error, 'Scheda non salvata')
@@ -156,7 +154,6 @@ async function withdraw() {
   try {
     const health = await api<StaffUsefulInfoDto>('/api/staff/useful-info', { method: 'DELETE' })
     if (data.value) data.value = { ...data.value, health }
-    resetHealth(health)
     notifySuccess('Consenso ritirato', 'Le informazioni sono state cancellate.')
   } catch (error) {
     notifyError(error, 'Consenso non ritirato')
@@ -276,23 +273,23 @@ const signPrompt = computed(() => {
                 :items="SIZE_ITEMS"
                 legend="Taglia"
                 orientation="horizontal"
-                :ui="HORIZONTAL"
+                :ui="INLINE_CHOICES_UI"
               />
             </UFormField>
-            <UFormField v-if="team === 'staff'" label="Formula contrattuale" name="contractType" required>
+            <UFormField v-if="asksContract(team)" label="Formula contrattuale" name="contractType" required>
               <URadioGroup
                 v-model="state.contractType"
                 :items="CONTRACT_ITEMS"
                 legend="Formula contrattuale"
                 orientation="horizontal"
-                :ui="HORIZONTAL"
+                :ui="INLINE_CHOICES_UI"
               />
             </UFormField>
             <StaffHealthFields
               :key="healthKey"
               v-model="state.health"
               :consent-at="data.health.consentAt"
-              :changed="healthChanged"
+              :needs-consent="needsConsent"
             />
             <UButton
               v-if="data.health.consentAt"

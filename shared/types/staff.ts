@@ -308,8 +308,9 @@ export interface StaffHome {
    * still to confirm.
    */
   availability: { available: number; total: number; toConfirm: number }
-  /** What the personal sheet still needs (the home asks for it once approved); null once complete. */
-  sheetMissing: string | null
+  /** The personal sheet has every required field (the home asks for it once approved, sheetMissing(team)). */
+  sheetComplete: boolean
+  team: StaffTeam
   /** The required documents not uploaded yet (CV, ID): the home asks for them once in the staff area. */
   documentsMissing: RequiredStaffDocument[]
 }

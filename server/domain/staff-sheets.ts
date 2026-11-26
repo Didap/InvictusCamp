@@ -6,7 +6,7 @@
 // only, so the database tests can load it.
 import { and, eq, isNull } from 'drizzle-orm'
 import { staffSheetSchema, type StaffSheetInput } from '../../shared/schemas/staff'
-import { ENUM_META, inStaffArea } from '../../shared/utils/constants'
+import { enumLabel, inStaffArea } from '../../shared/utils/constants'
 import { formatDay, formatTown, fullName } from '../../shared/utils/format'
 import { documents, staffProfiles, users } from '../db/schema'
 import type { EmailContext, EmailMessage } from '../emails/types'
@@ -45,7 +45,7 @@ function sheetBlocks({ account, sheet }: SheetInput): PdfBlock[] {
     ...(sheet.contractType
       ? [
           { heading: 'Collaborazione' },
-          ...field('Formula contrattuale', ENUM_META.staffContract[sheet.contractType].label),
+          ...field('Formula contrattuale', enumLabel('staffContract', sheet.contractType)),
         ]
       : []),
     { heading: 'Dichiarazione' },
@@ -83,12 +83,7 @@ export async function staffSheetDocument(
     .from(documents)
     .where(and(eq(documents.staffUserId, input.userId), isNull(documents.archivedAt)))
   const parsed = inStaffArea(profile.status) ? staffSheetSchema(profile.team).safeParse(staffSheetOf(profile)) : null
-  let data: SheetInput | null = null
-  if (parsed?.success) {
-    // Without a formula (the v-team) the data is the one before the formula was asked: its PDF stays.
-    const { contractType, ...withoutFormula } = parsed.data
-    data = { account, sheet: contractType ? parsed.data : withoutFormula }
-  }
+  const data: SheetInput | null = parsed?.success ? { account, sheet: parsed.data } : null
   const source = data && { data, digest: sha256(JSON.stringify(data)) }
   if (current?.digest === source?.digest) return []
   // The PDF in force no longer matches the sheet: it goes, and a new one comes while the sheet is complete.

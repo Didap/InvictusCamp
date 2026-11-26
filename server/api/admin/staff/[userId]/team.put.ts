@@ -11,8 +11,8 @@ export default defineEventHandler(async event => {
   const { team } = await parseBody(event, staffTeamSchema)
   const actor = { userId: admin.id, ip: clientIp(event) }
   const emails = await useDb().transaction(async tx => {
-    await setStaffTeam(tx, { userId, team, actor })
-    return staffSheetChanged(tx, userId, actor)
+    const moved = await setStaffTeam(tx, { userId, team, actor })
+    return moved ? staffSheetChanged(tx, userId, actor) : []
   })
   await deliver(emails)
   return { team }

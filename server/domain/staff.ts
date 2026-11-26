@@ -9,10 +9,12 @@ import {
   canMoveStaff,
   isReviewMove,
   isSheetComplete,
+  asksContract,
+  hasStaffHealth,
   HEALTH_CONSENT_NEEDED,
+  needsHealthConsent,
   normalizeNonFoodAllergies,
   REQUIRED_STAFF_DOCUMENTS,
-  sheetMissing,
   staffDocumentTypes,
   staffHealthChanges,
   type ConvocationAddInput,
@@ -117,22 +119,29 @@ export async function saveStaffUsefulInfo(
 ): Promise<StaffUsefulInfoDto> {
   // Locked: two saves at once each compare with what the other left.
   const before = await profileOf(db, input.userId, { lock: true })
-  const health = {
-    usefulInfo: normalizeUsefulInfo(input.value.info),
-    nonFoodAllergies: normalizeNonFoodAllergies(input.value.nonFoodAllergies),
-    otherInfo: input.value.otherInfo?.trim() || null,
-  }
   const stored = staffUsefulInfo(before)
   const fields = staffHealthChanges(stored, input.value)
   if (!fields.length) return stored
-  const kept = Object.values(health).some(Boolean)
-  if (kept && !input.value.consent) throw createError({ statusCode: 400, message: HEALTH_CONSENT_NEEDED })
+  if (needsHealthConsent(input.value, stored) && !input.value.consent) {
+    throw createError({ statusCode: 400, message: HEALTH_CONSENT_NEEDED })
+  }
+  const kept = hasStaffHealth(input.value)
   const [row] = await db
     .update(staffProfiles)
     // Data saved is the consent given to it now; saving nothing withdraws it.
-    .set({ ...health, usefulInfoConsentAt: kept ? sql`now()` : null })
+    .set({
+      usefulInfo: normalizeUsefulInfo(input.value.info),
+      nonFoodAllergies: normalizeNonFoodAllergies(input.value.nonFoodAllergies),
+      otherInfo: input.value.otherInfo?.trim() || null,
+      usefulInfoConsentAt: kept ? sql`now()` : null,
+    })
     .where(eq(staffProfiles.id, before.id))
-    .returning()
+    .returning({
+      usefulInfo: staffProfiles.usefulInfo,
+      nonFoodAllergies: staffProfiles.nonFoodAllergies,
+      otherInfo: staffProfiles.otherInfo,
+      usefulInfoConsentAt: staffProfiles.usefulInfoConsentAt,
+    })
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.useful_info',
@@ -170,8 +179,8 @@ export async function saveStaffSheet(
   const sheet: StaffSheet = {
     ...input.value,
     province: input.value.province || null,
-    // The formula is the staff's: the v-team volunteer, and one moved there from the staff leaves theirs.
-    contractType: before.team === 'staff' ? (input.value.contractType ?? null) : null,
+    // The formula is the staff's (the v-team's schema has none): checked on the row locked.
+    contractType: asksContract(before.team) ? (input.value.contractType ?? null) : null,
   }
   const fields = changedKeys(staffSheetOf(before), sheet)
   if (!fields.length) return sheet
@@ -447,12 +456,11 @@ export async function approveApplications(
 export async function setStaffTeam(
   db: DbOrTx,
   input: { userId: string; team: StaffTeam; actor: Actor },
-): Promise<void> {
+): Promise<boolean> {
   const profile = await profileOf(db, input.userId, { lock: true })
-  if (profile.team === input.team) return
-  // The contract formula is the staff's: the v-team volunteer. The handler makes the sheet's PDF again.
-  const contractType = input.team === 'staff' ? profile.contractType : null
-  await db.update(staffProfiles).set({ team: input.team, contractType }).where(eq(staffProfiles.id, profile.id))
+  if (profile.team === input.team) return false
+  // The formula a staff member chose does not follow them, either way: the handler makes the sheet's PDF again.
+  await db.update(staffProfiles).set({ team: input.team, contractType: null }).where(eq(staffProfiles.id, profile.id))
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'staff.team',
@@ -461,6 +469,7 @@ export async function setStaffTeam(
     data: { from: profile.team, to: input.team },
     ip: input.actor.ip ?? null,
   })
+  return true
 }
 
 /** The roles the administration gives a person (docs/spec.md 3.4). Convocations keep the role they have. */
@@ -1606,7 +1615,7 @@ export async function myConvocations(
 
 /** The home of the signed-in staff member, whatever the status of the application. */
 export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string = todayIso()): Promise<StaffHome> {
-  const sheetMissingText = isSheetComplete(staffSheetOf(profile), profile.team) ? null : sheetMissing(profile.team)
+  const sheetComplete = isSheetComplete(staffSheetOf(profile), profile.team)
   // Before the approval the home is only where the application stands.
   if (!inStaffArea(profile.status)) {
     return {
@@ -1614,7 +1623,8 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
       toAnswer: [],
       upcoming: [],
       availability: { available: 0, total: 0, toConfirm: 0 },
-      sheetMissing: sheetMissingText,
+      sheetComplete,
+      team: profile.team,
       documentsMissing: [],
     }
   }
@@ -1629,7 +1639,8 @@ export async function staffHome(db: DbOrTx, profile: ProfileRow, today: string =
     toAnswer: convocations.filter(c => c.answerable),
     upcoming: convocations.filter(c => c.status === 'accepted' && isSessionAhead(c.session, today)),
     availability: { available, total: sessions.length, toConfirm: sessions.filter(session => !session.locked).length },
-    sheetMissing: sheetMissingText,
+    sheetComplete,
+    team: profile.team,
     documentsMissing: requiredDocumentsMissing(profile, documents),
   }
 }

@@ -16,7 +16,7 @@ import type {
   StaffStatus,
   StaffTeam,
 } from '../../shared/utils/constants'
-import { CALENDAR_2027, calendarNumber, calendarTitle } from '../../shared/content/calendar-2027'
+import { CALENDAR_2027, calendarTitle, sessionName } from '../../shared/content/calendar-2027'
 import { FEEDBACK_OTHER_ITEMS } from '../../shared/content/feedback-form'
 import { programmeTemplate } from '../../shared/content/programme-template'
 import { DEFAULT_FAMILY_SLOTS, DEFAULT_LOCATION, DEFAULT_STAFF_NEEDED } from '../../shared/utils/constants'
@@ -1046,8 +1046,7 @@ export async function seedDemo(
   const byName = (first: string) => staff.find(s => s.firstName === first)!
   // The message an admin writes with the convocation names the session, as the camp numbers them.
   const convoke = async (session: { id: string; title: string }, rows: [string, ConvocationStatus, StaffRole][]) => {
-    const number = calendarNumber(session.title)
-    const message = `Ti aspettiamo al camp per ${number ? `la sessione ${number}` : `«${session.title}»`}.`
+    const message = `Ti aspettiamo al camp per ${sessionName(session.title)}.`
     await db.insert(t.sessionStaff).values(
       rows.map(([first, status, role]) => ({
         sessionId: session.id,

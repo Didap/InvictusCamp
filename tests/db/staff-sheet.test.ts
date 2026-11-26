@@ -43,7 +43,7 @@ describe('staff personal sheet', () => {
   it('saves the sheet, audits the fields that changed without their values, and the home stops asking', async () => {
     const { user, profile } = await makeStaff(db)
     const actor = { userId: user.id, ip: null }
-    expect((await staffHome(db, profile)).sheetMissing).toMatch(/formula contrattuale/)
+    expect((await staffHome(db, profile)).sheetComplete).toBe(false)
 
     const sheet = await saveStaffSheet(db, { userId: user.id, value: VALUE, actor })
     expect(sheet).toMatchObject({ fiscalCode: 'RSSMRA85T10A562S', province: null, shirtSize: 'L' })
@@ -58,7 +58,7 @@ describe('staff personal sheet', () => {
     expect(read.sheet).toEqual(sheet)
     expect(read.team).toBe('staff')
     expect(read.health).toEqual({ info: null, nonFoodAllergies: null, otherInfo: null, consentAt: null })
-    expect((await staffHome(db, row!)).sheetMissing).toBeNull()
+    expect((await staffHome(db, row!)).sheetComplete).toBe(true)
 
     // Saving the same values writes nothing; a new size is one field in the audit, never its value.
     await saveStaffSheet(db, { userId: user.id, value: VALUE, actor })
@@ -76,7 +76,7 @@ describe('staff personal sheet', () => {
     expect(await saveStaffSheet(db, { userId: user.id, value: VALUE, actor })).toMatchObject({ contractType: null })
     const [row] = await db.select().from(t.staffProfiles).where(eq(t.staffProfiles.id, profile.id))
     expect(row!.contractType).toBeNull()
-    expect((await staffHome(db, row!)).sheetMissing).toBeNull()
+    expect((await staffHome(db, row!)).sheetComplete).toBe(true)
 
     // Moved to the staff, the formula is asked; moved back, the one chosen goes.
     await setStaffTeam(db, { userId: user.id, team: 'staff', actor })
@@ -104,7 +104,7 @@ describe('staff personal sheet', () => {
     })
     expect(saved.consentAt).not.toBeNull()
     expect((await auditOf('staff.useful_info')).at(-1)?.data).toEqual({
-      fields: ['allergies', 'notes', 'nonFoodAllergies', 'otherInfo'],
+      fields: ['info.allergies', 'info.notes', 'nonFoodAllergies.allergies', 'otherInfo'],
     })
     expect(JSON.stringify(await auditOf('staff.useful_info'))).not.toContain('Daltonismo')
 

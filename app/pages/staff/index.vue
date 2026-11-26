@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { requiredDocumentsText } from '#shared/schemas/staff'
+import { requiredDocumentsText, sheetMissing } from '#shared/schemas/staff'
 import type { StaffHome } from '#shared/types/staff'
 import { formatDayRange, plural } from '#shared/utils/format'
 
@@ -69,13 +69,13 @@ watch(
       <!-- Approved (and inactive): the sheet to complete, convocations, sessions, documents, availability. -->
       <template v-else>
         <UAlert
-          v-if="home.sheetMissing"
+          v-if="!home.sheetComplete"
           class="mb-8"
           color="warning"
           variant="subtle"
           icon="i-lucide-id-card"
           title="Completa la tua scheda personale"
-          :description="home.sheetMissing"
+          :description="sheetMissing(home.team)"
           :actions="[
             {
               label: 'Compila la scheda',

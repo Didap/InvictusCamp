@@ -4,7 +4,6 @@ import { z } from 'zod'
 import { NON_FOOD_ALLERGIES } from '../content/member-form'
 import type { NonFoodAllergies, UsefulInfo } from '../types/domain'
 import { compact, normalizeUsefulInfo, picked, usefulInfoForm, usefulInfoSchema, zChoices } from './families'
-import type { StaffUsefulInfoDto } from '../types/staff'
 import {
   COORDINATOR_ROLE,
   PERSONAL_DOCUMENT_CATEGORIES,
@@ -42,7 +41,7 @@ const zRoles = z.array(zStaffRole).max(STAFF_LABELS_MAX)
 
 // ─── The personal sheet ────────────────────────────────────────────────────────────────────────────
 
-/** The fields of the sheet: required, the province apart. */
+/** The fields of the sheet everyone fills in: required, the province apart. */
 const sheetFields = z.object({
   birthDate: zBirthDate,
   birthPlace: zRequiredText(100),
@@ -51,14 +50,18 @@ const sheetFields = z.object({
   /** Nullish: the sheet as stored passes it too (isSheetComplete). */
   province: zProvince.nullish(),
   shirtSize: z.enum(SHIRT_SIZES, { error: 'Scegli la taglia' }),
-  contractType: z.enum(STAFF_CONTRACTS).nullish(),
 })
-export type StaffSheetInput = z.output<typeof sheetFields>
+export type StaffSheetInput = z.output<typeof sheetFields> & { contractType?: StaffContract | null }
+
+/** The contract formula is asked of the staff: the v-team volunteer. */
+export function asksContract(team: StaffTeam): boolean {
+  return team === 'staff'
+}
 
 /**
- * The personal sheet of an approved staff or v-team member, as stored once complete (isSheetComplete, its PDF):
- * the contract formula is required of the staff, the v-team volunteer. A field of its own, so its error comes
- * with the others.
+ * The personal sheet of an approved staff or v-team member, as the form sends it and as stored once complete
+ * (isSheetComplete, its PDF): the staff's has the contract formula, a field of its own so its error comes with the
+ * others; the v-team's has none, so a formula left there is dropped.
  */
 const SHEET_SCHEMAS: Record<StaffTeam, z.ZodType<StaffSheetInput>> = {
   staff: sheetFields.extend({ contractType: z.enum(STAFF_CONTRACTS, { error: 'Scegli la formula contrattuale' }) }),
@@ -70,19 +73,18 @@ export function staffSheetSchema(team: StaffTeam): z.ZodType<StaffSheetInput> {
 
 /** What the home and the sheet say while the sheet is incomplete. */
 export function sheetMissing(team: StaffTeam): string {
-  const last =
-    team === 'staff' ? ', la taglia della maglietta e la formula contrattuale' : ' e la taglia della maglietta'
-  return `Ci servono la data e il luogo di nascita, il codice fiscale, la residenza${last}.`
+  const fields = ['la data e il luogo di nascita', 'il codice fiscale', 'la residenza', 'la taglia della maglietta']
+  return `Ci servono ${andList(asksContract(team) ? [...fields, 'la formula contrattuale'] : fields)}.`
 }
 
 /** Whether a sheet as stored passes the form's schema: until then the home asks for it. */
 export function isSheetComplete(sheet: Record<keyof StaffSheetInput, string | null>, team: StaffTeam): boolean {
-  return SHEET_SCHEMAS[team].safeParse(sheet).success
+  return staffSheetSchema(team).safeParse(sheet).success
 }
 
 // ─── Health: allergies, diet and other details ─────────────────────────────────────────────────────
 
-export const nonFoodAllergiesSchema = z.object({
+const nonFoodAllergiesSchema = z.object({
   allergies: zChoices(NON_FOOD_ALLERGIES).optional(),
   other: zText(500).optional(),
 })
@@ -96,7 +98,7 @@ export function normalizeNonFoodAllergies(value: NonFoodAllergies | null | undef
 }
 
 /** The health answers of a staff member, as stored or as typed. */
-interface StaffHealthValue {
+export interface StaffHealthValue {
   info?: UsefulInfo | null
   nonFoodAllergies?: NonFoodAllergies | null
   otherInfo?: string | null
@@ -109,26 +111,22 @@ export function hasStaffHealth(value: StaffHealthValue): boolean {
   )
 }
 
-/** The health answers as flat fields, normalized: what tells a change (jsonb keeps an object's keys in its order). */
-function healthFields(value: StaffHealthValue) {
-  const info = normalizeUsefulInfo(value.info)
-  const nonFood = normalizeNonFoodAllergies(value.nonFoodAllergies)
-  return {
-    allergies: info?.allergies,
-    diet: info?.diet,
-    notes: info?.notes,
-    nonFoodAllergies: nonFood?.allergies,
-    nonFoodOther: nonFood?.other,
-    otherInfo: value.otherInfo?.trim() || undefined,
-  }
-}
-
-/** The names of the health answers that differ between two values (the audit lists them). */
+/** The health answers that differ, as the families' (healthChangedFields): `info.allergies`, `otherInfo`… */
 export function staffHealthChanges(before: StaffHealthValue, after: StaffHealthValue): string[] {
-  return changedKeys(healthFields(before), healthFields(after))
+  return [
+    ...changedKeys(normalizeUsefulInfo(before.info), normalizeUsefulInfo(after.info)).map(key => `info.${key}`),
+    ...changedKeys(
+      normalizeNonFoodAllergies(before.nonFoodAllergies),
+      normalizeNonFoodAllergies(after.nonFoodAllergies),
+    ).map(key => `nonFoodAllergies.${key}`),
+    ...((before.otherInfo?.trim() || null) !== (after.otherInfo?.trim() || null) ? ['otherInfo'] : []),
+  ]
 }
 
-/** Health data saved new or changed needs the consent ticked then; the same answers keep the consent given. */
+/**
+ * Health data saved new or changed needs the consent ticked then; the same answers keep the consent given, and
+ * none withdraws it. The form, the schema and the server (against the row locked) all ask this.
+ */
 export function needsHealthConsent(value: StaffHealthValue, stored: StaffHealthValue): boolean {
   return hasStaffHealth(value) && staffHealthChanges(stored, value).length > 0
 }
@@ -137,8 +135,7 @@ export const HEALTH_CONSENT_NEEDED = 'Per salvare questi dati serve il tuo conse
 /**
  * The health answers of the personal sheet: allergies, diet and notes for the canteen (the notes are the «Altro»
  * of the food allergies), the allergies not to food and the other details the camp should know, with the consent
- * box (needsHealthConsent; the server checks it against what is stored). DELETE /api/staff/useful-info withdraws
- * the consent.
+ * box. DELETE /api/staff/useful-info withdraws the consent.
  */
 export const staffHealthSchema = z.object({
   info: usefulInfoSchema,
@@ -153,7 +150,7 @@ export type StaffHealthInput = z.output<typeof staffHealthSchema>
  * are the account's). `stored` is the health data as saved, to tell whether the consent is needed.
  */
 export function staffSheetFormSchema(team: StaffTeam, stored: StaffHealthValue) {
-  return SHEET_SCHEMAS[team].and(
+  return staffSheetSchema(team).and(
     z.object({
       health: staffHealthSchema.refine(health => health.consent || !needsHealthConsent(health, stored), {
         path: ['consent'],
@@ -164,7 +161,7 @@ export function staffSheetFormSchema(team: StaffTeam, stored: StaffHealthValue) 
 }
 
 /** The health data as the form of /staff/scheda holds it: every field present, the consent box empty. */
-export function staffHealthForm(health: StaffUsefulInfoDto) {
+export function staffHealthForm(health: StaffHealthValue) {
   return {
     info: usefulInfoForm(health.info),
     nonFoodAllergies: {
