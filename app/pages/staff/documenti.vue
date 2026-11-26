@@ -12,7 +12,7 @@ import { formatDay } from '#shared/utils/format'
 
 // Documents (spec 3.4): the required ones first, a CV (the application's counts) and an ID, in PDF; what the
 // administration asks to sign (PendingSignatures, documents area); the other personal documents (titles,
-// certificates), each with a category and a title.
+// certificates), each with a category and a title, in PDF too.
 const api = useApi()
 const confirm = useConfirm()
 const { label, options } = useEnums()
@@ -153,7 +153,7 @@ async function remove(document: StaffDocumentDto) {
       </ul>
     </IcSection>
 
-    <IcSection title="Carica un documento" description="PDF, JPG o PNG, fino a 15 MB.">
+    <IcSection title="Carica un documento" description="In PDF, fino a 15 MB.">
       <div class="space-y-5">
         <div class="grid gap-5 sm:grid-cols-2">
           <UFormField label="Tipo di documento" required>
@@ -168,6 +168,7 @@ async function remove(document: StaffDocumentDto) {
           endpoint="/api/staff/documents"
           :fields="{ category: upload.category, title: upload.title.trim() }"
           :disabled="!upload.title.trim()"
+          accept="application/pdf"
           button-label="Carica il documento"
           :secondary="missing.length > 0"
           @uploaded="uploaded"

@@ -12,12 +12,15 @@ import {
   formatDayRange,
   formatTown,
   fullName,
+  plural,
 } from '#shared/utils/format'
 import { TEAM_SLUG, teamOfSlug, teamPath } from '#shared/utils/routes'
 
-// One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, personal
-// sheet with the health data behind the reserved section, application, review with internal notes, the outcome email sent only from "Comunica l’esito", availability,
-// convocations, personal documents, signatures.
+// One member of the staff or of the v-team (spec 3.4), under the list of their team. Beside: status and roles, the
+// review with internal notes, the outcome email sent only from «Comunica l’esito», contacts; the team, from the link
+// the person applied with, moves only from the menu. Main column: personal sheet with the health data behind the
+// reserved section, availability, convocations, personal documents (the CV of the application among them),
+// signatures, and the training they are interested in, closed.
 // Keyed by the person: moving to the list of the other team keeps the page, and what is typed in it.
 definePageMeta({ path: '/admin/:team(staff|v-team)/:userId', key: route => String(route.params.userId) })
 const route = useRoute()
@@ -92,12 +95,23 @@ function saveLabels(field: 'roles' | 'tags', ids: string[]) {
 }
 const labelsOpen = ref(false)
 
-// ─── Team: staff or v-team, chosen in the application ───
-const teamItems = computed(() => options('staffTeam').map(option => ({ label: option.label, value: option.value })))
-const savingTeam = ref(false)
+// ─── Team: staff or v-team, from the link of the application; moved only for a mistake ───
+const IN_TEAM: Record<StaffTeam, string> = { staff: 'nello staff', volunteer: 'nel v-team' }
+const otherTeam = computed<StaffTeam>(() => (person.value?.team === 'staff' ? 'volunteer' : 'staff'))
 async function changeTeam(to: StaffTeam) {
-  if (!person.value || to === person.value.team) return
-  savingTeam.value = true
+  const p = person.value
+  if (!p || to === p.team) return
+  const sheet = inStaffArea(p.status)
+    ? to === 'volunteer'
+      ? ' La formula contrattuale della scheda personale si cancella: se la scheda era pronta, riceve un’email per firmarla di nuovo.'
+      : ' Nella scheda personale dovrà indicare la formula contrattuale.'
+    : ''
+  const ok = await confirm({
+    title: `Sposti ${name.value} ${IN_TEAM[to]}?`,
+    description: `Passa all’elenco ${OF_TEAM[to]}: serve se la candidatura è arrivata dal link sbagliato.${sheet}`,
+    confirmLabel: `Sposta ${IN_TEAM[to]}`,
+  })
+  if (!ok) return
   try {
     const url: string = `/api/admin/staff/${userId.value}/team`
     await api(url, { method: 'PUT', body: { team: to } })
@@ -106,8 +120,6 @@ async function changeTeam(to: StaffTeam) {
   } catch (error) {
     notifyError(error)
     await refresh()
-  } finally {
-    savingTeam.value = false
   }
 }
 
@@ -129,8 +141,8 @@ async function move(to: StaffStatus) {
           }
         : {
             title: `Approvi la candidatura di ${name.value}?`,
-            description: `Potrà indicare la disponibilità e ricevere convocazioni. ${NO_EMAIL}`,
-            confirmLabel: 'Approva',
+            description: `Entra ${IN_TEAM[person.value!.team]}: compila la scheda personale, indica la disponibilità e può ricevere convocazioni. ${NO_EMAIL}`,
+            confirmLabel: 'Approva la candidatura',
           },
     rejected: {
       title: `Non selezioni ${name.value}?`,
@@ -180,7 +192,7 @@ const statusLine = computed(() => {
     case 'registered':
       return 'Ha creato l’account: la candidatura arriva quando conferma l’email e c’è il CV.'
     case 'applied':
-      return `Candidatura inviata il ${dayOf(p.appliedAt)}: da valutare.`
+      return `Candidatura inviata il ${dayOf(p.appliedAt)}: da valutare. La decidi tu: se la approvi, entra ${IN_TEAM[p.team]} e può compilare la scheda personale, indicare la disponibilità e ricevere convocazioni.`
     case 'approved':
       return p.reviewedAt ? `Candidatura approvata il ${dayOf(p.reviewedAt)}${by}.` : 'Nello staff approvato.'
     case 'rejected':
@@ -192,11 +204,18 @@ const statusLine = computed(() => {
   }
 })
 
-const moreItems = computed<DropdownMenuItem[][]>(() =>
-  person.value?.status === 'approved'
-    ? [[{ label: 'Disattiva', icon: 'i-lucide-pause', color: 'error', onSelect: () => move('inactive') }]]
-    : [],
-)
+const moreItems = computed<DropdownMenuItem[][]>(() => {
+  const p = person.value
+  if (!p) return []
+  const teamMove = {
+    label: `Sposta ${IN_TEAM[otherTeam.value]}`,
+    icon: 'i-lucide-arrow-right-left',
+    onSelect: () => changeTeam(otherTeam.value),
+  }
+  return p.status === 'approved'
+    ? [[teamMove], [{ label: 'Disattiva', icon: 'i-lucide-pause', color: 'error', onSelect: () => move('inactive') }]]
+    : [[teamMove]]
+})
 
 const contacts = computed(() => {
   const p = person.value
@@ -236,16 +255,6 @@ const sheet = computed(() => {
     { label: 'Città', value: formatTown(s) },
     { label: 'Regione', value: s.region },
   ].filter(item => withSheet.value || item.value)
-})
-
-const texts = computed(() => {
-  const p = person.value
-  if (!p) return []
-  return [
-    { label: 'Titoli e qualifiche', value: p.qualifications },
-    { label: 'Esperienze', value: p.experience },
-    { label: 'Motivazione', value: p.motivation },
-  ]
 })
 
 /** The sessions the person can come to: the ones still ahead first. */
@@ -338,18 +347,6 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               <IcStatusBadge v-if="person.accountStatus !== 'active'" kind="userStatus" :value="person.accountStatus" />
             </div>
             <p class="text-sm text-muted">{{ statusLine }}</p>
-            <UFormField
-              label="Squadra"
-              help="Dal link con cui si è candidata. Se la cambi, la persona passa all’altro elenco."
-            >
-              <USelect
-                :model-value="person.team"
-                :items="teamItems"
-                :loading="savingTeam"
-                class="w-full"
-                @update:model-value="value => changeTeam(value as StaffTeam)"
-              />
-            </UFormField>
             <UFormField label="Ruoli" help="Li dai tu, e li cambi quando vuoi.">
               <USelectMenu
                 :model-value="person.roles"
@@ -385,7 +382,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
                 <UButton
                   class="pointer-coarse:min-h-11"
                   icon="i-lucide-badge-check"
-                  label="Approva"
+                  label="Approva la candidatura"
                   :loading="moving === 'approved'"
                   @click="move('approved')"
                 />
@@ -483,27 +480,6 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           </div>
         </IcSection>
 
-        <IcSection
-          title="Candidatura"
-          :description="person.appliedAt ? `Inviata il ${dayOf(person.appliedAt)}` : 'Non ancora inviata'"
-        >
-          <div class="space-y-6">
-            <dl class="space-y-5">
-              <div v-for="item in texts" :key="item.label">
-                <dt class="text-sm font-semibold text-muted">{{ item.label }}</dt>
-                <dd class="mt-1 max-w-prose whitespace-pre-line" :class="item.value ? '' : 'text-dimmed'">
-                  {{ item.value || 'Non indicato' }}
-                </dd>
-              </div>
-            </dl>
-            <div>
-              <h3 class="text-sm font-semibold text-muted">Curriculum</h3>
-              <IcFileLink v-if="person.cv" :file="person.cv" class="mt-2" />
-              <p v-else class="mt-1 text-dimmed">Non caricato</p>
-            </div>
-          </div>
-        </IcSection>
-
         <IcSection title="Disponibilità" :description="availabilityNote">
           <template v-if="person.availabilityConfirmedAt && person.status === 'approved'" #actions>
             <UButton
@@ -554,7 +530,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           </ul>
         </IcSection>
 
-        <IcSection title="Convocazioni">
+        <IcSection title="Convocazioni" description="Le sessioni a cui è convocata, confermate o da confermare.">
           <p v-if="!person.convocations.length" class="text-muted">Nessuna convocazione finora.</p>
           <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
             <li v-for="c in person.convocations" :key="c.id" class="space-y-2 px-4 py-3">
@@ -582,14 +558,10 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           </ul>
         </IcSection>
 
-        <IcSection title="Formazione" description="Le formazioni proposte che le interessano.">
-          <p v-if="!person.training.length" class="text-muted">Nessuna indicata.</p>
-          <ul v-else class="list-disc space-y-1 pl-5">
-            <li v-for="training in person.training" :key="training.id">{{ training.title }}</li>
-          </ul>
-        </IcSection>
-
-        <IcSection title="Documenti personali" description="Caricati dalla persona: titoli, attestati, documenti.">
+        <IcSection
+          title="Documenti personali"
+          description="Caricati dalla persona, in PDF: il curriculum, il documento d’identità, titoli e attestati."
+        >
           <UAlert
             v-if="person.documentsMissing.length"
             class="mb-4"
@@ -599,8 +571,16 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
             :title="documentsAlert"
             description="Il curriculum e il documento d’identità in PDF sono obbligatori: la persona li carica dai suoi Documenti."
           />
-          <p v-if="!person.documents.length" class="text-muted">Nessun documento caricato.</p>
+          <p v-if="!person.cv && !person.documents.length" class="text-muted">Nessun documento caricato.</p>
           <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
+            <li v-if="person.cv" class="space-y-1 px-4 py-3">
+              <IcFileLink :file="person.cv" label="Curriculum" />
+              <p class="text-sm text-muted">
+                Curriculum · inviato con la candidatura<template v-if="person.appliedAt">
+                  il {{ dayOf(person.appliedAt) }}</template
+                >
+              </p>
+            </li>
             <li v-for="doc in person.documents" :key="doc.id" class="space-y-1 px-4 py-3">
               <IcFileLink :file="doc.file" :label="doc.title" />
               <p class="text-sm text-muted">
@@ -612,6 +592,25 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
 
         <IcSection title="Firme" description="I documenti assegnati a questa persona e il loro stato.">
           <DocumentsUserSignatures :user-id="person.userId" />
+        </IcSection>
+
+        <IcSection title="Formazione" description="Le formazioni proposte che le interessano.">
+          <p v-if="!person.training.length" class="text-muted">Nessuna indicata.</p>
+          <UCollapsible v-else>
+            <UButton
+              :label="`Mostra ${plural(person.training.length, 'formazione', 'formazioni')}`"
+              color="neutral"
+              variant="link"
+              trailing-icon="i-lucide-chevron-down"
+              class="px-0 pointer-coarse:min-h-11"
+              :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform' }"
+            />
+            <template #content>
+              <ul class="mt-2 list-disc space-y-1 pl-5">
+                <li v-for="training in person.training" :key="training.id">{{ training.title }}</li>
+              </ul>
+            </template>
+          </UCollapsible>
         </IcSection>
       </div>
     </div>

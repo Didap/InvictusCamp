@@ -168,7 +168,8 @@ categories `cv` and `id_document`, in PDF only (a family never has `cv`). The CV
 (`staff_profiles.cvFileId`) counts as the CV and stays as it was; an updated one, or the first for someone invited as
 approved, is uploaded in its place on the page. An ID uploaded earlier as a photo does not count. Until both are
 there the home asks for them, and the person's admin page says which is missing. The other personal documents
-(titles, certificates) keep their categories and formats.
+(titles, certificates) keep their categories and are taken in PDF only too (the docx of 26/11/2026); those
+uploaded earlier as photos stay.
 **Formazione**: the administration proposes trainings (`/admin/formazione`: title, optional description; add, edit,
 delete with its interests; audited `training.*`), and sees who is interested, with a link to each person. Staff and
 v-team in the staff area tick on `/staff/formazione` those that interest them, each tick saved at once
@@ -190,8 +191,17 @@ availability or receive convocations. The administration can move a person to th
 - **Staff and v-team are two separate lists**, two items of the menu: `/admin/staff` and `/admin/v-team`, each
   with the pages of its people (`/admin/staff/:userId`, `/admin/v-team/:userId`). A person's page opened under
   the other team (an old link, the users list, a change of team) moves to the list of their team. The
-  application is one for both: the team comes from the link (`/candidati?squadra=v-team`). Roles and Valutazione are the same for both lists. The Panoramica has a tile of applications to
-  review for each list.
+  application is one for both: the team comes from the link (`/candidati?squadra=v-team`), shown in the person's
+  status; it changes only for a mistake, with «Sposta nel v-team» / «Sposta nello staff» in the page's menu (⋯),
+  after a confirmation (audited `staff.team`; the contract formula is dropped and the sheet's PDF made again).
+  Roles and Valutazione are the same for both lists. The Panoramica has a tile of applications to review for
+  each list.
+- A person's page (`/admin/staff/:userId`): beside, «Stato» (status, what it means, roles, «Approva la
+  candidatura» / «Non selezionare» while the application waits: the admin decides, and approved the person
+  enters the staff area: sheet, availability, convocations), «Valutazione» (tags, internal notes), contacts. The
+  main column: personal sheet (the health data in its reserved section), availability, convocations (confirmed or
+  to confirm), personal documents (the CV sent with the application first), signatures, and the trainings the
+  person is interested in, closed until opened. Nothing else of the application: its older texts are not shown.
 - Each list shows name, roles, city, age and Valutazione; status, application date and availability are on
   each person's page. Filters: search, role, age (ranges of years at today), availability (at least one
   session, none, or a session not started yet).

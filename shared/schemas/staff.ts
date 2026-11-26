@@ -9,7 +9,6 @@ import {
   PERSONAL_DOCUMENT_CATEGORIES,
   SHIRT_SIZES,
   STAFF_CONTRACTS,
-  UPLOAD_MIME_TYPES,
   STAFF_TAG_COLORS,
   STAFF_TEAMS,
   type PersonalDocumentCategory,
@@ -329,10 +328,8 @@ export function isRequiredStaffDocument(category: PersonalDocumentCategory): cat
   return (REQUIRED_STAFF_DOCUMENTS as readonly string[]).includes(category)
 }
 
-/** The formats a staff member's document is taken in: the required ones in PDF only. */
-export function staffDocumentTypes(category: PersonalDocumentCategory): readonly UploadMimeType[] {
-  return isRequiredStaffDocument(category) ? ['application/pdf'] : UPLOAD_MIME_TYPES
-}
+/** A staff member's documents are taken in PDF only, the required ones and the others (the docx of 26/11/2026). */
+export const STAFF_DOCUMENT_TYPES = ['application/pdf'] as const satisfies readonly UploadMimeType[]
 
 /** The text fields sent with the file to POST /api/staff/documents. */
 export const staffDocumentSchema = z.object({
