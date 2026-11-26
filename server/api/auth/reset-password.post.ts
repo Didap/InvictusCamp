@@ -1,6 +1,7 @@
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { resetPasswordSchema } from '#shared/schemas/auth'
 import { ROLE_HOME } from '#shared/utils/routes'
+import { applyWithCv } from '../../domain/staff'
 import { consumeToken } from '../../domain/tokens'
 
 /** Sets a new password from the reset link; every other session of the account stops working. */
@@ -24,6 +25,8 @@ export default defineEventHandler(async event => {
       .where(and(eq(tables.users.id, userId), ne(tables.users.status, 'disabled')))
       .returning()
     if (!user) throw invalid()
+    // A candidate who lost the confirmation email confirms the address here: the application leaves too.
+    if (user.role === 'staff') await applyWithCv(tx, user.id, { ip: clientIp(event) })
     return user
   })
   await audit(event, { actorUserId: user.id, action: 'user.password_reset', entityType: 'user', entityId: user.id })

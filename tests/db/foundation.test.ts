@@ -92,6 +92,9 @@ describe('demo seed', () => {
       const [user] = await db.select().from(t.users).where(eq(t.users.email, DEMO_ACCOUNTS.newFamily))
       const [family] = await db.select().from(t.families).where(eq(t.families.userId, user!.id))
       expect(family).toMatchObject({ formStatus: 'draft', formAnswers: {} })
+      // The demo staff account has its sheet filled in, and its PDF to sign.
+      const [staff] = await db.select().from(t.users).where(eq(t.users.email, DEMO_ACCOUNTS.staff))
+      expect(await db.$count(t.documents, eq(t.documents.staffUserId, staff!.id))).toBe(1)
       expect(await seed(uploadsDir)).toBeNull()
     } finally {
       await rm(uploadsDir, { recursive: true, force: true })

@@ -1,5 +1,6 @@
 // DTOs of the communications area: the composer, the messages sent, the email log.
 import type { EmailStatus, SessionStatus, UserRole } from '../utils/constants'
+import type { IsoDay } from '../utils/dates'
 import type { Audience } from './domain'
 
 /** A person who would receive a message. */
@@ -70,12 +71,56 @@ export interface CommunicationDetail extends CommunicationListItem {
 }
 
 /** POST /api/admin/communications and POST /api/admin/communications/:id/send */
-export interface CommunicationSendResult {
+export interface CommunicationSendResult extends DeliveryReport {
   id: string
   recipients: number
+}
+
+/** What happened to a group of emails handed to deliver(). */
+export interface DeliveryReport {
   sent: number
   failed: number
   simulated: number
+  /** Over the daily limit: they leave by themselves, see GET /api/admin/email-log/queue. */
+  queued: number
+}
+
+/** When a group of queued emails is expected to leave: right away, when the queue opens, or at 23:59. */
+export interface EmailDeparture {
+  day: IsoDay
+  time: 'now' | 'opening' | 'last'
+}
+
+/** A queued email, in order of departure. */
+export interface EmailQueueItem {
+  id: string
+  toEmail: string
+  toName: string | null
+  subject: string
+  template: string
+  createdAt: string
+  departure: EmailDeparture
+}
+
+/** GET /api/admin/email-log/quota: today's count against the limit and the expected departures. */
+export interface EmailQuotaSummary {
+  used: number
+  /** How many more ordinary emails can leave today before the queue starts. */
+  ordinaryLeft: number
+  queued: number
+  departures: (EmailDeparture & { count: number })[]
+  /** When the count restarts, in Italian time: Resend's day is UTC, so "01:00" or "02:00" in summer. */
+  resetTime: string
+}
+
+/** What the quota bar shows: the summary, and whether emails are only recorded (no Resend key). */
+export interface EmailQuotaStatus extends EmailQuotaSummary {
+  simulated: boolean
+}
+
+/** GET /api/admin/email-log/queue: the summary and the first of the queue, in order. */
+export interface EmailQueueOverview extends EmailQuotaSummary {
+  items: EmailQueueItem[]
 }
 
 /** POST /api/admin/communications/preview: the email as it will look. */

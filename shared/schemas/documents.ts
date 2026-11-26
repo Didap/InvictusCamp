@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DOCUMENT_CATEGORIES } from '../utils/constants'
+import { DOCUMENT_CATEGORIES, STAFF_RESOURCE_MODES } from '../utils/constants'
 import { zIsoDay, zRequiredText, zText, zUuid } from './common'
 
 /** The details of a document: the upload form (with the file) and the edit form. */
@@ -50,6 +50,12 @@ export const assignSchema = z.object({
   dryRun: z.boolean().optional(),
 })
 export type AssignInput = z.infer<typeof assignSchema>
+
+/** PUT /api/admin/documents/:id/staff-resource: in the «Risorse utili» of staff and v-team, or not. */
+export const staffResourceSchema = z.object({
+  mode: z.enum(STAFF_RESOURCE_MODES).nullable(),
+  dryRun: z.boolean().optional(),
+})
 
 /** A checkbox that must be ticked before signing or confirming the reading. */
 export const zReadConsent = z

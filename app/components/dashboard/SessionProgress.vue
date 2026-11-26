@@ -46,7 +46,7 @@ const staff = computed(() => {
     confirmed: { value: s.confirmed, label: plural(s.confirmed, 'confermato', 'confermati') },
     pending: { value: waiting, label: `${waiting} in attesa di risposta o firma` },
     rest: missing ? `${missing} da trovare` : undefined,
-    toSend: s.drafts ? plural(s.drafts, 'convocazione da inviare', 'convocazioni da inviare') : null,
+    toSend: s.drafts.staff ? plural(s.drafts.staff, 'convocazione da inviare', 'convocazioni da inviare') : null,
   }
 })
 </script>

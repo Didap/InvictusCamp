@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import type { DropdownMenuItem } from '@nuxt/ui'
-import type { DocumentDetail, RemindResult } from '#shared/types/documents'
-import { enumLabel } from '#shared/utils/constants'
-import { formatDateTime, formatDay } from '#shared/utils/format'
+import type { ButtonProps, DropdownMenuItem } from '@nuxt/ui'
+import type { AssignResult, DocumentDetail, RemindResult } from '#shared/types/documents'
+import { enumLabel, type StaffResourceMode } from '#shared/utils/constants'
+import { todayIso } from '#shared/utils/dates'
+import { formatDateTime, formatDay, plural } from '#shared/utils/format'
 
 // One document: who must sign it and where each person is (reminders, cancellations, signed copies),
 // its details and a preview. "Assegna" is the primary action; archive and edit sit in the menu.
+// A family's release or a staff sheet (`generated`) is the gestionale's: no assign, edit, replace or restore.
 const route = useRoute()
 const api = useApi()
 const confirm = useConfirm()
@@ -65,6 +67,42 @@ async function reload() {
   await Promise.all([refresh(), refreshNuxtData('admin-documents')])
 }
 
+/** «Risorse utili» of staff and v-team: to accept (every approved person asked, one email each), to consult, or no. */
+const RESOURCE_ITEMS = [
+  { label: 'No', value: 'none' },
+  { label: 'Da leggere e accettare', value: 'accept', description: 'Lo chiediamo a ogni persona approvata.' },
+  { label: 'Da consultare', value: 'consult', description: 'Resta a disposizione, senza conferme.' },
+]
+const resourceSaving = ref(false)
+async function setResource(value: string) {
+  const mode = value === 'none' ? null : (value as StaffResourceMode)
+  const url: string = `/api/admin/documents/${documentId.value}/staff-resource`
+  resourceSaving.value = true
+  try {
+    if (mode === 'accept') {
+      const { result } = await api<{ result: AssignResult }>(url, { method: 'PUT', body: { mode, dryRun: true } })
+      const later = 'Chi viene approvato dopo lo trova nelle sue risorse.'
+      const ok = await confirm({
+        title: 'Da leggere e accettare?',
+        description: result.created
+          ? `Lo chiediamo a ${plural(result.created, 'persona approvata', 'persone approvate')}: ${plural(result.created, 'email', 'email')} in partenza. ${later}`
+          : result.recipients
+            ? `Tutte le persone approvate lo hanno già: nessuna email. ${later}`
+            : `Non c’è ancora nessuna persona approvata: nessuna email. ${later}`,
+        confirmLabel: result.created ? `Chiedi e invia ${plural(result.created, 'email', 'email')}` : 'Conferma',
+      })
+      if (!ok) return
+    }
+    await api(url, { method: 'PUT', body: { mode } })
+    notifySuccess(mode ? 'Messo tra le risorse utili' : 'Tolto dalle risorse utili')
+    await reload()
+  } catch (error) {
+    notifyError(error)
+  } finally {
+    resourceSaving.value = false
+  }
+}
+
 async function remindAll() {
   const count = pendingCount.value
   if (!count || !doc.value) return
@@ -89,13 +127,17 @@ async function remindAll() {
 async function setArchived(archived: boolean) {
   if (archived) {
     const count = pendingCount.value
+    const generated = Boolean(doc.value?.generated)
+    const cancelled = count
+      ? `${count === 1 ? 'La richiesta ancora aperta viene annullata' : `Le ${count} richieste ancora aperte vengono annullate`}, senza inviare email. `
+      : ''
     const ok = await confirm({
       title: 'Archiviare il documento?',
-      description: count
-        ? `${count === 1 ? 'La richiesta ancora aperta viene annullata' : `Le ${count} richieste ancora aperte vengono annullate`}, senza inviare email. Le firme raccolte restano qui.`
-        : 'Non comparirà più tra i documenti da assegnare. Le firme raccolte restano qui.',
+      description: generated
+        ? `${cancelled}Non sarà più in vigore, anche se è già firmato, e non si potrà ripristinare: al prossimo salvataggio dei dati il gestionale ne prepara uno nuovo da firmare.`
+        : `${cancelled || 'Non comparirà più tra i documenti da assegnare. '}Le firme raccolte restano qui.`,
       confirmLabel: 'Archivia',
-      danger: count > 0,
+      danger: generated || count > 0,
     })
     if (!ok) return
   }
@@ -121,15 +163,35 @@ async function onReplaced() {
   await reload()
 }
 
+/** The banner of an archived document: one the gestionale prepared is never restored, a new one comes instead. */
+const archivedNote = computed((): { description: string; actions: ButtonProps[] } | null => {
+  const d = doc.value
+  if (!d?.archivedAt) return null
+  const since = `Dal ${formatDay(todayIso(new Date(d.archivedAt)), 'long')}.`
+  if (d.generated) {
+    return {
+      description: `${since} Non è più in vigore e non si può ripristinare: il gestionale ne prepara uno nuovo quando i dati sono completi.`,
+      actions: [],
+    }
+  }
+  return {
+    description: `${since} Non si può assegnare né firmare: ripristinalo per usarlo di nuovo.`,
+    actions: [{ label: 'Ripristina', color: 'neutral', variant: 'outline', onClick: () => setArchived(false) }],
+  }
+})
+
 const menuItems = computed<DropdownMenuItem[][]>(() => {
   const d = doc.value
   if (!d) return []
+  const manual = !d.generated
   return [
     [
-      { label: 'Modifica i dettagli', icon: 'i-lucide-pencil', onSelect: () => (editOpen.value = true) },
-      ...(d.locked
-        ? []
-        : [{ label: 'Sostituisci il file', icon: 'i-lucide-file-up', onSelect: () => (replaceOpen.value = true) }]),
+      ...(manual
+        ? [{ label: 'Modifica i dettagli', icon: 'i-lucide-pencil', onSelect: () => (editOpen.value = true) }]
+        : []),
+      ...(manual && !d.locked
+        ? [{ label: 'Sostituisci il file', icon: 'i-lucide-file-up', onSelect: () => (replaceOpen.value = true) }]
+        : []),
       {
         label: 'Scarica il PDF originale',
         icon: 'i-lucide-download',
@@ -137,11 +199,11 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
         external: true,
       },
     ],
-    [
-      d.archivedAt
-        ? { label: 'Ripristina', icon: 'i-lucide-archive-restore', onSelect: () => setArchived(false) }
-        : { label: 'Archivia', icon: 'i-lucide-archive', onSelect: () => setArchived(true) },
-    ],
+    ...(!d.archivedAt
+      ? [[{ label: 'Archivia', icon: 'i-lucide-archive', onSelect: () => setArchived(true) }]]
+      : manual
+        ? [[{ label: 'Ripristina', icon: 'i-lucide-archive-restore', onSelect: () => setArchived(false) }]]
+        : []),
   ]
 })
 </script>
@@ -159,6 +221,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
         />
       </UDropdownMenu>
       <UButton
+        v-if="!doc.generated"
         icon="i-lucide-user-plus"
         label="Assegna"
         :disabled="!!doc.archivedAt"
@@ -177,13 +240,13 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
 
     <template v-else>
       <UAlert
-        v-if="doc.archivedAt"
+        v-if="archivedNote"
         color="neutral"
         variant="subtle"
         icon="i-lucide-archive"
         title="Documento archiviato"
-        :description="`Dal ${formatDay(doc.archivedAt.slice(0, 10), 'long')}. Non si può assegnare né firmare: ripristinalo per usarlo di nuovo.`"
-        :actions="[{ label: 'Ripristina', color: 'neutral', variant: 'outline', onClick: () => setArchived(false) }]"
+        :description="archivedNote.description"
+        :actions="archivedNote.actions"
         class="mb-8"
       />
 
@@ -198,6 +261,10 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
         </span>
         <span>{{ enumLabel('documentCategory', doc.category) }}</span>
         <span v-if="doc.session">{{ doc.session.title }}</span>
+        <span v-if="doc.generated" class="inline-flex items-center gap-1.5">
+          <UIcon name="i-lucide-file-cog" class="size-4" aria-hidden="true" />
+          Preparato e aggiornato dal gestionale
+        </span>
       </div>
 
       <IcSection
@@ -233,7 +300,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
           :title="`Ancora nessuno deve ${doc.requiresSignature ? 'firmarlo' : 'leggerlo'}`"
           description="Assegnalo a persone scelte, a tutte le famiglie, a tutto lo staff o a una sessione: ognuno riceve un’email con il link."
           :actions="
-            doc.archivedAt
+            doc.archivedAt || doc.generated
               ? []
               : [
                   {
@@ -267,6 +334,19 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
           <p v-if="!rows.length" class="text-muted">Nessuna richiesta corrisponde alla ricerca.</p>
           <DocumentsSignatureRequestList v-else :rows="rows" show="person" @changed="reload" />
         </template>
+      </IcSection>
+
+      <IcSection
+        v-if="!doc.generated"
+        title="Risorse utili dello staff"
+        description="Lo trovano staff e v-team nella loro pagina «Risorse utili»."
+      >
+        <URadioGroup
+          :model-value="doc.staffResource ?? 'none'"
+          :items="RESOURCE_ITEMS"
+          :disabled="resourceSaving || Boolean(doc.archivedAt)"
+          @update:model-value="value => setResource(String(value))"
+        />
       </IcSection>
 
       <IcSection title="Dettagli">
@@ -325,23 +405,25 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
           </ul>
         </template>
       </UModal>
-      <DocumentsAssignModal v-model:open="assignOpen" :document-id="doc.id" @assigned="reload" />
-      <DocumentsDocumentFormModal v-model:open="editOpen" :document="doc" @saved="reload" />
-      <UModal
-        v-model:open="replaceOpen"
-        title="Sostituisci il file"
-        description="Nessuno lo ha ancora firmato: puoi caricare una versione corretta. I codici già inviati smettono di valere."
-      >
-        <template #body>
-          <IcFileUpload
-            :endpoint="`/api/admin/documents/${doc.id}/file`"
-            accept="application/pdf"
-            description="Solo PDF, fino a 15 MB"
-            button-label="Sostituisci il file"
-            @uploaded="onReplaced"
-          />
-        </template>
-      </UModal>
+      <template v-if="!doc.generated">
+        <DocumentsAssignModal v-model:open="assignOpen" :document-id="doc.id" @assigned="reload" />
+        <DocumentsDocumentFormModal v-model:open="editOpen" :document="doc" @saved="reload" />
+        <UModal
+          v-model:open="replaceOpen"
+          title="Sostituisci il file"
+          description="Nessuno lo ha ancora firmato: puoi caricare una versione corretta. I codici già inviati smettono di valere."
+        >
+          <template #body>
+            <IcFileUpload
+              :endpoint="`/api/admin/documents/${doc.id}/file`"
+              accept="application/pdf"
+              description="Solo PDF, fino a 15 MB"
+              button-label="Sostituisci il file"
+              @uploaded="onReplaced"
+            />
+          </template>
+        </UModal>
+      </template>
     </template>
   </IcPage>
 </template>

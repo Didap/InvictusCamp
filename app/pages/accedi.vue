@@ -65,7 +65,7 @@ async function resend() {
 <template>
   <div>
     <h1 class="text-2xl font-bold text-highlighted">Accedi</h1>
-    <p class="mt-2 text-muted">Entra nel gestionale di Invictus Camp.</p>
+    <p class="mt-2 text-muted">Accedi al “dietro le quinte” di Invictus Camp.</p>
 
     <UForm :schema="loginSchema" :state="state" class="mt-8 space-y-5" @submit="onSubmit">
       <UFormField label="Email" name="email" required>

@@ -8,6 +8,7 @@ import type {
   FamilyFormStatus,
   UserStatus,
   ProgrammeGroup,
+  StaffTeam,
 } from '../utils/constants'
 import type { IsoDay } from '../utils/dates'
 import type { FeedbackState } from './feedback'
@@ -42,8 +43,8 @@ export interface StaffCounts {
   toSend: number
   /** Every convocation still in play (draft, sent, accepted). */
   open: number
-  /** Every convocation not sent yet. */
-  drafts: number
+  /** Every convocation not sent yet, by team: each team sends from its own tab. */
+  drafts: Record<StaffTeam, number>
 }
 
 /**

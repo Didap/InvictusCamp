@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DashboardTodo } from '#shared/types/dashboard'
 
-// "Da fare": each item is a link to the page where it is done.
+// A list of links, each to the page where it is done: "Da fare" of the dashboards, the sections of the guide.
 defineProps<{ items: DashboardTodo[] }>()
 </script>
 

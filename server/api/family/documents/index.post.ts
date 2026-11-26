@@ -9,16 +9,7 @@ import { addPersonalDocument, assertPersonalDocument } from '../../../domain/fam
 export default defineEventHandler(async event => {
   const { user, family } = await requireFamily(event)
   const upload = await readUpload(event)
-  const parsed = personalDocumentSchema.safeParse(upload.fields)
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0]
-    throw createError({
-      statusCode: 400,
-      message: issue ? `Dati non validi: ${issue.message}` : 'Dati non validi',
-      data: { issues: parsed.error.issues.map(i => ({ path: i.path.join('.'), message: i.message })) },
-    })
-  }
-  const document = parsed.data
+  const document = parseFields(upload.fields, personalDocumentSchema)
   const db = useDb()
   // Checked before the file is written, so a refused upload leaves nothing behind.
   await assertPersonalDocument(db, family.id, document)

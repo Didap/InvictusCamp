@@ -85,6 +85,7 @@ describe('canteen', () => {
     // Saving nothing clears the details and the consent.
     expect(await saveStaffUsefulInfo(db, { userId: staff.id, value: { info: {}, consent: false }, actor })).toEqual({
       info: null,
+      otherInfo: null,
       consentAt: null,
     })
   })

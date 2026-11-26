@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { and, eq, isNull } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { familyRelease, releaseTextDto, renewReleases, saveReleaseText } from '../../server/domain/releases'
-import { assignDocument, setDocumentArchived } from '../../server/domain/signatures'
+import { assignDocument, documentDetail, setDocumentArchived } from '../../server/domain/signatures'
 import { makeFamily, t, useTestDb } from './helpers'
 
 const db = useTestDb()
@@ -38,6 +38,11 @@ describe('release', () => {
     await expect(
       assignDocument(db, ctx, { documentId: document!.id, target: { type: 'all_families' }, actor }),
     ).rejects.toMatchObject({ statusCode: 409 })
+    // The administration sees it as the gestionale's, so it offers none of those actions.
+    expect(await documentDetail(db, document!.id)).toMatchObject({
+      generated: true,
+      requests: [{ document: { generated: true } }],
+    })
 
     // Nothing changed: nothing new.
     expect(await familyRelease(db, input)).toEqual([])

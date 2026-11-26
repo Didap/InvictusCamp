@@ -103,14 +103,16 @@ async function candidates(db: DbOrTx, audience: Audience): Promise<Candidate[]> 
         )
     }
     case 'session_staff': {
-      if (audience.statuses?.length === 0) return []
+      if (audience.statuses?.length === 0 || audience.teams?.length === 0) return []
       return db
         .select(candidateColumns)
         .from(sessionStaff)
         .innerJoin(users, eq(users.id, sessionStaff.userId))
+        .innerJoin(staffProfiles, eq(staffProfiles.userId, sessionStaff.userId))
         .where(
           and(
             eq(sessionStaff.sessionId, audience.sessionId),
+            audience.teams ? inArray(staffProfiles.team, audience.teams) : undefined,
             audience.statuses ? inArray(sessionStaff.status, audience.statuses) : undefined,
           ),
         )

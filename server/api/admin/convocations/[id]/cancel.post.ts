@@ -8,5 +8,5 @@ export default defineEventHandler(async event => {
     cancelConvocation(tx, emailContext(), { id, actor: { userId: admin.id, ip: clientIp(event) } }),
   )
   const report = await deliver(result.emails)
-  return { removed: result.removed, emails: result.emails.length, failed: report.failed }
+  return { removed: result.removed, emails: result.emails.length, failed: report.failed, queued: report.queued }
 })

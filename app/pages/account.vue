@@ -2,10 +2,16 @@
 import { z } from 'zod'
 import { accountSchema, changePasswordSchema } from '#shared/schemas/auth'
 import type { AccountDto } from '#shared/types/api'
+import type { UserRole } from '#shared/utils/constants'
 import { formatDateTime } from '#shared/utils/format'
 
 const api = useApi()
-const { fetch: refreshSession } = useUserSession()
+const { fetch: refreshSession, user } = useUserSession()
+const SIGNED_WITH: Partial<Record<UserRole, string>> = {
+  staff: 'Nome, cognome e telefono sono nella tua scheda personale: se li cambi, ti chiediamo di firmarla di nuovo.',
+  family: 'Il tuo nome è nella liberatoria della famiglia: se lo cambi, ti chiediamo di firmarla di nuovo.',
+}
+const signedWith = computed(() => (user.value ? SIGNED_WITH[user.value.role] : undefined))
 const { data: account, refresh } = await useApiFetch<AccountDto>('/api/account')
 
 const profile = reactive({ firstName: '', lastName: '', phone: '' })
@@ -68,6 +74,7 @@ async function savePassword() {
         <UFormField label="Telefono" name="phone" hint="Facoltativo">
           <UInput v-model="profile.phone" type="tel" autocomplete="tel" class="w-full" />
         </UFormField>
+        <p v-if="signedWith" class="text-sm text-muted">{{ signedWith }}</p>
         <UButton type="submit" :loading="savingProfile" label="Salva" />
       </UForm>
       <p v-if="account?.lastLoginAt" class="mt-6 text-sm text-muted">
@@ -80,7 +87,7 @@ async function savePassword() {
         <UFormField label="Password attuale" name="currentPassword" required>
           <IcPasswordInput v-model="passwords.currentPassword" autocomplete="current-password" />
         </UFormField>
-        <UFormField label="Nuova password" name="newPassword" help="Almeno 10 caratteri." required>
+        <UFormField label="Nuova password" name="newPassword" help="Almeno 8 caratteri." required>
           <IcPasswordInput v-model="passwords.newPassword" autocomplete="new-password" />
         </UFormField>
         <UFormField label="Ripeti la nuova password" name="confirm" required>

@@ -847,7 +847,15 @@ describe('the session itself', () => {
     const all = await listSessions(db, {}, '2026-11-06')
     expect(all.map(s => s.title)).toEqual(['Presto', 'Più avanti', 'Passata'])
     expect(all[0]!.slots).toEqual({ total: 4, held: 2, confirmed: 1, free: 2, reserves: 1 })
-    expect(all[0]!.staff).toEqual({ needed: 3, confirmed: 1, accepted: 2, waiting: 1, toSend: 0, open: 5, drafts: 1 })
+    expect(all[0]!.staff).toEqual({
+      needed: 3,
+      confirmed: 1,
+      accepted: 2,
+      waiting: 1,
+      toSend: 0,
+      open: 5,
+      drafts: { staff: 0, volunteer: 1 },
+    })
 
     const open = await listSessions(db, { statuses: ['draft', 'inviting', 'confirmed'] }, '2026-11-06')
     expect(open.map(s => s.id)).toEqual([soon.id, later.id, past.id])

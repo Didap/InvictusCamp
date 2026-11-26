@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import type { H3Event } from 'h3'
 import type { AccountDto, SessionUser } from '#shared/types/api'
-import type { UserRole } from '#shared/utils/constants'
+import { inStaffArea, type UserRole } from '#shared/utils/constants'
 import { forwardedClientIp } from '../domain/client-ip'
 
 type UserRow = typeof tables.users.$inferSelect
@@ -66,8 +66,12 @@ export async function requireFamily(event: H3Event) {
   return { user, family }
 }
 
-/** The signed-in staff account and its profile; `approved` requires an approved application. */
-export async function requireStaff(event: H3Event, options: { approved?: boolean } = {}) {
+/**
+ * The signed-in staff member and their profile, at the access the endpoint needs (spec 3.4): `area`, the
+ * default, the pages beyond the home (approved or inactive); `approved`, availability and convocations;
+ * `candidate`, anyone with a profile (the home and the CV of a person not approved yet).
+ */
+export async function requireStaff(event: H3Event, access: 'candidate' | 'area' | 'approved' = 'area') {
   const user = await requireRole(event, 'staff')
   const [profile] = await useDb()
     .select()
@@ -75,7 +79,7 @@ export async function requireStaff(event: H3Event, options: { approved?: boolean
     .where(eq(tables.staffProfiles.userId, user.id))
     .limit(1)
   if (!profile) throw createError({ statusCode: 404, message: 'Profilo staff non trovato' })
-  if (options.approved && profile.status !== 'approved') {
+  if ((access === 'area' && !inStaffArea(profile.status)) || (access === 'approved' && profile.status !== 'approved')) {
     throw createError({ statusCode: 403, message: 'Disponibile dopo l’approvazione della candidatura' })
   }
   return { user, profile }

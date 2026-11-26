@@ -1,13 +1,22 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import { isSheetComplete, requiredDocumentsText } from '#shared/schemas/staff'
 import type { StaffDetail, StaffTagDto } from '#shared/types/staff'
-import { OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
+import { inStaffArea, OF_TEAM, type StaffStatus, type StaffTeam } from '#shared/utils/constants'
 import { ageOn, todayIso } from '#shared/utils/dates'
-import { formatAge, formatDateTime, formatDay, formatDayRange, fullName } from '#shared/utils/format'
-import { teamOfSlug, teamPath } from '#shared/utils/routes'
+import {
+  andList,
+  formatAge,
+  formatDateTime,
+  formatDay,
+  formatDayRange,
+  formatTown,
+  fullName,
+} from '#shared/utils/format'
+import { TEAM_SLUG, teamOfSlug, teamPath } from '#shared/utils/routes'
 
-// One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, application,
-// review with internal notes, the outcome email sent only from "Comunica l’esito", availability,
+// One member of the staff or of the v-team (spec 3.4), under the list of their team: contacts, personal
+// sheet with the health data behind the reserved section, application, review with internal notes, the outcome email sent only from "Comunica l’esito", availability,
 // convocations, personal documents, signatures.
 // Keyed by the person: moving to the list of the other team keeps the page, and what is typed in it.
 definePageMeta({ path: '/admin/:team(staff|v-team)/:userId', key: route => String(route.params.userId) })
@@ -169,7 +178,7 @@ const statusLine = computed(() => {
   const by = p.reviewedByName ? ` da ${p.reviewedByName}` : ''
   switch (p.status) {
     case 'registered':
-      return 'Ha creato l’account e non ha ancora inviato la candidatura: potrai valutarla dopo l’invio.'
+      return 'Ha creato l’account: la candidatura arriva quando conferma l’email e c’è il CV.'
     case 'applied':
       return `Candidatura inviata il ${dayOf(p.appliedAt)}: da valutare.`
     case 'approved':
@@ -195,13 +204,35 @@ const contacts = computed(() => {
   return [
     { label: 'Email', value: p.email },
     { label: 'Telefono', value: p.phone, action: whatsappLink(p.phone) },
-    { label: 'Città', value: p.city },
-    {
-      label: 'Data di nascita',
-      value: p.birthDate && `${formatDay(p.birthDate, 'long')} (${formatAge(ageOn(p.birthDate, today))})`,
-    },
     { label: 'Account creato il', value: dayOf(p.createdAt) },
   ]
+})
+
+/** The sheet is the approved person's to fill in: a candidate has at most what the older form asked. */
+const withSheet = computed(() => inStaffArea(person.value?.status))
+/** Said only while the approved person still has something to fill in. */
+const sheetNote = computed(() =>
+  person.value && withSheet.value && !isSheetComplete(person.value.sheet)
+    ? 'Non ancora completa: la compila la persona.'
+    : undefined,
+)
+
+/** The personal sheet the person fills in once approved (/staff/scheda). */
+const sheet = computed(() => {
+  const s = person.value?.sheet
+  if (!s) return []
+  return [
+    {
+      label: 'Data di nascita',
+      value: s.birthDate && `${formatDay(s.birthDate, 'long')} (${formatAge(ageOn(s.birthDate, today))})`,
+    },
+    { label: 'Luogo di nascita', value: s.birthPlace },
+    { label: 'Codice fiscale', value: s.fiscalCode },
+    { label: 'Taglia della maglietta', value: s.shirtSize },
+    { label: 'Indirizzo', value: s.address },
+    { label: 'Città', value: formatTown(s) },
+    { label: 'Regione', value: s.region },
+  ].filter(item => withSheet.value || item.value)
 })
 
 const texts = computed(() => {
@@ -219,6 +250,42 @@ const availability = computed(() => {
   const all = person.value?.availability ?? []
   return [...all.filter(s => s.startDate > today), ...all.filter(s => s.startDate <= today).reverse()]
 })
+
+const documentsAlert = computed(() => {
+  const missing = person.value?.documentsMissing ?? []
+  return `${missing.length === 1 ? 'Manca' : 'Mancano'} ${requiredDocumentsText(missing)}`
+})
+
+/** The availability confirmed, and the reset the person asked for: «Riapri la disponibilità». */
+const availabilityNote = computed(() => {
+  const at = person.value?.availabilityConfirmedAt
+  return at
+    ? `Ultima conferma il ${dayOf(at)}: le sessioni confermate cambiano solo se riapri la disponibilità.`
+    : 'Le sessioni a cui ha detto che c’è, dal primo all’ultimo giorno. Non ancora confermate.'
+})
+const reopening = ref(false)
+async function reopenAvailability() {
+  const emailed = person.value?.accountStatus !== 'disabled'
+  const ok = await confirm({
+    title: 'Riapri la disponibilità?',
+    description: `${name.value} potrà cambiare le sessioni a cui c’è e confermarle di nuovo. Le risposte date restano. ${
+      emailed ? 'Parte 1 email.' : 'L’account è disattivato: non parte nessuna email.'
+    }`,
+    confirmLabel: emailed ? 'Riapri e invia 1 email' : 'Riapri',
+  })
+  if (!ok) return
+  reopening.value = true
+  try {
+    const url: string = `/api/admin/staff/${userId.value}/availability-reopen`
+    await api(url, { method: 'POST' })
+    notifySuccess('Disponibilità riaperta', emailed ? 'Abbiamo avvisato la persona via email.' : undefined)
+  } catch (error) {
+    notifyError(error, 'Disponibilità non riaperta')
+  } finally {
+    await refresh()
+    reopening.value = false
+  }
+}
 
 function convocationNote(c: StaffDetail['convocations'][number]): string {
   if (c.status === 'sent' && c.sentAt) return `Inviata il ${dayOf(c.sentAt)}`
@@ -270,29 +337,17 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
             <p class="text-sm text-muted">{{ statusLine }}</p>
             <UFormField
               label="Squadra"
-              :help="
-                person.status === 'registered'
-                  ? 'La sceglie la persona nella candidatura, finché non la invia.'
-                  : 'Scelta nella candidatura. Se la cambi, la persona passa all’altro elenco.'
-              "
+              help="Dal link con cui si è candidata. Se la cambi, la persona passa all’altro elenco."
             >
               <USelect
                 :model-value="person.team"
                 :items="teamItems"
                 :loading="savingTeam"
-                :disabled="person.status === 'registered'"
                 class="w-full"
                 @update:model-value="value => changeTeam(value as StaffTeam)"
               />
             </UFormField>
-            <UFormField
-              label="Ruoli"
-              :help="
-                person.status === 'registered'
-                  ? 'Li sceglie la persona nella candidatura, finché non la invia.'
-                  : 'Scelti nella candidatura: li cambi tu quando vuoi.'
-              "
-            >
+            <UFormField label="Ruoli" help="Li dai tu, e li cambi quando vuoi.">
               <USelectMenu
                 :model-value="person.roles"
                 :items="roleItems"
@@ -300,7 +355,6 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
                 multiple
                 placeholder="Nessun ruolo"
                 :loading="savingLabels === 'roles'"
-                :disabled="person.status === 'registered'"
                 class="w-full"
                 @update:model-value="value => saveLabels('roles', value as string[])"
               />
@@ -314,6 +368,10 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               title="Esito non ancora comunicato"
               description="Vede lo stato nella sua area, ma non ha ricevuto l’email con l’esito."
             />
+            <p v-else-if="person.outcome.queued" class="flex items-center gap-2 text-sm text-muted">
+              <UIcon name="i-lucide-clock" class="size-4 shrink-0" aria-hidden="true" />
+              Esito in coda: l’email parte da sola
+            </p>
             <p v-else-if="person.outcome.sentAt" class="flex items-center gap-2 text-sm text-muted">
               <UIcon name="i-lucide-mail-check" class="size-4 shrink-0" aria-hidden="true" />
               Esito comunicato il {{ formatDateTime(person.outcome.sentAt) }}
@@ -415,6 +473,13 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
       </aside>
 
       <div class="min-w-0 lg:order-1">
+        <IcSection v-if="withSheet || sheet.length" title="Scheda personale" :description="sheetNote">
+          <div class="space-y-6">
+            <IcDataList :items="sheet" :columns="2" />
+            <StaffReservedHealth v-if="withSheet" :user-id="person.userId" :consent-at="person.healthConsentAt" />
+          </div>
+        </IcSection>
+
         <IcSection
           title="Candidatura"
           :description="person.appliedAt ? `Inviata il ${dayOf(person.appliedAt)}` : 'Non ancora inviata'"
@@ -436,7 +501,27 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           </div>
         </IcSection>
 
-        <IcSection title="Disponibilità" description="Le sessioni a cui ha detto che c’è, dal primo all’ultimo giorno.">
+        <IcSection title="Disponibilità" :description="availabilityNote">
+          <template v-if="person.availabilityConfirmedAt && person.status === 'approved'" #actions>
+            <UButton
+              label="Riapri la disponibilità"
+              icon="i-lucide-calendar-cog"
+              color="neutral"
+              variant="outline"
+              :loading="reopening"
+              class="pointer-coarse:min-h-11"
+              @click="reopenAvailability"
+            />
+          </template>
+          <UAlert
+            v-if="person.availabilityResetRequestedAt"
+            class="mb-4"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-calendar-clock"
+            :title="`Ha chiesto di cambiare la disponibilità il ${dayOf(person.availabilityResetRequestedAt)}`"
+            description="Riaprila e la persona potrà modificarla: riceve un’email che la avvisa."
+          />
           <p v-if="!availability.length" class="text-muted">
             {{
               person.status === 'approved'
@@ -451,7 +536,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3"
             >
               <ULink
-                :to="`/admin/sessioni/${session.id}?tab=staff`"
+                :to="`/admin/sessioni/${session.id}?tab=${TEAM_SLUG[team]}`"
                 class="font-semibold hover:underline"
                 :class="session.startDate > today ? 'text-primary' : 'text-muted'"
               >
@@ -473,7 +558,7 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
               <div class="flex flex-wrap items-start justify-between gap-2">
                 <div class="min-w-0">
                   <ULink
-                    :to="`/admin/sessioni/${c.sessionId}?tab=staff`"
+                    :to="`/admin/sessioni/${c.sessionId}?tab=${TEAM_SLUG[team]}`"
                     class="font-semibold text-primary hover:underline"
                   >
                     {{ c.sessionTitle }}
@@ -494,7 +579,23 @@ function convocationNote(c: StaffDetail['convocations'][number]): string {
           </ul>
         </IcSection>
 
+        <IcSection title="Formazione" description="Le formazioni proposte che le interessano.">
+          <p v-if="!person.training.length" class="text-muted">Nessuna indicata.</p>
+          <ul v-else class="list-disc space-y-1 pl-5">
+            <li v-for="training in person.training" :key="training.id">{{ training.title }}</li>
+          </ul>
+        </IcSection>
+
         <IcSection title="Documenti personali" description="Caricati dalla persona: titoli, attestati, documenti.">
+          <UAlert
+            v-if="person.documentsMissing.length"
+            class="mb-4"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-file-warning"
+            :title="documentsAlert"
+            description="Il curriculum e il documento d’identità in PDF sono obbligatori: la persona li carica dai suoi Documenti."
+          />
           <p v-if="!person.documents.length" class="text-muted">Nessun documento caricato.</p>
           <ul v-else class="divide-y divide-default rounded-lg border border-default bg-elevated">
             <li v-for="doc in person.documents" :key="doc.id" class="space-y-1 px-4 py-3">

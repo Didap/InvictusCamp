@@ -44,7 +44,7 @@ Components (stubs exist with the final props; the owner replaces the body, the o
 | `components/sessions/FamiliesPanel.vue` | `sessionId` | A1 | A1 session page |
 | `components/sessions/FamilyInvitations.vue` | none | A1 | A3 family home |
 | `components/sessions/FamilyHistory.vue` | `familyId` | A1 | A3 admin family page |
-| `components/staff/SessionStaffPanel.vue` | `sessionId` | A2 | A1 session page |
+| `components/staff/SessionStaffPanel.vue` | `sessionId`, `team` (`staff` or `volunteer`: one tab each) | A2 | A1 session page |
 | `components/documents/SessionDocumentsPanel.vue` | `sessionId` | A4 | A1 session page |
 | `components/documents/PendingSignatures.vue` | none | A4 | A3 family home and documenti, A2 staff home and documenti |
 | `components/documents/UserSignatures.vue` | `userId` | A4 | A3 admin family page, A2 admin staff page |
@@ -56,7 +56,7 @@ Endpoints other areas call:
   `POST /api/admin/sessions/:id/families` body `{ familyIds: string[], kind: 'slot' | 'reserve' }` →
   `{ added: number, invited: number }` (A3 "Aggiungi a una sessione").
 - A5 composer prefill: `/admin/comunicazioni/nuova?audience=session_families&sessionId=…`,
-  `?audience=session_staff&sessionId=…`, `?userIds=id1,id2` (buttons "Scrivi" of A1, A2, A3).
+  `?audience=session_staff&sessionId=…[&team=staff|v-team]`, `?userIds=id1,id2` (buttons "Scrivi" of A1, A2, A3).
 - A4 signing page `/firma/:requestId` (linked from emails and PendingSignatures).
 - Foundation `requestSignatures()` + `signatureRequestEmails()` (A2 on accept, A4 on assign).
 
@@ -131,7 +131,7 @@ P0:
 - Session page `/admin/sessioni/:id`: header with status and the valid moves (`SESSION_TRANSITIONS`,
   `SESSION_TRANSITION_ACTIONS`); each move opens a confirmation that states `SESSION_TRANSITION_EFFECTS`
   and the exact number of emails, then applies it (spec 3.2). Tabs: Panoramica (facts, `slotSummary`,
-  staff summary), Famiglie (`FamiliesPanel`), Staff (`SessionStaffPanel`), Documenti
+  staff summary), Famiglie (`FamiliesPanel`), Staff and V-team (`SessionStaffPanel`, one tab per team), Documenti
   (`SessionDocumentsPanel`), Comunicazioni (`SessionCommunicationsPanel`). Tab in the query string.
 - `FamiliesPanel`: titolari and reserves with status; add families (search, as titolare or reserve,
   refuse titolari beyond the places); "Chiama la riserva" (next or a chosen one) when a place is free;
@@ -166,10 +166,11 @@ P0:
   cancel (spec 3.5).
 - Staff side: `/staff` home that adapts to the status (complete the application, waiting, approved:
   next convocations, `PendingSignatures`, availability prompt; not selected: a kind message);
-  `/staff/candidatura` (form + CV upload as PDF, send → `applied`; editable while `registered`);
+  `/staff/scheda` (the personal sheet once approved: birth, codice fiscale, residence, T-shirt size, health
+  data under consent, the application read only);
   `/staff/disponibilita` ("Ci sono" per session; refused before approval); `/staff/convocazioni` (accept,
   decline with reason; accept creates the contract request with `requestSignatures` and sends it);
-  `/staff/sessioni` (calendar and list of accepted sessions); `/staff/documenti` (`PendingSignatures` +
+  `/staff/sessioni` (contracts to sign, next confirmed sessions, sessions done, cancelled ones; no calendar); `/staff/documenti` (`PendingSignatures` +
   personal documents upload with category and title).
 - Database tests: review, convocation send, accept with and without contract, availability rules.
 

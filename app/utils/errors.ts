@@ -1,3 +1,4 @@
+import type { FormErrorEvent } from '@nuxt/ui'
 import type { ApiIssue } from '#shared/types/api'
 
 interface ApiErrorBody {
@@ -34,6 +35,26 @@ export function notifyError(error: unknown, title = 'Operazione non riuscita') {
   toast().add({ title, description: apiErrorMessage(error), color: 'error', icon: 'i-lucide-circle-alert' })
 }
 
-export function notifySuccess(title: string, description?: string) {
-  toast().add({ title, description, color: 'success', icon: 'i-lucide-circle-check' })
+/** A success toast; `action` points to where the result went (e.g. «Vai a Sessioni»). */
+export function notifySuccess(title: string, description?: string, action?: { label: string; to: string }) {
+  toast().add({
+    title,
+    description,
+    color: 'success',
+    icon: 'i-lucide-circle-check',
+    actions: action ? [{ ...action, color: 'neutral', variant: 'outline' }] : undefined,
+  })
+}
+
+/** A form's `@error`: brings the first field with an error into view and puts the focus on its control. */
+export function focusFirstError(event: FormErrorEvent) {
+  const id = event.errors[0]?.id
+  const field = id ? document.getElementById(id) : null
+  if (!field) return
+  field.scrollIntoView({ block: 'center' })
+  // A group of choices carries the id on its wrapper: its first control takes the focus.
+  const control = field.matches('input, textarea, button, select')
+    ? field
+    : field.querySelector<HTMLElement>('input, textarea, button')
+  control?.focus({ preventScroll: true })
 }

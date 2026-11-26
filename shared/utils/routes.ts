@@ -37,6 +37,11 @@ export function teamPath(team: StaffTeam, userId?: string): string {
   return `/admin/${TEAM_SLUG[team]}${userId ? `/${userId}` : ''}`
 }
 
+/** The composer on the convocations of a session: one team (`&team=v-team`) or, without `team`, both. */
+export function writeToSessionTeam(sessionId: string, team?: StaffTeam): string {
+  return `/admin/comunicazioni/nuova?audience=session_staff&sessionId=${sessionId}${team ? `&team=${TEAM_SLUG[team]}` : ''}`
+}
+
 export const GUEST_ONLY_PATHS = ['/accedi', '/registrati', '/candidati', '/password-dimenticata'] as const
 
 /** The role whose area contains `path`, if the path belongs to a role area. */

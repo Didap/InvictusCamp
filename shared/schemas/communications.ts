@@ -8,9 +8,11 @@ import {
   enumLabel,
   PARTICIPATION_KINDS,
   PARTICIPATION_STATUSES,
+  STAFF_TEAMS,
   type ConvocationStatus,
   type ParticipationKind,
   type ParticipationStatus,
+  type StaffTeam,
 } from '../utils/constants'
 import { orList, plural } from '../utils/format'
 import { fieldIssue, messageIssue } from '../utils/message-fields'
@@ -44,8 +46,8 @@ export const AUDIENCE_TYPE_META: Record<AudienceType, { label: string; descripti
     icon: 'i-lucide-calendar-heart',
   },
   session_staff: {
-    label: 'Lo staff di una sessione',
-    description: 'Per stato della convocazione',
+    label: 'Staff o v-team di una sessione',
+    description: 'Per squadra e stato della convocazione',
     icon: 'i-lucide-calendar-check',
   },
   users: { label: 'Persone scelte', description: 'Cerca per nome o email', icon: 'i-lucide-user-search' },
@@ -71,6 +73,7 @@ export const zAudience = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('session_staff'),
     sessionId: zSessionId,
+    teams: z.array(z.enum(STAFF_TEAMS)).max(STAFF_TEAMS.length).optional(),
     statuses: z.array(z.enum(CONVOCATION_STATUSES)).max(CONVOCATION_STATUSES.length).optional(),
   }),
   z.object({
@@ -157,6 +160,7 @@ export const EMAIL_TEMPLATE_LABELS: Record<string, string> = {
   'family.age_notice': 'Fascia d’età dei ragazzi',
   'staff.convocation': 'Convocazione',
   'staff.convocation_cancelled': 'Convocazione annullata',
+  'staff.availability_reopened': 'Disponibilità riaperta',
   'staff.approved': 'Candidatura approvata',
   'staff.rejected': 'Esito della candidatura',
   'signature.request': 'Documento da firmare',
@@ -178,6 +182,7 @@ export interface AudienceDraft {
   sessionId?: string
   kinds: ParticipationKind[]
   familyStatuses: ParticipationStatus[]
+  staffTeams: StaffTeam[]
   staffStatuses: ConvocationStatus[]
   userIds: string[]
 }
@@ -187,6 +192,7 @@ export function emptyAudienceDraft(type: AudienceType = 'all_families'): Audienc
     type,
     kinds: [...PARTICIPATION_KINDS],
     familyStatuses: [...DEFAULT_FAMILY_STATUSES],
+    staffTeams: [...STAFF_TEAMS],
     staffStatuses: [...DEFAULT_STAFF_STATUSES],
     userIds: [],
   }
@@ -203,7 +209,12 @@ export function audienceFromDraft(draft: AudienceDraft): Audience {
         statuses: [...draft.familyStatuses],
       }
     case 'session_staff':
-      return { type: draft.type, sessionId: draft.sessionId ?? '', statuses: [...draft.staffStatuses] }
+      return {
+        type: draft.type,
+        sessionId: draft.sessionId ?? '',
+        teams: [...draft.staffTeams],
+        statuses: [...draft.staffStatuses],
+      }
     case 'users':
       return { type: draft.type, userIds: [...draft.userIds] }
     default:
@@ -219,6 +230,7 @@ export function draftFromAudience(audience: Audience): AudienceDraft {
     if (audience.statuses) draft.familyStatuses = [...audience.statuses]
   } else if (audience.type === 'session_staff') {
     draft.sessionId = audience.sessionId
+    if (audience.teams) draft.staffTeams = [...audience.teams]
     if (audience.statuses) draft.staffStatuses = [...audience.statuses]
   } else if (audience.type === 'users') {
     draft.userIds = [...audience.userIds]
@@ -257,11 +269,14 @@ export function describeAudience(audience: Audience, sessionTitle?: string | nul
       return `Famiglie di ${session} (${parts.join('; ')})`
     }
     case 'session_staff': {
-      const statuses = audience.statuses ?? [...CONVOCATION_STATUSES]
-      if (statuses.length >= CONVOCATION_STATUSES.length) return `Staff di ${session}`
+      const teams = [...new Set(audience.teams ?? STAFF_TEAMS)]
+      const who = teams.length === 1 ? enumLabel('staffTeam', teams[0]!) : 'Staff e v-team'
+      if (!teams.length) return `${who} di ${session} (nessuna squadra scelta)`
+      const statuses = [...new Set(audience.statuses ?? CONVOCATION_STATUSES)]
+      if (statuses.length >= CONVOCATION_STATUSES.length) return `${who} di ${session}`
       return statuses.length
-        ? `Staff di ${session} (convocazione: ${orList(statuses.map(s => enumLabel('convocationStatus', s).toLowerCase()))})`
-        : `Staff di ${session} (nessuno stato scelto)`
+        ? `${who} di ${session} (convocazione: ${orList(statuses.map(s => enumLabel('convocationStatus', s).toLowerCase()))})`
+        : `${who} di ${session} (nessuno stato scelto)`
     }
     case 'users':
       return plural(new Set(audience.userIds).size, 'persona scelta', 'persone scelte')

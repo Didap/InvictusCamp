@@ -1,19 +1,32 @@
 // Schemas of the staff area, shared by the forms (UForm) and the API (parseBody), plus the small rules
-// both sides need: what an application lacks, the moves of a review (docs/spec.md 3.4, 3.5).
+// both sides need: the moves of a review (docs/spec.md 3.4, 3.5).
 import { z } from 'zod'
+import type { UsefulInfo } from '../types/domain'
 import { normalizeUsefulInfo, usefulInfoSchema } from './families'
 import {
   COORDINATOR_ROLE,
   PERSONAL_DOCUMENT_CATEGORIES,
+  SHIRT_SIZES,
+  UPLOAD_MIME_TYPES,
   STAFF_TAG_COLORS,
   STAFF_TEAMS,
   type PersonalDocumentCategory,
   type StaffRole,
+  type UploadMimeType,
   type StaffStatus,
   type StaffTeam,
 } from '../utils/constants'
-import { todayIso } from '../utils/dates'
-import { zIsoDay, zRequiredText, zText, zUuid } from './common'
+import { andList } from '../utils/format'
+import {
+  requiredResidence,
+  zBirthDate,
+  zFiscalCode,
+  zOptionalText,
+  zProvince,
+  zRequiredText,
+  zText,
+  zUuid,
+} from './common'
 
 /** The id of a role of `staff_roles` (the server checks it exists). */
 export const zStaffRole = z.string().trim().min(1).max(64)
@@ -22,86 +35,50 @@ export const zStaffTeam = z.enum(STAFF_TEAMS)
 const STAFF_LABELS_MAX = 40
 const zRoles = z.array(zStaffRole).max(STAFF_LABELS_MAX)
 
-const zBirthDate = zIsoDay.refine(day => day >= '1920-01-01' && day < todayIso(), {
-  error: 'Data di nascita non valida',
-})
-
-// ─── Canteen ───────────────────────────────────────────────────────────────────────────────────────
+// ─── The personal sheet ────────────────────────────────────────────────────────────────────────────
 
 /**
- * PUT /api/staff/useful-info: allergies, diet and notes for the canteen. Allergies are health data: saving
- * anything needs the consent, saving nothing withdraws it.
+ * PUT /api/staff/sheet: the personal sheet of an approved staff or v-team member (/staff/scheda). Name,
+ * email and phone are the account's; everything here is required, the province apart.
+ */
+export const staffSheetSchema = z.object({
+  birthDate: zBirthDate,
+  birthPlace: zRequiredText(100),
+  fiscalCode: zFiscalCode,
+  ...requiredResidence,
+  /** Nullish: the sheet as stored passes it too (isSheetComplete). */
+  province: zProvince.nullish(),
+  shirtSize: z.enum(SHIRT_SIZES, { error: 'Scegli la taglia' }),
+})
+export type StaffSheetInput = z.output<typeof staffSheetSchema>
+
+/** What the home and the sheet say while the sheet is incomplete. */
+export const SHEET_MISSING =
+  'Ci servono la data e il luogo di nascita, il codice fiscale, la residenza e la taglia della maglietta.'
+
+/** Whether a sheet as stored passes the form's schema: until then the home asks for it. */
+export function isSheetComplete(sheet: Record<keyof StaffSheetInput, string | null>): boolean {
+  return staffSheetSchema.safeParse(sheet).success
+}
+
+// ─── Health: canteen and other details ─────────────────────────────────────────────────────────────
+
+/** Whether there is health data to keep: «Informazioni utili» or the other details. */
+export function hasStaffHealth(value: { info?: UsefulInfo | null; otherInfo?: string | null }): boolean {
+  return Boolean(normalizeUsefulInfo(value.info) || value.otherInfo?.trim())
+}
+
+/**
+ * PUT /api/staff/useful-info: allergies, diet and notes for the canteen, and the other details the camp should
+ * know. Health data: saving anything needs the consent, saving nothing withdraws it.
  */
 export const staffUsefulInfoSchema = z
-  .object({ info: usefulInfoSchema, consent: z.boolean().default(false) })
-  .refine(value => value.consent || !normalizeUsefulInfo(value.info), {
+  .object({ info: usefulInfoSchema, otherInfo: zText(2000).optional(), consent: z.boolean().default(false) })
+  .refine(value => value.consent || !hasStaffHealth(value), {
     path: ['consent'],
     error: 'Per salvare questi dati serve il tuo consenso',
   })
 export type StaffUsefulInfoInput = z.output<typeof staffUsefulInfoSchema>
-
-// ─── Application ───────────────────────────────────────────────────────────────────────────────────
-
-/** POST /api/staff/application/submit: the whole application (the CV is checked on the server). */
-export const staffApplicationSchema = z.object({
-  team: zStaffTeam,
-  birthDate: zBirthDate,
-  city: zRequiredText(100),
-  roles: zRoles.min(1, { error: 'Scegli almeno un ruolo' }),
-  qualifications: zRequiredText(2000),
-  experience: zRequiredText(4000),
-  motivation: zRequiredText(2000),
-})
-export type StaffApplicationInput = z.infer<typeof staffApplicationSchema>
-
-/** PUT /api/staff/application: a draft, every field may be empty. */
-export const staffApplicationDraftSchema = z.object({
-  team: zStaffTeam.optional(),
-  birthDate: zBirthDate.nullable().optional(),
-  city: zText(100).nullable().optional(),
-  roles: zRoles.optional(),
-  qualifications: zText(2000).nullable().optional(),
-  experience: zText(4000).nullable().optional(),
-  motivation: zText(2000).nullable().optional(),
-})
-export type StaffApplicationDraft = z.infer<typeof staffApplicationDraftSchema>
-
-interface ApplicationFields {
-  birthDate: string | null
-  city: string | null
-  roles: readonly string[]
-  qualifications: string | null
-  experience: string | null
-  motivation: string | null
-  cvFileId?: string | null
-  cv?: unknown
-}
-
-/** The parts of an application, as the labels of the form (the checklist of the staff home). */
-export const APPLICATION_CHECKLIST = [
-  'Data di nascita',
-  'Città',
-  'Ruoli',
-  'Titoli e qualifiche',
-  'Esperienze',
-  'Motivazione',
-  'CV in PDF',
-] as const
-export type ApplicationPart = (typeof APPLICATION_CHECKLIST)[number]
-
-/** What the application still lacks before it can be sent, in the order of the form. */
-export function applicationMissing(profile: ApplicationFields): ApplicationPart[] {
-  const filled: Record<ApplicationPart, boolean> = {
-    'Data di nascita': Boolean(profile.birthDate),
-    Città: Boolean(profile.city?.trim()),
-    Ruoli: profile.roles.length > 0,
-    'Titoli e qualifiche': Boolean(profile.qualifications?.trim()),
-    Esperienze: Boolean(profile.experience?.trim()),
-    Motivazione: Boolean(profile.motivation?.trim()),
-    'CV in PDF': Boolean(profile.cvFileId || profile.cv),
-  }
-  return APPLICATION_CHECKLIST.filter(part => !filled[part])
-}
 
 /**
  * Where a person sits in the base of a session (spec 3.5): a coordinator (one per team), or one of the
@@ -160,6 +137,13 @@ export const staffTagsSchema = z.object({ tags: z.array(zUuid).max(STAFF_LABELS_
 export const staffRoleInputSchema = z.object({ name: zRequiredText(60) })
 export type StaffRoleInput = z.infer<typeof staffRoleInputSchema>
 
+/** POST /api/admin/training, PUT /api/admin/training/:id: a training proposed in «Formazione». */
+export const trainingOptionSchema = z.object({ title: zRequiredText(120), description: zOptionalText(500) })
+export type TrainingOptionInput = z.infer<typeof trainingOptionSchema>
+
+/** PUT /api/staff/training/:id: interested or not. */
+export const trainingInterestSchema = z.object({ interested: z.boolean() })
+
 /** POST /api/admin/staff/tags, PUT /api/admin/staff/tags/:id: a tag of the «Valutazione». */
 export const staffTagInputSchema = z.object({ name: zRequiredText(40), color: z.enum(STAFF_TAG_COLORS) })
 export type StaffTagInput = z.infer<typeof staffTagInputSchema>
@@ -188,6 +172,9 @@ export const staffBulkApproveSchema = z.object({
 
 /** PUT /api/staff/availability/:sessionId: whether the person can come to the whole session. */
 export const availabilityAnswerSchema = z.object({ available: z.boolean() })
+
+/** «Conferma le preferenze»: the sessions the page showed. */
+export const availabilityConfirmSchema = z.object({ sessionIds: z.array(zUuid).max(500) })
 
 // ─── Convocations ──────────────────────────────────────────────────────────────────────────────────
 
@@ -227,6 +214,31 @@ export const convocationDeclineSchema = z.object({ reason: zText(500).nullable()
 export const STAFF_DOCUMENT_CATEGORIES = PERSONAL_DOCUMENT_CATEGORIES.filter(
   category => category !== 'diagnosis',
 ) as Exclude<PersonalDocumentCategory, 'diagnosis'>[]
+
+/**
+ * What every staff and v-team member in the staff area uploads (spec 3.4), in PDF only: a CV (the one sent with the
+ * application counts) and an ID. Each has its place on /staff/documenti.
+ */
+export const REQUIRED_STAFF_DOCUMENTS = ['cv', 'id_document'] as const satisfies readonly PersonalDocumentCategory[]
+export type RequiredStaffDocument = (typeof REQUIRED_STAFF_DOCUMENTS)[number]
+const REQUIRED_DOCUMENT_NAMES: Record<RequiredStaffDocument, string> = {
+  cv: 'il curriculum',
+  id_document: 'il documento d’identità',
+}
+
+/** «il curriculum e il documento d’identità»: the required documents in a sentence. */
+export function requiredDocumentsText(missing: readonly RequiredStaffDocument[]): string {
+  return andList(missing.map(document => REQUIRED_DOCUMENT_NAMES[document]))
+}
+
+export function isRequiredStaffDocument(category: PersonalDocumentCategory): category is RequiredStaffDocument {
+  return (REQUIRED_STAFF_DOCUMENTS as readonly string[]).includes(category)
+}
+
+/** The formats a staff member's document is taken in: the required ones in PDF only. */
+export function staffDocumentTypes(category: PersonalDocumentCategory): readonly UploadMimeType[] {
+  return isRequiredStaffDocument(category) ? ['application/pdf'] : UPLOAD_MIME_TYPES
+}
 
 /** The text fields sent with the file to POST /api/staff/documents. */
 export const staffDocumentSchema = z.object({

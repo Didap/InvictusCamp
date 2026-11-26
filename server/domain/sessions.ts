@@ -80,7 +80,7 @@ import { DomainError } from './errors'
 import { familyPhoneSql } from './families'
 import { isYearArchived, ownResponse, questionnaireOpen } from './feedback'
 import { freezeSessionProgramme, sessionHasProgramme } from './programmes'
-import { cancelSessionConvocations, sessionConvocationNotices } from './staff'
+import { cancelSessionConvocations, reopenSessionAvailability, sessionConvocationNotices } from './staff'
 
 /** Who acts: the signed-in user and the client address, for the audit. */
 export interface Actor {
@@ -278,11 +278,11 @@ export async function staffCountsOf(
         waiting: 0,
         toSend: 0,
         open: 0,
-        drafts: 0,
+        drafts: { staff: 0, volunteer: 0 },
       }
       for (const convocation of bySession.get(session.id) ?? []) {
         if (OPEN_CONVOCATIONS.includes(convocation.status)) counts.open++
-        if (convocation.status === 'draft') counts.drafts++
+        if (convocation.status === 'draft') counts.drafts[convocation.team]++
         if (!countsTowardNeeded(convocation)) continue
         if (convocation.status === 'accepted') {
           counts.accepted++
@@ -773,6 +773,7 @@ export async function updateSession(
   const fields = EDITABLE_FIELDS.filter(field => input.values[field] !== session[field])
   if (!fields.length) return
   await db.update(campSessions).set(input.values).where(eq(campSessions.id, session.id))
+  if (fields.includes('startDate') || fields.includes('endDate')) await reopenSessionAvailability(db, session.id)
   await writeAudit(db, {
     actorUserId: input.actor.userId,
     action: 'session.update',

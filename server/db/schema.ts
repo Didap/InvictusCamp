@@ -35,7 +35,9 @@ import type {
   PersonalDocumentCategory,
   ProgrammeGroup,
   SessionStatus,
+  ShirtSize,
   SignatureStatus,
+  StaffResourceMode,
   StaffRole,
   StaffStatus,
   StaffTagColor,
@@ -281,8 +283,19 @@ export const staffProfiles = pgTable(
     status: text().$type<StaffStatus>().notNull().default('registered'),
     /** Staff or v-team (volunteers): chosen in the application, changed by the administration. */
     team: text().$type<StaffTeam>().notNull().default('staff'),
+    // The personal sheet (/staff/scheda), filled in once approved: birth, codice fiscale, residence, size.
     birthDate: day(),
+    birthPlace: text(),
+    fiscalCode: text(),
+    /** Residence: street and number. */
+    address: text(),
     city: text(),
+    /** CAP, five digits. */
+    postalCode: text(),
+    province: text(),
+    region: text().$type<ItalianRegion>(),
+    /** For the uniform. */
+    shirtSize: text().$type<ShirtSize>(),
     /** Ids of `staff_roles`: chosen in the application, then given by the administration. */
     roles: jsonb().$type<StaffRole[]>().notNull().default([]),
     /** Ids of `staff_tags`: the «Valutazione» of the administration, never shown to the person. */
@@ -293,16 +306,55 @@ export const staffProfiles = pgTable(
     cvFileId: uuid().references(() => files.id, { onDelete: 'set null' }),
     /** Allergies, diet, notes for the canteen (health data): kept only with `usefulInfoConsentAt`. */
     usefulInfo: jsonb().$type<UsefulInfo>(),
+    /**
+     * What makes the camp more welcoming for the person (dyscalculia, colour blindness…): health data under the
+     * same consent, read by the administration only, never by the canteen.
+     */
+    otherInfo: text(),
+    /** The consent to health data: `usefulInfo` and `otherInfo`. */
     usefulInfoConsentAt: timestamp(tz),
     appliedAt: timestamp(tz),
     reviewedAt: timestamp(tz),
     reviewedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
     /** Internal notes of the review; never shown to the candidate. */
     reviewNotes: text(),
+    /** «Chiedi il reset»: the person asks the administration to reopen the availability (availabilityConfirmations). */
+    availabilityResetRequestedAt: timestamp(tz),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   t => [uniqueIndex('staff_profiles_user_key').on(t.userId), index('staff_profiles_status_idx').on(t.status)],
+)
+
+/**
+ * «Formazione»: the trainings the administration proposes (docs/spec.md 3.4), for staff and v-team to say they are
+ * interested; in the order they were added.
+ */
+export const trainingOptions = pgTable('training_options', {
+  id: pk(),
+  title: text().notNull(),
+  description: text(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+})
+
+/** A staff or v-team member interested in a training («Formazione»). */
+export const trainingInterests = pgTable(
+  'training_interests',
+  {
+    id: pk(),
+    optionId: uuid()
+      .notNull()
+      .references(() => trainingOptions.id, { onDelete: 'cascade' }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  t => [
+    uniqueIndex('training_interests_option_user_key').on(t.optionId, t.userId),
+    index('training_interests_user_idx').on(t.userId),
+  ],
 )
 
 // ─── Sessions ──────────────────────────────────────────────────────────────────────────────────────
@@ -436,6 +488,29 @@ export const sessionAvailability = pgTable(
   ],
 )
 
+/**
+ * «Conferma le preferenze»: the sessions whose answer (yes or no, in session_availability) a staff member
+ * confirmed, fixed until the administration reopens the availability, the person leaves the approved staff or
+ * the session's dates change.
+ */
+export const availabilityConfirmations = pgTable(
+  'availability_confirmations',
+  {
+    id: pk(),
+    sessionId: uuid()
+      .notNull()
+      .references(() => campSessions.id, { onDelete: 'cascade' }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  t => [
+    uniqueIndex('availability_confirmations_session_user_key').on(t.sessionId, t.userId),
+    index('availability_confirmations_user_idx').on(t.userId),
+  ],
+)
+
 /** A staff member convoked to a session. Confirmed = accepted and, if the session has a contract, signed. */
 export const sessionStaff = pgTable(
   'session_staff',
@@ -562,7 +637,14 @@ export const documents = pgTable(
      * by hand.
      */
     familyId: uuid().references(() => families.id, { onDelete: 'cascade' }),
+    /**
+     * Or for one staff or v-team member, the PDF of their personal sheet (server/domain/staff-sheets.ts), with
+     * the digest of the sheet in `sourceDigest`: the same rules.
+     */
+    staffUserId: uuid().references(() => users.id, { onDelete: 'cascade' }),
     sourceDigest: text(),
+    /** In the «Risorse utili» of staff and v-team: to accept (each approved person asked) or to consult. */
+    staffResource: text().$type<StaffResourceMode>(),
     /** Set when the document belongs to one session (e.g. its contract). */
     sessionId: uuid().references((): AnyPgColumn => campSessions.id, { onDelete: 'set null' }),
     createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),
@@ -570,7 +652,13 @@ export const documents = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  t => [index('documents_session_idx').on(t.sessionId)],
+  t => [
+    index('documents_session_idx').on(t.sessionId),
+    // One sheet in force per person: the new one is inserted after the old one is archived.
+    uniqueIndex('documents_staff_sheet_key')
+      .on(t.staffUserId)
+      .where(sql`${t.archivedAt} is null`),
+  ],
 )
 
 /**
@@ -683,15 +771,21 @@ export const emailLog = pgTable(
     subject: text().notNull(),
     /** The HTML sent; null for emails that carry access links or codes. */
     html: text(),
+    /** The plain text of an email waiting in the queue; cleared once it has left. */
+    textBody: text(),
     status: text().$type<EmailStatus>().notNull(),
     providerId: text(),
     error: text(),
     communicationId: uuid().references(() => communications.id, { onDelete: 'set null' }),
     sessionId: uuid().references(() => campSessions.id, { onDelete: 'set null' }),
+    /** When it left or may have left: every row with a value counts against that day's limit. */
+    sentAt: timestamp(tz),
     createdAt: createdAt(),
   },
   t => [
     index('email_log_created_idx').on(t.createdAt),
+    index('email_log_sent_idx').on(t.sentAt),
+    index('email_log_status_idx').on(t.status, t.createdAt),
     index('email_log_user_idx').on(t.toUserId),
     index('email_log_communication_idx').on(t.communicationId),
     index('email_log_session_idx').on(t.sessionId),

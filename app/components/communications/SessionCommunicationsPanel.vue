@@ -1,28 +1,42 @@
 <script setup lang="ts">
+import { enumMeta } from '#shared/utils/constants'
+import { writeToSessionTeam } from '#shared/utils/routes'
+
 // CONTRACT (docs/BUILD.md): owned by A5 Comunicazioni. Admin session page, tab "Comunicazioni": the
 // messages written to the session's people, every email of the session (automatic and manual), and
-// the buttons to write to its families or its staff.
+// the buttons to write to its families, its staff or its v-team.
 const props = defineProps<{ sessionId: string }>()
 
-const writeTo = (audience: 'session_families' | 'session_staff') =>
-  `/admin/comunicazioni/nuova?audience=${audience}&sessionId=${props.sessionId}`
+const writeToFamilies = computed(
+  () => `/admin/comunicazioni/nuova?audience=session_families&sessionId=${props.sessionId}`,
+)
 </script>
 
 <template>
   <div>
-    <IcSection title="Messaggi" description="Scritti dal gestionale alle famiglie o allo staff di questa sessione.">
+    <IcSection
+      title="Messaggi"
+      description="Scritti dal gestionale alle famiglie, allo staff o al v-team di questa sessione."
+    >
       <template #actions>
         <UButton
-          :to="writeTo('session_families')"
+          :to="writeToFamilies"
           icon="i-lucide-heart-handshake"
           label="Scrivi alle famiglie"
           color="neutral"
           variant="outline"
         />
         <UButton
-          :to="writeTo('session_staff')"
-          icon="i-lucide-id-card"
+          :to="writeToSessionTeam(sessionId, 'staff')"
+          :icon="enumMeta('staffTeam', 'staff').icon"
           label="Scrivi allo staff"
+          color="neutral"
+          variant="outline"
+        />
+        <UButton
+          :to="writeToSessionTeam(sessionId, 'volunteer')"
+          :icon="enumMeta('staffTeam', 'volunteer').icon"
+          label="Scrivi al v-team"
           color="neutral"
           variant="outline"
         />

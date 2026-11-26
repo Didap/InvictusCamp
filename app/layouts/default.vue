@@ -2,12 +2,13 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { enumLabel } from '#shared/utils/constants'
 import { fullName, initials } from '#shared/utils/format'
+import { ACCOUNT_ITEM } from '#shared/utils/nav'
 
 // The dashboard shell of every signed-in page: sidebar with the role's sections, account menu. Families
 // and staff also find there how to reach the camp, families at their own address.
 const { user, clear } = useUserSession()
 const nav = useNav()
-const showHelp = computed(() => user.value?.role === 'family' || user.value?.role === 'staff')
+const showHelp = computed(() => showsContact(user.value?.role))
 const contact = useContact()
 
 async function logout() {
@@ -18,7 +19,7 @@ async function logout() {
 
 const accountItems = computed<DropdownMenuItem[][]>(() => [
   [{ label: fullName(user.value), description: user.value?.email, type: 'label' }],
-  [{ label: 'Il mio account', icon: 'i-lucide-user-cog', to: '/account' }],
+  [ACCOUNT_ITEM],
   [{ label: 'Esci', icon: 'i-lucide-log-out', onSelect: logout }],
 ])
 </script>

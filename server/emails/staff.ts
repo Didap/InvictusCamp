@@ -1,5 +1,5 @@
 // Emails of the staff area: the outcome of a review (written or kept by the administration and sent
-// only from "Comunica l’esito"), a convocation to a session and its cancellation. No health details,
+// only from "Comunica l’esito"), a convocation to a session and its cancellation, the availability reopened. No health details,
 // no access links: they are kept in email_log.
 import type { StaffOutcomeTemplate } from '../../shared/types/staff'
 import { formatDayRange } from '../../shared/utils/format'
@@ -141,7 +141,7 @@ export function convocationCancelledEmail(
       'Non devi fare nulla. Se hai domande, scrivi all’amministrazione del camp.',
     ],
     details: sessionDetails(input.session, input.roleName),
-    action: { label: 'Vedi le tue convocazioni', url: appLink(ctx, '/staff/convocazioni') },
+    action: { label: 'Vedi le tue sessioni', url: appLink(ctx, '/staff/sessioni') },
   })
   return {
     to: input.to,
@@ -151,5 +151,27 @@ export function convocationCancelledEmail(
     html,
     text,
     sessionId: input.session.id,
+  }
+}
+
+/** The administration reopened the availability (after «Chiedi il reset», or on its own). */
+export function availabilityReopenedEmail(ctx: EmailContext, input: Recipient): EmailMessage {
+  const { html, text } = renderEmail(ctx, {
+    preheader: 'Puoi cambiare la tua disponibilità e confermarla di nuovo.',
+    title: 'Puoi cambiare la tua disponibilità',
+    greeting: `Ciao ${input.firstName},`,
+    paragraphs: [
+      'l’amministrazione di Invictus Camp ha riaperto la tua disponibilità: puoi cambiare le sessioni a cui ci sei.',
+      'Quando hai finito, confermala di nuovo.',
+    ],
+    action: { label: 'Vai alla disponibilità', url: appLink(ctx, '/staff/disponibilita') },
+  })
+  return {
+    to: input.to,
+    toUserId: input.toUserId,
+    template: 'staff.availability_reopened',
+    subject: 'Puoi cambiare la tua disponibilità',
+    html,
+    text,
   }
 }

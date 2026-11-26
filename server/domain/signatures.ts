@@ -76,16 +76,26 @@ type DocumentRow = typeof documents.$inferSelect
  */
 type DocumentLock = 'update' | 'share'
 
-async function requireDocument(db: DbOrTx, documentId: string, lock?: DocumentLock): Promise<DocumentRow> {
+export async function requireDocument(db: DbOrTx, documentId: string, lock?: DocumentLock): Promise<DocumentRow> {
   const query = db.select().from(documents).where(eq(documents.id, documentId)).limit(1)
   const [row] = lock ? await query.for(lock) : await query
   if (!row) throw fail(404, 'Documento non trovato')
   return row
 }
 
-/** A document the gestionale prepares for a family (its release) is not changed by hand. */
-function assertNotGenerated(document: { familyId: string | null }) {
+// A document the gestionale prepares for one person has its owner: a family's release (releases.ts) or a staff
+// member's sheet (staff-sheets.ts). Never changed, assigned or restored by hand.
+const NOT_GENERATED = and(isNull(documents.familyId), isNull(documents.staffUserId))
+const GENERATED = sql<boolean>`not ${NOT_GENERATED}`
+
+/** A request no longer to answer: its code goes too. */
+export const CANCELLED_REQUEST = { status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 } as const
+
+export function assertNotGenerated(document: { familyId: string | null; staffUserId: string | null }) {
   if (document.familyId) throw fail(409, 'È la liberatoria di una famiglia: la prepara e la aggiorna il gestionale')
+  if (document.staffUserId) {
+    throw fail(409, 'È la scheda personale di una persona dello staff: la prepara e la aggiorna il gestionale')
+  }
 }
 
 async function requireSession(db: DbOrTx, sessionId: string): Promise<void> {
@@ -151,6 +161,47 @@ export async function createDocument(
     ip: input.actor.ip,
   })
   return row!.id
+}
+
+/**
+ * Stores the PDF the gestionale prepared for one person, records it with its owner and the digest of what it was
+ * written from, and asks `signerId` to sign it. The caller archives the one it replaces first, audits, and
+ * emails the requests (signatureRequestEmails).
+ */
+export async function createGeneratedDocument(
+  db: DbOrTx,
+  uploadsDir: string,
+  input: {
+    owner: { familyId: string } | { staffUserId: string }
+    signerId: string
+    title: string
+    description: string
+    category: DocumentCategory
+    pdf: Uint8Array
+    sourceDigest: string
+  },
+): Promise<{ documentId: string; requestIds: string[] }> {
+  const file = await storeFile(db, uploadsDir, {
+    data: input.pdf,
+    originalName: `${input.title}.pdf`,
+    mimeType: 'application/pdf',
+    purpose: 'document',
+    ownerUserId: input.signerId,
+  })
+  const [document] = await db
+    .insert(documents)
+    .values({
+      ...input.owner,
+      title: input.title,
+      description: input.description,
+      category: input.category,
+      fileId: file.id,
+      requiresSignature: true,
+      sourceDigest: input.sourceDigest,
+    })
+    .returning({ id: documents.id })
+  const requests = await requestSignatures(db, { documentId: document!.id, userIds: [input.signerId] })
+  return { documentId: document!.id, requestIds: requests.map(request => request.id) }
 }
 
 async function signedCount(db: DbOrTx, documentId: string): Promise<number> {
@@ -253,7 +304,7 @@ export async function setDocumentArchived(
   if (input.archived) {
     const rows = await db
       .update(signatureRequests)
-      .set({ status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 })
+      .set(CANCELLED_REQUEST)
       .where(and(eq(signatureRequests.documentId, document.id), eq(signatureRequests.status, 'pending')))
       .returning({ id: signatureRequests.id })
     cancelled = rows.length
@@ -425,14 +476,14 @@ export async function remindRequests(
 /** Cancels a request still to sign: the person can no longer sign it. No email. */
 export async function cancelRequest(db: DbOrTx, input: { requestId: string; actor: Actor }): Promise<void> {
   const [target] = await db
-    .select({ familyId: documents.familyId })
+    .select({ familyId: documents.familyId, staffUserId: documents.staffUserId })
     .from(signatureRequests)
     .innerJoin(documents, eq(documents.id, signatureRequests.documentId))
     .where(eq(signatureRequests.id, input.requestId))
   if (target) assertNotGenerated(target)
   const [row] = await db
     .update(signatureRequests)
-    .set({ status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 })
+    .set(CANCELLED_REQUEST)
     .where(and(eq(signatureRequests.id, input.requestId), eq(signatureRequests.status, 'pending')))
     .returning({ documentId: signatureRequests.documentId, userId: signatureRequests.userId })
   if (!row) {
@@ -1000,6 +1051,7 @@ export async function signatureRows(
         title: documents.title,
         category: documents.category,
         requiresSignature: documents.requiresSignature,
+        generated: GENERATED,
       },
     })
     .from(signatureRequests)
@@ -1097,6 +1149,7 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
   const [row] = await db
     .select({
       document: documents,
+      generated: GENERATED,
       file: files,
       session: { id: campSessions.id, title: campSessions.title },
       author: { firstName: users.firstName, lastName: users.lastName },
@@ -1108,7 +1161,7 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
     .where(eq(documents.id, documentId))
     .limit(1)
   if (!row) throw fail(404, 'Documento non trovato')
-  const { document, file, session, author } = row
+  const { document, generated, file, session, author } = row
   const requests = await signatureRows(db, eq(signatureRequests.documentId, document.id))
   const live = requests.filter(r => r.status !== 'cancelled')
   return {
@@ -1121,6 +1174,8 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
     createdAt: document.createdAt.toISOString(),
     archivedAt: document.archivedAt?.toISOString() ?? null,
     description: document.description,
+    generated,
+    staffResource: document.staffResource,
     file: {
       id: file.id,
       originalName: file.originalName,
@@ -1169,7 +1224,7 @@ export async function documentOptions(db: DbOrTx): Promise<DocumentOptions> {
       sessionId: documents.sessionId,
     })
     .from(documents)
-    .where(isNull(documents.archivedAt))
+    .where(and(isNull(documents.archivedAt), NOT_GENERATED))
     .orderBy(desc(documents.createdAt))
   return {
     sessions,
