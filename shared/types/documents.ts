@@ -70,7 +70,14 @@ export interface SignatureRequestRow {
   id: string
   status: SignatureStatus
   person: SignaturePerson
-  document: { id: string; title: string; category: DocumentCategory; requiresSignature: boolean }
+  document: {
+    id: string
+    title: string
+    category: DocumentCategory
+    requiresSignature: boolean
+    /** A family's release or a staff sheet: no request cancelled one by one (archiving withdraws the document). */
+    generated: boolean
+  }
   sessionId: string | null
   requestedAt: string
   dueDate: string | null

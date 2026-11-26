@@ -86,6 +86,7 @@ export async function requireDocument(db: DbOrTx, documentId: string, lock?: Doc
 // A document the gestionale prepares for one person has its owner: a family's release (releases.ts) or a staff
 // member's sheet (staff-sheets.ts). Never changed, assigned or restored by hand.
 const NOT_GENERATED = and(isNull(documents.familyId), isNull(documents.staffUserId))
+const GENERATED = sql<boolean>`not ${NOT_GENERATED}`
 
 /** A request no longer to answer: its code goes too. */
 export const CANCELLED_REQUEST = { status: 'cancelled', otpHash: null, otpExpiresAt: null, otpAttempts: 0 } as const
@@ -1050,6 +1051,7 @@ export async function signatureRows(
         title: documents.title,
         category: documents.category,
         requiresSignature: documents.requiresSignature,
+        generated: GENERATED,
       },
     })
     .from(signatureRequests)
@@ -1147,6 +1149,7 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
   const [row] = await db
     .select({
       document: documents,
+      generated: GENERATED,
       file: files,
       session: { id: campSessions.id, title: campSessions.title },
       author: { firstName: users.firstName, lastName: users.lastName },
@@ -1158,7 +1161,7 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
     .where(eq(documents.id, documentId))
     .limit(1)
   if (!row) throw fail(404, 'Documento non trovato')
-  const { document, file, session, author } = row
+  const { document, generated, file, session, author } = row
   const requests = await signatureRows(db, eq(signatureRequests.documentId, document.id))
   const live = requests.filter(r => r.status !== 'cancelled')
   return {
@@ -1171,7 +1174,7 @@ export async function documentDetail(db: DbOrTx, documentId: string): Promise<Do
     createdAt: document.createdAt.toISOString(),
     archivedAt: document.archivedAt?.toISOString() ?? null,
     description: document.description,
-    generated: document.familyId !== null || document.staffUserId !== null,
+    generated,
     staffResource: document.staffResource,
     file: {
       id: file.id,
