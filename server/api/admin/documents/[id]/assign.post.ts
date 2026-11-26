@@ -20,6 +20,6 @@ export default defineEventHandler(async (event): Promise<AssignResult> => {
       actor: { userId: admin.id, ip: clientIp(event) },
     }),
   )
-  await deliver(messages)
-  return result
+  const report = await deliver(messages)
+  return { ...result, emailsOff: report.disabled }
 })

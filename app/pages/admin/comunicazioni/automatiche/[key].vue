@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { emailTextsSchema } from '#shared/schemas/automatic-emails'
-import type { AutomaticEmailDetail } from '#shared/types/automatic-emails'
+import type { AutomaticEmailDetail, AutomaticEmailSwitch } from '#shared/types/automatic-emails'
 import type { DeliveryReport, EmailPreview } from '#shared/types/communications'
 import {
   automaticEmailDefinition,
@@ -11,7 +11,7 @@ import {
   type AutomaticEmailKey,
   type EmailTexts,
 } from '#shared/utils/automatic-emails'
-import { formatDateTime } from '#shared/utils/format'
+import { formatDateTime, plural } from '#shared/utils/format'
 
 // One automatic email (Comunicazioni › Automatiche): what makes it leave, its switch, its texts with the
 // email previewed on the right as it arrives (real template, example data), a test to oneself, the send by
@@ -84,7 +84,10 @@ async function save() {
   saving.value = true
   try {
     const url: string = `/api/admin/automatic-emails/${key.value}`
-    data.value = await api<AutomaticEmailDetail>(url, { method: 'PUT', body: { ...state } })
+    data.value = await api<AutomaticEmailDetail>(url, {
+      method: 'PUT',
+      body: { texts: { ...state }, updatedAt: data.value?.updatedAt ?? null },
+    })
     notifySuccess('Testo salvato', 'Le prossime email partono con questo testo. Nessuna email è partita adesso.')
   } catch (error) {
     notifyError(error, 'Testo non salvato')
@@ -124,9 +127,12 @@ async function setActive(active: boolean) {
   switching.value = true
   try {
     const url: string = `/api/admin/automatic-emails/${key.value}/active`
-    await api(url, { method: 'PUT', body: { active } })
-    if (data.value) data.value = { ...data.value, active }
-    notifySuccess(active ? 'Email accesa' : 'Email spenta')
+    const { held, ...detail } = await api<AutomaticEmailSwitch>(url, { method: 'PUT', body: { active } })
+    data.value = detail
+    notifySuccess(
+      active ? 'Email accesa' : 'Email spenta',
+      held ? `${plural(held, 'email in coda non partirà', 'email in coda non partiranno')}.` : undefined,
+    )
   } catch (error) {
     notifyError(error)
   } finally {
@@ -137,6 +143,12 @@ async function setActive(active: boolean) {
 const { user } = useUserSession()
 const testing = ref(false)
 async function sendTest() {
+  const ok = await confirm({
+    title: 'Invii una prova a te?',
+    description: `Parte 1 email a ${user.value?.email ?? 'te'}, con il testo come lo vedi e dati di esempio. Conta nel limite di oggi.`,
+    confirmLabel: 'Invia la prova',
+  })
+  if (!ok) return
   testing.value = true
   try {
     const url: string = `/api/admin/automatic-emails/${key.value}/test`

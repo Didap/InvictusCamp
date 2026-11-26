@@ -9,7 +9,7 @@ import { staffSheetDocument } from '../domain/staff-sheets'
  * (server/domain/staff-sheets.ts). Returns the emails to deliver after the commit.
  */
 export async function staffSheetChanged(tx: DbOrTx, userId: string, actor: Actor) {
-  return staffSheetDocument(tx, { userId, ctx: await emailContext(), uploadsDir: uploadsDir(), actor })
+  return staffSheetDocument(tx, { userId, ctx: await emailContext(tx), uploadsDir: uploadsDir(), actor })
 }
 
 /**
@@ -24,6 +24,6 @@ export async function accountChanged(tx: DbOrTx, user: { id: string; role: strin
     .from(tables.families)
     .where(eq(tables.families.userId, user.id))
   return family
-    ? familyRelease(tx, { familyId: family.id, ctx: await emailContext(), uploadsDir: uploadsDir(), actor })
+    ? familyRelease(tx, { familyId: family.id, ctx: await emailContext(tx), uploadsDir: uploadsDir(), actor })
     : []
 }

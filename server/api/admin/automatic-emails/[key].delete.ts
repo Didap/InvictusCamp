@@ -6,6 +6,8 @@ import { automaticEmailDetail, saveEmailTexts } from '../../../domain/automatic-
 export default defineEventHandler(async (event): Promise<AutomaticEmailDetail> => {
   const admin = await requireAdmin(event)
   const key = requireAutomaticEmailKey(event)
-  await saveEmailTexts(useDb(), { key, texts: automaticEmailDefinition(key).defaults, actorId: admin.id })
-  return automaticEmailDetail(useDb(), key)
+  return useDb().transaction(async tx => {
+    await saveEmailTexts(tx, { key, texts: automaticEmailDefinition(key).defaults, actorId: admin.id })
+    return automaticEmailDetail(tx, key)
+  })
 })

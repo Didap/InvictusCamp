@@ -2,7 +2,7 @@
 // receives it, the fields it fills and its starting texts. The administration can change the texts and
 // switch an email off; server/emails/automatic.ts renders them, deliver() honours the switch.
 // Copy rules (DESIGN.md, Voice): plain Italian, short sentences, the "tu" form, no em dashes.
-import { GUEST_AGE } from './constants'
+import { GUEST_AGE, type ParticipationKind, type ParticipationStatus } from './constants'
 import { FIELD, textFields } from './plain-text'
 
 export const AUTOMATIC_EMAIL_AREAS = ['sessions', 'staff', 'documents', 'families', 'access'] as const
@@ -44,7 +44,8 @@ export const EMAIL_TEXT_LIMITS: Record<keyof EmailTexts, number> = {
   preheader: 200,
   title: 200,
   greeting: 200,
-  body: 10_000,
+  // As the outcome a candidate receives (staffOutcomeSchema): its body is the text proposed there.
+  body: 5000,
   actionLabel: 60,
   after: 4000,
   footnote: 1000,
@@ -60,14 +61,24 @@ export interface AutomaticEmailDefinition {
   fields: readonly EmailField[]
   /** Why it cannot be switched off (an access link, a code, a message the administration sends itself). */
   alwaysOn?: string
-  /** It can be sent by hand: to the families of a session, or to families. */
-  manual?: 'session_families' | 'families'
+  /** It can be sent by hand to the families of a session; the choice starts from these kinds and statuses. */
+  manual?: { kinds: ParticipationKind[]; statuses: ParticipationStatus[] }
   defaults: EmailTexts
 }
 
 const SESSION_FIELDS = ['nome', 'sessione', 'date', 'luogo'] as const
 const DOCUMENT_FIELDS = ['nome', 'documento'] as const
 const NAME_ONLY = ['nome'] as const
+// Who an email sent by hand starts from: the families the event would have reached.
+const TOLD = { kinds: ['slot'], statuses: ['invited'] } satisfies AutomaticEmailDefinition['manual']
+const RESERVES = { kinds: ['reserve'], statuses: ['invited'] } satisfies AutomaticEmailDefinition['manual']
+const CONFIRMED = { kinds: ['slot'], statuses: ['confirmed'] } satisfies AutomaticEmailDefinition['manual']
+const STILL_IN = {
+  kinds: ['slot', 'reserve'],
+  statuses: ['invited', 'confirmed'],
+} satisfies AutomaticEmailDefinition['manual']
+const REMOVED = { kinds: ['slot'], statuses: ['cancelled'] } satisfies AutomaticEmailDefinition['manual']
+const RESERVES_REMOVED = { kinds: ['reserve'], statuses: ['cancelled'] } satisfies AutomaticEmailDefinition['manual']
 const ACCESS_LINK = 'Contiene un link personale per entrare: senza, nessuno potrebbe accedere.'
 const SENT_BY_HAND =
   'La mandi tu con «Comunica l’esito» nella scheda della persona, dove puoi ancora cambiare il testo.'
@@ -117,7 +128,7 @@ export const AUTOMATIC_EMAILS = {
     trigger:
       'Quando apri gli inviti di una sessione, e quando aggiungi una famiglia titolare a una sessione con gli inviti aperti.',
     fields: SESSION_FIELDS,
-    manual: 'session_families',
+    manual: TOLD,
     defaults: texts({
       subject: 'Invito: {sessione}',
       preheader: 'La tua famiglia è invitata a «{sessione}». Conferma o rinuncia dal gestionale.',
@@ -132,7 +143,7 @@ export const AUTOMATIC_EMAILS = {
     recipient: 'La famiglia titolare che non ha ancora risposto',
     trigger: 'Quando mandi di nuovo l’invito a una famiglia che non ha ancora risposto.',
     fields: SESSION_FIELDS,
-    manual: 'session_families',
+    manual: TOLD,
     defaults: texts({
       subject: 'Promemoria invito: {sessione}',
       preheader: 'La tua famiglia è invitata a «{sessione}». Conferma o rinuncia dal gestionale.',
@@ -148,7 +159,7 @@ export const AUTOMATIC_EMAILS = {
     trigger:
       'Quando apri gli inviti di una sessione, e quando aggiungi una riserva a una sessione con gli inviti aperti.',
     fields: SESSION_FIELDS,
-    manual: 'session_families',
+    manual: RESERVES,
     defaults: texts({
       subject: 'Lista di riserva: {sessione}',
       preheader: 'La tua famiglia è in lista di riserva per «{sessione}».',
@@ -166,7 +177,7 @@ export const AUTOMATIC_EMAILS = {
     recipient: 'La famiglia di riserva chiamata',
     trigger: 'Quando chiami una famiglia di riserva a un posto libero.',
     fields: SESSION_FIELDS,
-    manual: 'session_families',
+    manual: TOLD,
     defaults: texts({
       subject: 'Si è liberato un posto: {sessione}',
       preheader: 'C’è un posto per la tua famiglia in «{sessione}». Conferma o rinuncia dal gestionale.',
@@ -184,7 +195,7 @@ export const AUTOMATIC_EMAILS = {
     recipient: 'Le famiglie titolari che hanno confermato',
     trigger: 'Quando confermi la sessione.',
     fields: SESSION_FIELDS,
-    manual: 'session_families',
+    manual: CONFIRMED,
     defaults: texts({
       subject: 'Sessione confermata: {sessione}',
       preheader: '«{sessione}» si farà: ti aspettiamo al camp.',
@@ -202,7 +213,7 @@ export const AUTOMATIC_EMAILS = {
     recipient: 'Le famiglie invitate o che avevano confermato',
     trigger: 'Quando annulli la sessione.',
     fields: SESSION_FIELDS,
-    manual: 'session_families',
+    manual: STILL_IN,
     defaults: texts({
       subject: 'Sessione annullata: {sessione}',
       preheader: '«{sessione}» è stata annullata.',
@@ -219,7 +230,7 @@ export const AUTOMATIC_EMAILS = {
     recipient: 'La famiglia titolare tolta dalla sessione',
     trigger: 'Quando togli dalla sessione una famiglia titolare che aveva già ricevuto l’invito.',
     fields: SESSION_FIELDS,
-    manual: 'session_families',
+    manual: REMOVED,
     defaults: texts({
       subject: 'Partecipazione annullata: {sessione}',
       preheader: 'Un aggiornamento sulla tua partecipazione a «{sessione}».',
@@ -236,7 +247,7 @@ export const AUTOMATIC_EMAILS = {
     recipient: 'La famiglia di riserva tolta dalla sessione',
     trigger: 'Quando togli dalla lista di riserva una famiglia che era già stata avvisata.',
     fields: SESSION_FIELDS,
-    manual: 'session_families',
+    manual: RESERVES_REMOVED,
     defaults: texts({
       subject: 'Partecipazione annullata: {sessione}',
       preheader: 'Un aggiornamento sulla tua partecipazione a «{sessione}».',
@@ -250,7 +261,7 @@ export const AUTOMATIC_EMAILS = {
     recipient: 'Le famiglie titolari che hanno partecipato',
     trigger: 'Quando segni la sessione come conclusa, se qualcuno ha partecipato.',
     fields: SESSION_FIELDS,
-    manual: 'session_families',
+    manual: CONFIRMED,
     defaults: texts({
       subject: 'Com’è andata? {sessione}',
       preheader: 'Raccontaci com’è andata «{sessione}»: bastano pochi minuti.',
@@ -270,7 +281,6 @@ export const AUTOMATIC_EMAILS = {
     recipient: 'La famiglia',
     trigger: `Quando una famiglia completa i suoi dati e nessuno dei ragazzi per cui chiede di partecipare ha tra i ${GUEST_AGE.min} e i ${GUEST_AGE.max} anni. Parte una volta sola.`,
     fields: NAME_ONLY,
-    manual: 'families',
     defaults: texts({
       subject: 'Sull’età dei ragazzi che accogliamo',
       preheader: `Il camp accoglie ragazzi e ragazze tra i ${GUEST_AGE.min} e i ${GUEST_AGE.max} anni.`,

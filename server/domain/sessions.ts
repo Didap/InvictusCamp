@@ -336,7 +336,6 @@ export async function listSessions(
   return sortSessions(rows, today).map(row => toListItem(row, slots.get(row.id)!, staff.get(row.id)!))
 }
 
-/** A titolare who confirmed: the session is confirmed to it and, once it is over, it gets the questionnaire. */
 /** Every email a status move can send. */
 const SESSION_MOVE_EMAILS = [
   'session.invite',
@@ -347,6 +346,7 @@ const SESSION_MOVE_EMAILS = [
   'staff.session_cancelled',
 ]
 
+/** A titolare who confirmed: the session is confirmed to it and, once it is over, it gets the questionnaire. */
 const cameToSession = (row: Pick<ParticipationRow, 'kind' | 'status'>) =>
   row.kind === 'slot' && row.status === 'confirmed'
 

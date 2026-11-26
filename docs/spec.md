@@ -274,15 +274,17 @@ availability or receive convocations. The administration can move a person to th
   by themselves: `{nome}` always, `{sessione}`, `{date}`, `{luogo}` in the session and convocation emails,
   `{documento}` in the document ones; any other field stops the save. The facts (session, dates, deadline,
   document, code) and the button's address stay the platform's. Saving texts equal to the starting ones keeps
-  no change; "Rimetti il testo iniziale" goes back to them. Stored in `automatic_emails` (no row: on, starting
-  texts), audited `email.texts`, `email.texts_reset`, `email.active`, `email.manual_send`.
+  no change; "Rimetti il testo iniziale" goes back to them; a save over someone else's later save is refused
+  (409). Stored in `automatic_emails` (no row: on, starting texts), audited `email.texts`, `email.texts_reset`, `email.active`, `email.manual_send`.
   - **Off**: the event no longer sends the email; `deliver()` records it in the log as `disabled` ("Spenta"),
-    outside the daily count, and the confirmation of a session move says which emails are off. Access emails
+    outside the daily count, and so do the ones of its kind already waiting in the queue. The confirmation of
+    a session move says which emails are off, and the toasts after an action count only the emails that left. Access emails
     (invitations, address confirmation, password reset), the signature code and the outcomes of a candidacy
     (sent by hand from «Comunica l’esito», whose proposed text is the one saved here) cannot be switched off.
-  - **Invia una prova a me**: the email as written, with example data, to the administrator's address.
-  - **Invia a mano** (the session emails to the families of a chosen session, filtered by kind and status; the
-    age notice to families): the saved texts, with the session's facts, leave now even when the email is off.
+  - **Invia una prova a me**: the email as written, with example data, to the administrator's address; it asks
+    first, as it counts in the daily limit.
+  - **Invia a mano** (the session emails, to the families of a chosen session by kind and status, starting from
+    those the event reaches): the saved texts, with the session's facts, leave now even when the email is off.
     The other emails need what their event creates (a link, a convocation, a document to sign).
 - **WhatsApp**: where the administration sees a family's phone (the family record; the families of a session,
   as "Scrivi su WhatsApp" in a row's menu) or a staff member's (the staff record), a button opens the chat with

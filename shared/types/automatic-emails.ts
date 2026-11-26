@@ -18,6 +18,12 @@ export interface AutomaticEmailDetail extends AutomaticEmailState {
   texts: EmailTexts
 }
 
+/** PUT /api/admin/automatic-emails/:key/active */
+export interface AutomaticEmailSwitch extends AutomaticEmailDetail {
+  /** Emails of its kind that were waiting in the queue and will not leave. */
+  held: number
+}
+
 /** POST /api/admin/automatic-emails/:key/send */
 export interface ManualSendResult extends DeliveryReport {
   recipients: number

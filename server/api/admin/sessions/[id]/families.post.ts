@@ -20,6 +20,6 @@ export default defineEventHandler(async (event): Promise<AddFamiliesResult> => {
       actor: { userId: admin.id, ip: clientIp(event) },
     }),
   )
-  await deliver(result.emails)
-  return { added: result.added, invited: result.invited }
+  const report = await deliver(result.emails)
+  return { added: result.added, invited: result.invited, emailsOff: report.disabled }
 })

@@ -59,6 +59,7 @@ export function automaticEmail(ctx: EmailContext, key: AutomaticEmailKey, input:
     html: rendered.html.replaceAll(LINE_BREAK, '<br>'),
     text: rendered.text.replaceAll(LINE_BREAK, '\n'),
     sessionId: input.sessionId ?? null,
+    ...(ctx.off?.has(key) ? { switchedOff: true } : {}),
     ...(input.sensitive ? { sensitive: true } : {}),
     ...(input.devNote ? { devNote: input.devNote } : {}),
   }

@@ -104,7 +104,14 @@ async function submit() {
     notifySuccess(
       `${plural(result.added, 'famiglia aggiunta', 'famiglie aggiunte')}`,
       result.invited
-        ? `${plural(result.invited, 'email inviata', 'email inviate')}.`
+        ? [
+            result.invited > result.emailsOff
+              ? `${plural(result.invited - result.emailsOff, 'email inviata', 'email inviate')}.`
+              : '',
+            emailsOffNote(result.emailsOff),
+          ]
+            .filter(Boolean)
+            .join(' ')
         : 'La sessione è in bozza: riceveranno l’invito quando apri gli inviti.',
     )
     open.value = false

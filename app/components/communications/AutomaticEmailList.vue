@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { AutomaticEmailState } from '#shared/types/automatic-emails'
+import type { AutomaticEmailState, AutomaticEmailSwitch } from '#shared/types/automatic-emails'
 import {
   AUTOMATIC_EMAIL_AREA_LABELS,
   AUTOMATIC_EMAIL_AREAS,
   automaticEmailDefinition,
   type AutomaticEmailKey,
 } from '#shared/utils/automatic-emails'
+import { plural } from '#shared/utils/format'
 
 // Comunicazioni › Automatiche: every email the platform sends by itself, by area, with what makes it leave
 // and its switch. Off, its event no longer sends it; the page of each email changes its texts.
@@ -39,9 +40,12 @@ async function setActive(key: AutomaticEmailKey, active: boolean) {
   switching.value = key
   try {
     const url: string = `/api/admin/automatic-emails/${key}/active`
-    await api(url, { method: 'PUT', body: { active } })
+    const { held } = await api<AutomaticEmailSwitch>(url, { method: 'PUT', body: { active } })
     await refresh()
-    notifySuccess(active ? `«${email.label}» è accesa` : `«${email.label}» è spenta`)
+    notifySuccess(
+      active ? `«${email.label}» è accesa` : `«${email.label}» è spenta`,
+      held ? `${plural(held, 'email in coda non partirà', 'email in coda non partiranno')}.` : undefined,
+    )
   } catch (error) {
     notifyError(error)
   } finally {

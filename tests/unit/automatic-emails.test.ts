@@ -42,7 +42,7 @@ describe('the catalog of automatic emails', () => {
     for (const key of AUTOMATIC_EMAIL_KEYS) {
       const email = exampleEmail(ctx, key, recipient)
       expect(email.template).toBe(key)
-      expect(email.manual).toBe(true)
+      expect(email.switchedOff).toBe(false)
       expect(email.sessionId).toBeNull()
       expect(Boolean(email.sensitive)).toBe(key.startsWith('auth.') || key === 'signature.otp')
     }
@@ -67,6 +67,12 @@ describe('texts written in the dashboard', () => {
     expect(email.html).toContain('Vai alla sessione')
     expect(email.html).toContain('https://gestionale.example.it/famiglia/sessioni')
     expect(email.text).toContain('Porta il <cappello>.\n')
+  })
+
+  it('come out switched off when the administration switched them off', () => {
+    const off = new Set(['session.confirmed'])
+    expect(sessionConfirmedEmail({ ...ctx, off }, recipient, session).switchedOff).toBe(true)
+    expect(exampleEmail({ ...ctx, off }, 'session.confirmed', recipient).switchedOff).toBe(false)
   })
 
   it('leave the other emails with their defaults', () => {

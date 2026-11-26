@@ -4,7 +4,7 @@ import {
   automaticEmailDetail,
   disabledEmailKeys,
   listAutomaticEmails,
-  loadEmailTexts,
+  loadEmailSettings,
   manualEmails,
   saveEmailTexts,
   setEmailActive,
@@ -23,7 +23,7 @@ describe('automatic emails', () => {
     const texts = { ...AUTOMATIC_EMAILS['session.confirmed'].defaults, subject: 'Si parte, {nome}!' }
     await saveEmailTexts(db, { key: 'session.confirmed', texts, actorId: admin.id })
 
-    expect(await loadEmailTexts(db)).toEqual({ 'session.confirmed': texts })
+    expect((await loadEmailSettings(db)).texts).toEqual({ 'session.confirmed': texts })
     expect(await automaticEmailDetail(db, 'session.confirmed')).toMatchObject({
       active: true,
       customized: true,
@@ -36,7 +36,7 @@ describe('automatic emails', () => {
       texts: AUTOMATIC_EMAILS['session.confirmed'].defaults,
       actorId: admin.id,
     })
-    expect(await loadEmailTexts(db)).toEqual({})
+    expect((await loadEmailSettings(db)).texts).toEqual({})
     const audits = await db.select().from(t.auditLog).where(eq(t.auditLog.entityType, 'automatic_email'))
     expect(audits.map(row => row.action)).toEqual(['email.texts', 'email.texts_reset'])
   })
@@ -57,6 +57,32 @@ describe('automatic emails', () => {
 
     await setEmailActive(db, { key: 'session.confirmed', active: true, actorId: admin.id })
     expect(await disabledEmailKeys(db, ['session.confirmed'])).toEqual(new Set())
+  })
+
+  it('switching an email off holds back the ones of its kind waiting in the queue', async () => {
+    const admin = await makeAdmin(db)
+    const row = { toEmail: 'anna@test.local', subject: 'S', status: 'queued' as const }
+    await db.insert(t.emailLog).values([
+      { ...row, template: 'session.invite' },
+      { ...row, template: 'session.reserve' },
+    ])
+    expect(await setEmailActive(db, { key: 'session.invite', active: false, actorId: admin.id })).toBe(1)
+    const rows = await db.select({ template: t.emailLog.template, status: t.emailLog.status }).from(t.emailLog)
+    expect(rows.sort((a, b) => a.template.localeCompare(b.template))).toEqual([
+      { template: 'session.invite', status: 'disabled' },
+      { template: 'session.reserve', status: 'queued' },
+    ])
+  })
+
+  it('refuses texts saved over a change made after the page was read', async () => {
+    const admin = await makeAdmin(db)
+    const texts = { ...AUTOMATIC_EMAILS['session.reserve'].defaults, title: 'Sei in lista' }
+    await saveEmailTexts(db, { key: 'session.reserve', texts, actorId: admin.id, updatedAt: null })
+    await expect(
+      saveEmailTexts(db, { key: 'session.reserve', texts, actorId: admin.id, updatedAt: null }),
+    ).rejects.toThrow('ricarica la pagina')
+    const { updatedAt } = await automaticEmailDetail(db, 'session.reserve')
+    await saveEmailTexts(db, { key: 'session.reserve', texts, actorId: admin.id, updatedAt })
   })
 
   it('records an email held back by the switch as disabled, outside the daily count', async () => {
@@ -95,18 +121,18 @@ describe('automatic emails', () => {
         to: anna.user.email,
         sessionId: session.id,
         subject: 'Sessione confermata: Sessione di luglio',
-        manual: true,
+        switchedOff: false,
       },
     ])
     await expect(
       manualEmails(db, ctx, { key: 'session.confirmed', audience: { type: 'all_families' }, actorId: admin.id }),
-    ).rejects.toThrow('non si può mandare a mano')
+    ).rejects.toThrow('solo alle famiglie di una sessione')
     await expect(
       manualEmails(db, ctx, {
         key: 'auth.reset_password',
-        audience: { type: 'users', userIds: [anna.user.id] },
+        audience: { type: 'session_families', sessionId: session.id },
         actorId: admin.id,
       }),
-    ).rejects.toThrow('non si può mandare a mano')
+    ).rejects.toThrow('solo alle famiglie di una sessione')
   })
 })

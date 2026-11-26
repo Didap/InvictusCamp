@@ -78,7 +78,7 @@ import {
   staffOutcomeEmail,
 } from '../emails/staff'
 import type { EmailContext, EmailMessage } from '../emails/types'
-import { loadEmailTexts } from './automatic-emails'
+import { loadEmailSettings } from './automatic-emails'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
 import { withdrawQueuedEmails } from './email-quota'
@@ -1266,7 +1266,7 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
   const template = outcomeTemplate(profile.status)
   // The proposal only needs the texts: no link is written, so no address.
   const proposal = template
-    ? outcomeProposal({ appUrl: '', texts: await loadEmailTexts(db) }, template, user.firstName)
+    ? outcomeProposal({ appUrl: '', ...(await loadEmailSettings(db)) }, template, user.firstName)
     : null
   const [lastOutcome] = template
     ? await db

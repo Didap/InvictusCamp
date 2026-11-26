@@ -35,6 +35,11 @@ export function emailTextsSchema(key: AutomaticEmailKey) {
   })
 }
 
+/** PUT /api/admin/automatic-emails/:key: the texts, and when the page read the email (null: never changed). */
+export function emailTextsSaveSchema(key: AutomaticEmailKey) {
+  return z.object({ texts: emailTextsSchema(key), updatedAt: z.iso.datetime().nullable() })
+}
+
 export const emailActiveSchema = z.object({ active: z.boolean() })
 
 /** "Invia a mano": who receives the email now. */

@@ -6,8 +6,8 @@ import type { AudienceType } from '#shared/types/domain'
 import { automaticEmailDefinition, type AutomaticEmailKey } from '#shared/utils/automatic-emails'
 import { plural } from '#shared/utils/format'
 
-// "Invia a mano": an automatic email with its saved texts, sent now to the people chosen, even when its
-// event no longer sends it. Session emails go to the families of one session, with that session's facts.
+// "Invia a mano": a session email with its saved texts, sent now to the families of a session chosen (by kind
+// and status, starting from those its event reaches), with that session's facts, even when it is switched off.
 const open = defineModel<boolean>('open', { default: false })
 const props = defineProps<{ emailKey: AutomaticEmailKey }>()
 
@@ -15,22 +15,24 @@ const api = useApi()
 const confirm = useConfirm()
 
 const email = computed(() => automaticEmailDefinition(props.emailKey))
-const types = computed<AudienceType[]>(() =>
-  email.value.manual === 'families' ? ['all_families', 'session_families', 'users'] : ['session_families'],
-)
+const types: AudienceType[] = ['session_families']
 
 const { data: options } = await useApiFetch<CommunicationOptions>('/api/admin/communications/options')
-const draft = ref<AudienceDraft>(emptyAudienceDraft(types.value[0]))
+/** The families of a session, starting from those the event would have reached. */
+function startingDraft(): AudienceDraft {
+  const draft = emptyAudienceDraft('session_families')
+  const preset = email.value.manual
+  return preset ? { ...draft, kinds: [...preset.kinds], familyStatuses: [...preset.statuses] } : draft
+}
+const draft = ref<AudienceDraft>(startingDraft())
 const audience = computed(() => audienceFromDraft(draft.value))
 watch(open, value => {
-  if (value) draft.value = emptyAudienceDraft(types.value[0])
+  if (value) draft.value = startingDraft()
 })
 
 const missing = computed(() => {
   const a = audience.value
-  if (a.type === 'session_families' && !a.sessionId) return 'Scegli la sessione.'
-  if (a.type === 'users' && !a.userIds.length) return 'Scegli almeno una famiglia.'
-  return null
+  return a.type === 'session_families' && !a.sessionId ? 'Scegli la sessione.' : null
 })
 
 const summary = ref<AudienceSummary | null>(null)

@@ -13,7 +13,7 @@ import {
   type EmailTexts,
   type EmailTextsByKey,
 } from '../../shared/utils/automatic-emails'
-import { automaticEmails, campSessions, users } from '../db/schema'
+import { automaticEmails, campSessions, emailLog, users } from '../db/schema'
 import { inviteEmail, resetPasswordEmail, verifyEmailEmail } from '../emails/auth'
 import { signatureSignedEmail } from '../emails/documents'
 import { guestAgeEmail } from '../emails/families'
@@ -30,21 +30,28 @@ import type { EmailContext, EmailMessage } from '../emails/types'
 import { resolveAudience } from './audiences'
 import { writeAudit } from './audit'
 import type { DbOrTx } from './db'
-import { httpError } from './users'
+import { EMAIL_OFF } from './email-quota'
+import { createError } from './errors'
 
-/** The texts the administration changed, for the EmailContext of every send. */
-export async function loadEmailTexts(db: DbOrTx): Promise<EmailTextsByKey> {
-  const rows = await db.select({ key: automaticEmails.key, texts: automaticEmails.texts }).from(automaticEmails)
+const canSwitchOff = (key: string) => isAutomaticEmailKey(key) && !automaticEmailDefinition(key).alwaysOn
+
+/** The texts the administration changed and the emails it switched off, for the EmailContext of every send. */
+export async function loadEmailSettings(db: DbOrTx): Promise<{ texts: EmailTextsByKey; off: Set<string> }> {
+  const rows = await db
+    .select({ key: automaticEmails.key, active: automaticEmails.active, texts: automaticEmails.texts })
+    .from(automaticEmails)
   const texts: EmailTextsByKey = {}
-  for (const row of rows) if (row.texts && isAutomaticEmailKey(row.key)) texts[row.key] = row.texts
-  return texts
+  const off = new Set<string>()
+  for (const row of rows) {
+    if (row.texts && isAutomaticEmailKey(row.key)) texts[row.key] = row.texts
+    if (!row.active && canSwitchOff(row.key)) off.add(row.key)
+  }
+  return { texts, off }
 }
 
 /** Which of these templates are switched off now. Emails that cannot be switched off never are. */
 export async function disabledEmailKeys(db: DbOrTx, templates: Iterable<string>): Promise<Set<string>> {
-  const keys = [...new Set(templates)].filter(
-    key => isAutomaticEmailKey(key) && !automaticEmailDefinition(key).alwaysOn,
-  )
+  const keys = [...new Set(templates)].filter(canSwitchOff)
   if (!keys.length) return new Set()
   const rows = await db
     .select({ key: automaticEmails.key })
@@ -103,11 +110,27 @@ export async function automaticEmailDetail(db: DbOrTx, key: AutomaticEmailKey): 
 const sameTexts = (a: EmailTexts, b: EmailTexts) =>
   (Object.keys(b) as (keyof EmailTexts)[]).every(field => a[field] === b[field])
 
-/** Saves the texts of an email; texts equal to the defaults are stored as no change. */
+/**
+ * Saves the texts of an email; texts equal to the defaults are stored as no change. `updatedAt`: when the page
+ * read it (null if never changed); someone else having saved since is a 409, as for the other shared texts.
+ */
 export async function saveEmailTexts(
   db: DbOrTx,
-  input: { key: AutomaticEmailKey; texts: EmailTexts; actorId: string },
+  input: { key: AutomaticEmailKey; texts: EmailTexts; actorId: string; updatedAt?: string | null },
 ): Promise<void> {
+  if (input.updatedAt !== undefined) {
+    const [row] = await db
+      .select({ updatedAt: automaticEmails.updatedAt })
+      .from(automaticEmails)
+      .where(eq(automaticEmails.key, input.key))
+      .for('update')
+    if ((row?.updatedAt.toISOString() ?? null) !== input.updatedAt) {
+      throw createError({
+        statusCode: 409,
+        message: 'Qualcuno ha cambiato questa email mentre la scrivevi: ricarica la pagina e riprova.',
+      })
+    }
+  }
   const texts = sameTexts(input.texts, automaticEmailDefinition(input.key).defaults) ? null : input.texts
   await db
     .insert(automaticEmails)
@@ -121,13 +144,18 @@ export async function saveEmailTexts(
   })
 }
 
-/** Switches an email on or off. Access links, codes and the outcomes sent by hand cannot be switched off. */
+/**
+ * Switches an email on or off. Off, the ones of its kind still waiting in the queue stay there as disabled too:
+ * returns how many. Access links, codes and the outcomes sent by hand cannot be switched off.
+ */
 export async function setEmailActive(
   db: DbOrTx,
   input: { key: AutomaticEmailKey; active: boolean; actorId: string },
-): Promise<void> {
+): Promise<number> {
   const reason = automaticEmailDefinition(input.key).alwaysOn
-  if (reason && !input.active) throw httpError(409, `Questa email non si può spegnere. ${reason}`)
+  if (reason && !input.active) {
+    throw createError({ statusCode: 409, message: `Questa email non si può spegnere. ${reason}` })
+  }
   await db
     .insert(automaticEmails)
     .values({ key: input.key, active: input.active, updatedBy: input.actorId })
@@ -138,6 +166,13 @@ export async function setEmailActive(
     entityType: 'automatic_email',
     data: { key: input.key, active: input.active },
   })
+  if (input.active) return 0
+  const held = await db
+    .update(emailLog)
+    .set({ status: 'disabled', error: EMAIL_OFF, textBody: null })
+    .where(and(eq(emailLog.template, input.key), eq(emailLog.status, 'queued')))
+    .returning({ id: emailLog.id })
+  return held.length
 }
 
 // ─── Example and send by hand ──────────────────────────────────────────────────────────────────────
@@ -212,18 +247,7 @@ export function exampleEmail(
 ): EmailMessage {
   const context = texts ? { ...ctx, texts: { ...ctx.texts, [key]: texts } } : ctx
   // The example session does not exist: the log row of a test belongs to no session.
-  return { ...EXAMPLES[key](context, recipient), sessionId: null, manual: true }
-}
-
-/** The audiences an email can be sent to by hand, by what it speaks of. */
-const MANUAL_AUDIENCES = {
-  session_families: ['session_families'],
-  families: ['all_families', 'session_families', 'users'],
-} as const satisfies Record<string, readonly Audience['type'][]>
-
-export function canSendTo(key: AutomaticEmailKey, audience: Audience): boolean {
-  const manual = automaticEmailDefinition(key).manual
-  return Boolean(manual && (MANUAL_AUDIENCES[manual] as readonly string[]).includes(audience.type))
+  return { ...EXAMPLES[key](context, recipient), sessionId: null, switchedOff: false }
 }
 
 /**
@@ -236,41 +260,31 @@ export async function manualEmails(
   input: { key: AutomaticEmailKey; audience: Audience; actorId: string },
 ): Promise<EmailMessage[]> {
   const { key, audience } = input
-  if (!canSendTo(key, audience)) throw httpError(400, 'Questa email non si può mandare a mano a questi destinatari.')
-  const { recipients } = await resolveAudience(db, audience)
-  let messages: EmailMessage[]
-  if (automaticEmailDefinition(key).manual === 'session_families') {
-    if (audience.type !== 'session_families') throw httpError(400, 'Scegli la sessione.')
-    const [facts] = await db
-      .select({
-        id: campSessions.id,
-        title: campSessions.title,
-        location: campSessions.location,
-        startDate: campSessions.startDate,
-        endDate: campSessions.endDate,
-        responseDeadline: campSessions.responseDeadline,
-      })
-      .from(campSessions)
-      .where(eq(campSessions.id, audience.sessionId))
-      .limit(1)
-    if (!facts) throw httpError(404, 'Sessione non trovata')
-    messages = recipients.map(r =>
-      familySessionEmail(
-        ctx,
-        key as SessionEmailKey,
-        { to: r.email, toUserId: r.userId, firstName: r.firstName },
-        facts,
-      ),
-    )
-  } else {
-    // family.age_notice, the one email sent by hand to families without a session.
-    messages = recipients.map(r => guestAgeEmail(ctx, { to: r.email, toUserId: r.userId, firstName: r.firstName }))
+  if (!automaticEmailDefinition(key).manual || audience.type !== 'session_families') {
+    throw createError({ statusCode: 400, message: 'Questa email si manda a mano solo alle famiglie di una sessione.' })
   }
+  const { recipients } = await resolveAudience(db, audience)
+  const [facts] = await db
+    .select({
+      id: campSessions.id,
+      title: campSessions.title,
+      location: campSessions.location,
+      startDate: campSessions.startDate,
+      endDate: campSessions.endDate,
+      responseDeadline: campSessions.responseDeadline,
+    })
+    .from(campSessions)
+    .where(eq(campSessions.id, audience.sessionId))
+    .limit(1)
+  if (!facts) throw createError({ statusCode: 404, message: 'Sessione non trovata' })
+  const messages = recipients.map(r =>
+    familySessionEmail(ctx, key as SessionEmailKey, { to: r.email, toUserId: r.userId, firstName: r.firstName }, facts),
+  )
   await writeAudit(db, {
     actorUserId: input.actorId,
     action: 'email.manual_send',
     entityType: 'automatic_email',
     data: { key, audience, recipients: messages.length },
   })
-  return messages.map(message => ({ ...message, manual: true }))
+  return messages.map(message => ({ ...message, switchedOff: false }))
 }

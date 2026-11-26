@@ -6,6 +6,8 @@ export interface EmailContext {
   appUrl: string
   /** The texts the administration changed (Comunicazioni › Automatiche); the others use their defaults. */
   texts?: EmailTextsByKey
+  /** The automatic emails switched off there: their messages come out `switchedOff`. */
+  off?: ReadonlySet<string>
 }
 
 /** A rendered email, ready for deliver() (server/utils/email.ts). Domain functions return these. */
@@ -23,6 +25,6 @@ export interface EmailMessage {
   sensitive?: boolean
   /** Printed in the dev console when the email is simulated (the link or code of an access email). */
   devNote?: string
-  /** Sent by hand by the administration: it leaves even when its automatic email is switched off. */
-  manual?: boolean
+  /** Its automatic email is switched off: deliver() records it as disabled and does not send it. */
+  switchedOff?: boolean
 }

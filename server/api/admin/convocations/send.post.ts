@@ -10,5 +10,11 @@ export default defineEventHandler(async event => {
     sendConvocations(tx, ctx, { ...input, actor: { userId: admin.id, ip: clientIp(event) } }),
   )
   const report = await deliver(result.emails)
-  return { sent: result.sent, skipped: result.skipped, failed: report.failed, queued: report.queued }
+  return {
+    sent: result.sent,
+    skipped: result.skipped,
+    failed: report.failed,
+    queued: report.queued,
+    disabled: report.disabled,
+  }
 })

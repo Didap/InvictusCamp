@@ -182,7 +182,16 @@ async function submit() {
     })
     notifySuccess(
       'Documento assegnato',
-      result.created === 1 ? 'È partita 1 email.' : `Sono partite ${result.created} email.`,
+      [
+        result.created - (result.emailsOff ?? 0) === 1
+          ? 'È partita 1 email.'
+          : result.created > (result.emailsOff ?? 0)
+            ? `Sono partite ${result.created - (result.emailsOff ?? 0)} email.`
+            : '',
+        emailsOffNote(result.emailsOff),
+      ]
+        .filter(Boolean)
+        .join(' ') || undefined,
     )
     emit('assigned', result)
     open.value = false
