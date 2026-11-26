@@ -10,6 +10,7 @@ import {
   assignDocument,
   cancelRequest,
   confirmReading,
+  documentDetail,
   ensureSignedCopy,
   issueSignatureCode,
   listDocuments,
@@ -197,6 +198,14 @@ describe('assigning a document', () => {
     expect(await audiences()).toEqual(['family', 'staff', 'volunteer'])
     await db.update(t.signatureRequests).set({ status: 'cancelled' }).where(eq(t.signatureRequests.userId, user.id))
     expect(await audiences()).toEqual(['staff', 'volunteer'])
+  })
+
+  it('a document uploaded by the administration is not the gestionale’s', async () => {
+    const { document } = await pendingRequest()
+    expect(await documentDetail(db, document.id)).toMatchObject({
+      generated: false,
+      requests: [{ document: { generated: false } }],
+    })
   })
 
   it('reminds only who still has to sign', async () => {

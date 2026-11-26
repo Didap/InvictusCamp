@@ -6,9 +6,8 @@ import { join } from 'node:path'
 import { and, eq, isNull } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { familyRelease, releaseTextDto, renewReleases, saveReleaseText } from '../../server/domain/releases'
-import { requestSignatures } from '../../server/domain/signature-requests'
 import { assignDocument, documentDetail, setDocumentArchived } from '../../server/domain/signatures'
-import { makeDocument, makeFamily, t, useTestDb } from './helpers'
+import { makeFamily, t, useTestDb } from './helpers'
 
 const db = useTestDb()
 const uploadsDir = mkdtempSync(join(tmpdir(), 'invictus-release-'))
@@ -43,12 +42,6 @@ describe('release', () => {
     const detail = await documentDetail(db, document!.id)
     expect(detail.generated).toBe(true)
     expect(detail.requests.map(r => r.document.generated)).toEqual([true])
-    const upload = await makeDocument(db)
-    await requestSignatures(db, { documentId: upload.id, userIds: [user.id] })
-    expect(await documentDetail(db, upload.id)).toMatchObject({
-      generated: false,
-      requests: [{ document: { generated: false } }],
-    })
 
     // Nothing changed: nothing new.
     expect(await familyRelease(db, input)).toEqual([])

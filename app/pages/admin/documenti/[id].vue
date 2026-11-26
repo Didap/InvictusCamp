@@ -2,6 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { AssignResult, DocumentDetail, RemindResult } from '#shared/types/documents'
 import { enumLabel, type StaffResourceMode } from '#shared/utils/constants'
+import { todayIso } from '#shared/utils/dates'
 import { formatDateTime, formatDay, plural } from '#shared/utils/format'
 
 // One document: who must sign it and where each person is (reminders, cancellations, signed copies),
@@ -126,15 +127,17 @@ async function remindAll() {
 async function setArchived(archived: boolean) {
   if (archived) {
     const count = pendingCount.value
+    const generated = Boolean(doc.value?.generated)
+    const cancelled = count
+      ? `${count === 1 ? 'La richiesta ancora aperta viene annullata' : `Le ${count} richieste ancora aperte vengono annullate`}, senza inviare email. `
+      : ''
     const ok = await confirm({
       title: 'Archiviare il documento?',
-      description: doc.value?.generated
-        ? `${count ? 'La richiesta ancora aperta viene annullata, senza inviare email. ' : ''}Non si potrà ripristinare: il gestionale ne prepara uno nuovo al prossimo salvataggio dei dati.`
-        : count
-          ? `${count === 1 ? 'La richiesta ancora aperta viene annullata' : `Le ${count} richieste ancora aperte vengono annullate`}, senza inviare email. Le firme raccolte restano qui.`
-          : 'Non comparirà più tra i documenti da assegnare. Le firme raccolte restano qui.',
+      description: generated
+        ? `${cancelled}Non sarà più in vigore, anche se è già firmato, e non si potrà ripristinare: al prossimo salvataggio dei dati il gestionale ne prepara uno nuovo da firmare.`
+        : `${cancelled || 'Non comparirà più tra i documenti da assegnare. '}Le firme raccolte restano qui.`,
       confirmLabel: 'Archivia',
-      danger: count > 0,
+      danger: generated || count > 0,
     })
     if (!ok) return
   }
@@ -225,11 +228,11 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
         variant="subtle"
         icon="i-lucide-archive"
         title="Documento archiviato"
-        :description="
+        :description="`Dal ${formatDay(todayIso(new Date(doc.archivedAt)), 'long')}. ${
           doc.generated
-            ? `Dal ${formatDay(doc.archivedAt.slice(0, 10), 'long')}. Non è più in vigore e non si può ripristinare: quello aggiornato lo prepara il gestionale.`
-            : `Dal ${formatDay(doc.archivedAt.slice(0, 10), 'long')}. Non si può assegnare né firmare: ripristinalo per usarlo di nuovo.`
-        "
+            ? 'Non è più in vigore e non si può ripristinare: il gestionale ne prepara uno nuovo quando i dati sono completi.'
+            : 'Non si può assegnare né firmare: ripristinalo per usarlo di nuovo.'
+        }`"
         :actions="
           doc.generated
             ? []

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq, isNull } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
-import { assignDocument, setDocumentArchived } from '../../server/domain/signatures'
+import { assignDocument, documentDetail, setDocumentArchived } from '../../server/domain/signatures'
 import { myStaffSheet, saveStaffSheet, saveStaffUsefulInfo, sheetSignature, staffHome } from '../../server/domain/staff'
 import { staffSheetDocument } from '../../server/domain/staff-sheets'
 import { makeStaff, t, useTestDb } from './helpers'
@@ -102,6 +102,11 @@ describe('staff personal sheet', () => {
     await expect(
       assignDocument(db, ctx, { documentId: document!.id, target: { type: 'all_staff' }, actor }),
     ).rejects.toMatchObject({ statusCode: 409 })
+    // The administration sees it as the gestionale's, so it offers none of those actions.
+    expect(await documentDetail(db, document!.id)).toMatchObject({
+      generated: true,
+      requests: [{ document: { generated: true } }],
+    })
 
     // Nothing changed: nothing new.
     expect(await staffSheetDocument(db, input)).toEqual([])

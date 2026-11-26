@@ -75,7 +75,7 @@ export interface SignatureRequestRow {
     title: string
     category: DocumentCategory
     requiresSignature: boolean
-    /** A family's release or a staff sheet: the gestionale withdraws its requests, never by hand. */
+    /** A family's release or a staff sheet: no request cancelled one by one (archiving withdraws the document). */
     generated: boolean
   }
   sessionId: string | null
