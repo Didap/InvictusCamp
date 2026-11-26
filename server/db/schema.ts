@@ -313,6 +313,7 @@ export const staffProfiles = pgTable(
     roles: jsonb().$type<StaffRole[]>().notNull().default([]),
     /** Ids of `staff_tags`: the «Valutazione» of the administration, never shown to the person. */
     tags: jsonb().$type<string[]>().notNull().default([]),
+    /** The texts of the first application form: kept as they were, no longer shown or written. */
     qualifications: text(),
     experience: text(),
     motivation: text(),

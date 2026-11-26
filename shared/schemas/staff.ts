@@ -9,7 +9,6 @@ import {
   PERSONAL_DOCUMENT_CATEGORIES,
   SHIRT_SIZES,
   STAFF_CONTRACTS,
-  UPLOAD_MIME_TYPES,
   STAFF_TAG_COLORS,
   STAFF_TEAMS,
   type PersonalDocumentCategory,
@@ -17,7 +16,9 @@ import {
   type StaffRole,
   type UploadMimeType,
   type StaffStatus,
+  type UserStatus,
   type StaffTeam,
+  inStaffArea,
 } from '../utils/constants'
 import { andList } from '../utils/format'
 import { changedKeys } from '../utils/plain'
@@ -80,6 +81,23 @@ export function sheetMissing(team: StaffTeam): string {
 /** Whether a sheet as stored passes the form's schema: until then the home asks for it. */
 export function isSheetComplete(sheet: Record<keyof StaffSheetInput, string | null>, team: StaffTeam): boolean {
   return staffSheetSchema(team).safeParse(sheet).success
+}
+
+/**
+ * Whether moving a person to the team `to` gives their sheet a new PDF to sign, with its email: to the v-team the
+ * formula goes (setStaffTeam) and a sheet complete without it is written again (server/domain/staff-sheets.ts); a
+ * disabled account gets no email. The confirmation of the move says it; a database test holds it to the server.
+ */
+export function teamMoveSendsSheet(
+  person: { status: StaffStatus; accountStatus: UserStatus; sheet: Record<keyof StaffSheetInput, string | null> },
+  to: StaffTeam,
+): boolean {
+  return (
+    inStaffArea(person.status) &&
+    person.accountStatus !== 'disabled' &&
+    !asksContract(to) &&
+    isSheetComplete({ ...person.sheet, contractType: null }, to)
+  )
 }
 
 // ─── Health: allergies, diet and other details ─────────────────────────────────────────────────────
@@ -329,10 +347,8 @@ export function isRequiredStaffDocument(category: PersonalDocumentCategory): cat
   return (REQUIRED_STAFF_DOCUMENTS as readonly string[]).includes(category)
 }
 
-/** The formats a staff member's document is taken in: the required ones in PDF only. */
-export function staffDocumentTypes(category: PersonalDocumentCategory): readonly UploadMimeType[] {
-  return isRequiredStaffDocument(category) ? ['application/pdf'] : UPLOAD_MIME_TYPES
-}
+/** A staff member's documents are taken in PDF only, the required ones and the others (the docx of 26/11/2026). */
+export const STAFF_DOCUMENT_TYPES = ['application/pdf'] as const satisfies readonly UploadMimeType[]
 
 /** The text fields sent with the file to POST /api/staff/documents. */
 export const staffDocumentSchema = z.object({

@@ -15,7 +15,7 @@ import {
   needsHealthConsent,
   normalizeNonFoodAllergies,
   REQUIRED_STAFF_DOCUMENTS,
-  staffDocumentTypes,
+  STAFF_DOCUMENT_TYPES,
   staffHealthChanges,
   type ConvocationAddInput,
   type RequiredStaffDocument,
@@ -1190,7 +1190,7 @@ function requiredDocumentsMissing(
   const there = (category: RequiredStaffDocument) =>
     (category === 'cv' && profile.cvFileId !== null) ||
     documents.some(
-      d => d.category === category && (staffDocumentTypes(category) as readonly string[]).includes(d.file.mimeType),
+      d => d.category === category && (STAFF_DOCUMENT_TYPES as readonly string[]).includes(d.file.mimeType),
     )
   return REQUIRED_STAFF_DOCUMENTS.filter(category => !there(category))
 }
@@ -1326,9 +1326,6 @@ export async function staffDetail(db: DbOrTx, userId: string): Promise<StaffDeta
     healthConsentAt: iso(profile.usefulInfoConsentAt),
     roles: profile.roles,
     tags: profile.tags,
-    qualifications: profile.qualifications,
-    experience: profile.experience,
-    motivation: profile.motivation,
     cv: cv ? toFileDto(cv) : null,
     appliedAt: iso(profile.appliedAt),
     reviewedAt: iso(profile.reviewedAt),

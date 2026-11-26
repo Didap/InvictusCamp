@@ -770,11 +770,6 @@ export async function seedDemo(
       birthDate: `${2004 - index * 3}-0${(index % 9) + 1}-1${index % 9}`,
       roles: s.roles,
       tags: s.status === 'approved' ? demoTags(index) : [],
-      qualifications: applied ? 'Laurea e attestati del settore (esempio).' : null,
-      experience: applied
-        ? 'Esperienze con bambini e ragazzi con disabilità in centri estivi e associazioni (esempio).'
-        : null,
-      motivation: applied ? 'Voglio contribuire a un’estate inclusiva per le famiglie del camp (esempio).' : null,
       cvFileId: cv?.id ?? null,
       // The demo account has its personal sheet filled in (/staff/scheda); the others still have to.
       ...(s.email === DEMO_ACCOUNTS.staff

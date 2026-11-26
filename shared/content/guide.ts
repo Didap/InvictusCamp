@@ -169,7 +169,7 @@ export const GUIDES: Record<UserRole, Guide> = {
       '/staff/convocazioni': 'Le convocazioni a cui devi ancora rispondere: le accetti o le rifiuti.',
       '/staff/sessioni': 'Le sessioni che hai accettato, con il programma della settimana, e quelle già fatte.',
       '/staff/documenti':
-        'I documenti obbligatori (CV e documento d’identità, in PDF), quelli da firmare, come la tua scheda o il contratto di una sessione, e quelli che carichi tu.',
+        'I documenti obbligatori (CV e documento d’identità), quelli da firmare, come la tua scheda o il contratto di una sessione, e quelli che carichi tu, tutti in PDF.',
       '/staff/formazione':
         'Le formazioni che proponiamo: spunta quelle che ti interessano, ogni spunta si salva da sola.',
       '/staff/risorse':
@@ -303,8 +303,8 @@ export const GUIDES: Record<UserRole, Guide> = {
         title: 'Valutare una candidatura',
         steps: [
           'La Panoramica ti dice quante candidature aspettano, per lo staff e per il v-team.',
-          'Apri la persona da «Staff» o «V-team»: trovi i suoi dati e il CV.',
-          'Approva o rifiuta la candidatura. Le note interne la persona non le vede mai.',
+          'Apri la persona da «Staff» o «V-team»: il CV è in «Documenti personali».',
+          'In «Stato» premi «Approva la candidatura» o «Non selezionare»: approvata, la persona entra nell’area staff. Le note interne la persona non le vede mai.',
           'L’email con l’esito non parte da sola: la mandi tu quando vuoi, con un messaggio che puoi cambiare.',
         ],
       },

@@ -160,9 +160,6 @@ export interface StaffDetail {
   roles: StaffRole[]
   /** Ids of the tags of the «Valutazione»: never shown to the person. */
   tags: string[]
-  qualifications: string | null
-  experience: string | null
-  motivation: string | null
   cv: FileDto | null
   appliedAt: string | null
   reviewedAt: string | null
