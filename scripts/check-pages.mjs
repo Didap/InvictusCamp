@@ -35,6 +35,7 @@ export const PAGES = {
     '/admin/comunicazioni/{communication}',
     '/admin/utenti',
     '/account',
+    '/guida',
   ],
   famiglia: [
     '/famiglia',
@@ -45,6 +46,7 @@ export const PAGES = {
     '/famiglia/membri',
     '/famiglia/documenti',
     '/firma/{signature}',
+    '/guida',
   ],
   staff: [
     '/staff',
@@ -57,9 +59,10 @@ export const PAGES = {
     '/staff/formazione',
     '/staff/risorse',
     '/firma/{signature}',
+    '/guida',
   ],
   // Before the approval the area is the home alone: the other pages lead back there.
-  candidato: ['/staff'],
+  candidato: ['/staff', '/guida'],
 }
 
 if (!LOCAL) {
