@@ -280,6 +280,8 @@ export const GUIDES: Record<UserRole, Guide> = {
       '/admin/documenti': 'Carichi un PDF, lo assegni da firmare e segui chi ha firmato.',
       '/admin/comunicazioni':
         'Le email a famiglie e staff, i modelli da cui partire e il registro di tutte le email partite.',
+      '/admin/anagrafica':
+        'Tutti i contatti del camp, con o senza account: li importi da un elenco, li dividi in gruppi ed esporti il CSV.',
       '/admin/feedback': 'Cosa hanno detto le famiglie a fine sessione: voti, commenti e staff.',
       '/admin/utenti':
         'Gli account: inviti una persona, mandi di nuovo un invito o il link per la password, disattivi un account.',
@@ -339,6 +341,15 @@ export const GUIDES: Record<UserRole, Guide> = {
           'Scegli a chi: tutte le famiglie, tutto lo staff, le famiglie o lo staff di una sessione, persone scelte.',
           'Scrivi oggetto e testo, oppure «Parti da un modello». {nome} diventa il nome di chi riceve; con una sessione anche {sessione} e {date}.',
           'Guarda l’anteprima e invia: prima ti dice quante persone ricevono l’email.',
+        ],
+      },
+      {
+        title: 'Importare un elenco di contatti',
+        steps: [
+          'In Excel o Google Fogli seleziona le colonne con nome, cognome, email ed eventualmente il tipo, titoli compresi, e copiale.',
+          'In «Anagrafica» premi «Importa un elenco» e incolla, oppure premi «Scegli un file CSV».',
+          'Controlla le prime righe e quelle lasciate fuori, con il motivo. Scegli il tipo per chi non ce l’ha e, se vuoi, i gruppi.',
+          'Premi «Importa»: un’email già in anagrafica non entra due volte. Non parte nessuna email.',
         ],
       },
     ],

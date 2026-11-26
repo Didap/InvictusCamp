@@ -38,6 +38,7 @@ export function navFor(role: UserRole, staffInArea: boolean): NavItem[][] {
           { label: 'Formazione', icon: 'i-lucide-graduation-cap', to: '/admin/formazione' },
           { label: 'Documenti', icon: 'i-lucide-files', to: '/admin/documenti' },
           { label: 'Comunicazioni', icon: 'i-lucide-mail', to: '/admin/comunicazioni' },
+          { label: 'Anagrafica', icon: 'i-lucide-book-user', to: '/admin/anagrafica' },
           { label: 'Feedback', icon: 'i-lucide-message-square-heart', to: '/admin/feedback' },
         ],
         [{ label: 'Utenti', icon: 'i-lucide-users-round', to: '/admin/utenti' }, GUIDE_ITEM],

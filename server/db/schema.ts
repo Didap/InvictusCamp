@@ -11,6 +11,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -21,6 +22,7 @@ import type { FeedbackArchive } from '../../shared/types/feedback'
 import type { FamilyFormContent } from '../../shared/content/family-form'
 import type { EmailTexts } from '../../shared/utils/automatic-emails'
 import type {
+  ContactKind,
   ConvocationStatus,
   DocumentCategory,
   EmailStatus,
@@ -47,7 +49,7 @@ import type {
   UserRole,
   UserStatus,
 } from '../../shared/utils/constants'
-import { LODGING_LOCATIONS, OPEN_CONVOCATIONS, STAFF_TAG_COLORS } from '../../shared/utils/constants'
+import { CONTACT_KINDS, LODGING_LOCATIONS, OPEN_CONVOCATIONS, STAFF_TAG_COLORS } from '../../shared/utils/constants'
 import { ACTIVE_STATUSES } from '../../shared/utils/slots'
 
 const tz = { withTimezone: true } as const
@@ -806,6 +808,59 @@ export const emailLog = pgTable(
     index('email_log_communication_idx').on(t.communicationId),
     index('email_log_session_idx').on(t.sessionId),
   ],
+)
+
+// ─── Anagrafica ────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A person the camp keeps in touch with (docs/spec.md 3.16), with an account or without: added by hand or
+ * pasted in bulk by the administration. The account, if any, is found by the email, never linked by id.
+ */
+export const contacts = pgTable(
+  'contacts',
+  {
+    id: pk(),
+    kind: text().$type<ContactKind>().notNull(),
+    /** '' when the list it came from had no name. */
+    firstName: text().notNull().default(''),
+    lastName: text().notNull().default(''),
+    /** Always lowercase: one contact per address. */
+    email: text().notNull(),
+    createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  t => [
+    uniqueIndex('contacts_email_key').on(t.email),
+    index('contacts_name_idx').on(t.lastName, t.firstName),
+    check('contacts_kind', sql`${t.kind} in (${sqlList(CONTACT_KINDS)})`),
+  ],
+)
+
+/** A group of contacts the administration makes («Famiglie 2026», «Donatori»): a contact can be in many. */
+export const contactGroups = pgTable(
+  'contact_groups',
+  {
+    id: pk(),
+    name: text().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  t => [uniqueIndex('contact_groups_name_key').on(sql`lower(${t.name})`)],
+)
+
+export const contactGroupMembers = pgTable(
+  'contact_group_members',
+  {
+    contactId: uuid()
+      .notNull()
+      .references(() => contacts.id, { onDelete: 'cascade' }),
+    groupId: uuid()
+      .notNull()
+      .references(() => contactGroups.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  t => [primaryKey({ columns: [t.contactId, t.groupId] }), index('contact_group_members_group_idx').on(t.groupId)],
 )
 
 // ─── Audit ─────────────────────────────────────────────────────────────────────────────────────────

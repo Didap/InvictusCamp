@@ -41,7 +41,8 @@ Administration: `/admin` (Panoramica), `/admin/sessioni`, `/admin/sessioni/nuova
 `/admin/formazione` (3.4),
 `/admin/documenti`, `/admin/documenti/:id`,
 `/admin/comunicazioni`, `/admin/comunicazioni/nuova`, `/admin/comunicazioni/:id`, `/admin/programma`,
-`/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/feedback` (3.13), `/admin/utenti`.
+`/admin/programma/:year` (3.10), `/admin/alloggi` (3.11), `/admin/feedback` (3.13), `/admin/anagrafica` (3.16),
+`/admin/utenti`.
 
 Family: `/famiglia` (home), `/famiglia/sessioni`, `/famiglia/profilo` (the family data, 3.8),
 `/famiglia/membri`, `/famiglia/documenti`, `/famiglia/programma/:sessionId`, `/famiglia/questionario/:sessionId` (3.13). Staff: `/staff` (home), `/staff/scheda`,
@@ -570,6 +571,40 @@ Signed in only: help to sign in stays on the public pages (`/accedi` offers the 
 - **Domande frequenti**: questions and answers that open one by one (password, emails not arrived, who sees the
   health data, the reserve list, the daily email limit…).
 - Families and staff end with how to reach the camp (`useContact`).
+
+### 3.16 Anagrafica
+
+`/admin/anagrafica`, «Anagrafica»: every person the camp keeps in touch with, with an account or without
+(families met at events, donors, schools, people of past years), for mailing lists and groups. Administration only.
+Tables `contacts`, `contact_groups`, `contact_group_members` (migration 0033).
+
+- **A contact**: a type (`CONTACT_KINDS`: Famiglia, Staff, V-team, Sostenitore, Ente o partner, Altro), name and
+  surname (either may be empty: many lists hold only the address) and the email, lowercase, one contact per address.
+  The list shows whether an account has the same email (its role); the two are never linked by id, and deleting a
+  contact leaves the account.
+- **Groups**: named by the administration («Famiglie 2026», «Donatori»), a contact in any number of them. «Gruppi»
+  creates, renames (the name is saved when the field is left) and deletes them; deleting a group keeps its contacts.
+  A new group can also be typed in the group picker of a contact or of an import.
+- **The list**: search by name or email, filter by type and by group (or «Senza gruppo»), 50 per page, by surname.
+  «Aggiungi» adds one contact; each row can be changed or deleted.
+- **Many at once**: tick the contacts (or the whole page, then «Seleziona tutti i N contatti trovati» to act on every
+  one the filters find, on every page), then «Aggiungi a un gruppo», «Togli da un gruppo», «Cambia tipo» or
+  «Elimina» (confirmed).
+- **Import** («Importa un elenco»): a list pasted from a spreadsheet (cells split by tabs) or a CSV file
+  (semicolons or commas; UTF-8, or Windows-1252 as Excel in Italian saves it), read in the browser
+  (`shared/utils/contacts-import.ts`). With a header row the columns are found by name (Nome, Cognome, Tipo, «Nome e
+  cognome», «Cognome e nome», «Name»; «Nome» alone is not split) and the email is the column with the @, whatever
+  its title; without one the cell with the @ is the email, a known type is the type
+  (labels and synonyms: «donatore», «volontaria», «scuola»…), the other cells the name and the surname. The preview
+  shows how many contacts are ready, the first rows, and the rows left out with the reason (no email, email not
+  valid, email repeated in the list, two addresses in one row). The administration picks the type of the rows
+  without one, the groups every contact of the list joins, and whether contacts already in the registry take the
+  type and names of the list (a blank cell changes nothing); otherwise they stay as they are, but still join the
+  groups. At most 5000 rows at a time.
+- **Export**: «Esporta CSV», the contacts the filters find (name, surname, email, type, groups), e.g. to load a group
+  into a mailing list.
+- No email leaves from this page. Audited: `contact.import`, `contact.bulk`, `contact.delete`, `contact.export`,
+  `contact_group.create|rename|delete`.
 
 ## 4. Emails
 

@@ -26,6 +26,9 @@ export const zPersonName = z
 /** An empty field ('' or null, as forms and query strings send it) reads as missing. */
 export const blankAsMissing = (value: unknown) => (value === '' || value === null ? undefined : value)
 
+/** An optional field of a query or a form: '' and null read as missing. */
+export const zOptional = <T extends z.ZodType>(schema: T) => z.preprocess(blankAsMissing, schema.optional())
+
 /** A person's birth date, required. */
 export const zBirthDate = z.preprocess(
   blankAsMissing,
